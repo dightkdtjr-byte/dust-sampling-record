@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, RefreshCw, FileSpreadsheet, Calculator, Wind, Droplets, Gauge, Scale, AlertTriangle, CheckCircle2, Plus, Trash2, ListOrdered, Target, ChevronDown, Download, Zap } from 'lucide-react';
+import { Save, RefreshCw, FileSpreadsheet, Calculator, Wind, Droplets, Gauge, Scale, AlertTriangle, CheckCircle2, Plus, Trash2, ListOrdered, Target, ChevronDown, Download } from 'lucide-react';
 
 const NOZZLE_SET = [
   { num: 4, d: 3.21 }, { num: 5, d: 3.97 }, { num: 6, d: 4.79 },
@@ -229,6 +229,9 @@ export default function App() {
     return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0 };
   };
 
+  // -------------------------------------------------------------
+  // ✅ 연산 체인에서 오차 누적을 방지하기 위한 Raw 값 추출기
+  // -------------------------------------------------------------
   const getRawAvgDp = () => {
     const validDps = formData.points.map(p => parseFloat(p.dp)).filter(v => !isNaN(v));
     return validDps.length === 0 ? 0 : validDps.reduce((a, b) => a + b, 0) / validDps.length;
@@ -253,6 +256,7 @@ export default function App() {
     if (validDps.length === 0 || isNaN(avgTs) || isNaN(P) || isNaN(Ms)) return 0;
     
     const sqrtDpAvg = validDps.reduce((a, b) => a + Math.sqrt(b), 0) / validDps.length;
+    
     const velocityConstant = Math.sqrt((2 * 9.81 * 760 * 22.4) / 273); 
     return velocityConstant * C * sqrtDpAvg * Math.sqrt((273 + avgTs) / (P * Ms));
   };
@@ -319,6 +323,9 @@ export default function App() {
     return 0;
   };
 
+  // -------------------------------------------------------------
+  // 화면 표기(UI 표시) 전용 함수 모음
+  // -------------------------------------------------------------
   const calcAvgDp = () => getRawAvgDp(); 
   const calcAvgTs = () => getRawAvgTs();
   const calcStackPressure = () => getRawStackPressure();
@@ -445,6 +452,7 @@ export default function App() {
     });
   };
 
+  // ✅ K-Factor에 따른 목표 도달 필요 시간(reqTime)을 동적으로 계산하여 모든 예측량 도출
   const getExpectedValues = () => {
     const d = parseFloat(formData.nozzleDiameter), k = parseFloat(formData.kFactor), dp = getRawAvgDp(), Vs = getRawGasVelocity();
 
@@ -465,9 +473,11 @@ export default function App() {
         const Q_m = (Vs * An * 60 * 1000 * ((Tm + 273) / (Ts + 273)) * (Ps / Pm) * (1 - Xw / 100)) / Yd;
         const Q_sl = Q_m * Yd * (273 / (273 + Tm)) * (Pm / 760);
         
+        // 목표 채취량 도달을 위한 '케이팩터 연동 채취시간' 역산
         const calcTime = Math.ceil(targetVol / Q_sl);
         if (isFinite(calcTime) && calcTime > 0) {
             reqTime = calcTime;
+            // 도출된 채취시간을 바탕으로 최종 채취량을 계산
             const Vm_val = Q_m * reqTime;
             L = Vm_val.toFixed(1);
             const Vsl_val = Q_sl * reqTime;
@@ -588,7 +598,7 @@ export default function App() {
       actualConcentration: actualC, correctedConcentration: correctedC
     };
     setSavedData([...savedData, result]);
-    alert('삐까삐까! 작성하신 데이터가 임시 저장되었습니다. ⚡');
+    alert('작성하신 데이터가 임시 저장되었습니다.');
   };
 
   const exportToCSV = () => {
@@ -633,76 +643,75 @@ export default function App() {
   const expData = getExpectedValues();
 
   return (
-    <div className="min-h-screen bg-yellow-50 p-4 md:p-8 font-sans text-slate-800 selection:bg-yellow-200">
+    <div className="min-h-screen bg-emerald-50/50 p-4 md:p-8 font-sans text-slate-800">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* 헤더 섹션 */}
-        <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-t-yellow-400 flex items-center justify-between">
+        <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-t-emerald-600 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
-              <Zap className="text-yellow-500 w-8 h-8 fill-yellow-400" />
-              먼지 시료채취 종합 기록부 ⚡
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <FileSpreadsheet className="text-emerald-600 w-8 h-8" />
+              먼지 시료채취 종합 기록부
             </h1>
-            <p className="text-slate-600 mt-2 text-sm font-medium">대기오염공정시험기준에 맞춘 전 항목 종합 연산 및 자동 기록 시트</p>
+            <p className="text-slate-500 mt-2 text-sm">대기오염공정시험기준에 맞춘 전 항목 종합 연산 및 자동 기록 시트</p>
           </div>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
           
           {/* 섹션 1: 일반 사항 및 배출구 제원 */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-yellow-100 pb-2 flex items-center gap-2">
-              <span className="bg-yellow-400 text-slate-900 font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">
+              <span className="bg-emerald-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
               일반 사항 및 배출구 제원
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
               <div><label className="block text-xs font-bold text-slate-600 mb-1">측정 일자</label>
-                <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full p-2 bg-yellow-50/50 border border-yellow-200 rounded focus:ring-2 focus:ring-yellow-400 outline-none transition-colors" /></div>
+                <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">사업장명</label>
-                <input type="text" name="company" value={formData.company} onChange={handleChange} className="w-full p-2 bg-yellow-50/50 border border-yellow-200 rounded focus:ring-2 focus:ring-yellow-400 outline-none transition-colors" /></div>
+                <input type="text" name="company" value={formData.company} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">배출구명 (위치)</label>
-                <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full p-2 bg-yellow-50/50 border border-yellow-200 rounded focus:ring-2 focus:ring-yellow-400 outline-none transition-colors" /></div>
+                <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">측정자</label>
-                <input type="text" name="sampler" value={formData.sampler} onChange={handleChange} className="w-full p-2 bg-yellow-50/50 border border-yellow-200 rounded focus:ring-2 focus:ring-yellow-400 outline-none transition-colors" /></div>
+                <input type="text" name="sampler" value={formData.sampler} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500" /></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-yellow-100/50 p-4 rounded-lg border border-yellow-200">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50/30 p-4 rounded-lg border border-emerald-100">
               <div><label className="block text-xs font-bold text-slate-600 mb-1">날씨</label>
-                <input type="text" name="weather" value={formData.weather} onChange={handleChange} className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                <input type="text" name="weather" value={formData.weather} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">대기 온도 (℃)</label>
-                <input type="number" step="0.1" name="atmTemp" value={formData.atmTemp} onChange={handleChange} className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                <input type="number" step="0.1" name="atmTemp" value={formData.atmTemp} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" /></div>
               <div className="md:col-span-2"><label className="block text-xs font-bold text-slate-600 mb-1">대기압 (측정공 주변, mmHg)</label>
-                <input type="number" step="1" name="atmPressure" value={formData.atmPressure} onChange={handleChange} className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                <input type="number" step="1" name="atmPressure" value={formData.atmPressure} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" /></div>
             </div>
 
             {/* 굴뚝 제원 (직경 산출) */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50 p-4 rounded-lg border border-emerald-200">
               <div>
-                <label className="block text-xs font-bold text-yellow-900 mb-1">총 측정 깊이 (m)</label>
-                <input type="number" step="0.001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="끝벽까지의 총 길이" className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 bg-white outline-none" />
+                <label className="block text-xs font-bold text-emerald-800 mb-1">총 측정 깊이 (m)</label>
+                <input type="number" step="0.001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="끝벽까지의 총 길이" className="w-full p-2 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 bg-white" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-yellow-900 mb-1">플랜지 길이 (m)</label>
-                <input type="number" step="0.001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 bg-white outline-none" />
+                <label className="block text-xs font-bold text-emerald-800 mb-1">플랜지 길이 (m)</label>
+                <input type="number" step="0.001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 bg-white" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1">순수 굴뚝 내경 (D, m)</label>
-                <input type="number" step="0.001" name="stackDiameter" value={formData.stackDiameter} onChange={handleChange} className="w-full p-2 border border-yellow-400 rounded focus:ring-2 focus:ring-yellow-500 bg-yellow-100 font-black text-slate-900 outline-none" placeholder="자동계산 (총 깊이 - 플랜지)" />
+                <label className="block text-xs font-bold text-emerald-900 mb-1">순수 굴뚝 내경 (D, m)</label>
+                <input type="number" step="0.001" name="stackDiameter" value={formData.stackDiameter} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded focus:ring-2 focus:ring-emerald-500 bg-emerald-100 font-black text-emerald-900" placeholder="자동계산 (총 깊이 - 플랜지)" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1">단면적 (A, ㎡)</label>
-                <input type="text" readOnly value={samplingPointsData ? samplingPointsData.area : ''} className="w-full p-2 border border-yellow-400 rounded bg-yellow-100 font-black text-slate-900 outline-none" placeholder="자동계산" />
+                <label className="block text-xs font-bold text-emerald-900 mb-1">단면적 (A, ㎡)</label>
+                <input type="text" readOnly value={samplingPointsData ? samplingPointsData.area : ''} className="w-full p-2 border border-emerald-400 rounded bg-emerald-100 font-black text-emerald-900" placeholder="자동계산" />
               </div>
             </div>
 
             {/* 굴뚝 내경에 따른 측정점 산출 패널 */}
             {samplingPointsData && (
-              <div className="mt-4 bg-white p-4 rounded-lg border border-yellow-200 shadow-sm">
+              <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                    <Target className="w-4 h-4 text-red-500"/> 굴뚝 내경({formData.stackDiameter}m) 연동 측정점 산출
+                  <h3 className="text-sm font-bold text-emerald-800 flex items-center gap-1">
+                    <Target className="w-4 h-4"/> 굴뚝 내경({formData.stackDiameter}m) 연동 측정점 산출
                   </h3>
                   {samplingPointsData.isCenterOnly && (
-                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold animate-pulse border border-red-200">
+                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold animate-pulse">
                       ⚠️ 단면적 0.25㎡ 이하 (단면중심 1점 측정)
                     </span>
                   )}
@@ -710,43 +719,43 @@ export default function App() {
                 
                 <div className="flex flex-col xl:flex-row gap-4 items-start">
                   <div className="flex flex-col gap-2 shrink-0">
-                    <div className="bg-yellow-100 px-3 py-2 rounded border border-yellow-300 text-center shadow-sm">
-                      <span className="block text-[10px] text-slate-600 font-bold">1개 측정공(Port) 기준</span>
-                      <span className="font-black text-slate-900 text-lg">총 {samplingPointsData.perRadius}개</span>
+                    <div className="bg-emerald-50 px-3 py-2 rounded border border-emerald-100 text-center shadow-sm">
+                      <span className="block text-[10px] text-slate-500 font-bold">1개 측정공(Port) 기준</span>
+                      <span className="font-black text-emerald-700 text-lg">총 {samplingPointsData.perRadius}개</span>
                     </div>
                   </div>
                   
-                  <div className="flex-1 w-full overflow-x-auto bg-white rounded border border-yellow-200">
+                  <div className="flex-1 w-full overflow-x-auto bg-white rounded border border-slate-200">
                     <table className="w-full text-xs text-center border-collapse">
                       <thead>
-                        <tr className="bg-yellow-50 text-slate-700">
-                          <th className="border-r border-b border-yellow-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치)</th>
-                          <th className="border-b border-yellow-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
+                        <tr className="bg-slate-50 text-slate-700">
+                          <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치)</th>
+                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
                         </tr>
-                        <tr className="bg-yellow-50 text-slate-700">
+                        <tr className="bg-slate-50 text-slate-700">
                           {samplingPointsData.nearInsertion.map((_, i) => (
-                            <th key={i} className="border-b border-l border-yellow-200 p-1">{i + 1}번</th>
+                            <th key={i} className="border-b border-l border-slate-200 p-1">{i + 1}번</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
-                          <td className="border-r border-b border-yellow-200 p-2 font-bold text-slate-800 whitespace-nowrap bg-yellow-100/50">
-                            가까운 쪽 (정방향)<br/><span className="text-[9px] font-normal text-slate-600">기본 측정</span>
+                          <td className="border-r border-b border-slate-200 p-2 font-bold text-emerald-800 whitespace-nowrap bg-emerald-50">
+                            가까운 쪽 (정방향)<br/><span className="text-[9px] font-normal text-emerald-600">기본 측정</span>
                           </td>
                           {samplingPointsData.nearInsertion.map((d, i) => (
-                            <td key={i} className="border-l border-b border-yellow-200 p-2 font-black text-slate-800 bg-white">
+                            <td key={i} className="border-l border-b border-slate-200 p-2 font-black text-emerald-600 bg-emerald-50/50">
                               {d} m
                             </td>
                           ))}
                         </tr>
                         {!samplingPointsData.isCenterOnly && (
                           <tr>
-                            <td className="border-r border-yellow-200 p-2 font-bold text-red-700 whitespace-nowrap bg-red-50">
-                              깊은 쪽 (역방향)<br/><span className="text-[9px] font-normal text-red-500">반대편 측정공 대체시</span>
+                            <td className="border-r border-slate-200 p-2 font-bold text-rose-800 whitespace-nowrap bg-rose-50">
+                              깊은 쪽 (역방향)<br/><span className="text-[9px] font-normal text-rose-500">반대편 측정공 대체시</span>
                             </td>
                             {samplingPointsData.farInsertion.map((d, i) => (
-                              <td key={i} className="border-l border-yellow-200 p-2 font-black text-red-600 bg-red-50/50">
+                              <td key={i} className="border-l border-slate-200 p-2 font-black text-rose-600 bg-rose-50/50">
                                 {d} m
                               </td>
                             ))}
@@ -757,11 +766,11 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-3 border-t border-yellow-100 pt-4">
+                <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-3 border-t border-slate-100 pt-4">
                   <div className="text-[10px] text-slate-500 text-left w-full space-y-1">
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
-                  <button type="button" onClick={applySamplingPointsToTable} className="w-full md:w-auto py-2 px-5 bg-yellow-400 text-slate-900 rounded-lg font-black text-sm hover:bg-yellow-500 shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0 border border-yellow-500">
+                  <button type="button" onClick={applySamplingPointsToTable} className="w-full md:w-auto py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-md flex items-center justify-center gap-2 transition-colors shrink-0">
                     <ListOrdered className="w-4 h-4" /> 하단 표 {samplingPointsData.perRadius}칸 자동 생성
                   </button>
                 </div>
@@ -770,10 +779,10 @@ export default function App() {
           </div>
 
           {/* 섹션 2: 배출가스 조성 및 분자량 (가스분석기 자료) */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200">
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-yellow-100 pb-2">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b pb-2">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">2</span>
+                <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
                 배출가스 조성 및 밀도 (가스분석기 5분 간격 3회 측정)
               </h2>
             </div>
@@ -782,43 +791,43 @@ export default function App() {
                <div className="lg:col-span-2 overflow-x-auto">
                   <table className="w-full text-sm text-center border-collapse">
                     <thead>
-                      <tr className="bg-red-50 text-red-800 border-b border-red-200">
-                        <th className="p-2 border-r border-red-100 font-bold whitespace-nowrap">회차 (시간)</th>
-                        <th className="p-2 border-r border-red-100 font-bold">O₂ (%)</th>
-                        <th className="p-2 border-r border-red-100 font-bold">CO₂ (%)</th>
-                        <th className="p-2 border-r border-red-100 font-bold">CO (ppm)</th>
-                        <th className="p-2 border-r border-red-100 font-bold">SOx (ppm)</th>
-                        <th className="p-2 font-bold">NOx (ppm)</th>
+                      <tr className="bg-teal-50 text-teal-800">
+                        <th className="p-2 border border-teal-100 font-semibold whitespace-nowrap">회차 (시간)</th>
+                        <th className="p-2 border border-teal-100 font-semibold">O₂ (%)</th>
+                        <th className="p-2 border border-teal-100 font-semibold">CO₂ (%)</th>
+                        <th className="p-2 border border-teal-100 font-semibold">CO (ppm)</th>
+                        <th className="p-2 border border-teal-100 font-semibold">SOx (ppm)</th>
+                        <th className="p-2 border border-teal-100 font-semibold">NOx (ppm)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {formData.gasAnalyzer.map((gas, idx) => (
-                        <tr key={idx} className="hover:bg-yellow-50 border-b border-yellow-100">
-                          <td className="p-2 border-r border-yellow-100 font-medium text-slate-700">{idx + 1}회차 ({(idx + 1) * 5}분)</td>
-                          <td className="p-1 border-r border-yellow-100">
-                            <input type="number" step="0.01" value={gas.o2} onChange={(e) => handleGasAnalyzerChange(idx, 'o2', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2 border border-teal-100 font-medium text-slate-600">{idx + 1}회차 ({(idx + 1) * 5}분)</td>
+                          <td className="p-1 border border-teal-100">
+                            <input type="number" step="0.01" value={gas.o2} onChange={(e) => handleGasAnalyzerChange(idx, 'o2', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                           </td>
-                          <td className="p-1 border-r border-yellow-100">
-                            <input type="number" step="0.01" value={gas.co2} onChange={(e) => handleGasAnalyzerChange(idx, 'co2', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                          <td className="p-1 border border-teal-100">
+                            <input type="number" step="0.01" value={gas.co2} onChange={(e) => handleGasAnalyzerChange(idx, 'co2', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                           </td>
-                          <td className="p-1 border-r border-yellow-100">
-                            <input type="number" step="0.01" value={gas.co} onChange={(e) => handleGasAnalyzerChange(idx, 'co', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                          <td className="p-1 border border-teal-100">
+                            <input type="number" step="0.01" value={gas.co} onChange={(e) => handleGasAnalyzerChange(idx, 'co', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                           </td>
-                          <td className="p-1 border-r border-yellow-100">
-                            <input type="number" step="0.01" value={gas.sox} onChange={(e) => handleGasAnalyzerChange(idx, 'sox', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                          <td className="p-1 border border-teal-100">
+                            <input type="number" step="0.01" value={gas.sox} onChange={(e) => handleGasAnalyzerChange(idx, 'sox', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                           </td>
-                          <td className="p-1">
-                            <input type="number" step="0.01" value={gas.nox} onChange={(e) => handleGasAnalyzerChange(idx, 'nox', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                          <td className="p-1 border border-teal-100">
+                            <input type="number" step="0.01" value={gas.nox} onChange={(e) => handleGasAnalyzerChange(idx, 'nox', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                           </td>
                         </tr>
                       ))}
-                      <tr className="bg-yellow-100/50 font-bold text-slate-800">
-                        <td className="p-2 border-r border-yellow-200">평균</td>
-                        <td className="p-2 border-r border-yellow-200 text-red-600">{o2.toFixed(2)}</td>
-                        <td className="p-2 border-r border-yellow-200">{co2.toFixed(2)}</td>
-                        <td className="p-2 border-r border-yellow-200">{co.toFixed(2)}</td>
-                        <td className="p-2 border-r border-yellow-200">{sox.toFixed(2)}</td>
-                        <td className="p-2">{nox.toFixed(2)}</td>
+                      <tr className="bg-slate-50 font-bold text-slate-700">
+                        <td className="p-2 border border-teal-100">평균</td>
+                        <td className="p-2 border border-teal-100 text-red-600">{o2.toFixed(2)}</td>
+                        <td className="p-2 border border-teal-100">{co2.toFixed(2)}</td>
+                        <td className="p-2 border border-teal-100">{co.toFixed(2)}</td>
+                        <td className="p-2 border border-teal-100">{sox.toFixed(2)}</td>
+                        <td className="p-2 border border-teal-100">{nox.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -826,49 +835,49 @@ export default function App() {
                
                <div className="lg:col-span-1 flex flex-col gap-4">
                  {/* O2 보정 계수 패널 */}
-                 <div className="bg-white p-4 rounded-lg border border-red-300 shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500"></div>
+                 <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
                     <h3 className="text-xs font-bold text-red-800 mb-3 flex items-center gap-1 border-b border-red-100 pb-2">
                       <Target className="w-4 h-4"/> 산소(O₂) 보정 계수 산출
                     </h3>
                     <div className="flex justify-between items-center mb-2">
                        <div className="flex flex-col">
-                         <span className="text-xs font-bold text-slate-700">표준 산소 농도 (O<sub>s</sub>, %)</span>
-                         <span className="text-[9px] text-slate-500">보정 대상이 아니면 비워두세요</span>
+                         <span className="text-xs font-bold text-slate-600">표준 산소 농도 (O<sub>s</sub>, %)</span>
+                         <span className="text-[9px] text-slate-400">보정 대상이 아니면 비워두세요</span>
                        </div>
-                       <input type="number" step="0.1" name="standardO2" value={formData.standardO2} onChange={handleChange} className="w-20 p-1 border border-red-300 rounded text-center text-sm font-black text-red-700 bg-red-50 focus:ring-2 focus:ring-red-400 outline-none" placeholder="공란" />
+                       <input type="number" step="0.1" name="standardO2" value={formData.standardO2} onChange={handleChange} className="w-20 p-1 border border-red-300 rounded text-center text-sm font-black text-red-700 bg-red-50 focus:ring-2 focus:ring-red-500" placeholder="공란" />
                     </div>
                     <div className="flex justify-between items-center mb-2">
-                       <span className="text-xs font-bold text-slate-700">실측 산소 농도 (O<sub>a</sub>, %)</span>
-                       <span className="font-bold text-slate-800">{o2.toFixed(2)} %</span>
+                       <span className="text-xs font-bold text-slate-600">실측 산소 농도 (O<sub>a</sub>, %)</span>
+                       <span className="font-bold text-slate-700">{o2.toFixed(2)} %</span>
                     </div>
-                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-red-100">
-                       <span className="text-xs font-bold text-red-700" title="(21 - 표준O2) / (21 - 실측O2)">산소 보정 계수 (K)</span>
+                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-slate-100">
+                       <span className="text-xs font-bold text-red-900" title="(21 - 표준O2) / (21 - 실측O2)">산소 보정 계수 (K)</span>
                        <span className="font-black text-lg text-red-600">{calcO2CorrectionFactor().toFixed(3)}</span>
                     </div>
                  </div>
 
                  {/* 분자량/밀도 패널 */}
-                 <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                 <div className="bg-teal-50 p-4 rounded-lg border border-teal-200">
                     <div className="flex justify-between items-center mb-1">
-                       <span className="text-[11px] font-bold text-orange-800" title="100 - O₂(%) - CO₂(%) - CO(%)">평균 N₂ (%)</span>
-                       <span className="text-xs font-bold text-orange-700">{n2.toFixed(2)}</span>
+                       <span className="text-[11px] font-bold text-teal-800" title="100 - O₂(%) - CO₂(%) - CO(%)">평균 N₂ (%)</span>
+                       <span className="text-xs font-bold text-teal-700">{n2.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center mb-1">
-                       <span className="text-[11px] font-bold text-orange-800" title="Σ(M_i * x_i) / 100">건조가스분자량 (M<sub>d</sub>)</span>
-                       <span className="text-xs font-black text-orange-900">{Md.toFixed(3)}</span>
+                       <span className="text-[11px] font-bold text-teal-800" title="Σ(M_i * x_i) / 100">건조가스분자량 (M<sub>d</sub>)</span>
+                       <span className="text-xs font-black text-teal-700">{Md.toFixed(3)}</span>
                     </div>
-                    <div className="flex justify-between items-center mb-1 pt-1 border-t border-orange-200/50">
-                       <span className="text-[11px] font-bold text-orange-800" title="사전 수분량 반영됨">습가스분자량 (M<sub>s</sub>)</span>
-                       <span className="text-sm font-black text-orange-900">{Ms.toFixed(3)}</span>
+                    <div className="flex justify-between items-center mb-1 pt-1 border-t border-teal-200/50">
+                       <span className="text-[11px] font-bold text-teal-900" title="사전 수분량 반영됨">습가스분자량 (M<sub>s</sub>)</span>
+                       <span className="text-sm font-black text-teal-700">{Ms.toFixed(3)}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-orange-200/50">
-                       <span className="text-[11px] font-bold text-orange-800" title="1 / (22.4 * 100) * [ Σ(M_i*x_i) * (100 - Xw)/100 + 18 * Xw ]">배출가스밀도 (γ<sub>a</sub>)</span>
-                       <span className="text-sm font-black text-red-600">{r0.toFixed(3)}</span>
+                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-teal-200/50">
+                       <span className="text-[11px] font-bold text-teal-800" title="1 / (22.4 * 100) * [ Σ(M_i*x_i) * (100 - Xw)/100 + 18 * Xw ]">배출가스밀도 (γ<sub>a</sub>)</span>
+                       <span className="text-sm font-black text-teal-700">{r0.toFixed(3)}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-orange-200/50">
-                       <span className="text-[11px] font-bold text-orange-800" title="온도 및 압력 보정된 실제 밀도">배출가스밀도 (r)</span>
-                       <span className="text-sm font-black text-red-600">{isNaN(r) ? '-' : r.toFixed(3)}</span>
+                    <div className="flex justify-between items-center pt-1 mt-1 border-t border-teal-200/50">
+                       <span className="text-[11px] font-bold text-teal-900" title="온도 및 압력 보정된 실제 밀도">배출가스밀도 (r)</span>
+                       <span className="text-sm font-black text-teal-700">{isNaN(r) ? '-' : r.toFixed(3)}</span>
                     </div>
                  </div>
                </div>
@@ -877,9 +886,9 @@ export default function App() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 섹션 3: 배출가스 수분량 */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-yellow-100 pb-2 flex items-center gap-2">
-                <span className="bg-yellow-500 text-slate-900 font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">
+                <span className="bg-cyan-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
                 배출가스 수분량 (자동측정기법)
               </h2>
               <div className="space-y-4">
@@ -892,46 +901,46 @@ export default function App() {
                         <input 
                           type="number" step="0.1" value={val} 
                           onChange={(e) => handleMoistureChange(idx, e.target.value)} 
-                          className="w-full p-2 border border-yellow-300 rounded focus:ring-2 focus:ring-yellow-400 bg-yellow-50 text-center text-sm outline-none" 
+                          className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-cyan-500 bg-cyan-50 text-center text-sm" 
                         />
                       </div>
                     ))}
                   </div>
                 </div>
                 
-                <div className="bg-yellow-100 p-4 rounded-lg flex justify-between items-center border border-yellow-300 mt-4 shadow-sm">
-                  <div className="flex items-center gap-2 text-slate-800">
-                    <Droplets className="w-5 h-5 text-blue-500" />
+                <div className="bg-cyan-50 p-4 rounded-lg flex justify-between items-center border border-cyan-100 mt-4">
+                  <div className="flex items-center gap-2 text-cyan-800">
+                    <Droplets className="w-5 h-5" />
                     <span className="font-bold">사전 적용 수분량 (평균)</span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900">{calcMoisture()}%</div>
+                  <div className="text-2xl font-black text-cyan-600">{calcMoisture()}%</div>
                 </div>
                 
-                <div className="mt-6 pt-4 border-t border-yellow-200">
-                  <label className="block text-sm font-bold text-slate-800 mb-2 flex items-center gap-1">
+                <div className="mt-6 pt-4 border-t border-slate-200">
+                  <label className="block text-sm font-bold text-emerald-800 mb-2 flex items-center gap-1">
                     사후 수분량 (임핀저 무게법) <span className="text-slate-500 font-normal text-xs">- 최종 등속흡인계수 계산용</span>
                   </label>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-center border-collapse">
                       <thead>
-                        <tr className="bg-yellow-200 text-slate-800">
-                          <th className="p-2 border border-yellow-300 font-bold rounded-tl-lg">임핀저</th>
-                          <th className="p-2 border border-yellow-300 font-bold">채취 전 (g)</th>
-                          <th className="p-2 border border-yellow-300 font-bold">채취 후 (g)</th>
-                          <th className="p-2 border border-yellow-300 font-bold rounded-tr-lg">증가량 (g)</th>
+                        <tr className="bg-emerald-50 text-emerald-700">
+                          <th className="p-2 border border-emerald-100 font-semibold rounded-tl-lg">임핀저</th>
+                          <th className="p-2 border border-emerald-100 font-semibold">채취 전 (g)</th>
+                          <th className="p-2 border border-emerald-100 font-semibold">채취 후 (g)</th>
+                          <th className="p-2 border border-emerald-100 font-semibold rounded-tr-lg">증가량 (g)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.impingers.map((imp, idx) => (
-                          <tr key={imp.id} className="hover:bg-yellow-50">
-                            <td className="p-2 border border-yellow-200 text-slate-700 font-bold">{imp.id}단{imp.id === 4 ? '(실리카겔)' : ''}</td>
-                            <td className="p-1 border border-yellow-200">
-                              <input type="number" step="0.01" value={imp.initial} onChange={(e) => handleImpingerChange(idx, 'initial', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                          <tr key={imp.id}>
+                            <td className="p-2 border border-emerald-100 text-slate-600 font-medium">{imp.id}단{imp.id === 4 ? '(실리카겔)' : ''}</td>
+                            <td className="p-1 border border-emerald-100">
+                              <input type="number" step="0.01" value={imp.initial} onChange={(e) => handleImpingerChange(idx, 'initial', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                             </td>
-                            <td className="p-1 border border-yellow-200">
-                              <input type="number" step="0.01" value={imp.final} onChange={(e) => handleImpingerChange(idx, 'final', e.target.value)} className="w-full p-1 border border-yellow-300 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                            <td className="p-1 border border-emerald-100">
+                              <input type="number" step="0.01" value={imp.final} onChange={(e) => handleImpingerChange(idx, 'final', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" />
                             </td>
-                            <td className="p-2 border border-yellow-200 font-black text-slate-900 bg-yellow-100/50">
+                            <td className="p-2 border border-emerald-100 font-bold text-emerald-600 bg-emerald-50/50">
                               {!isNaN(parseFloat(imp.initial)) && !isNaN(parseFloat(imp.final)) ? (parseFloat(imp.final) - parseFloat(imp.initial)).toFixed(2) : '-'}
                             </td>
                           </tr>
@@ -940,13 +949,13 @@ export default function App() {
                     </table>
                   </div>
                   <div className="flex flex-col gap-2 mt-3">
-                    <div className="flex justify-between items-center bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                      <span className="text-sm font-bold text-slate-700">포집된 수분 총량 (V<sub>lc</sub>)</span>
-                      <span className="font-black text-slate-900">{calcTotalMoistureWeight().toFixed(2)} ml</span>
+                    <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+                      <span className="text-sm font-bold text-emerald-800">포집된 수분 총량 (V<sub>lc</sub>)</span>
+                      <span className="font-black text-emerald-600">{calcTotalMoistureWeight().toFixed(2)} ml</span>
                     </div>
-                    <div className="flex justify-between items-center bg-red-500 p-3 rounded-lg shadow-sm text-white">
+                    <div className="flex justify-between items-center bg-emerald-600 p-3 rounded-lg shadow-sm text-white">
                       <span className="text-sm font-bold">사후 수분량 (X<sub>w</sub>)</span>
-                      <span className="font-black text-xl text-yellow-300">{calcPostMoisture()}%</span>
+                      <span className="font-black text-xl">{calcPostMoisture()}%</span>
                     </div>
                   </div>
                 </div>
@@ -954,79 +963,79 @@ export default function App() {
             </div>
 
             {/* 섹션 4: 동압 및 유속 */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200 flex flex-col h-full">
-              <div className="flex justify-between items-center mb-4 border-b border-yellow-100 pb-2">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+              <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <span className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">4</span>
+                  <span className="bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">4</span>
                   측정점별 동압 및 온도
                 </h2>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-700">피토관 계수</label>
-                  <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-20 p-1 border border-yellow-300 rounded text-sm text-center outline-none focus:ring-2 focus:ring-red-400" />
+                  <label className="text-xs font-bold text-slate-600">피토관 계수</label>
+                  <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-20 p-1 border border-slate-300 rounded text-sm text-center" />
                 </div>
               </div>
               
-              <div className="flex-1 overflow-auto bg-yellow-50/50 p-2 rounded border border-yellow-200 mb-4">
+              <div className="flex-1 overflow-auto bg-slate-50 p-2 rounded border border-slate-200 mb-4">
                 <table className="w-full text-sm text-center">
                   <thead>
-                    <tr className="text-slate-700 border-b border-yellow-300 bg-yellow-100/50">
-                      <th className="pb-2 pt-2 rounded-tl-lg font-bold">측정점</th>
-                      <th className="pb-2 pt-2 text-xs font-bold">전압<br/>(mmH2O)</th>
-                      <th className="pb-2 pt-2 text-xs font-bold">정압<br/>(mmH2O)</th>
-                      <th className="pb-2 pt-2 text-xs font-bold">동압<br/>(mmH2O)</th>
-                      <th className="pb-2 pt-2 text-xs font-bold">온도(℃)</th>
-                      <th className="pb-2 pt-2 rounded-tr-lg"></th>
+                    <tr className="text-slate-600 border-b border-slate-300">
+                      <th className="pb-2">측정점</th>
+                      <th className="pb-2 text-xs">전압<br/>(mmH2O)</th>
+                      <th className="pb-2 text-xs">정압<br/>(mmH2O)</th>
+                      <th className="pb-2 text-xs">동압<br/>(mmH2O)</th>
+                      <th className="pb-2 text-xs">온도(℃)</th>
+                      <th className="pb-2"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {formData.points.map((point, idx) => (
-                      <tr key={point.id} className="hover:bg-yellow-100/30">
-                        <td className="py-1 font-bold text-slate-700">{point.id}</td>
-                        <td className="py-1"><input type="number" step="0.1" value={point.tp !== undefined ? point.tp : ''} onChange={(e) => handlePointChange(idx, 'tp', e.target.value)} className="w-16 p-1 border border-yellow-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-yellow-400" /></td>
-                        <td className="py-1"><input type="number" step="0.1" value={point.sp !== undefined ? point.sp : ''} onChange={(e) => handlePointChange(idx, 'sp', e.target.value)} className="w-16 p-1 border border-yellow-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-yellow-400" /></td>
-                        <td className="py-1"><input type="number" step="0.1" value={point.dp} onChange={(e) => handlePointChange(idx, 'dp', e.target.value)} className="w-16 p-1 border border-red-300 bg-red-50 rounded text-center font-black text-red-600 text-sm outline-none focus:ring-2 focus:ring-red-400" /></td>
-                        <td className="py-1"><input type="number" step="0.1" value={point.ts} onChange={(e) => handlePointChange(idx, 'ts', e.target.value)} className="w-16 p-1 border border-yellow-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-yellow-400" /></td>
+                      <tr key={point.id}>
+                        <td className="py-1 font-bold text-slate-500">{point.id}</td>
+                        <td className="py-1"><input type="number" step="0.1" value={point.tp !== undefined ? point.tp : ''} onChange={(e) => handlePointChange(idx, 'tp', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm" /></td>
+                        <td className="py-1"><input type="number" step="0.1" value={point.sp !== undefined ? point.sp : ''} onChange={(e) => handlePointChange(idx, 'sp', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm" /></td>
+                        <td className="py-1"><input type="number" step="0.1" value={point.dp} onChange={(e) => handlePointChange(idx, 'dp', e.target.value)} className="w-16 p-1 border border-green-300 bg-green-50 rounded text-center font-bold text-green-700 text-sm" /></td>
+                        <td className="py-1"><input type="number" step="0.1" value={point.ts} onChange={(e) => handlePointChange(idx, 'ts', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm" /></td>
                         <td className="py-1">
-                          <button type="button" onClick={() => removePoint(idx)} className="text-red-400 hover:text-red-600 p-1 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => removePoint(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <button type="button" onClick={addPoint} className="w-full mt-2 py-1.5 flex items-center justify-center gap-1 text-slate-800 bg-yellow-200 hover:bg-yellow-300 rounded text-xs font-black border border-yellow-400 transition-colors shadow-sm">
+                <button type="button" onClick={addPoint} className="w-full mt-2 py-1 flex items-center justify-center gap-1 text-green-600 bg-green-50 hover:bg-green-100 rounded text-xs font-bold border border-green-200">
                   <Plus className="w-3 h-3" /> 측정점 추가
                 </button>
               </div>
 
-              <div className="bg-yellow-100 p-4 rounded-lg flex justify-between items-center border border-yellow-300 shadow-sm">
-                <div className="flex items-center gap-2 text-slate-800">
-                  <Wind className="w-5 h-5 text-slate-700" />
+              <div className="bg-green-50 p-4 rounded-lg flex justify-between items-center border border-green-100">
+                <div className="flex items-center gap-2 text-green-800">
+                  <Wind className="w-5 h-5" />
                   <span className="font-bold">평균 유속 (Vs)</span>
                 </div>
-                <div className="text-2xl font-black text-red-600">{calcGasVelocity()} <span className="text-sm font-bold text-slate-700">m/s</span></div>
+                <div className="text-2xl font-black text-green-600">{calcGasVelocity()} <span className="text-sm">m/s</span></div>
               </div>
             </div>
           </div>
 
           {/* 섹션 5: 시료채취 및 등속흡인 */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-yellow-100 pb-2 flex items-center gap-2">
-              <span className="bg-yellow-400 text-slate-900 font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">5</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">
+              <span className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">5</span>
               시료 채취 기록 (적산유량계 및 등속흡인)
             </h2>
 
             {/* 1단계: 자동 산정 및 예측 결과 통합 패널 */}
-            <div className="bg-yellow-50 border border-yellow-300 p-5 rounded-lg mb-6 shadow-sm">
+            <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg mb-6 shadow-sm">
                <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-4 gap-2">
-                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <Target className="w-5 h-5 text-red-500" /> 1단계: 채취조건 정밀 산출 (기기 고유 계수 연동)
+                 <h3 className="font-bold text-emerald-800 flex items-center gap-2">
+                    <Target className="w-5 h-5" /> 1단계: 채취조건 정밀 산출 (기기 고유 계수 연동)
                  </h3>
-                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-yellow-300 shadow-sm">
-                    <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
+                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
+                    <label className="text-xs font-bold text-emerald-700">장비 프리셋 선택</label>
                     <select 
                        value={formData.samplerId} 
                        onChange={handleSamplerChange}
-                       className="p-1 border border-yellow-400 rounded text-sm font-bold text-slate-900 bg-yellow-100 focus:ring-2 focus:ring-yellow-500 outline-none cursor-pointer"
+                       className="p-1 border border-emerald-300 rounded text-sm font-bold text-emerald-900 bg-emerald-50 focus:ring-2 focus:ring-emerald-500 outline-none"
                     >
                        <option value="">직접 입력</option>
                        {SAMPLERS.map(s => (
@@ -1038,87 +1047,87 @@ export default function App() {
                
                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3 items-end">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">목표 채취량 (SL)</label>
-                    <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-yellow-300 rounded text-sm bg-white font-bold outline-none focus:ring-2 focus:ring-yellow-400" />
+                    <label className="block text-xs font-bold text-emerald-700 mb-1">목표 채취량 (SL)</label>
+                    <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-emerald-200 rounded text-sm bg-white font-bold" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1" title="가스미터 보정계수">보정계수 (Y<sub>d</sub>)</label>
-                    <input type="number" step="0.001" name="gasMeterFactor" value={formData.gasMeterFactor} onChange={handleChange} placeholder="Yd" className="w-full p-2 border border-yellow-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-red-600" />
+                    <label className="block text-xs font-bold text-emerald-700 mb-1" title="가스미터 보정계수">보정계수 (Y<sub>d</sub>)</label>
+                    <input type="number" step="0.001" name="gasMeterFactor" value={formData.gasMeterFactor} onChange={handleChange} placeholder="Yd" className="w-full p-2 border border-emerald-200 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-teal-900" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1" title="오리피스 계수">오리피스 계수 (ΔH<sub>@</sub>)</label>
-                    <input type="number" step="0.1" name="deltaHAt" value={formData.deltaHAt} onChange={handleChange} placeholder="ΔH@" className="w-full p-2 border border-yellow-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-red-600" />
+                    <label className="block text-xs font-bold text-emerald-700 mb-1" title="오리피스 계수">오리피스 계수 (ΔH<sub>@</sub>)</label>
+                    <input type="number" step="0.1" name="deltaHAt" value={formData.deltaHAt} onChange={handleChange} placeholder="ΔH@" className="w-full p-2 border border-emerald-200 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-teal-900" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1" title="채취 중 예상되는 입구 온도">예상 T<sub>m</sub> (입구, ℃)</label>
-                    <input type="number" step="0.1" name="expectedTmIn" value={formData.expectedTmIn} onChange={handleChange} placeholder={formData.atmTemp ? formData.atmTemp : "25"} className="w-full p-2 border border-yellow-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-slate-800" />
+                    <label className="block text-[11px] font-bold text-emerald-700 mb-1" title="채취 중 예상되는 입구 온도">예상 T<sub>m</sub> (입구, ℃)</label>
+                    <input type="number" step="0.1" name="expectedTmIn" value={formData.expectedTmIn} onChange={handleChange} placeholder={formData.atmTemp ? formData.atmTemp : "25"} className="w-full p-2 border border-emerald-200 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-teal-900" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1" title="채취 중 예상되는 출구 온도">예상 T<sub>m</sub> (출구, ℃)</label>
-                    <input type="number" step="0.1" name="expectedTmOut" value={formData.expectedTmOut} onChange={handleChange} placeholder={formData.atmTemp ? formData.atmTemp : "25"} className="w-full p-2 border border-yellow-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-slate-800" />
+                    <label className="block text-[11px] font-bold text-emerald-700 mb-1" title="채취 중 예상되는 출구 온도">예상 T<sub>m</sub> (출구, ℃)</label>
+                    <input type="number" step="0.1" name="expectedTmOut" value={formData.expectedTmOut} onChange={handleChange} placeholder={formData.atmTemp ? formData.atmTemp : "25"} className="w-full p-2 border border-emerald-200 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-teal-900" />
                   </div>
                </div>
 
                <div className="mb-4">
-                  <button type="button" onClick={handleCalculateOptions} className="w-full py-3 bg-yellow-400 text-slate-900 rounded-lg font-black text-sm hover:bg-yellow-500 transition shadow-md flex justify-center items-center gap-2 border border-yellow-500">
+                  <button type="button" onClick={handleCalculateOptions} className="w-full py-3 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700 transition shadow-md flex justify-center items-center gap-2">
                     <Calculator className="w-5 h-5" /> K-Factor 및 예상 채취시간 자동 산출
                   </button>
                </div>
                
                {recommendations && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                    <div className="bg-red-50 border-2 border-red-300 p-4 rounded-lg shadow-sm hover:border-red-500 transition-colors">
-                       <h4 className="font-black text-red-800 mb-3 flex items-center gap-1 border-b border-red-200 pb-2">⚡ 빠른 채취 <span className="text-[10px] font-bold text-red-500 ml-auto">(최대치, 50 이하)</span></h4>
-                       <ul className="text-sm text-slate-700 space-y-2 mb-4">
-                          <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.fast.bestNozzleNum} <span className="text-sm font-medium">({recommendations.fast.finalDn}mm)</span></span></li>
-                          <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-red-600">{recommendations.fast.fastestTime} 분</span></li>
-                          <li className="flex justify-between font-bold"><span>K-Factor:</span> <span className="font-black">{recommendations.fast.calculatedK}</span></li>
-                          <li className="flex justify-between items-center bg-white p-1 rounded border border-red-200 font-bold"><span>예상 ΔH:</span> <span className="font-black text-red-600 text-lg">{recommendations.fast.expectedDH}</span></li>
+                    <div className="bg-rose-50 border-2 border-rose-200 p-4 rounded-lg shadow-sm hover:border-rose-400 transition-colors">
+                       <h4 className="font-bold text-rose-800 mb-3 flex items-center gap-1 border-b border-rose-200 pb-2">⚡ 빠른 채취 <span className="text-[10px] font-normal text-rose-600 ml-auto">(최대치, 50 이하)</span></h4>
+                       <ul className="text-sm text-rose-700 space-y-2 mb-4">
+                          <li className="flex justify-between"><span>추천 노즐:</span> <span className="font-black text-lg">No.{recommendations.fast.bestNozzleNum} <span className="text-sm">({recommendations.fast.finalDn}mm)</span></span></li>
+                          <li className="flex justify-between"><span>예상 시간:</span> <span className="font-black text-indigo-700">{recommendations.fast.fastestTime} 분</span></li>
+                          <li className="flex justify-between"><span>K-Factor:</span> <span className="font-black">{recommendations.fast.calculatedK}</span></li>
+                          <li className="flex justify-between items-center bg-white p-1 rounded border border-rose-200"><span>예상 ΔH:</span> <span className="font-black text-rose-600 text-lg">{recommendations.fast.expectedDH}</span></li>
                        </ul>
-                       <button type="button" onClick={() => applyRecommendation(recommendations.fast)} className="w-full py-2 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
+                       <button type="button" onClick={() => applyRecommendation(recommendations.fast)} className="w-full py-2 bg-rose-600 text-white rounded text-sm font-bold hover:bg-rose-700 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
                     </div>
-                    <div className="bg-yellow-100 border-2 border-yellow-400 p-4 rounded-lg shadow-sm hover:border-yellow-500 transition-colors">
-                       <h4 className="font-black text-slate-800 mb-3 flex items-center gap-1 border-b border-yellow-300 pb-2">🎯 표준 채취 <span className="text-[10px] font-bold text-slate-600 ml-auto">(ΔH 25 내외)</span></h4>
-                       <ul className="text-sm text-slate-700 space-y-2 mb-4">
-                          <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.standard.bestNozzleNum} <span className="text-sm font-medium">({recommendations.standard.finalDn}mm)</span></span></li>
-                          <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-red-600">{recommendations.standard.fastestTime} 분</span></li>
-                          <li className="flex justify-between font-bold"><span>K-Factor:</span> <span className="font-black">{recommendations.standard.calculatedK}</span></li>
-                          <li className="flex justify-between items-center bg-white p-1 rounded border border-yellow-300 font-bold"><span>예상 ΔH:</span> <span className="font-black text-yellow-600 text-lg">{recommendations.standard.expectedDH}</span></li>
+                    <div className="bg-emerald-50 border-2 border-emerald-200 p-4 rounded-lg shadow-sm hover:border-emerald-400 transition-colors">
+                       <h4 className="font-bold text-emerald-800 mb-3 flex items-center gap-1 border-b border-emerald-200 pb-2">🎯 표준 채취 <span className="text-[10px] font-normal text-emerald-600 ml-auto">(ΔH 25 내외)</span></h4>
+                       <ul className="text-sm text-emerald-700 space-y-2 mb-4">
+                          <li className="flex justify-between"><span>추천 노즐:</span> <span className="font-black text-lg">No.{recommendations.standard.bestNozzleNum} <span className="text-sm">({recommendations.standard.finalDn}mm)</span></span></li>
+                          <li className="flex justify-between"><span>예상 시간:</span> <span className="font-black text-indigo-700">{recommendations.standard.fastestTime} 분</span></li>
+                          <li className="flex justify-between"><span>K-Factor:</span> <span className="font-black">{recommendations.standard.calculatedK}</span></li>
+                          <li className="flex justify-between items-center bg-white p-1 rounded border border-emerald-200"><span>예상 ΔH:</span> <span className="font-black text-emerald-600 text-lg">{recommendations.standard.expectedDH}</span></li>
                        </ul>
-                       <button type="button" onClick={() => applyRecommendation(recommendations.standard)} className="w-full py-2 bg-yellow-400 text-slate-900 rounded-lg text-sm font-bold hover:bg-yellow-500 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
+                       <button type="button" onClick={() => applyRecommendation(recommendations.standard)} className="w-full py-2 bg-emerald-600 text-white rounded text-sm font-bold hover:bg-emerald-700 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
                     </div>
-                    <div className="bg-orange-50 border-2 border-orange-300 p-4 rounded-lg shadow-sm hover:border-orange-500 transition-colors">
-                       <h4 className="font-black text-orange-900 mb-3 flex items-center gap-1 border-b border-orange-200 pb-2">🛡️ 안정/장시간 <span className="text-[10px] font-bold text-orange-600 ml-auto">(ΔH 10 내외)</span></h4>
-                       <ul className="text-sm text-slate-700 space-y-2 mb-4">
-                          <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.stable.bestNozzleNum} <span className="text-sm font-medium">({recommendations.stable.finalDn}mm)</span></span></li>
-                          <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-red-600">{recommendations.stable.fastestTime} 분</span></li>
-                          <li className="flex justify-between font-bold"><span>K-Factor:</span> <span className="font-black">{recommendations.stable.calculatedK}</span></li>
-                          <li className="flex justify-between items-center bg-white p-1 rounded border border-orange-200 font-bold"><span>예상 ΔH:</span> <span className="font-black text-orange-600 text-lg">{recommendations.stable.expectedDH}</span></li>
+                    <div className="bg-cyan-50 border-2 border-cyan-200 p-4 rounded-lg shadow-sm hover:border-cyan-400 transition-colors">
+                       <h4 className="font-bold text-cyan-800 mb-3 flex items-center gap-1 border-b border-cyan-200 pb-2">🛡️ 안정/장시간 <span className="text-[10px] font-normal text-cyan-600 ml-auto">(ΔH 10 내외)</span></h4>
+                       <ul className="text-sm text-cyan-700 space-y-2 mb-4">
+                          <li className="flex justify-between"><span>추천 노즐:</span> <span className="font-black text-lg">No.{recommendations.stable.bestNozzleNum} <span className="text-sm">({recommendations.stable.finalDn}mm)</span></span></li>
+                          <li className="flex justify-between"><span>예상 시간:</span> <span className="font-black text-indigo-700">{recommendations.stable.fastestTime} 분</span></li>
+                          <li className="flex justify-between"><span>K-Factor:</span> <span className="font-black">{recommendations.stable.calculatedK}</span></li>
+                          <li className="flex justify-between items-center bg-white p-1 rounded border border-cyan-200"><span>예상 ΔH:</span> <span className="font-black text-cyan-600 text-lg">{recommendations.stable.expectedDH}</span></li>
                        </ul>
-                       <button type="button" onClick={() => applyRecommendation(recommendations.stable)} className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
+                       <button type="button" onClick={() => applyRecommendation(recommendations.stable)} className="w-full py-2 bg-cyan-600 text-white rounded text-sm font-bold hover:bg-cyan-700 shadow-sm flex justify-center items-center gap-1"><CheckCircle2 className="w-4 h-4"/> 적용하기</button>
                     </div>
                  </div>
                )}
                
-               <p className="text-[11px] text-slate-600 mb-4 font-bold">※ K-Factor 및 예상 오리피스압(ΔH) 산출 후, 해당 노즐의 유량(Q<sub>sl</sub>)을 바탕으로 <span className="text-red-600">목표 채취량({formData.targetVolume || 1000}SL)에 도달하기 위한 필요 채취시간</span>을 자동 역산합니다.</p>
+               <p className="text-[11px] text-green-700 mb-4 font-medium">※ K-Factor 및 예상 오리피스압(ΔH) 산출 후, 해당 노즐의 유량(Q<sub>sl</sub>)을 바탕으로 <b>목표 채취량({formData.targetVolume || 1000}SL)에 도달하기 위한 필요 채취시간</b>을 자동 역산합니다.</p>
 
                {/* 접기/펴기 엑셀 전체 리스트 */}
                <details className="mt-4 mb-4">
-                  <summary className="cursor-pointer text-xs font-black text-slate-700 hover:text-slate-900 flex items-center gap-1">
+                  <summary className="cursor-pointer text-xs font-semibold text-green-700 hover:text-green-800 flex items-center gap-1">
                      <ChevronDown className="w-4 h-4"/> 전체 노즐 예측표 열어보기 (참고용)
                   </summary>
                   <div className="mt-3 overflow-x-auto">
-                     <table className="w-full text-xs text-center border-collapse border border-yellow-300">
-                       <thead className="bg-yellow-200 text-slate-800">
+                     <table className="w-full text-xs text-center border-collapse border border-slate-300">
+                       <thead className="bg-green-100 text-green-800">
                           <tr>
-                             <th className="border border-yellow-300 p-1 font-bold">노즐번호</th>
-                             <th className="border border-yellow-300 p-1 font-bold">노즐직경(mm)</th>
-                             <th className="border border-yellow-300 p-1 font-bold">K-factor</th>
-                             <th className="border border-yellow-300 p-1 font-bold">ΔH</th>
-                             <th className="border border-yellow-300 p-1 font-bold text-red-600">예상시간(분)</th>
-                             <th className="border border-yellow-300 p-1 font-bold">(L)</th>
-                             <th className="border border-yellow-300 p-1 font-bold">(SL)</th>
-                             <th className="border border-yellow-300 p-1 font-bold">(Sm³)</th>
+                             <th className="border border-green-200 p-1">노즐번호</th>
+                             <th className="border border-green-200 p-1">노즐직경(mm)</th>
+                             <th className="border border-green-200 p-1">K-factor</th>
+                             <th className="border border-green-200 p-1">ΔH</th>
+                             <th className="border border-green-200 p-1 text-indigo-800">예상시간(분)</th>
+                             <th className="border border-green-200 p-1">(L)</th>
+                             <th className="border border-green-200 p-1">(SL)</th>
+                             <th className="border border-green-200 p-1">(Sm³)</th>
                           </tr>
                        </thead>
                        <tbody className="bg-white">
@@ -1147,6 +1156,7 @@ export default function App() {
                                 const q_m = (vs * an * 60000 * ((tm+273)/(ts+273)) * (ps/pm) * (1-Xw/100)) / y;
                                 const q_sl = q_m * y * (273/(tm+273)) * (pm/760);
                                 
+                                // ✅ 노즐(K-factor)에 따른 필요 채취 시간 계산
                                 let time = Math.ceil((parseFloat(formData.targetVolume) || 1000) / q_sl);
                                 if (!isFinite(time) || time <= 0) time = 0;
                                 reqTime = time;
@@ -1158,20 +1168,20 @@ export default function App() {
                              }
                              const isSelected = formData.usedNozzleNum === String(n.num);
                              return (
-                               <tr key={n.num} className={isSelected ? "bg-yellow-100 font-bold" : "hover:bg-yellow-50"}>
-                                 <td className="border border-yellow-200 p-1 font-bold text-slate-800">
+                               <tr key={n.num} className={isSelected ? "bg-green-100 font-bold" : ""}>
+                                 <td className="border border-green-100 p-1">
                                    {n.num}
                                    {formData.recommendedNozzleNum === String(n.num) && (
                                      <span className="ml-1 text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">추천</span>
                                    )}
                                  </td>
-                                 <td className="border border-yellow-200 p-1 font-bold">{n.d.toFixed(2)}</td>
-                                 <td className="border border-yellow-200 p-1 font-black text-slate-700">{k}</td>
-                                 <td className="border border-yellow-200 p-1 font-black text-red-600">{dh}</td>
-                                 <td className="border border-yellow-200 p-1 font-black text-red-600 bg-red-50/50">{reqTime}</td>
-                                 <td className="border border-yellow-200 p-1">{vl}</td>
-                                 <td className="border border-yellow-200 p-1">{vsl}</td>
-                                 <td className="border border-yellow-200 p-1">{vsm}</td>
+                                 <td className="border border-green-100 p-1">{n.d.toFixed(2)}</td>
+                                 <td className="border border-green-100 p-1 text-emerald-700">{k}</td>
+                                 <td className="border border-green-100 p-1 font-bold">{dh}</td>
+                                 <td className="border border-green-100 p-1 text-indigo-700 font-bold bg-indigo-50/30">{reqTime}</td>
+                                 <td className="border border-green-100 p-1">{vl}</td>
+                                 <td className="border border-green-100 p-1">{vsl}</td>
+                                 <td className="border border-green-100 p-1">{vsm}</td>
                                </tr>
                              )
                           })}
@@ -1180,158 +1190,158 @@ export default function App() {
                   </div>
                </details>
 
-               {/* 산정 결과 요약창 */}
-               <div className="bg-white p-4 border border-yellow-400 rounded-lg shadow-inner">
+               {/* UI 깨짐 수정을 위한 Flex-wrap 기반 산정 결과 요약창 */}
+               <div className="bg-white p-4 border border-green-200 rounded-lg shadow-inner">
                   {formData.recommendedNozzleNum && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between shadow-sm">
+                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-400 rounded-lg flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className="text-xl">⚡</span>
-                        <span className="font-black text-red-900">시스템 추천 적정 노즐:</span>
-                        <span className="text-lg font-black text-slate-900 bg-yellow-300 px-3 py-1 border border-yellow-400 rounded-lg">
+                        <span className="text-xl">💡</span>
+                        <span className="font-bold text-yellow-900">시스템 추천 적정 노즐:</span>
+                        <span className="text-lg font-black text-emerald-700 bg-emerald-50 px-2 py-1 border border-emerald-200 rounded">
                           No.{formData.recommendedNozzleNum} ({formData.recommendedNozzleDia} mm)
                         </span>
                       </div>
                     </div>
                   )}
                   
-                  <h4 className="text-sm font-black text-slate-800 mb-3 border-b border-yellow-200 pb-2">📊 노즐 선정 및 채취량 예측 정보</h4>
+                  <h4 className="text-sm font-bold text-slate-700 mb-3 border-b pb-2">📊 노즐 선정 및 채취량 예측 정보</h4>
                   <div className="flex flex-wrap justify-center gap-2 text-center">
-                      <div className="bg-slate-100 py-2 px-1 rounded-lg border border-slate-200 flex-1 min-w-[90px]">
+                      <div className="bg-slate-50 py-2 px-1 rounded border border-slate-100 flex-1 min-w-[90px]">
                           <div className="text-[10px] text-slate-500 font-bold">가스유속(V<sub>s</sub>)</div>
-                          <div className="font-black text-slate-800 mt-1">{calcGasVelocity()}</div>
+                          <div className="font-black text-slate-700 mt-1">{calcGasVelocity()}</div>
                       </div>
-                      <div className="bg-yellow-100 py-2 px-1 rounded-lg border border-yellow-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-slate-700 font-bold">노즐경(D<sub>n</sub>)</div>
-                          <div className="font-black text-slate-900 mt-1">{formData.nozzleDiameter || '-'}</div>
+                      <div className="bg-emerald-50 py-2 px-1 rounded border border-emerald-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-emerald-600 font-bold">노즐경(D<sub>n</sub>)</div>
+                          <div className="font-black text-emerald-800 mt-1">{formData.nozzleDiameter || '-'}</div>
                       </div>
-                      <div className="bg-yellow-100 py-2 px-1 rounded-lg border border-yellow-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-slate-700 font-bold">K-Factor</div>
-                          <div className="font-black text-slate-900 mt-1">{formData.kFactor || '-'}</div>
+                      <div className="bg-emerald-50 py-2 px-1 rounded border border-emerald-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-emerald-600 font-bold">K-Factor</div>
+                          <div className="font-black text-emerald-800 mt-1">{formData.kFactor || '-'}</div>
                       </div>
-                      <div className="bg-red-100 py-2 px-1 rounded-lg border border-red-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-red-700 font-bold">예상 ΔH</div>
-                          <div className="font-black text-red-700 mt-1">{expData.dH}</div>
+                      <div className="bg-teal-50 py-2 px-1 rounded border border-teal-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-teal-700 font-bold">예상 ΔH</div>
+                          <div className="font-black text-teal-800 mt-1">{expData.dH}</div>
                       </div>
-                      <div className="bg-red-500 py-2 px-1 rounded-lg border border-red-600 flex-1 min-w-[90px] shadow-sm">
-                          <div className="text-[10px] text-red-100 font-bold">예상시간(분)</div>
-                          <div className="font-black text-white mt-1">{expData.reqTime}</div>
+                      <div className="bg-indigo-50 py-2 px-1 rounded border border-indigo-100 flex-1 min-w-[90px] shadow-sm">
+                          <div className="text-[10px] text-indigo-700 font-bold">예상시간(분)</div>
+                          <div className="font-black text-indigo-800 mt-1">{expData.reqTime}</div>
                       </div>
-                      <div className="bg-orange-100 py-2 px-1 rounded-lg border border-orange-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-orange-800 font-bold">건조채취량(V<sub>m</sub>)</div>
-                          <div className="font-black text-orange-900 mt-1">{expData.L}</div>
+                      <div className="bg-green-50 py-2 px-1 rounded border border-green-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-green-700 font-bold">건조채취량(V<sub>m</sub>)</div>
+                          <div className="font-black text-green-800 mt-1">{expData.L}</div>
                       </div>
-                      <div className="bg-orange-100 py-2 px-1 rounded-lg border border-orange-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-orange-800 font-bold">표준채취량(SL)</div>
-                          <div className="font-black text-orange-900 mt-1">{expData.SL}</div>
+                      <div className="bg-green-50 py-2 px-1 rounded border border-green-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-green-700 font-bold">표준채취량(SL)</div>
+                          <div className="font-black text-green-800 mt-1">{expData.SL}</div>
                       </div>
-                      <div className="bg-orange-100 py-2 px-1 rounded-lg border border-orange-300 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-orange-800 font-bold">표준채취량(Sm³)</div>
-                          <div className="font-black text-orange-900 mt-1">{expData.Sm3}</div>
+                      <div className="bg-green-50 py-2 px-1 rounded border border-green-100 flex-1 min-w-[90px]">
+                          <div className="text-[10px] text-green-700 font-bold">표준채취량(Sm³)</div>
+                          <div className="font-black text-green-800 mt-1">{expData.Sm3}</div>
                       </div>
                   </div>
                </div>
             </div>
             
             {/* 기본 채취 조건 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">사용 노즐경 (mm)</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">사용 노즐경 (mm)</label>
                 <input 
                   type="number" step="0.01" list="nozzle-list" name="nozzleDiameter" 
                   value={formData.nozzleDiameter} onChange={handleChange} 
                   placeholder="목록 선택 또는 입력"
-                  className="w-full p-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-400 bg-white outline-none" 
+                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-green-500 bg-white" 
                 />
                 <datalist id="nozzle-list">
                   {NOZZLE_SET.map(n => <option key={n.num} value={n.d.toFixed(2)}>No.{n.num} ({n.d}mm)</option>)}
                 </datalist>
               </div>
-              <div><label className="block text-xs font-bold text-slate-700 mb-1">적용 K-Factor</label>
-                <input type="number" step="0.001" name="kFactor" value={formData.kFactor} onChange={handleKFactorChange} className="w-full p-2 border border-yellow-400 bg-white rounded-lg focus:ring-2 focus:ring-yellow-500 font-black outline-none text-slate-800" /></div>
+              <div><label className="block text-xs font-bold text-green-700 mb-1">적용 K-Factor</label>
+                <input type="number" step="0.001" name="kFactor" value={formData.kFactor} onChange={handleKFactorChange} className="w-full p-2 border border-green-400 bg-green-50 rounded focus:ring-2 focus:ring-green-500 font-bold" /></div>
             </div>
 
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex justify-between items-end mb-2">
-                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1"><ListOrdered className="w-4 h-4"/> 2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)</h3>
+                <h3 className="text-sm font-bold text-green-800 flex items-center gap-1"><ListOrdered className="w-4 h-4"/> 2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)</h3>
               </div>
               
-              <div className="overflow-x-auto border border-yellow-300 rounded-xl shadow-sm">
+              <div className="overflow-x-auto border border-slate-300 rounded-lg">
                 <table className="w-full text-xs text-center min-w-[900px]">
-                  <thead className="bg-yellow-200 text-slate-800 border-b border-yellow-300">
+                  <thead className="bg-slate-100 text-slate-600 border-b border-slate-300">
                     <tr>
-                      <th className="p-1 font-bold whitespace-nowrap">순번</th>
-                      <th className="p-1 font-bold whitespace-nowrap">채취점</th>
-                      <th className="p-1 font-bold whitespace-nowrap">시간<br/>(분)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>온도(T<sub>s</sub>, ℃)</th>
-                      <th className="p-1 font-black text-red-600 whitespace-nowrap">동압<br/>(Δp)</th>
-                      <th className="p-1 font-black text-slate-900 whitespace-nowrap">오리피스압<br/>(ΔH)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">적산유량<br/>(V<sub>m</sub>, L)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-600">입구 | 출구</span></th>
-                      <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>
-                      <th className="p-1 font-black text-red-600 border-l border-yellow-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
+                      <th className="p-1 font-semibold whitespace-nowrap">순번</th>
+                      <th className="p-1 font-semibold whitespace-nowrap">채취점</th>
+                      <th className="p-1 font-semibold whitespace-nowrap">시간<br/>(분)</th>
+                      <th className="p-1 font-semibold text-slate-700 whitespace-nowrap">배출가스<br/>온도(T<sub>s</sub>, ℃)</th>
+                      <th className="p-1 font-semibold text-emerald-600 whitespace-nowrap">동압<br/>(Δp)</th>
+                      <th className="p-1 font-semibold text-cyan-600 whitespace-nowrap">오리피스압<br/>(ΔH)</th>
+                      <th className="p-1 font-semibold text-green-700 whitespace-nowrap">적산유량<br/>(V<sub>m</sub>, L)</th>
+                      <th className="p-1 font-semibold text-rose-600 whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-400">입구 | 출구</span></th>
+                      <th className="p-1 font-semibold text-slate-600 whitespace-nowrap">진공압<br/>(mmHg)</th>
+                      <th className="p-1 font-semibold text-slate-600 whitespace-nowrap">임핀저<br/>온도(℃)</th>
+                      <th className="p-1 font-semibold text-orange-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
                       <th className="p-1"></th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white">
+                  <tbody>
                     {formData.gasMeters.map((meter, idx) => {
                       const isStartRow = idx === 0;
                       const rowRate = calcRowIsokineticRate(idx);
                       const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 95 && parseFloat(rowRate) <= 105;
                       
                       return (
-                        <tr key={meter.id} className={`border-b border-yellow-100 last:border-0 hover:bg-yellow-50 transition-colors`}>
+                        <tr key={meter.id} className={`border-b border-slate-100 last:border-0 ${isStartRow ? 'bg-slate-100/50' : 'hover:bg-slate-50'}`}>
                           <td className="p-1 font-bold text-slate-500 w-8">{isStartRow ? '초기' : meter.id}</td>
                           <td className="p-1 w-12">
                             {isStartRow ? (
                               <span className="font-bold text-slate-400">시작</span>
                             ) : (
-                              <input type="text" value={meter.pointNum} onChange={(e) => handleGasMeterChange(idx, 'pointNum', e.target.value)} placeholder="입력" className="w-full p-1 border border-yellow-200 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                              <input type="text" value={meter.pointNum} onChange={(e) => handleGasMeterChange(idx, 'pointNum', e.target.value)} placeholder="입력" className="w-full p-1 border border-slate-200 rounded text-center" />
                             )}
                           </td>
                           <td className="p-1 w-12">
                             {isStartRow ? (
                               <span className="font-bold text-slate-400">0</span>
                             ) : (
-                              <input type="number" step="0.1" value={meter.time} onChange={(e) => handleGasMeterChange(idx, 'time', e.target.value)} placeholder="5" className="w-full p-1 border border-yellow-200 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400" />
+                              <input type="number" step="0.1" value={meter.time} onChange={(e) => handleGasMeterChange(idx, 'time', e.target.value)} placeholder="5" className="w-full p-1 border border-slate-200 rounded text-center" />
                             )}
                           </td>
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.stackTemp} onChange={(e) => handleGasMeterChange(idx, 'stackTemp', e.target.value)} placeholder="Ts" className={`w-full p-1 border border-yellow-200 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                            <input type="number" step="0.1" value={meter.stackTemp} onChange={(e) => handleGasMeterChange(idx, 'stackTemp', e.target.value)} placeholder="Ts" className={`w-full p-1 border border-slate-200 rounded text-center ${isStartRow ? 'bg-white' : ''}`} />
                           </td>
                           
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-red-300 bg-red-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-red-400" />
+                            <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-medium" />
                           </td>
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.pressure} onChange={(e) => handleGasMeterChange(idx, 'pressure', e.target.value)} className="w-full p-1 border border-slate-300 bg-slate-100 rounded text-center font-black text-slate-800 outline-none focus:ring-2 focus:ring-slate-400" />
+                            <input type="number" step="0.1" value={meter.pressure} onChange={(e) => handleGasMeterChange(idx, 'pressure', e.target.value)} className="w-full p-1 border border-cyan-300 bg-cyan-100 rounded text-center font-bold text-cyan-800" />
                           </td>
                           <td className="p-1 w-20">
-                            <input type="number" step="0.1" value={meter.volume} onChange={(e) => handleGasMeterChange(idx, 'volume', e.target.value)} className={`w-full p-1 border ${isStartRow ? 'border-yellow-400 bg-yellow-100 text-slate-900 font-black' : 'border-yellow-200 bg-white font-bold text-slate-700'} rounded text-center outline-none focus:ring-2 focus:ring-yellow-400`} placeholder={isStartRow ? '초기유량' : ''} />
+                            <input type="number" step="0.1" value={meter.volume} onChange={(e) => handleGasMeterChange(idx, 'volume', e.target.value)} className={`w-full p-1 border ${isStartRow ? 'border-emerald-400 bg-emerald-50 text-emerald-900 font-bold' : 'border-green-200 bg-green-50 font-medium'} rounded text-center`} placeholder={isStartRow ? '초기유량' : ''} />
                           </td>
                           
                           <td className="p-1 w-28">
                             <div className="flex items-center gap-1">
-                              <input type="number" step="0.1" value={meter.tmIn} onChange={(e) => handleGasMeterChange(idx, 'tmIn', e.target.value)} placeholder="입구" className="w-1/2 p-1 border border-orange-200 bg-orange-50 rounded text-center outline-none focus:ring-2 focus:ring-orange-400" />
-                              <input type="number" step="0.1" value={meter.tmOut} onChange={(e) => handleGasMeterChange(idx, 'tmOut', e.target.value)} placeholder="출구" className="w-1/2 p-1 border border-orange-200 bg-orange-50 rounded text-center outline-none focus:ring-2 focus:ring-orange-400" />
+                              <input type="number" step="0.1" value={meter.tmIn} onChange={(e) => handleGasMeterChange(idx, 'tmIn', e.target.value)} placeholder="입구" className="w-1/2 p-1 border border-rose-200 bg-rose-50 rounded text-center" />
+                              <input type="number" step="0.1" value={meter.tmOut} onChange={(e) => handleGasMeterChange(idx, 'tmOut', e.target.value)} placeholder="출구" className="w-1/2 p-1 border border-rose-200 bg-rose-50 rounded text-center" />
                             </div>
                           </td>
                           
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.vacuum} onChange={(e) => handleGasMeterChange(idx, 'vacuum', e.target.value)} placeholder="압" className={`w-full p-1 border border-yellow-200 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                            <input type="number" step="0.1" value={meter.vacuum} onChange={(e) => handleGasMeterChange(idx, 'vacuum', e.target.value)} placeholder="압" className={`w-full p-1 border border-slate-200 rounded text-center ${isStartRow ? 'bg-white' : ''}`} />
                           </td>
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.impingerTemp} onChange={(e) => handleGasMeterChange(idx, 'impingerTemp', e.target.value)} placeholder="온도" className={`w-full p-1 border border-yellow-200 rounded text-center outline-none focus:ring-2 focus:ring-yellow-400 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                            <input type="number" step="0.1" value={meter.impingerTemp} onChange={(e) => handleGasMeterChange(idx, 'impingerTemp', e.target.value)} placeholder="온도" className={`w-full p-1 border border-slate-200 rounded text-center ${isStartRow ? 'bg-white' : ''}`} />
                           </td>
                           
-                          <td className="p-1 border-l border-yellow-200 w-16">
-                            <span className={`inline-block w-full py-1 rounded-lg font-black ${rowRate === '-' ? 'text-slate-400 bg-slate-100' : isRateValid ? 'text-slate-900 bg-yellow-400' : 'text-white bg-red-500'}`}>
+                          <td className="p-1 border-l border-slate-200 w-16">
+                            <span className={`inline-block w-full py-1 rounded font-bold ${rowRate === '-' ? 'text-slate-400 bg-slate-50' : isRateValid ? 'text-emerald-700 bg-emerald-100' : 'text-red-600 bg-red-100'}`}>
                               {rowRate === '-' ? '-' : `${rowRate}%`}
                             </span>
                           </td>
                           <td className="p-1 w-8">
-                            {!isStartRow && <button type="button" onClick={() => removeGasMeter(idx)} className="text-red-400 hover:text-red-600 p-1 transition-colors"><Trash2 className="w-4 h-4" /></button>}
+                            {!isStartRow && <button type="button" onClick={() => removeGasMeter(idx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-3 h-3" /></button>}
                           </td>
                         </tr>
                       );
@@ -1339,58 +1349,58 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <button type="button" onClick={addGasMeter} className="w-full mt-2 py-2 flex items-center justify-center gap-1 text-slate-800 bg-yellow-200 hover:bg-yellow-300 rounded-lg text-sm font-black border border-yellow-400 transition-colors shadow-sm">
-                <Plus className="w-4 h-4" /> 측정 기록 칸 추가 ⚡
+              <button type="button" onClick={addGasMeter} className="w-full mt-2 py-1.5 flex items-center justify-center gap-1 text-green-700 bg-green-50 hover:bg-green-100 rounded text-xs font-bold border border-green-200 transition-colors">
+                <Plus className="w-4 h-4" /> 측정 기록 칸 추가
               </button>
             </div>
 
             {/* 유량계 기록 요약표 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-slate-100 border border-slate-300 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-slate-600 font-bold mb-1">총 채취 시간 (분)</span>
-                <span className="text-lg font-black text-slate-900">{getSamplingMinutes()}</span>
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex flex-col items-center justify-center">
+                <span className="text-xs text-slate-500 font-bold mb-1">총 채취 시간 (분)</span>
+                <span className="text-lg font-black text-slate-700">{getSamplingMinutes()}</span>
               </div>
-              <div className="bg-yellow-100 border border-yellow-300 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-slate-700 font-bold mb-1">총 채취 가스량 (V<sub>m</sub>)</span>
-                <span className="text-xl font-black text-slate-900">{calcGasMeterVolDiff() > 0 ? calcGasMeterVolDiff() : '-'}</span>
+              <div className="bg-green-50 border border-green-200 p-3 rounded-lg flex flex-col items-center justify-center">
+                <span className="text-xs text-green-700 font-bold mb-1">총 채취 가스량 (V<sub>m</sub>)</span>
+                <span className="text-xl font-black text-green-800">{calcGasMeterVolDiff() > 0 ? calcGasMeterVolDiff() : '-'}</span>
               </div>
-              <div className="bg-orange-100 border border-orange-300 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-orange-800 font-bold mb-1">평균 온도 (T<sub>m</sub>, ℃)</span>
-                <span className="text-lg font-black text-orange-900">{calcAvgTm()}</span>
+              <div className="bg-rose-50 border border-rose-200 p-3 rounded-lg flex flex-col items-center justify-center">
+                <span className="text-xs text-rose-600 font-bold mb-1">평균 온도 (T<sub>m</sub>, ℃)</span>
+                <span className="text-lg font-black text-rose-800">{calcAvgTm()}</span>
               </div>
-              <div className="bg-red-50 border border-red-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-red-700 font-bold mb-1">평균 오리피스압 (ΔH)</span>
-                <span className="text-lg font-black text-red-700">{calcAvgOrifice()}</span>
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex flex-col items-center justify-center">
+                <span className="text-xs text-blue-600 font-bold mb-1">평균 오리피스압 (ΔH)</span>
+                <span className="text-lg font-black text-blue-800">{calcAvgOrifice()}</span>
               </div>
             </div>
 
-            <div className="bg-slate-900 p-5 rounded-2xl flex flex-col justify-between text-white shadow-xl border-2 border-yellow-400">
+            <div className="bg-emerald-900 p-5 rounded-xl flex flex-col justify-between text-white shadow-inner">
               <div className="flex items-center gap-3 mb-4">
-                <Gauge className="w-8 h-8 text-yellow-400" />
+                <Gauge className="w-8 h-8 text-emerald-300" />
                 <div>
-                  <h3 className="font-black text-xl text-yellow-400 tracking-tight">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
-                  <p className="text-xs text-slate-300 mt-1">대기오염공정시험기준 유효범위 : 95% ~ 105% (수식 0.00346 적용됨)</p>
+                  <h3 className="font-bold text-lg">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
+                  <p className="text-xs text-emerald-300 mt-1">대기오염공정시험기준 유효범위 : 95% ~ 105% (수식 0.00346 적용됨)</p>
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 mt-2">
-                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center justify-center">
-                  <span className="text-xs text-slate-400 mb-1 font-bold">사전 수분량 기준 (전체)</span>
-                  <div className="text-2xl font-black text-white">{calcIsokineticRate(false)}<span className="text-sm ml-1 text-slate-500">%</span></div>
+                <div className="bg-emerald-800 p-3 rounded-lg border border-emerald-700 flex flex-col items-center justify-center">
+                  <span className="text-xs text-emerald-200 mb-1">사전 수분량 기준 (전체)</span>
+                  <div className="text-2xl font-bold text-emerald-100">{calcIsokineticRate(false)}<span className="text-sm ml-1">%</span></div>
                 </div>
-                <div className="bg-red-500 p-4 rounded-xl border-2 border-red-400 flex flex-col items-center justify-center shadow-lg relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
-                  <span className="text-xs text-red-100 mb-1 font-black">사후 수분량 기준 (최종)</span>
-                  <div className="text-4xl font-black text-yellow-300">{calcIsokineticRate(true)}<span className="text-xl ml-1 text-white">%</span></div>
+                <div className="bg-emerald-600 p-3 rounded-lg border border-emerald-500 flex flex-col items-center justify-center shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-green-400"></div>
+                  <span className="text-xs text-emerald-100 mb-1 font-bold">사후 수분량 기준 (최종)</span>
+                  <div className="text-3xl font-black text-white">{calcIsokineticRate(true)}<span className="text-lg ml-1">%</span></div>
                 </div>
               </div>
 
-              <div className="mt-5 flex justify-end">
+              <div className="mt-4 flex justify-end">
                 {calcIsokineticRate(true) !== '-' && (
                   <div>
                     {(parseFloat(calcIsokineticRate(true)) >= 95 && parseFloat(calcIsokineticRate(true)) <= 105) ? 
-                      <span className="flex items-center text-slate-900 text-sm font-black bg-yellow-400 px-4 py-2 rounded-full shadow-md"><Zap className="w-4 h-4 mr-1 fill-slate-900"/> 적합 (최종 유효 데이터)</span> : 
-                      <span className="flex items-center text-white text-sm font-black bg-red-600 px-4 py-2 rounded-full shadow-md"><AlertTriangle className="w-4 h-4 mr-1"/> 부적합 (재측정 요망)</span>
+                      <span className="flex items-center text-green-300 text-sm font-bold bg-green-900/50 px-3 py-1.5 rounded-full"><CheckCircle2 className="w-4 h-4 mr-1"/> 적합 (최종 유효 데이터)</span> : 
+                      <span className="flex items-center text-red-300 text-sm font-bold bg-red-900/50 px-3 py-1.5 rounded-full"><AlertTriangle className="w-4 h-4 mr-1"/> 부적합 (재측정 요망)</span>
                     }
                   </div>
                 )}
@@ -1399,112 +1409,108 @@ export default function App() {
           </div>
 
           {/* 섹션 6: 시료(여과지) 분석 및 비고 */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-yellow-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-yellow-100 pb-2 flex items-center gap-2">
-              <span className="bg-slate-800 text-yellow-400 w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">6</span>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">
+              <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm">6</span>
               먼지 시료 무게 및 최종 결과
             </h2>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              <div className="lg:col-span-2 grid grid-cols-3 gap-4 border border-yellow-200 p-4 rounded-xl bg-yellow-50/50 h-fit">
-                <div><label className="block text-xs font-bold text-slate-700 mb-1">여과지 번호</label>
-                  <input type="text" name="filterId" value={formData.filterId} onChange={handleChange} className="w-full p-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1">채취 전 무게 (mg)</label>
-                  <input type="number" step="0.0001" name="filterInitial" value={formData.filterInitial} onChange={handleChange} placeholder="0.0000" className="w-full p-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1">채취 후 무게 (mg)</label>
-                  <input type="number" step="0.0001" name="filterFinal" value={formData.filterFinal} onChange={handleChange} placeholder="0.0000" className="w-full p-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+              <div className="lg:col-span-2 grid grid-cols-3 gap-4 border border-slate-200 p-4 rounded-lg bg-slate-50 h-fit">
+                <div><label className="block text-xs font-bold text-slate-600 mb-1">여과지 번호</label>
+                  <input type="text" name="filterId" value={formData.filterId} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-teal-500" /></div>
+                <div><label className="block text-xs font-bold text-slate-600 mb-1">채취 전 무게 (mg)</label>
+                  <input type="number" step="0.0001" name="filterInitial" value={formData.filterInitial} onChange={handleChange} placeholder="0.0000" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-teal-500" /></div>
+                <div><label className="block text-xs font-bold text-slate-600 mb-1">채취 후 무게 (mg)</label>
+                  <input type="number" step="0.0001" name="filterFinal" value={formData.filterFinal} onChange={handleChange} placeholder="0.0000" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-teal-500" /></div>
               </div>
-              <div className="lg:col-span-1 bg-yellow-100 p-4 rounded-xl border border-yellow-300 flex flex-col justify-center items-center text-slate-900 shadow-sm relative overflow-hidden">
-                <div className="absolute -right-4 -bottom-4 opacity-10">
-                  <Zap className="w-24 h-24 fill-yellow-500" />
-                </div>
-                <Scale className="w-8 h-8 mb-2 text-yellow-600" />
-                <span className="text-xs font-black mb-1 z-10">포집된 먼지 무게 (W<sub>d</sub>)</span>
-                <span className="text-3xl font-black text-red-600 z-10">{calcDustWeightDiff()} <span className="text-sm font-bold text-slate-700">mg</span></span>
+              <div className="lg:col-span-1 bg-teal-50 p-4 rounded-lg border border-teal-200 flex flex-col justify-center items-center text-teal-900 shadow-inner">
+                <Scale className="w-6 h-6 mb-2 text-teal-600" />
+                <span className="text-xs font-bold mb-1">포집된 먼지 무게 (W<sub>d</sub>)</span>
+                <span className="text-3xl font-black text-teal-700">{calcDustWeightDiff()} <span className="text-sm font-normal">mg</span></span>
               </div>
             </div>
 
-            {/* 최종 농도 산출 결과 패널 */}
-            <div className="bg-slate-900 p-6 rounded-2xl border-2 border-yellow-400 shadow-xl text-white mb-6 relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
-               <h3 className="text-base font-black text-yellow-400 mb-4 flex items-center gap-2 border-b border-slate-700 pb-3">
-                 <FileSpreadsheet className="w-5 h-5"/> 최종 산출 결과 요약 ⚡
+            {/* 최종 농도 산출 결과 패널 - 습가스/건조가스 유량 추가 */}
+            <div className="bg-emerald-950 p-5 rounded-xl border border-emerald-900 shadow-md text-white mb-6">
+               <h3 className="text-sm font-bold text-emerald-50 mb-4 flex items-center gap-2 border-b border-emerald-800/50 pb-2">
+                 <FileSpreadsheet className="w-4 h-4"/> 최종 산출 결과 요약
                </h3>
-               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-700 text-center mt-2">
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-emerald-800/50 text-center">
                   <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">표준 습가스 유량 (Q<sub>sw</sub>)</span>
-                      <span className="text-2xl font-black text-white">{calcGasFlowRates().wet} <span className="text-sm font-medium text-slate-500">Sm³/hr</span></span>
+                      <span className="text-xs text-emerald-200/70 mb-1">표준 습가스 유량 (Q<sub>sw</sub>)</span>
+                      <span className="text-xl font-bold text-emerald-300">{calcGasFlowRates().wet} <span className="text-sm font-normal">Sm³/hr</span></span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">표준 건조가스 유량 (Q<sub>s</sub>)</span>
-                      <span className="text-2xl font-black text-white">{calcGasFlowRates().dry} <span className="text-sm font-medium text-slate-500">Sm³/hr</span></span>
+                      <span className="text-xs text-emerald-200/70 mb-1">표준 건조가스 유량 (Q<sub>s</sub>)</span>
+                      <span className="text-xl font-bold text-emerald-300">{calcGasFlowRates().dry} <span className="text-sm font-normal">Sm³/hr</span></span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">실측 먼지 농도 (C)</span>
-                      <span className="text-2xl font-black text-white">{calcDustConcentrations().actualC} <span className="text-sm font-medium text-slate-500">mg/Sm³</span></span>
+                      <span className="text-xs text-emerald-200/70 mb-1">실측 먼지 농도 (C)</span>
+                      <span className="text-xl font-bold text-emerald-400">{calcDustConcentrations().actualC} <span className="text-sm font-normal">mg/Sm³</span></span>
                   </div>
-                  <div className="flex flex-col items-center justify-center p-4 bg-slate-800 rounded-xl border border-slate-700 md:border-none md:rounded-none md:bg-transparent">
-                      <span className="text-xs text-yellow-400 font-black mb-2">
+                  <div className="flex flex-col items-center justify-center p-2 bg-emerald-900/50 rounded-lg border-l-0 md:border-l">
+                      <span className="text-xs text-emerald-300 font-bold mb-1">
                         O₂ 보정 농도 (C<sub>c</sub>)
-                        {!formData.standardO2 && <span className="text-[10px] font-medium text-slate-500 ml-1">(제외)</span>}
+                        {!formData.standardO2 && <span className="text-[10px] font-normal text-emerald-500 ml-1">(제외)</span>}
                       </span>
-                      <span className="text-3xl font-black text-red-400">{calcDustConcentrations().correctedC} <span className="text-sm font-medium text-slate-400">mg/Sm³</span></span>
+                      <span className="text-2xl font-black text-white">{calcDustConcentrations().correctedC} <span className="text-sm font-normal">mg/Sm³</span></span>
                   </div>
                </div>
             </div>
 
             <div className="mt-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1">현장 특이사항 및 비고</label>
-              <textarea name="remarks" value={formData.remarks} onChange={handleChange} rows="2" className="w-full p-3 border border-yellow-300 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none bg-yellow-50/30" placeholder="측정공 상태, 장비 특이점 등"></textarea>
+              <label className="block text-xs font-bold text-slate-600 mb-1">현장 특이사항 및 비고</label>
+              <textarea name="remarks" value={formData.remarks} onChange={handleChange} rows="2" className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500" placeholder="측정공 상태, 장비 특이점 등"></textarea>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-yellow-300 border-dashed">
-            <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-black rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm">
+          <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-emerald-200 border-dashed">
+            <button type="button" onClick={() => window.location.reload()} className="px-8 py-3 bg-white border border-emerald-300 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors flex items-center gap-2 shadow-sm">
               <RefreshCw className="w-5 h-5" /> 새 기록지 작성
             </button>
-            <button type="submit" className="px-8 py-3.5 bg-red-500 text-white font-black rounded-xl hover:bg-red-600 transition-colors flex items-center gap-2 shadow-lg hover:-translate-y-0.5 transform">
+            <button type="submit" className="px-8 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-md">
               <Save className="w-5 h-5" /> 기록부 데이터 저장
             </button>
           </div>
         </form>
 
         {savedData.length > 0 && (
-          <div className="bg-slate-900 p-6 rounded-2xl shadow-2xl mt-8 text-white border-2 border-slate-700">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-slate-700 pb-4">
-              <h2 className="text-xl font-black flex items-center gap-2 text-yellow-400"><FileSpreadsheet className="w-6 h-6"/> 저장된 종합 리포트 ⚡</h2>
+          <div className="bg-emerald-900 p-6 rounded-xl shadow-lg mt-8 text-white">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+              <h2 className="text-xl font-bold flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/> 저장된 종합 리포트</h2>
               <button 
                 onClick={exportToCSV} 
-                className="flex items-center gap-2 px-5 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-black rounded-xl transition-transform shadow-md text-sm hover:scale-105"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors shadow-md text-sm"
               >
-                <Download className="w-4 h-4" /> CSV 파일로 추출
+                <Download className="w-4 h-4" /> CSV 엑셀 파일로 추출
               </button>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-slate-700">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm text-center">
-                <thead className="bg-slate-800 text-slate-300">
+                <thead className="bg-emerald-800 text-emerald-50">
                   <tr>
-                    <th className="p-3 font-bold">배출구명</th>
-                    <th className="p-3 font-bold">수분량(%)</th>
-                    <th className="p-3 font-bold">등속흡인율(%)</th>
-                    <th className="p-3 font-bold">먼지무게(mg)</th>
-                    <th className="p-3 font-bold text-white">실측농도</th>
-                    <th className="p-3 text-yellow-400 font-black">보정농도</th>
+                    <th className="p-3 rounded-tl-lg">배출구명</th>
+                    <th className="p-3">수분량(%)</th>
+                    <th className="p-3">등속흡인율(%)</th>
+                    <th className="p-3">먼지무게(mg)</th>
+                    <th className="p-3 text-emerald-300">실측농도</th>
+                    <th className="p-3 text-emerald-200 font-bold rounded-tr-lg">보정농도</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700 bg-slate-900">
+                <tbody className="divide-y divide-emerald-800/50 bg-emerald-900">
                   {savedData.map((data, index) => (
-                    <tr key={index} className="hover:bg-slate-800/80 transition-colors">
-                      <td className="p-3 font-bold text-slate-100">{data.location}</td>
-                      <td className="p-3 text-slate-300">{data.moisturePercent}</td>
+                    <tr key={index} className="hover:bg-emerald-800/50 transition-colors">
+                      <td className="p-3 font-medium">{data.location}</td>
+                      <td className="p-3 text-blue-300">{data.moisturePercent}</td>
                       <td className="p-3">
-                          <span className={parseFloat(data.isokineticRate) >= 95 && parseFloat(data.isokineticRate) <= 105 ? "text-slate-900 font-black bg-yellow-400 px-2.5 py-1 rounded-md" : "text-white font-black bg-red-500 px-2.5 py-1 rounded-md"}>
+                          <span className={parseFloat(data.isokineticRate) >= 95 && parseFloat(data.isokineticRate) <= 105 ? "text-green-300 font-bold bg-green-900/80 px-2 py-1 rounded" : "text-red-300 font-bold bg-red-900/80 px-2 py-1 rounded"}>
                            {data.isokineticRate}
                           </span>
                       </td>
-                      <td className="p-3 text-slate-300">{data.dustWeight}</td>
-                      <td className="p-3 font-bold text-white">{data.actualConcentration}</td>
-                      <td className="p-3 text-yellow-400 font-black text-lg">{data.correctedConcentration}</td>
+                      <td className="p-3 text-teal-300">{data.dustWeight}</td>
+                      <td className="p-3 text-emerald-300">{data.actualConcentration}</td>
+                      <td className="p-3 text-white font-bold">{data.correctedConcentration}</td>
                     </tr>
                   ))}
                 </tbody>
