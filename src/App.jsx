@@ -2244,12 +2244,32 @@ export default function App() {
   };
 
   const calcGasFlowRates = () => {
-    const Vs = getRawGasVelocity(); 
-    const Ts = getRawAvgTs();
-    const Ps = getRawStackPressure();
+    // 표준가스 유량은 "측정 전 측정점(4번)"의 정압/온도/동압 데이터로 계산
+    const pointTs = formData.points.map((p) => parseFloat(p.ts)).filter((v) => Number.isFinite(v));
+    const pointDp = formData.points.map((p) => parseFloat(p.dp)).filter((v) => Number.isFinite(v) && v >= 0);
+    const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
+    const Pa = parseFloat(formData.atmPressure);
     const D = parseFloat(formData.stackDiameter);
-    
-    if (Vs === 0 || isNaN(Ts) || isNaN(Ps) || isNaN(D)) return { dry: '-', wet: '-' };
+
+    if (pointTs.length === 0 || pointDp.length === 0 || pointSp.length === 0 || !Number.isFinite(Pa) || !Number.isFinite(D) || D <= 0) {
+      return { dry: '-', wet: '-' };
+    }
+
+    const Ts = pointTs.reduce((a, b) => a + b, 0) / pointTs.length;
+    const dpAvg = pointDp.reduce((a, b) => a + b, 0) / pointDp.length;
+    const spAvg = pointSp.reduce((a, b) => a + b, 0) / pointSp.length;
+    const Ps = Pa + (spAvg / 13.6);
+    const C = parseFloat(formData.pitotFactor) || 0.84;
+    const r0 = getGasComposition().r0;
+
+    if (!Number.isFinite(dpAvg) || dpAvg <= 0 || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(r0) || r0 <= 0 || !Number.isFinite(C) || C <= 0) {
+      return { dry: '-', wet: '-' };
+    }
+
+    const r = r0 * (273 / (273 + Ts)) * (Ps / 760);
+    if (!Number.isFinite(r) || r <= 0) return { dry: '-', wet: '-' };
+    const Vs = C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
+    if (!Number.isFinite(Vs) || Vs <= 0) return { dry: '-', wet: '-' };
 
     const A = Math.PI * Math.pow(D / 2, 2);
     const gasComp = getGasComposition(); 
