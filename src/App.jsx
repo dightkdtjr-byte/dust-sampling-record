@@ -949,6 +949,12 @@ const roundFixed = (val, digits = 2) => {
   return (Math.round((num + Number.EPSILON) * factor) / factor).toFixed(digits);
 };
 
+const formatFixed15 = (val) => {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '-';
+  return num.toFixed(15);
+};
+
 const calcExpectedOrificeDH = (kVal, dpVal) => {
   const kNum = parseFloat(kVal);
   const dpNum = parseFloat(dpVal);
@@ -2342,7 +2348,7 @@ export default function App() {
       if (name === 'totalStackDepth' || name === 'flangeLength') {
         const total = parseFloat(newData.totalStackDepth);
         const flange = parseFloat(newData.flangeLength) || 0; 
-        if (!isNaN(total)) newData.stackDiameter = Math.max(0, total - flange).toFixed(4);
+        if (!isNaN(total)) newData.stackDiameter = String(Math.max(0, total - flange));
       }
       return newData;
     });
@@ -2601,6 +2607,14 @@ export default function App() {
       .filter((row, idx) => isActiveMeterRow(row, idx))
   );
 
+  const getRawOrificePressureFromRow = (row) => {
+    const kVal = parseFloat(formData.kFactor);
+    const dpVal = parseFloat(row?.dp);
+    if (Number.isFinite(kVal) && Number.isFinite(dpVal)) return kVal * dpVal;
+    const manualPressure = parseFloat(row?.pressure);
+    return Number.isFinite(manualPressure) ? manualPressure : NaN;
+  };
+
   const getRawGasVelocityFromMeterRows = () => {
     const activeRows = getActiveMeterRows();
     const dpValues = activeRows
@@ -2665,7 +2679,7 @@ export default function App() {
 
   const getRawAvgOrifice = () => {
     // 시작행(0분)의 오리피스압도 평균에 포함
-    const validPressures = getActiveMeterRows().map(g => parseFloat(g.pressure)).filter(v => Number.isFinite(v));
+    const validPressures = getActiveMeterRows().map(g => getRawOrificePressureFromRow(g)).filter(v => Number.isFinite(v));
     return validPressures.length === 0 ? NaN : validPressures.reduce((a, b) => a + b, 0) / validPressures.length;
   };
 
@@ -2803,7 +2817,7 @@ export default function App() {
       : times.reduce((sum, value) => sum + value, 0);
   };
 
-  const calcGasFlowRates = () => {
+  const getRawGasFlowFactors = () => {
     // 표준가스 유량:
     // 정압은 본 측정 전(측정점) 평균 정압,
     // 유속은 적산유량계 기록표 평균 동압으로 구한 값 사용
@@ -2815,30 +2829,59 @@ export default function App() {
     const D = parseFloat(formData.stackDiameter);
 
     if (!Number.isFinite(Ts) || !Number.isFinite(Vs) || Vs <= 0 || pointSp.length === 0 || !Number.isFinite(Pa) || !Number.isFinite(D) || D <= 0) {
-      return { dry: '-', wet: '-' };
+      return null;
     }
 
     const spAvg = pointSp.reduce((a, b) => a + b, 0) / pointSp.length;
-    const Pw = Pa;
     const Ps = spAvg / 13.6;
-    const absPressure = Pw + Ps;
+    const absPressure = Pa + Ps;
 
-    if (!Number.isFinite(absPressure) || absPressure <= 0) {
-      return { dry: '-', wet: '-' };
-    }
+    if (!Number.isFinite(absPressure) || absPressure <= 0) return null;
 
-    // 엑셀 시트의 단면적 셀(소수 4자리) 기준으로 동일하게 적용
-    const A = Number((Math.PI * Math.pow(D / 2, 2)).toFixed(4));
+    // 중간 계산은 반올림 없이 원시값 사용 (엑셀과 동일한 계산 경로)
+    const A = Math.PI * Math.pow(D / 2, 2);
     const postMoisture = getRawPostMoisture();
     const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
     const tempTerm = 273 / (273 + Ts);
-    const pressureTerm = (Pw + Ps) / 760;
+    const pressureTerm = absPressure / 760;
+    const moistureTerm = 1 - moistureRatio;
+
+    if (!Number.isFinite(tempTerm) || !Number.isFinite(pressureTerm) || !Number.isFinite(moistureTerm)) return null;
+
+    return {
+      Vs,
+      A,
+      Ts,
+      Pa,
+      Ps,
+      XwPercent: postMoisture,
+      moistureRatio,
+      tempTerm,
+      pressureTerm,
+      moistureTerm,
+      constant3600: 3600,
+    };
+  };
+
+  const calcGasFlowRates = () => {
+    const factors = getRawGasFlowFactors();
+    if (!factors) return { dry: '-', wet: '-', dryRaw: NaN, wetRaw: NaN, factors: null };
 
     // Qn(건조) = v * A * 273/(273+Ts) * (Pa+Ps)/760 * (1 - Xw/100) * 3600
-    const Q_wet = Vs * A * tempTerm * pressureTerm * 3600;
-    const Q_dry = Vs * A * tempTerm * pressureTerm * (1 - moistureRatio) * 3600;
+    const Q_wet = factors.Vs * factors.A * factors.tempTerm * factors.pressureTerm * factors.constant3600;
+    const Q_dry = Q_wet * factors.moistureTerm;
 
-    return { wet: roundFixed(Q_wet, 2), dry: roundFixed(Q_dry, 2) };
+    return {
+      wet: roundFixed(Q_wet, 2),
+      dry: roundFixed(Q_dry, 2),
+      wetRaw: Q_wet,
+      dryRaw: Q_dry,
+      factors: {
+        ...factors,
+        Q_wet,
+        Q_dry,
+      },
+    };
   };
 
   const generateRecommendation = (mode) => {
@@ -2993,7 +3036,7 @@ export default function App() {
     const TmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length;
 
     // 엑셀 AVERAGE(F17:F19)처럼 오리피스압 누적 평균
-    const pmValues = rangeRows.map(row => parseFloat(row.pressure)).filter(v => Number.isFinite(v));
+    const pmValues = rangeRows.map(row => getRawOrificePressureFromRow(row)).filter(v => Number.isFinite(v));
     if (pmValues.length === 0) return '-';
     const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
 
@@ -3097,7 +3140,7 @@ export default function App() {
     if (tmValues.length === 0) return NaN;
     const TmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length;
 
-    const pmValues = rangeRows.map(row => parseFloat(row.pressure)).filter(v => Number.isFinite(v));
+    const pmValues = rangeRows.map(row => getRawOrificePressureFromRow(row)).filter(v => Number.isFinite(v));
     if (pmValues.length === 0) return NaN;
     const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
 
@@ -3748,6 +3791,8 @@ export default function App() {
   const r = (!isNaN(r0) && !isNaN(currentTs) && !isNaN(currentPs)) ? r0 * (273 / (273 + currentTs)) * (currentPs / 760) : NaN;
   const samplingPointsData = getSamplingPoints();
   const configuredNozzles = getConfiguredNozzles();
+  const gasFlowRates = calcGasFlowRates();
+  const gasFlowFactors = gasFlowRates.factors;
   
   const getExpectedValues = () => {
     const d = parseFloat(formData.nozzleDiameter), k = parseFloat(formData.kFactor), dp = getRawAvgDp(), Vs = getRawGasVelocity();
@@ -3797,7 +3842,7 @@ export default function App() {
 
     const tsAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.stackTemp)));
     const dpAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.dp)));
-    const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.pressure)));
+    const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => getRawOrificePressureFromRow(row)));
     const tmInAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmIn)));
     const tmOutAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmOut)));
     const vacuumAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.vacuum)));
@@ -5814,11 +5859,13 @@ export default function App() {
                <div className={`grid grid-cols-1 ${isDustSheet ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 습가스 유량 (Q<sub>sw</sub>)</span>
-                      <span className="text-2xl font-bold text-emerald-300">{calcGasFlowRates().wet} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+                      <span className="text-2xl font-bold text-emerald-300">{gasFlowRates.wet} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+                      <span className="text-[10px] mt-1 text-slate-400">{formatFixed15(gasFlowRates.wetRaw)}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 건조가스 유량 (Q<sub>s</sub>)</span>
-                      <span className="text-2xl font-bold text-cyan-300">{calcGasFlowRates().dry} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+                      <span className="text-2xl font-bold text-cyan-300">{gasFlowRates.dry} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+                      <span className="text-[10px] mt-1 text-slate-400">{formatFixed15(gasFlowRates.dryRaw)}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
@@ -5840,6 +5887,14 @@ export default function App() {
                     </div>
                   )}
                </div>
+               {gasFlowFactors && (
+                 <div className="mt-4 p-3 rounded-lg border border-slate-600 bg-slate-900/40 text-[10px] text-slate-300">
+                   <p className="font-bold text-slate-200 mb-1">유량 계산 인수 (소수 15자리)</p>
+                   <p>v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
+                   <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw={formatFixed15(gasFlowFactors.XwPercent)}</p>
+                   <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
+                 </div>
+               )}
             </div>
 
             <div className="mt-2">
