@@ -570,6 +570,7 @@ const STORAGE_KEYS = {
   activeUser: 'dust-sampling.secure-active-user.v2',
   lastLoginId: 'dust-sampling.last-login-id.v1',
   sessionAuth: 'dust-sampling.session-auth.v1',
+  cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
 };
 
 const getUserNozzlesStorageKey = (userId) => (
@@ -583,6 +584,18 @@ const getUserSamplersStorageKey = (userId) => (
 const getUserPitotStorageKey = (userId) => (
   `${STORAGE_KEYS.pitotUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
 );
+
+const getUserCloudSyncStorageKey = (userId) => (
+  `${STORAGE_KEYS.cloudSyncPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
+
+const sanitizeCloudSyncConfig = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return {
+    token: typeof value.token === 'string' ? value.token.trim() : '',
+    gistId: typeof value.gistId === 'string' ? value.gistId.trim() : '',
+  };
+};
 
 const persistSessionAuth = (userId, password) => {
   try {
@@ -824,6 +837,8 @@ const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
 const MAGIKARP_POKEMON_ID = 129;
+const CLOUD_SYNC_FILE_NAME = 'stackpilot-cloud.json';
+const CLOUD_SYNC_VERSION = 1;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -1038,6 +1053,8 @@ export default function App() {
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [profileNickname, setProfileNickname] = useState('');
   const [authModal, setAuthModal] = useState('');
+  const [cloudSyncConfig, setCloudSyncConfig] = useState({ token: '', gistId: '' });
+  const [cloudSyncBusy, setCloudSyncBusy] = useState(false);
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
   const isPresetHydratingRef = useRef(false);
   const vaultKeyRef = useRef({});
@@ -1054,6 +1071,25 @@ export default function App() {
     const normalizedId = String(userId || '').trim().toLowerCase();
     return Boolean(normalizedId) && normalizedId !== BETA_USER_ID && normalizedId !== LEGACY_BETA_USER_ID;
   };
+
+  useEffect(() => {
+    if (!activeUser) {
+      setCloudSyncConfig({ token: '', gistId: '' });
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(getUserCloudSyncStorageKey(activeUser));
+      if (!raw) {
+        setCloudSyncConfig({ token: '', gistId: '' });
+        return;
+      }
+      const parsed = sanitizeCloudSyncConfig(JSON.parse(raw));
+      setCloudSyncConfig(parsed || { token: '', gistId: '' });
+    } catch (error) {
+      console.error('클라우드 동기화 설정 로딩 실패:', error);
+      setCloudSyncConfig({ token: '', gistId: '' });
+    }
+  }, [activeUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1822,6 +1858,223 @@ export default function App() {
     }
   };
 
+  const persistCloudSyncConfig = (nextConfig) => {
+    if (!activeUser) return;
+    const sanitized = sanitizeCloudSyncConfig(nextConfig) || { token: '', gistId: '' };
+    setCloudSyncConfig(sanitized);
+    try {
+      localStorage.setItem(getUserCloudSyncStorageKey(activeUser), JSON.stringify(sanitized));
+    } catch (error) {
+      console.error('클라우드 동기화 설정 저장 실패:', error);
+    }
+  };
+
+  const parseGithubApiError = async (response) => {
+    try {
+      const parsed = await response.json();
+      if (typeof parsed?.message === 'string' && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+    } catch (error) {
+      // ignore json parse failure
+    }
+    return `HTTP ${response.status}`;
+  };
+
+  const buildCloudSyncPayload = () => {
+    const userRecord = secureUsers[activeUser];
+    if (!userRecord) throw new Error('현재 계정 데이터가 없습니다.');
+
+    return {
+      app: 'StackPilot',
+      version: CLOUD_SYNC_VERSION,
+      exportedAt: new Date().toISOString(),
+      userId: activeUser,
+      secureUser: userRecord,
+      nozzles: sanitizeNozzleSet(nozzleSet) || [],
+      samplers: sanitizeSamplers(samplers) || [],
+      pitotPresets: sanitizePitotPresets(pitotPresets) || [],
+    };
+  };
+
+  const handleSaveCloudSyncConfig = () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 설정 가능합니다.');
+      return;
+    }
+    persistCloudSyncConfig(cloudSyncConfig);
+    alert('클라우드 동기화 설정을 저장했습니다.');
+  };
+
+  const handleCloudUploadToGist = async () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 업로드 가능합니다.');
+      return;
+    }
+    const token = String(cloudSyncConfig.token || '').trim();
+    if (!token) {
+      alert('GitHub PAT를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setCloudSyncBusy(true);
+      const payload = buildCloudSyncPayload();
+      const content = JSON.stringify(payload, null, 2);
+      const gistId = String(cloudSyncConfig.gistId || '').trim();
+      const headers = {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+      const requestBody = {
+        description: `StackPilot Cloud Sync (${activeUser})`,
+        files: {
+          [CLOUD_SYNC_FILE_NAME]: { content },
+        },
+      };
+
+      let response;
+      if (gistId) {
+        response = await fetch(`https://api.github.com/gists/${encodeURIComponent(gistId)}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(requestBody),
+        });
+      } else {
+        response = await fetch('https://api.github.com/gists', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...requestBody, public: false }),
+        });
+      }
+
+      if (!response.ok) {
+        const reason = await parseGithubApiError(response);
+        throw new Error(reason);
+      }
+
+      const result = await response.json();
+      const nextGistId = typeof result?.id === 'string' ? result.id : gistId;
+      if (!nextGistId) throw new Error('Gist ID를 확인할 수 없습니다.');
+
+      persistCloudSyncConfig({ token, gistId: nextGistId });
+      alert('클라우드 백업 업로드가 완료되었습니다.');
+    } catch (error) {
+      console.error('클라우드 업로드 실패:', error);
+      alert(`클라우드 업로드 실패: ${error?.message || '알 수 없는 오류'}`);
+    } finally {
+      setCloudSyncBusy(false);
+    }
+  };
+
+  const handleCloudRestoreFromGist = async () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 복원 가능합니다.');
+      return;
+    }
+    const token = String(cloudSyncConfig.token || '').trim();
+    const gistId = String(cloudSyncConfig.gistId || '').trim();
+    if (!token) {
+      alert('GitHub PAT를 입력해주세요.');
+      return;
+    }
+    if (!gistId) {
+      alert('Gist ID를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setCloudSyncBusy(true);
+      const headers = {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+      };
+      const gistResponse = await fetch(`https://api.github.com/gists/${encodeURIComponent(gistId)}`, {
+        method: 'GET',
+        headers,
+      });
+      if (!gistResponse.ok) {
+        const reason = await parseGithubApiError(gistResponse);
+        throw new Error(reason);
+      }
+
+      const gistData = await gistResponse.json();
+      const fileMap = gistData?.files || {};
+      const targetFile = fileMap[CLOUD_SYNC_FILE_NAME] || Object.values(fileMap)[0];
+      if (!targetFile) throw new Error('Gist 파일을 찾지 못했습니다.');
+
+      let rawContent = typeof targetFile.content === 'string' ? targetFile.content : '';
+      if ((!rawContent || targetFile.truncated) && targetFile.raw_url) {
+        const rawResponse = await fetch(targetFile.raw_url, { headers });
+        if (!rawResponse.ok) {
+          const reason = await parseGithubApiError(rawResponse);
+          throw new Error(reason);
+        }
+        rawContent = await rawResponse.text();
+      }
+      if (!rawContent) throw new Error('클라우드 파일 내용이 비어 있습니다.');
+
+      const payload = JSON.parse(rawContent);
+      if (!payload || typeof payload !== 'object') throw new Error('클라우드 데이터 형식이 올바르지 않습니다.');
+      if (String(payload.userId || '') !== activeUser) {
+        throw new Error(`현재 로그인(${activeUser})과 백업 계정(${payload.userId || '알수없음'})이 다릅니다.`);
+      }
+
+      const sanitizedUserMap = sanitizeSecureUsers({ [activeUser]: payload.secureUser });
+      const cloudUser = sanitizedUserMap ? sanitizedUserMap[activeUser] : null;
+      if (!cloudUser) throw new Error('클라우드 사용자 데이터가 올바르지 않습니다.');
+
+      const key = vaultKeyRef.current[activeUser];
+      if (!key) throw new Error('복원을 위해 다시 로그인해주세요.');
+      const decrypted = await decryptJsonWithKey(key, cloudUser.dataIv, cloudUser.dataCipher);
+      const restoredReports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
+
+      const restoredNozzles = sanitizeNozzleSet(payload.nozzles);
+      const restoredSamplers = sanitizeSamplers(payload.samplers);
+      const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
+
+      setSecureUsers(prev => ({
+        ...prev,
+        [activeUser]: cloudUser,
+      }));
+      setActiveUserReports(restoredReports);
+
+      const nozzleTargetKey = canUseUserScopedPresets(activeUser)
+        ? getUserNozzlesStorageKey(activeUser)
+        : STORAGE_KEYS.nozzles;
+      const samplerTargetKey = canUseUserScopedPresets(activeUser)
+        ? getUserSamplersStorageKey(activeUser)
+        : STORAGE_KEYS.samplers;
+      const pitotTargetKey = canUseUserScopedPresets(activeUser)
+        ? getUserPitotStorageKey(activeUser)
+        : STORAGE_KEYS.pitotPresets;
+
+      if (restoredNozzles && restoredNozzles.length > 0) {
+        setNozzleSet(restoredNozzles);
+        localStorage.setItem(nozzleTargetKey, JSON.stringify(restoredNozzles));
+      }
+      if (restoredSamplers && restoredSamplers.length > 0) {
+        setSamplers(restoredSamplers);
+        localStorage.setItem(samplerTargetKey, JSON.stringify(restoredSamplers));
+      }
+      if (restoredPitot && restoredPitot.length > 0) {
+        setPitotPresets(restoredPitot);
+        localStorage.setItem(pitotTargetKey, JSON.stringify(restoredPitot));
+      }
+
+      persistCloudSyncConfig({ token, gistId });
+      setMenuCheckedReportKeys([]);
+      setSheetCheckedReportKeys([]);
+      alert(`클라우드 복원 완료: 리포트 ${restoredReports.length}건`);
+    } catch (error) {
+      console.error('클라우드 복원 실패:', error);
+      alert(`클라우드 복원 실패: ${error?.message || '알 수 없는 오류'}`);
+    } finally {
+      setCloudSyncBusy(false);
+    }
+  };
+
   const clearActiveUserReports = async () => {
     if (!activeUser) return;
     if (!isUserUnlocked) {
@@ -2574,7 +2827,8 @@ export default function App() {
       return { dry: '-', wet: '-' };
     }
 
-    const A = Math.PI * Math.pow(D / 2, 2);
+    // 엑셀 시트의 단면적 셀(소수 4자리) 기준으로 동일하게 적용
+    const A = Number((Math.PI * Math.pow(D / 2, 2)).toFixed(4));
     const postMoisture = getRawPostMoisture();
     const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
     const tempTerm = 273 / (273 + Ts);
@@ -4107,6 +4361,52 @@ export default function App() {
                         >
                           현재 계정 삭제
                         </button>
+                        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist)</p>
+                          <p className="text-[11px] text-slate-600 mt-1">다른 기기에서도 같은 계정 리포트를 복원할 수 있습니다.</p>
+                          <div className="mt-2 space-y-2">
+                            <input
+                              type="password"
+                              value={cloudSyncConfig.token}
+                              onChange={(e) => setCloudSyncConfig((prev) => ({ ...prev, token: e.target.value }))}
+                              className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                              placeholder="GitHub PAT (gist 권한)"
+                            />
+                            <input
+                              type="text"
+                              value={cloudSyncConfig.gistId}
+                              onChange={(e) => setCloudSyncConfig((prev) => ({ ...prev, gistId: e.target.value }))}
+                              className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                              placeholder="Gist ID (처음 업로드 시 자동 생성)"
+                            />
+                            <div className="grid grid-cols-3 gap-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveCloudSyncConfig}
+                                disabled={cloudSyncBusy}
+                                className="px-2 py-2 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-[11px] disabled:opacity-60"
+                              >
+                                설정 저장
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCloudUploadToGist}
+                                disabled={cloudSyncBusy}
+                                className="px-2 py-2 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] disabled:opacity-60"
+                              >
+                                {cloudSyncBusy ? '진행중' : '클라우드 업로드'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCloudRestoreFromGist}
+                                disabled={cloudSyncBusy}
+                                className="px-2 py-2 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 font-bold text-[11px] disabled:opacity-60"
+                              >
+                                {cloudSyncBusy ? '진행중' : '클라우드 복원'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
