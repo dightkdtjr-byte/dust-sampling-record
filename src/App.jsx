@@ -2534,10 +2534,12 @@ export default function App() {
     const sox = getAnalyzerAvg('sox');
     const nox = getAnalyzerAvg('nox');
     
-    const coPercent = co / 10000; 
+    // 엑셀(노즐산정!E28) 호환: CO = AVERAGE(D8:D10) / 1000
+    const coPercent = co / 1000; 
     const n2 = 100 - co2 - o2 - coPercent; 
     
-    const M_O2 = 32, M_CO2 = 44, M_CO = 28, M_N2 = 28;
+    // 엑셀(노즐산정!D28) 호환: CO 분자량 38 사용
+    const M_O2 = 32, M_CO2 = 44, M_CO = 38, M_N2 = 28;
     const sumMx = (M_O2 * o2) + (M_CO2 * co2) + (M_CO * coPercent) + (M_N2 * n2);
 
     const Md = sumMx / 100;
@@ -3591,9 +3593,10 @@ export default function App() {
         const safeO2 = Number.isFinite(o2) ? o2 : 0;
         const safeCo2 = Number.isFinite(co2) ? co2 : 0;
         const safeCo = Number.isFinite(co) ? co : 0;
-        const coPercent = safeCo / 10000;
+        // 엑셀(노즐산정)과 동일한 CO 환산/분자량 경로
+        const coPercent = safeCo / 1000;
         const n2 = 100 - safeCo2 - safeO2 - coPercent;
-        const sumMx = (32 * safeO2) + (44 * safeCo2) + (28 * coPercent) + (28 * n2);
+        const sumMx = (32 * safeO2) + (44 * safeCo2) + (38 * coPercent) + (28 * n2);
         const Md = sumMx / 100;
         const Xw = avg(sourceMoistures.map((v) => toNumStrict(v)));
         const safeXw = Number.isFinite(Xw) ? Xw : 0;
