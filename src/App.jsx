@@ -2492,7 +2492,7 @@ export default function App() {
     return {
       perRadius: isCenterOnly ? 1 : rnCoeffs.length,
       isCenterOnly,
-      area: area.toFixed(4),
+      area: formatFixed15(area),
       nearInsertion: nearDistances.map(d => (d + flange).toFixed(4)),
       farInsertion: farDistances.map(d => (d + flange).toFixed(4)),
     };
@@ -2698,44 +2698,76 @@ export default function App() {
     return total;
   };
 
-  const getRawPostMoisture = () => {
-    // 사후 수분량 항:
-    // 1) 가스미터 값 차이 ΔVm(L)
-    // 2) 가스미터 온도 평균 Tm
-    // 3) 대기압 Pa
-    // 4) 가스미터압 보정항 Pm/13.6
-    const Wm = getRawTotalMoistureWeight(); // 임핀저 포집 수분량(ml≈g)
-    const deltaVmL = getRawGasMeterVolDiff(); // ΔVm (L)
-    const tmAvg = getRawAvgTm(); // Tm 평균(℃)
-    const pa = parseFloat(formData.atmPressure); // Pa (mmHg)
-    const pmAvg = getRawAvgOrifice(); // Pm 평균(mmH2O)
+  const getMeterRowsUntilLastVolume = () => {
+    let lastVolumeIdx = -1;
+    formData.gasMeters.forEach((row, idx) => {
+      const volume = parseFloat(row?.volume);
+      if (Number.isFinite(volume)) lastVolumeIdx = idx;
+    });
+    if (lastVolumeIdx < 0) return [];
+    return formData.gasMeters.slice(0, lastVolumeIdx + 1);
+  };
+
+  const getRawPostMoistureFactors = () => {
+    // 엑셀 수분량!I44 계산 경로와 동일:
+    // Xw = (22.4/18*F38) / (D44*(273/(273+E44))*((F44+H44)/760) + 22.4/18*F38) * 100
+    const Wm = getRawTotalMoistureWeight(); // F38
+    const meterRows = getMeterRowsUntilLastVolume();
+    if (meterRows.length === 0) return null;
+
+    const startVolume = parseFloat(meterRows[0]?.volume); // B44
+    const endVolume = Math.max(...meterRows
+      .map((row) => parseFloat(row?.volume))
+      .filter((v) => Number.isFinite(v))); // C44(MAX)
+    if (!Number.isFinite(startVolume) || !Number.isFinite(endVolume) || endVolume <= startVolume) return null;
+
+    const deltaVmL = endVolume - startVolume;
     const yd = parseFloat(formData.gasMeterFactor) || 1.0;
+    const pa = parseFloat(formData.atmPressure);
+    if (!Number.isFinite(yd) || yd <= 0 || !Number.isFinite(pa)) return null;
 
-    if (Wm > 0 && deltaVmL > 0 && Number.isFinite(tmAvg) && Number.isFinite(pa) && Number.isFinite(pmAvg)) {
-      const pmAbsTerm = pa + (pmAvg / 13.6);
-      if (!Number.isFinite(pmAbsTerm) || pmAbsTerm <= 0) return 0;
+    const tmValues = meterRows.flatMap((row) => {
+      const inT = parseFloat(row.tmIn);
+      const outT = parseFloat(row.tmOut);
+      const values = [];
+      if (Number.isFinite(inT)) values.push(inT);
+      if (Number.isFinite(outT)) values.push(outT);
+      return values;
+    });
+    if (tmValues.length === 0) return null;
+    const tmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length; // E44
 
-      const vmStdL = deltaVmL * yd * (273 / (273 + tmAvg)) * (pmAbsTerm / 760);
-      // 엑셀 상수와 동일하게 22.4/18 사용
-      const vwStdL = Wm * (22.4 / 18);
-      return (vwStdL / (vmStdL + vwStdL)) * 100;
+    const pmValues = meterRows
+      .map((row) => getRawOrificePressureFromRow(row))
+      .filter((v) => Number.isFinite(v));
+    if (pmValues.length === 0) return null;
+    const pmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length; // G44
+
+    const pmAbsTerm = pa + (pmAvg / 13.6); // F44 + H44
+    if (!Number.isFinite(pmAbsTerm) || pmAbsTerm <= 0) return null;
+
+    const vmStdL = deltaVmL * yd * (273 / (273 + tmAvg)) * (pmAbsTerm / 760);
+    const vwStdL = Wm * (22.4 / 18);
+    if (!Number.isFinite(vmStdL) || vmStdL <= 0) return null;
+
+    let Xw = NaN;
+    const denominator = vmStdL + vwStdL;
+    if (Wm > 0 && Number.isFinite(vwStdL) && denominator > 0) {
+      const rawXw = (vwStdL / denominator) * 100;
+      if (Number.isFinite(rawXw) && rawXw >= 0) Xw = rawXw;
     }
-    return 0;
+
+    return { Xw, vmStdL, vwStdL, deltaVmL, tmAvg, pmAvg, pa, yd, Wm };
+  };
+
+  const getRawPostMoisture = () => {
+    const factors = getRawPostMoistureFactors();
+    return factors && Number.isFinite(factors.Xw) ? factors.Xw : 0;
   };
 
   const getRawVmStd = () => {
-    const deltaVmL = getRawGasMeterVolDiff();
-    const tmAvg = getRawAvgTm();
-    const pa = parseFloat(formData.atmPressure);
-    const pmAvg = getRawAvgOrifice();
-    const yd = parseFloat(formData.gasMeterFactor) || 1.0;
-
-    if (deltaVmL > 0 && Number.isFinite(tmAvg) && Number.isFinite(pa) && Number.isFinite(pmAvg)) {
-      const pmAbsTerm = pa + (pmAvg / 13.6);
-      if (!Number.isFinite(pmAbsTerm) || pmAbsTerm <= 0) return 0;
-      return deltaVmL * yd * (273 / (273 + tmAvg)) * (pmAbsTerm / 760);
-    }
-    return 0;
+    const factors = getRawPostMoistureFactors();
+    return factors ? factors.vmStdL : 0;
   };
 
   const getRawDustWeightDiff = () => {
@@ -5891,7 +5923,7 @@ export default function App() {
                  <div className="mt-4 p-3 rounded-lg border border-slate-600 bg-slate-900/40 text-[10px] text-slate-300">
                    <p className="font-bold text-slate-200 mb-1">유량 계산 인수 (소수 15자리)</p>
                    <p>v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
-                   <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw={formatFixed15(gasFlowFactors.XwPercent)}</p>
+                   <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw(raw15)={formatFixed15(gasFlowFactors.XwPercent)} | Xw(excel14)={roundFixed(gasFlowFactors.XwPercent, 14)}</p>
                    <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
                  </div>
                )}
