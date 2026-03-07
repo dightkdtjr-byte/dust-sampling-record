@@ -2624,22 +2624,30 @@ export default function App() {
     return Number.isFinite(manualPressure) ? manualPressure : NaN;
   };
 
-  const getRawCorrectedDensityFromTs = (ts) => {
+  const getRawCorrectedDensityFromAvgTs = (avgTs) => {
     const gasComp = getGasComposition();
     const Ps = getRawStackPressure();
-    if (!Number.isFinite(ts) || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
-    const density = gasComp.r0 * (273 / (273 + ts)) * (Ps / 760);
+    if (!Number.isFinite(avgTs) || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
+    const density = gasComp.r0 * (273 / (273 + avgTs)) * (Ps / 760);
     return Number.isFinite(density) && density > 0 ? density : NaN;
   };
 
+  const getRawCorrectedDensityFromRows = (rows) => {
+    const tsValues = rows.map((row) => parseFloat(row?.stackTemp)).filter((v) => Number.isFinite(v));
+    if (tsValues.length === 0) return NaN;
+    const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
+    return getRawCorrectedDensityFromAvgTs(avgTs);
+  };
+
   const getRawAvgCorrectedDensityFromMeterRows = () => {
-    // 적산유량계 기록표(초기~마지막 유량행) 보정밀도 원값 평균
-    const meterRows = getMeterRowsUntilLastVolume();
-    const densities = meterRows
-      .map((row) => getRawCorrectedDensityFromTs(parseFloat(row?.stackTemp)))
-      .filter((v) => Number.isFinite(v));
-    if (densities.length === 0) return NaN;
-    return densities.reduce((a, b) => a + b, 0) / densities.length;
+    // 적산유량계 기록표에서 마지막 유효행의 누적 보정밀도(N행 방식) 사용
+    // = r0 * 273/(273+AVERAGE(Ts_start:Ts_last)) * (Ps/760)
+    const meterRowsWithIndex = getMeterRowsUntilLastVolume()
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row, idx }) => isActiveMeterRow(row, idx));
+    if (meterRowsWithIndex.length === 0) return NaN;
+    const lastIdx = meterRowsWithIndex[meterRowsWithIndex.length - 1].idx;
+    return getRawCorrectedDensityFromRows(getActiveMeterRowsUntil(lastIdx));
   };
 
   const getRawGasVelocityFactorsFromMeterRows = () => {
@@ -3139,17 +3147,7 @@ export default function App() {
     if (idx < 0) return NaN;
     if (idx > 0 && String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return NaN;
     const rangeRows = getActiveMeterRowsUntil(idx);
-    const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
-    if (tsValues.length === 0) return NaN;
-
-    const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
-    const Ps = getRawStackPressure();
-    const r0 = getGasComposition().r0;
-    if (!Number.isFinite(Ps) || !Number.isFinite(r0) || r0 <= 0) return NaN;
-
-    const correctedDensity = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
-    if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return NaN;
-    return correctedDensity;
+    return getRawCorrectedDensityFromRows(rangeRows);
   };
 
   const calcRowCorrectedGasDensity = (idx) => {
