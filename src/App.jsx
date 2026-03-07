@@ -4930,18 +4930,6 @@ export default function App() {
   return (
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
-      <div className="fixed left-4 bottom-4 z-40 flex items-center gap-1 rounded-xl border border-white/70 bg-white/80 px-2 py-1 backdrop-blur">
-        {SKY_PREVIEW_OPTIONS.map((opt) => (
-          <button
-            key={`sheet-sky-${opt.id}`}
-            type="button"
-            onClick={() => setSkyPreviewMode(opt.id)}
-            className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${skyPreviewMode === opt.id ? 'bg-slate-800 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
@@ -6380,7 +6368,6 @@ export default function App() {
         </div>
 
       </div>
-      <SignatureBadge />
     </div>
   );
 }
