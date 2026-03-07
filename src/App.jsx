@@ -4826,7 +4826,7 @@ export default function App() {
                         htmlFor="profile-csv-import"
                         className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] cursor-pointer"
                       >
-                        선택 기록부 엑셀로 추출
+                        선택 항목 엑셀로 추출
                       </label>
                       <input
                         id="profile-csv-import"
@@ -6229,7 +6229,7 @@ export default function App() {
                 onClick={handleExportSelectedTemplateExcel}
                 className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
               >
-                선택 기록부 엑셀로 추출
+                선택 항목 엑셀로 추출
               </button>
             </div>
           </div>
