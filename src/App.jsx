@@ -218,6 +218,9 @@ const SKY_PREVIEW_OPTIONS = [
 ];
 
 const MOBILE_LIGHT_MAX_WIDTH = 768;
+const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
+const DEFAULT_MEASURE_ROW_COUNT = 12;
+const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
 
 const isMobileViewportWidth = () => {
   if (typeof window === 'undefined') return false;
@@ -226,6 +229,81 @@ const isMobileViewportWidth = () => {
 
 const makeSparseLayout = (items, step = 2) =>
   items.filter((_, idx) => idx % step === 0 || idx === items.length - 1);
+
+const buildPointSlotSequence = (pointCount, slotCount = DEFAULT_MEASURE_ROW_COUNT) => {
+  const safePointCount = Math.max(1, Math.floor(Number(pointCount) || 1));
+  const safeSlotCount = Math.max(1, Math.floor(Number(slotCount) || 1));
+  const baseCount = Math.floor(safeSlotCount / safePointCount);
+  const counts = Array.from({ length: safePointCount }, () => baseCount);
+  let remainder = safeSlotCount - (baseCount * safePointCount);
+
+  let left = 0;
+  let right = safePointCount - 1;
+  let applyFromStart = true;
+  while (remainder > 0) {
+    if (left > right) {
+      left = 0;
+      right = safePointCount - 1;
+    }
+    if (left === right) {
+      counts[left] += 1;
+      remainder -= 1;
+      continue;
+    }
+    if (applyFromStart) {
+      counts[left] += 1;
+      left += 1;
+    } else {
+      counts[right] += 1;
+      right -= 1;
+    }
+    applyFromStart = !applyFromStart;
+    remainder -= 1;
+  }
+
+  const sequence = [];
+  counts.forEach((count, idx) => {
+    for (let i = 0; i < count; i += 1) {
+      sequence.push(String(idx + 1));
+    }
+  });
+  return sequence.slice(0, safeSlotCount);
+};
+
+const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_COUNT) => {
+  const sequence = buildPointSlotSequence(pointCount, slotCount);
+  const rows = [{
+    id: 0,
+    pointNum: '시작',
+    time: '0',
+    stackTemp: '',
+    dp: '',
+    pressure: '',
+    volume: '',
+    tmIn: '',
+    tmOut: '',
+    vacuum: '',
+    impingerTemp: '',
+  }];
+
+  sequence.forEach((pointNum, idx) => {
+    rows.push({
+      id: idx + 1,
+      pointNum,
+      time: String(DEFAULT_SLOT_MINUTES),
+      stackTemp: '',
+      dp: '',
+      pressure: '',
+      volume: '',
+      tmIn: '',
+      tmOut: '',
+      vacuum: '',
+      impingerTemp: '',
+    });
+  });
+
+  return rows;
+};
 
 const PIXEL_MOUNTAIN_CLIP_PATH = 'polygon(0 100%, 0 78%, 8% 78%, 8% 66%, 16% 66%, 16% 54%, 24% 54%, 24% 42%, 32% 42%, 32% 30%, 40% 30%, 40% 18%, 48% 18%, 48% 8%, 56% 8%, 56% 18%, 64% 18%, 64% 30%, 72% 30%, 72% 42%, 80% 42%, 80% 54%, 88% 54%, 88% 66%, 96% 66%, 96% 78%, 100% 78%, 100% 100%)';
 const PIXEL_HILL_CLIP_PATH = 'polygon(0 100%, 0 72%, 6% 72%, 6% 64%, 14% 64%, 14% 56%, 22% 56%, 22% 62%, 30% 62%, 30% 52%, 38% 52%, 38% 44%, 46% 44%, 46% 50%, 54% 50%, 54% 42%, 62% 42%, 62% 50%, 70% 50%, 70% 60%, 78% 60%, 78% 54%, 86% 54%, 86% 66%, 94% 66%, 94% 74%, 100% 74%, 100% 100%)';
@@ -712,10 +790,7 @@ export default function App() {
     gasMeterFactor: '0.991', deltaHAt: '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
     nozzleDiameter: '', kFactor: '',
-    gasMeters: Array.from({ length: 6 }, (_, i) => ({
-      id: i, pointNum: i === 0 ? '시작' : '', time: i === 0 ? '0' : '', stackTemp: '', 
-      dp: '', pressure: '', volume: '', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' 
-    })),
+    gasMeters: createGasMeterRowsByPoints(5),
     filterId: '', filterInitial: '', filterFinal: '', remarks: ''
   });
 
@@ -1792,17 +1867,14 @@ export default function App() {
     const spData = getSamplingPoints();
     if (!spData) return;
     const pointCount = spData.perRadius;
-    const minMeasureRows = 5; // 시작(0분) 행 제외 최소 측정기록 칸
-    const totalMeterRows = Math.max(pointCount + 1, minMeasureRows + 1);
+    const measureRows = DEFAULT_MEASURE_ROW_COUNT;
+    const totalMeterRows = measureRows + 1;
     setFormData(prev => {
       const newPoints = Array.from({ length: pointCount }, (_, i) => prev.points[i] || { id: i + 1, tp: '', sp: '', dp: '', ts: '' });
-      const newMeters = Array.from({ length: totalMeterRows }, (_, i) => {
-        if (i === 0) return prev.gasMeters[0] || { id: 0, pointNum: '시작', time: '0', stackTemp: '', dp: '', pressure: '', volume: '', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' };
-        return prev.gasMeters[i] || { id: i, pointNum: '', time: '', stackTemp: '', dp: '', pressure: '', volume: '', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' };
-      });
+      const newMeters = createGasMeterRowsByPoints(pointCount, measureRows);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
-    alert(`측정점 ${pointCount}개를 반영했고, 측정기록표는 시작행 포함 총 ${totalMeterRows}행(측정칸 최소 ${minMeasureRows}개)으로 생성했습니다.`);
+    alert(`측정점 ${pointCount}개 반영 완료: 60분 기준 측정칸 ${measureRows}개(시작행 포함 총 ${totalMeterRows}행)로 채취점이 자동 배분되었습니다.`);
   };
 
   const getGasComposition = () => {
@@ -3823,7 +3895,7 @@ export default function App() {
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
                   <button type="button" onClick={applySamplingPointsToTable} className="w-full md:w-auto py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors shrink-0 border border-emerald-700">
-                    하단 표 {samplingPointsData.perRadius}칸 자동 생성
+                    측정점/60분 표 자동 생성
                   </button>
                 </div>
               </div>
