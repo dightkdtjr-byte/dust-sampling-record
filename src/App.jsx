@@ -2642,13 +2642,13 @@ export default function App() {
   const getRawAvgCorrectedDensityFromMeterRows = () => {
     // 적산유량계 기록표에서 마지막 유효행의 누적 보정밀도(N행 방식) 사용
     // = r0 * 273/(273+AVERAGE(Ts_start:Ts_last)) * (Ps/760)
-    const meterRows = getMeterRowsUntilLastVolume();
+    const meterRows = getMeterRowsWithVolume();
     if (meterRows.length === 0) return NaN;
     return getRawCorrectedDensityFromRows(meterRows);
   };
 
   const getRawGasVelocityFactorsFromMeterRows = () => {
-    const meterRows = getMeterRowsUntilLastVolume();
+    const meterRows = getMeterRowsWithVolume();
     const dpValues = meterRows
       .map((row) => parseFloat(row.dp))
       .filter((v) => Number.isFinite(v) && v >= 0);
@@ -2711,7 +2711,7 @@ export default function App() {
   };
 
   const getRawAvgSamplingTs = () => {
-    const validTemps = getMeterRowsUntilLastVolume().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
+    const validTemps = getMeterRowsWithVolume().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
@@ -2745,6 +2745,10 @@ export default function App() {
     if (lastVolumeIdx < 0) return [];
     return formData.gasMeters.slice(0, lastVolumeIdx + 1);
   };
+
+  const getMeterRowsWithVolume = () => (
+    getMeterRowsUntilLastVolume().filter((row) => Number.isFinite(parseFloat(row?.volume)))
+  );
 
   const getRawPostMoistureFactors = () => {
     // 엑셀 수분량!I44 계산 경로와 동일:
