@@ -2355,7 +2355,7 @@ export default function App() {
     const flowRates = calcGasFlowRates();
     const isokineticRate = calcIsokineticRate(true);
     const isokineticNum = parseFloat(isokineticRate);
-    const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 95 && isokineticNum <= 105 ? '적합' : '부적합';
+    const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 90 && isokineticNum <= 110 ? '적합' : '부적합';
 
     const result = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -4604,7 +4604,7 @@ export default function App() {
                     {formData.gasMeters.map((meter, idx) => {
                       const isStartRow = idx === 0;
                       const rowRate = calcRowIsokineticRate(idx);
-                      const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 95 && parseFloat(rowRate) <= 105;
+                      const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 90 && parseFloat(rowRate) <= 110;
                       
                       return (
                         <tr key={meter.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors`}>
@@ -4694,7 +4694,7 @@ export default function App() {
               <div className="mb-4">
                 <div>
                   <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
-                  <p className="text-xs text-slate-600 mt-1">대기오염공정시험기준 유효범위 : 95% ~ 105% (수식 0.00346 적용됨)</p>
+                  <p className="text-xs text-slate-600 mt-1">대기오염공정시험기준 유효범위 : 90% ~ 110% (수식 0.00346 적용됨)</p>
                 </div>
               </div>
               
@@ -4713,7 +4713,7 @@ export default function App() {
               <div className="mt-5 flex justify-end">
                 {calcIsokineticRate(true) !== '-' && (
                   <div>
-                    {(parseFloat(calcIsokineticRate(true)) >= 95 && parseFloat(calcIsokineticRate(true)) <= 105) ? 
+                    {(parseFloat(calcIsokineticRate(true)) >= 90 && parseFloat(calcIsokineticRate(true)) <= 110) ? 
                       <span className="flex items-center text-white text-sm font-bold bg-green-700 px-4 py-2 rounded-full shadow-sm">적합 (최종 유효 데이터)</span> : 
                       <span className="flex items-center text-white text-sm font-bold bg-red-600 px-4 py-2 rounded-full shadow-sm">부적합 (재측정 요망)</span>
                     }
