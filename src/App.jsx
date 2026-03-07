@@ -3359,13 +3359,14 @@ export default function App() {
                         <tr
                           key={reportKey || data.savedAt}
                           className="hover:bg-slate-50 cursor-pointer"
-                          onDoubleClick={() => handleLoadSavedReport(data)}
-                          title="더블클릭하면 불러오기"
+                          onClick={() => handleLoadSavedReport(data)}
+                          title="클릭하면 불러오기"
                         >
                           <td className="p-2 text-center">
                             <input
                               type="checkbox"
                               checked={menuCheckedReportKeySet.has(reportKey)}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
                             />
                           </td>
