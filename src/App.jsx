@@ -3526,7 +3526,56 @@ export default function App() {
     return { dH, L, SL, Sm3, reqTime };
   };
 
+  const getMeterTableAverages = () => {
+    const activeRowsWithIndex = formData.gasMeters
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row, idx }) => isActiveMeterRow(row, idx));
+    const samplingRowsWithIndex = activeRowsWithIndex.filter(({ idx }) => idx > 0);
+
+    const avgOf = (values) => {
+      const valid = values.filter((v) => Number.isFinite(v));
+      if (valid.length === 0) return NaN;
+      return valid.reduce((acc, cur) => acc + cur, 0) / valid.length;
+    };
+
+    const fmt = (value, digits) => (Number.isFinite(value) ? roundFixed(value, digits) : '-');
+
+    const timeAvg = avgOf(samplingRowsWithIndex.map(({ row }) => parseFloat(row.time)));
+    const tsAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.stackTemp)));
+    const dpAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.dp)));
+    const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.pressure)));
+    const volumeAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.volume)));
+    const tmInAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmIn)));
+    const tmOutAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmOut)));
+    const vacuumAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.vacuum)));
+    const impingerTempAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.impingerTemp)));
+    const velocityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowGasVelocityRaw(idx)));
+    const densityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowCorrectedGasDensityRaw(idx)));
+    const moistureAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowMoistureCaptureRaw(idx)));
+    const rateAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => parseFloat(calcRowIsokineticRate(idx))));
+
+    const tmPair = (Number.isFinite(tmInAvg) || Number.isFinite(tmOutAvg))
+      ? `${fmt(tmInAvg, 1)} / ${fmt(tmOutAvg, 1)}`
+      : '-';
+
+    return {
+      time: fmt(timeAvg, 1),
+      stackTemp: fmt(tsAvg, 1),
+      dp: fmt(dpAvg, 2),
+      pressure: fmt(pressureAvg, 2),
+      volume: fmt(volumeAvg, 2),
+      tmPair,
+      vacuum: fmt(vacuumAvg, 1),
+      impingerTemp: fmt(impingerTempAvg, 1),
+      velocity: fmt(velocityAvg, 2),
+      density: fmt(densityAvg, 2),
+      moisture: fmt(moistureAvg, 2),
+      rate: fmt(rateAvg, 1),
+    };
+  };
+
   const expData = getExpectedValues();
+  const meterTableAverages = getMeterTableAverages();
   const activeSheet = SHEET_MENU.find(item => item.id === selectedSheet);
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
@@ -4788,7 +4837,7 @@ export default function App() {
                 </div>
               </div>
 
-              <details open className="mb-3 bg-white border border-emerald-200 rounded-lg p-2">
+              <details className="mb-3 bg-white border border-emerald-200 rounded-lg p-2">
                 <summary className="cursor-pointer text-[11px] font-bold text-emerald-800">
                   피토 프리셋 직접 편집 (C<sub>p</sub>)
                 </summary>
@@ -5355,6 +5404,23 @@ export default function App() {
                         </tr>
                       );
                     })}
+                    <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-800">
+                      <td className="p-1">평균</td>
+                      <td className="p-1">-</td>
+                      <td className="p-1">{meterTableAverages.time}</td>
+                      <td className="p-1">{meterTableAverages.stackTemp}</td>
+                      <td className="p-1">{meterTableAverages.dp}</td>
+                      <td className="p-1">{meterTableAverages.pressure}</td>
+                      <td className="p-1">{meterTableAverages.volume}</td>
+                      <td className="p-1">{meterTableAverages.tmPair}</td>
+                      <td className="p-1">{meterTableAverages.vacuum}</td>
+                      <td className="p-1">{meterTableAverages.impingerTemp}</td>
+                      <td className="p-1">{meterTableAverages.velocity}</td>
+                      <td className="p-1">{meterTableAverages.density}</td>
+                      <td className="p-1">{meterTableAverages.moisture}</td>
+                      <td className="p-1 text-emerald-700">{meterTableAverages.rate === '-' ? '-' : `${meterTableAverages.rate}%`}</td>
+                      <td className="p-1"></td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
