@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import JSZip from 'jszip';
 import mainLogoImage from './assets/mainlogo.png';
 
@@ -4442,9 +4443,9 @@ export default function App() {
                   </button>
                 </div>
 
-                {authModal === 'admin' && (
-                  <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                {authModal === 'admin' && typeof document !== 'undefined' && createPortal(
+                  <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
+                    <div className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">관리자 로그인</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -4481,7 +4482,8 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             ) : (
@@ -4535,9 +4537,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {authModal === 'nickname' && (
-                  <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                {authModal === 'nickname' && typeof document !== 'undefined' && createPortal(
+                  <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
+                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">별명 설정</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -4565,12 +4567,13 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
 
-                {authModal === 'settings' && (
-                  <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                {authModal === 'settings' && typeof document !== 'undefined' && createPortal(
+                  <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
+                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">설정</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -4640,7 +4643,8 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             )}
@@ -5555,18 +5559,7 @@ export default function App() {
                  </div>
                </details>
                
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3 items-end">
-                 <div>
-                    <label className="block text-xs font-bold text-emerald-800 mb-1">피토관 정보</label>
-                    <input
-                      type="text"
-                      name="pitotInfo"
-                      value={formData.pitotInfo}
-                      onChange={handleChange}
-                      placeholder="예: 피토 1호기 / S/N"
-                      className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700"
-                    />
-                 </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3 items-end">
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1">목표 채취량 (SL)</label>
                     <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-emerald-300 rounded text-sm bg-white font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
