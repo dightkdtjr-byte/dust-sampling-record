@@ -3677,11 +3677,6 @@ export default function App() {
             {opt.label}
           </button>
         ))}
-        {isMobileLightMode && (
-          <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-black">
-            모바일 경량
-          </span>
-        )}
       </div>
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
@@ -3939,16 +3934,6 @@ export default function App() {
             )}
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
-            {isUserUnlocked && (
-              <button
-                type="button"
-                aria-label="설정 열기"
-                onClick={() => setAuthModal('settings')}
-                className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-20"
-              >
-                ⚙ 설정
-              </button>
-            )}
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
@@ -4015,7 +4000,15 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-4 flex flex-col items-center">
-                <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
+                <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-white relative shadow-sm">
+                  <button
+                    type="button"
+                    aria-label="설정 열기"
+                    onClick={() => setAuthModal('settings')}
+                    className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-10"
+                  >
+                    ⚙ 설정
+                  </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
                       <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center">
@@ -4288,11 +4281,6 @@ export default function App() {
             {opt.label}
           </button>
         ))}
-        {isMobileLightMode && (
-          <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-black">
-            모바일 경량
-          </span>
-        )}
       </div>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
@@ -4808,12 +4796,12 @@ export default function App() {
 
             {/* ✅ 4번 섹션 동정압 측정 시의 미터온도(Tm) 입력칸 추가 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 border-b border-slate-200 pb-3 gap-3">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <div className="flex flex-col md:flex-row md:items-center mb-4 border-b border-slate-200 pb-3 gap-3">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 md:whitespace-nowrap shrink-0">
                   <span className="bg-emerald-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black shrink-0">4</span>
                   측정점별 동압 및 온도
                 </h2>
-                <div className="flex flex-wrap items-center gap-2 md:gap-4">
+                <div className="flex flex-wrap items-center gap-2 md:gap-4 md:ml-auto md:justify-end">
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
                     <label className="text-[11px] font-bold text-slate-700">피토계수</label>
                     <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
