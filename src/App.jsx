@@ -59,7 +59,9 @@ const SHEET_MENU = [
 
 const getSkyPhaseByHour = (date = new Date()) => {
   const hour = date.getHours();
-  return hour >= 7 && hour < 17 ? 'day' : 'night';
+  if (hour >= 6 && hour < 11) return 'morning';
+  if (hour >= 11 && hour < 16) return 'day';
+  return 'night';
 };
 
 const seededNoise = (seed) => {
@@ -220,6 +222,7 @@ const getPixelTreePalette = (isNightSky, seedIndex) => {
 
 const SKY_PREVIEW_OPTIONS = [
   { id: 'auto', label: '자동' },
+  { id: 'morning', label: '아침' },
   { id: 'day', label: '낮' },
   { id: 'night', label: '밤' },
 ];
@@ -457,6 +460,26 @@ const SKYLINE_FLYER_CSS = `
   border-radius: 9999px;
   background: radial-gradient(circle at 36% 34%, rgba(254, 249, 195, 1), rgba(253, 230, 138, 0.95) 48%, rgba(251, 191, 36, 0.88));
   box-shadow: 0 0 0 12px rgba(254, 240, 138, 0.25), 0 0 36px rgba(250, 204, 21, 0.35), 0 0 70px rgba(249, 115, 22, 0.2);
+}
+.skyline-sunrise-mountain {
+  position: absolute;
+  left: 80%;
+  top: 33%;
+  width: clamp(92px, 10vw, 136px);
+  height: clamp(92px, 10vw, 136px);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 1), rgba(253, 224, 71, 0.96) 44%, rgba(251, 146, 60, 0.9));
+  box-shadow: 0 0 0 11px rgba(254, 240, 138, 0.2), 0 0 36px rgba(251, 191, 36, 0.32), 0 0 66px rgba(251, 146, 60, 0.2);
+}
+.skyline-sunrise-mountain-sheet {
+  position: absolute;
+  left: 78%;
+  top: 54%;
+  width: clamp(56px, 7vw, 84px);
+  height: clamp(56px, 7vw, 84px);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 0.98), rgba(253, 224, 71, 0.92) 44%, rgba(251, 146, 60, 0.86));
+  box-shadow: 0 0 0 8px rgba(254, 240, 138, 0.18), 0 0 28px rgba(251, 191, 36, 0.28), 0 0 48px rgba(251, 146, 60, 0.18);
 }
 @keyframes stackHeartRise {
   0% {
@@ -1098,7 +1121,7 @@ export default function App() {
     try {
       return sanitizeSkyPreviewMode(localStorage.getItem(STORAGE_KEYS.skyPreviewMode));
     } catch (error) {
-      console.error('낮/밤 설정 로딩 실패:', error);
+      console.error('하늘 시간대 설정 로딩 실패:', error);
       return 'auto';
     }
   });
@@ -1115,7 +1138,7 @@ export default function App() {
     try {
       localStorage.setItem(STORAGE_KEYS.skyPreviewMode, sanitizeSkyPreviewMode(skyPreviewMode));
     } catch (error) {
-      console.error('낮/밤 설정 저장 실패:', error);
+      console.error('하늘 시간대 설정 저장 실패:', error);
     }
   }, [skyPreviewMode]);
 
@@ -4208,7 +4231,61 @@ export default function App() {
   const isDustSheet = selectedSheet === 'dust';
   const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
   const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
-  const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
+  const resolvedSkyMode = skyPreviewMode === 'auto' ? skyPhase : skyPreviewMode;
+  const isNightSky = resolvedSkyMode === 'night';
+  const isMorningSky = resolvedSkyMode === 'morning';
+  const skyOrbClass = isNightSky ? 'skyline-moon' : (isMorningSky ? '' : 'skyline-sun');
+  const menuSkyBgClass = isNightSky
+    ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'
+      : 'bg-gradient-to-b from-[#dff3ff] via-[#bee5ff] to-[#ffe8be]');
+  const menuSkyOverlayClass = isNightSky
+    ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#fff2cc]/38 via-[#ffdca5]/20 to-transparent'
+      : 'bg-gradient-to-b from-white/42 via-sky-100/12 to-transparent');
+  const menuSkyGlowLeftClass = isNightSky
+    ? 'bg-indigo-300/20'
+    : (isMorningSky ? 'bg-amber-100/70' : 'bg-white/85');
+  const menuSkyGlowRightClass = isNightSky
+    ? 'bg-violet-400/15'
+    : (isMorningSky ? 'bg-orange-200/45' : 'bg-sky-200/70');
+  const menuGroundClass = isNightSky
+    ? 'bg-gradient-to-b from-[#233a33] via-[#16282c] to-[#080f15]'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#6a8d73] via-[#54795f] to-[#2f493d]'
+      : 'bg-gradient-to-b from-[#79a584] via-[#658d72] to-[#3f5f4d]');
+  const menuRidgeClass = isNightSky
+    ? 'bg-gradient-to-t from-[#0c1424]/60 to-transparent'
+    : (isMorningSky
+      ? 'bg-gradient-to-t from-[#f8dca2]/35 to-transparent'
+      : 'bg-gradient-to-t from-[#d8ecff]/30 to-transparent');
+  const menuMountainClass = isNightSky
+    ? 'bg-gradient-to-b from-[#35446c]/80 to-[#1a243f]/75'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#9ca8c7]/80 to-[#6f7ea7]/74'
+      : 'bg-gradient-to-b from-[#abc4e0]/78 to-[#7f9ec7]/72');
+  const sheetSkyBgClass = isNightSky
+    ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'
+      : 'bg-gradient-to-b from-[#dff3ff] via-[#bee5ff] to-[#ffe8be]');
+  const sheetSkyOverlayClass = isNightSky
+    ? 'bg-gradient-to-b from-[#040915]/42 via-[#1d2f64]/16 to-transparent'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#fff3d6]/34 via-[#ffe4b8]/16 to-transparent'
+      : 'bg-gradient-to-b from-white/34 via-sky-100/10 to-transparent');
+  const sheetGroundClass = isNightSky
+    ? 'bg-gradient-to-b from-[#223733] to-[#070d14]'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#6f9675] to-[#3f5f4d]'
+      : 'bg-gradient-to-b from-[#82ad8a] to-[#4d725b]');
+  const sheetMountainClass = isNightSky
+    ? 'bg-gradient-to-b from-[#35446c]/72 to-[#1a243f]/68'
+    : (isMorningSky
+      ? 'bg-gradient-to-b from-[#a9b4cd]/72 to-[#7585ab]/68'
+      : 'bg-gradient-to-b from-[#b7cde6]/70 to-[#86a8d1]/66');
   const isMobileLightMode = isMobileViewport;
   const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
   const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
@@ -4299,13 +4376,13 @@ export default function App() {
 
   if (!selectedSheet) {
     return (
-      <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
+      <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${menuSkyBgClass}`}>
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
-        <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
-        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
-        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${isNightSky ? 'bg-violet-400/15' : 'bg-sky-200/65'}`} />
-        <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
+        <div className={`absolute inset-0 ${menuSkyOverlayClass}`} />
+        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
+        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
+        {skyOrbClass && <div className={skyOrbClass} />}
           {isNightSky && (
             <div className="absolute inset-0">
               {sceneStarsMenu.map((star) => (
@@ -4326,12 +4403,13 @@ export default function App() {
           )}
           <div className="absolute bottom-0 left-0 right-0">
             <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl">
-              <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${isNightSky ? 'bg-gradient-to-b from-[#233a33] via-[#16282c] to-[#080f15]' : 'bg-gradient-to-b from-[#5e8c67] via-[#4e7458] to-[#2c3f37]'}`} />
-              <div className={`absolute bottom-16 left-0 right-0 h-14 ${isNightSky ? 'bg-gradient-to-t from-[#0c1424]/60 to-transparent' : 'bg-gradient-to-t from-[#d3e6ff]/40 to-transparent'}`} />
+              <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${menuGroundClass}`} />
+              <div className={`absolute bottom-16 left-0 right-0 h-14 ${menuRidgeClass}`} />
+              {isMorningSky && <div className="skyline-sunrise-mountain" />}
               {sceneMountains.map((mountain) => (
                 <div
                   key={mountain.id}
-                  className={`absolute bottom-[6.4rem] rounded-t-[45%] ${isNightSky ? 'bg-gradient-to-b from-[#35446c]/80 to-[#1a243f]/75' : 'bg-gradient-to-b from-[#90a9c9]/78 to-[#6784aa]/72'}`}
+                  className={`absolute bottom-[6.4rem] rounded-t-[45%] ${menuMountainClass}`}
                   style={{ left: mountain.left, width: mountain.width, height: `${mountain.height}px` }}
                 />
               ))}
@@ -4552,9 +4630,6 @@ export default function App() {
                 className="h-[2.6rem] md:h-[4rem] w-auto select-none"
               />
             </h1>
-            {isUserUnlocked && (
-              <p className="text-sm text-slate-600 mt-2">로그인 완료: 원하는 기록부 아이콘을 누르면 해당 기록부로 이동합니다.</p>
-            )}
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
             {!isUserUnlocked ? (
@@ -4730,7 +4805,7 @@ export default function App() {
                         </button>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 낮/밤 표시를 선택합니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대(아침/낮/밤) 표시를 선택합니다.</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {SKY_PREVIEW_OPTIONS.map((opt) => {
                               const selected = skyPreviewMode === opt.id;
@@ -4960,13 +5035,13 @@ export default function App() {
   }
 
   return (
-    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
+    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
-        <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/42 via-[#1d2f64]/16 to-transparent' : 'bg-gradient-to-b from-white/28 via-sky-100/12 to-transparent'}`} />
-        <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
+        <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
+        {skyOrbClass && <div className={skyOrbClass} />}
         {isNightSky && sceneStarsSheet.map((star) => (
           <span
             key={`sheet-${star.id}`}
@@ -4983,11 +5058,12 @@ export default function App() {
         ))}
         <div className="absolute bottom-0 left-0 right-0">
           <div className="relative mx-auto h-44 md:h-56 max-w-7xl">
-            <div className={`absolute bottom-0 left-0 right-0 h-20 ${isNightSky ? 'bg-gradient-to-b from-[#223733] to-[#070d14]' : 'bg-gradient-to-b from-[#6b8f70] to-[#395447]'}`} />
+            <div className={`absolute bottom-0 left-0 right-0 h-20 ${sheetGroundClass}`} />
+            {isMorningSky && <div className="skyline-sunrise-mountain-sheet" />}
             {sceneMountains.map((mountain) => (
               <div
                 key={`sheet-${mountain.id}`}
-                className={`absolute bottom-16 rounded-t-[45%] ${isNightSky ? 'bg-gradient-to-b from-[#35446c]/72 to-[#1a243f]/68' : 'bg-gradient-to-b from-[#90a9c9]/70 to-[#6784aa]/66'}`}
+                className={`absolute bottom-16 rounded-t-[45%] ${sheetMountainClass}`}
                 style={{ left: mountain.left, width: mountain.width, height: `${Math.round(mountain.height * 0.38)}px` }}
               />
             ))}
