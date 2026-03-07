@@ -705,7 +705,6 @@ export default function App() {
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
-  const [lowSpecMode, setLowSpecMode] = useState(true);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
 
   useEffect(() => {
@@ -2530,16 +2529,16 @@ export default function App() {
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
   const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
-  const sceneStarsMenu = lowSpecMode ? SKYLINE_STARS.slice(0, 12) : SKYLINE_STARS;
-  const sceneStarsSheet = lowSpecMode ? SKYLINE_STARS.slice(0, 10) : SKYLINE_STARS.slice(0, 30);
-  const sceneMountains = lowSpecMode ? SKYLINE_MOUNTAINS.slice(0, 2) : SKYLINE_MOUNTAINS;
-  const sceneTreeBelt = lowSpecMode ? SKYLINE_TREE_BELT.slice(0, 14) : SKYLINE_TREE_BELT;
-  const sceneFrontTreeBelt = lowSpecMode ? SKYLINE_FRONT_TREE_BELT.slice(0, 12) : SKYLINE_FRONT_TREE_BELT;
-  const sceneBackTowers = lowSpecMode ? SKYLINE_BACK_TOWERS.slice(0, 5) : SKYLINE_BACK_TOWERS;
-  const sceneFactoryBlocks = lowSpecMode ? SKYLINE_FACTORY_BLOCKS.slice(0, 3) : SKYLINE_FACTORY_BLOCKS;
-  const sceneCoolingTowers = lowSpecMode ? SKYLINE_COOLING_TOWERS.slice(0, 1) : SKYLINE_COOLING_TOWERS;
-  const sceneStacks = lowSpecMode ? SKYLINE_STACKS.slice(0, 3) : SKYLINE_STACKS;
-  const getSmokeParticleTotal = (stack) => (lowSpecMode ? Math.min(4, stack.smokeCount) : stack.smokeCount + 4);
+  const sceneStarsMenu = SKYLINE_STARS;
+  const sceneStarsSheet = SKYLINE_STARS.slice(0, 30);
+  const sceneMountains = SKYLINE_MOUNTAINS;
+  const sceneTreeBelt = SKYLINE_TREE_BELT;
+  const sceneFrontTreeBelt = SKYLINE_FRONT_TREE_BELT;
+  const sceneBackTowers = SKYLINE_BACK_TOWERS;
+  const sceneFactoryBlocks = SKYLINE_FACTORY_BLOCKS;
+  const sceneCoolingTowers = SKYLINE_COOLING_TOWERS;
+  const sceneStacks = SKYLINE_STACKS;
+  const getSmokeParticleTotal = (stack) => stack.smokeCount + 4;
   const navigateToMenu = () => {
     setSelectedSheet('');
     if (window.location.hash) {
@@ -2597,29 +2596,22 @@ export default function App() {
       <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
         <style>{SKYLINE_FLYER_CSS}</style>
         <div className="fixed left-4 bottom-4 z-40 flex items-center gap-1 rounded-xl border border-white/70 bg-white/80 px-2 py-1 backdrop-blur">
-          {SKY_PREVIEW_OPTIONS.map((opt) => (
-            <button
-              key={`menu-sky-${opt.id}`}
-              type="button"
-              onClick={() => setSkyPreviewMode(opt.id)}
-              className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${skyPreviewMode === opt.id ? 'bg-slate-800 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        {SKY_PREVIEW_OPTIONS.map((opt) => (
           <button
+            key={`menu-sky-${opt.id}`}
             type="button"
-            onClick={() => setLowSpecMode((prev) => !prev)}
-            className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${lowSpecMode ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+            onClick={() => setSkyPreviewMode(opt.id)}
+            className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${skyPreviewMode === opt.id ? 'bg-slate-800 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
           >
-            경량
+            {opt.label}
           </button>
-        </div>
-        <div className="pointer-events-none absolute inset-0 z-0">
-          <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
-          <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full ${lowSpecMode ? 'blur-xl' : 'blur-3xl'} ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
-          <div className={`absolute right-4 top-2 h-72 w-72 rounded-full ${lowSpecMode ? 'blur-xl' : 'blur-3xl'} ${isNightSky ? 'bg-violet-400/15' : 'bg-sky-200/65'}`} />
-          <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
+        ))}
+      </div>
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
+        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
+        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${isNightSky ? 'bg-violet-400/15' : 'bg-sky-200/65'}`} />
+        <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
           {isNightSky && (
             <div className="absolute inset-0">
               {sceneStarsMenu.map((star) => (
@@ -3194,13 +3186,6 @@ export default function App() {
             {opt.label}
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => setLowSpecMode((prev) => !prev)}
-          className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${lowSpecMode ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-        >
-          경량
-        </button>
       </div>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
