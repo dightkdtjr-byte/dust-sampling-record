@@ -3540,37 +3540,40 @@ export default function App() {
 
     const fmt = (value, digits) => (Number.isFinite(value) ? roundFixed(value, digits) : '-');
 
-    const timeAvg = avgOf(samplingRowsWithIndex.map(({ row }) => parseFloat(row.time)));
     const tsAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.stackTemp)));
     const dpAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.dp)));
     const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.pressure)));
-    const volumeAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.volume)));
     const tmInAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmIn)));
     const tmOutAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmOut)));
     const vacuumAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.vacuum)));
     const impingerTempAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.impingerTemp)));
     const velocityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowGasVelocityRaw(idx)));
     const densityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowCorrectedGasDensityRaw(idx)));
-    const moistureAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowMoistureCaptureRaw(idx)));
-    const rateAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => parseFloat(calcRowIsokineticRate(idx))));
+    const lastSamplingIdx = samplingRowsWithIndex.length > 0
+      ? samplingRowsWithIndex[samplingRowsWithIndex.length - 1].idx
+      : -1;
+    const totalTime = getSamplingMinutes();
+    const totalVolume = getRawGasMeterVolDiff();
+    const finalMoisture = lastSamplingIdx > 0 ? getRowMoistureCaptureRaw(lastSamplingIdx) : NaN;
+    const finalRate = lastSamplingIdx > 0 ? parseFloat(calcRowIsokineticRate(lastSamplingIdx)) : NaN;
 
     const tmPair = (Number.isFinite(tmInAvg) || Number.isFinite(tmOutAvg))
       ? `${fmt(tmInAvg, 1)} / ${fmt(tmOutAvg, 1)}`
       : '-';
 
     return {
-      time: fmt(timeAvg, 1),
+      time: fmt(totalTime, 1),
       stackTemp: fmt(tsAvg, 1),
       dp: fmt(dpAvg, 2),
       pressure: fmt(pressureAvg, 2),
-      volume: fmt(volumeAvg, 2),
+      volume: fmt(totalVolume, 2),
       tmPair,
       vacuum: fmt(vacuumAvg, 1),
       impingerTemp: fmt(impingerTempAvg, 1),
       velocity: fmt(velocityAvg, 2),
       density: fmt(densityAvg, 2),
-      moisture: fmt(moistureAvg, 2),
-      rate: fmt(rateAvg, 1),
+      moisture: fmt(finalMoisture, 2),
+      rate: fmt(finalRate, 1),
     };
   };
 
