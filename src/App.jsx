@@ -5496,7 +5496,7 @@ export default function App() {
                  </div>
                </div>
 
-               <details className="mb-3 bg-white border border-emerald-200 rounded-lg p-2">
+               <details className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                  <summary className="cursor-pointer text-[11px] font-bold text-emerald-800">
                    샘플러 프리셋 직접 편집 (Yd / ΔH@)
                  </summary>
@@ -5618,7 +5618,7 @@ export default function App() {
                <p className="text-[11px] text-emerald-700 mb-4 font-bold">※ K-Factor 및 예상 오리피스압(ΔH) 산출 후, 해당 노즐의 유량(Q<sub>sl</sub>)을 바탕으로 <span className="text-emerald-900">목표 채취량({formData.targetVolume || 1000}SL)에 도달하기 위한 필요 채취시간</span>을 자동 역산합니다.</p>
 
                {/* 접기/펴기 엑셀 전체 리스트 */}
-               <details className="mt-4 mb-4">
+               <details className="mt-4 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                   <summary className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center justify-between gap-2">
                      <span>전체 노즐 예측표 열어보기</span>
                      <span className="text-[10px] text-slate-500">표 안에서 번호/직경 직접 기입 가능</span>
