@@ -2326,7 +2326,8 @@ export default function App() {
     const gasComp = getGasComposition();
     if (isNaN(gasComp.r0) || gasComp.r0 === 0) return 0;
     
-    const r = Number((gasComp.r0 * (273 / (273 + avgTs)) * (P / 760)).toFixed(3));
+    const r = gasComp.r0 * (273 / (273 + avgTs)) * (P / 760);
+    if (!Number.isFinite(r) || r <= 0) return 0;
     
     // 엑셀 수식: =D9*(2*9.81*J15/K15)^0.5
     // 각 점을 따로 계산하지 않고, '평균 동압(dpAvg)'을 식에 한 번에 넣어서 엑셀과 완전히 똑같이 계산합니다.
