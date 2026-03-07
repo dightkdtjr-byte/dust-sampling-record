@@ -2244,18 +2244,17 @@ export default function App() {
   };
 
   const calcGasFlowRates = () => {
-    // 표준가스 유량은 "측정 전 측정점(4번)"의 정압/온도/동압 데이터로 계산
-    const pointTs = formData.points.map((p) => parseFloat(p.ts)).filter((v) => Number.isFinite(v));
+    // 표준가스 유량: 정압/동압은 측정점 데이터, 온도는 적산유량계 기록표 평균 사용
     const pointDp = formData.points.map((p) => parseFloat(p.dp)).filter((v) => Number.isFinite(v) && v >= 0);
     const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
+    const Ts = getRawAvgSamplingTs();
     const Pa = parseFloat(formData.atmPressure);
     const D = parseFloat(formData.stackDiameter);
 
-    if (pointTs.length === 0 || pointDp.length === 0 || pointSp.length === 0 || !Number.isFinite(Pa) || !Number.isFinite(D) || D <= 0) {
+    if (!Number.isFinite(Ts) || pointDp.length === 0 || pointSp.length === 0 || !Number.isFinite(Pa) || !Number.isFinite(D) || D <= 0) {
       return { dry: '-', wet: '-' };
     }
 
-    const Ts = pointTs.reduce((a, b) => a + b, 0) / pointTs.length;
     const dpAvg = pointDp.reduce((a, b) => a + b, 0) / pointDp.length;
     const spAvg = pointSp.reduce((a, b) => a + b, 0) / pointSp.length;
     const Ps = Pa + (spAvg / 13.6);
