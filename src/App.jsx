@@ -2977,6 +2977,13 @@ export default function App() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setAuthModal('settings')}
+                          className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                        >
+                          ⚙ 설정
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleLockActiveUser}
                           className="px-3 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 font-bold text-xs"
                         >
@@ -3020,22 +3027,34 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={clearActiveUserReports}
-                    className="px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 font-bold text-xs"
-                  >
-                    리포트 전체 삭제
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteActiveUser}
-                    className="px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700 font-bold text-xs"
-                  >
-                    현재 계정 삭제
-                  </button>
-                </div>
+                {authModal === 'settings' && (
+                  <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
+                    <div className="w-full max-w-lg bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-black text-slate-900">설정</h3>
+                        <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
+                          닫기
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={clearActiveUserReports}
+                          className="w-full px-3 py-2 rounded border border-red-300 text-red-700 hover:bg-red-50 font-bold text-sm"
+                        >
+                          리포트 전체 삭제
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeleteActiveUser}
+                          className="w-full px-3 py-2 rounded bg-red-600 text-white hover:bg-red-700 font-bold text-sm"
+                        >
+                          현재 계정 삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
