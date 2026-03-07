@@ -821,6 +821,7 @@ export default function App() {
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
+  const [isKFactorEditing, setIsKFactorEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -4521,7 +4522,17 @@ export default function App() {
                 </datalist>
               </div>
               <div><label className="block text-xs font-bold text-slate-700 mb-1">적용 K-Factor</label>
-                <input type="number" step="any" name="kFactor" value={formData.kFactor} onChange={handleKFactorChange} className="w-full p-2 border border-slate-300 bg-white rounded-lg focus:ring-2 focus:ring-emerald-500 font-black outline-none text-slate-800" /></div>
+                <input
+                  type="number"
+                  step="any"
+                  name="kFactor"
+                  value={isKFactorEditing ? formData.kFactor : (formData.kFactor === '' ? '' : formatKFactorDisplay(formData.kFactor))}
+                  onFocus={() => setIsKFactorEditing(true)}
+                  onBlur={() => setIsKFactorEditing(false)}
+                  onChange={handleKFactorChange}
+                  className="w-full p-2 border border-slate-300 bg-white rounded-lg focus:ring-2 focus:ring-emerald-500 font-black outline-none text-slate-800"
+                />
+              </div>
             </div>
 
             {/* 적산유량계 기록표 */}
