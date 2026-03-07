@@ -2642,12 +2642,9 @@ export default function App() {
   const getRawAvgCorrectedDensityFromMeterRows = () => {
     // 적산유량계 기록표에서 마지막 유효행의 누적 보정밀도(N행 방식) 사용
     // = r0 * 273/(273+AVERAGE(Ts_start:Ts_last)) * (Ps/760)
-    const meterRowsWithIndex = getMeterRowsUntilLastVolume()
-      .map((row, idx) => ({ row, idx }))
-      .filter(({ row, idx }) => isActiveMeterRow(row, idx));
-    if (meterRowsWithIndex.length === 0) return NaN;
-    const lastIdx = meterRowsWithIndex[meterRowsWithIndex.length - 1].idx;
-    return getRawCorrectedDensityFromRows(getActiveMeterRowsUntil(lastIdx));
+    const meterRows = getMeterRowsUntilLastVolume();
+    if (meterRows.length === 0) return NaN;
+    return getRawCorrectedDensityFromRows(meterRows);
   };
 
   const getRawGasVelocityFactorsFromMeterRows = () => {
