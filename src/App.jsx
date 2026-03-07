@@ -3504,7 +3504,26 @@ export default function App() {
     }
   };
 
-  const handleCopyCurrentToOtherSheets = async () => {
+  const buildCopiedReportForSheet = (sourceReport, targetSheetId) => {
+    const targetMeta = SHEET_MENU.find((item) => item.id === targetSheetId);
+    const pointCount = Array.isArray(sourceReport?.points) && sourceReport.points.length > 0
+      ? sourceReport.points.length
+      : formData.points.length;
+    const { _sheetId, _sheetTitle, ...baseReport } = sourceReport || {};
+
+    return {
+      ...baseReport,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      savedAt: new Date().toISOString(),
+      user: activeUser,
+      sheetId: targetSheetId,
+      sheetTitle: targetMeta?.title || baseReport.sheetTitle || '먼지시료채취기록부',
+      impingers: normalizeImpingers(baseReport.impingers, getImpingerStageCount(targetSheetId)),
+      gasMeters: normalizeGasMeterRows(baseReport.gasMeters, pointCount),
+    };
+  };
+
+  const handleCopySavedReportToCurrentSheet = async (sourceReport) => {
     if (!activeUser) {
       alert('먼저 아이디/비밀번호로 로그인해주세요.');
       return;
@@ -3513,23 +3532,69 @@ export default function App() {
       alert('로그인 후 복사할 수 있습니다.');
       return;
     }
-    const fromSheetId = selectedSheet || 'dust';
-    const targetSheetIds = SHEET_MENU.map((item) => item.id).filter((id) => id !== fromSheetId);
-    if (targetSheetIds.length === 0) return;
+    const targetSheetId = selectedSheet || 'dust';
+    const sourceSheetId = resolveReportSheetId(sourceReport);
+    if (sourceSheetId === targetSheetId) {
+      alert('이미 현재 기록부와 같은 종류의 리포트입니다.');
+      return;
+    }
 
-    const copiedReports = targetSheetIds.map((sheetId) => buildReportSnapshot(sheetId));
-    const nextReports = [...activeUserReports, ...copiedReports];
-    const targetNames = targetSheetIds
-      .map((sheetId) => SHEET_MENU.find((item) => item.id === sheetId)?.title || sheetId)
-      .join(', ');
+    const copiedReport = buildCopiedReportForSheet(sourceReport, targetSheetId);
+    const nextReports = [...activeUserReports, copiedReport];
+    const targetTitle = SHEET_MENU.find((item) => item.id === targetSheetId)?.title || targetSheetId;
+    const sourceTitle = SHEET_MENU.find((item) => item.id === sourceSheetId)?.title || sourceSheetId;
 
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`현재 기록을 다음 기록부로 복사 저장했습니다.\n${targetNames}`);
+      alert(`${sourceTitle} 리포트를 ${targetTitle}로 복사 저장했습니다.`);
     } catch (error) {
       console.error(error);
-      alert('기록 복사 저장 중 오류가 발생했습니다.');
+      alert('리포트 복사 저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCopyCheckedReportsToCurrentSheet = async () => {
+    if (!activeUser) {
+      alert('먼저 아이디/비밀번호로 로그인해주세요.');
+      return;
+    }
+    if (!isUserUnlocked) {
+      alert('로그인 후 복사할 수 있습니다.');
+      return;
+    }
+    if (sheetCheckedReportKeysValid.length === 0) {
+      alert('복사할 리포트를 먼저 선택해주세요.');
+      return;
+    }
+
+    const targetSheetId = selectedSheet || 'dust';
+    const selectedSet = new Set(sheetCheckedReportKeysValid);
+    const selectedReports = savedData.filter((item) => selectedSet.has(buildReportKey(item.id, item.savedAt)));
+    if (selectedReports.length === 0) {
+      alert('선택된 리포트를 찾지 못했습니다.');
+      return;
+    }
+
+    const copyTargets = selectedReports.filter((report) => resolveReportSheetId(report) !== targetSheetId);
+    if (copyTargets.length === 0) {
+      alert('선택된 리포트가 모두 현재 기록부와 같은 종류입니다.');
+      return;
+    }
+
+    const copiedReports = copyTargets.map((report) => buildCopiedReportForSheet(report, targetSheetId));
+    const nextReports = [...activeUserReports, ...copiedReports];
+    const targetTitle = SHEET_MENU.find((item) => item.id === targetSheetId)?.title || targetSheetId;
+
+    try {
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
+      setSheetCheckedReportKeys([]);
+      setMenuCheckedReportKeys((prev) => prev.filter((key) => !selectedSet.has(key)));
+      alert(`선택 리포트 ${copiedReports.length}건을 ${targetTitle}로 복사 저장했습니다.`);
+    } catch (error) {
+      console.error(error);
+      alert('선택 리포트 복사 저장 중 오류가 발생했습니다.');
     }
   };
 
@@ -6144,14 +6209,6 @@ export default function App() {
             <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
             </button>
-            <button
-              type="button"
-              onClick={handleCopyCurrentToOtherSheets}
-              className="px-6 py-3.5 bg-white border border-emerald-300 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors shadow-sm inline-flex items-center gap-2"
-            >
-              <CopySheetsIcon className="w-4 h-4" />
-              다른 기록부로 복사 저장
-            </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
               기록부 데이터 저장
             </button>
@@ -6170,6 +6227,13 @@ export default function App() {
                 className="px-5 py-2.5 border border-red-400 text-red-200 hover:bg-red-600/20 font-bold rounded-xl transition-colors shadow-md text-sm"
               >
                 선택 삭제
+              </button>
+              <button
+                onClick={handleCopyCheckedReportsToCurrentSheet}
+                className="px-5 py-2.5 border border-emerald-400 text-emerald-200 hover:bg-emerald-600/20 font-bold rounded-xl transition-colors shadow-md text-sm inline-flex items-center gap-1.5"
+              >
+                <CopySheetsIcon className="w-4 h-4" />
+                선택 복사
               </button>
               <button
                 onClick={handleExportSelectedTemplateExcel}
@@ -6207,7 +6271,7 @@ export default function App() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-700">
-              <table className="w-full text-xs text-center min-w-[2020px]">
+              <table className="w-full text-xs text-center min-w-[2160px]">
                 <thead className="bg-slate-700 text-slate-200">
                   <tr>
                     <th className="p-2 font-bold">
@@ -6219,6 +6283,7 @@ export default function App() {
                     </th>
                     <th className="p-2 font-bold">측정일자</th>
                     <th className="p-2 font-bold">저장시간</th>
+                    <th className="p-2 font-bold">시트</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
                     <th className="p-2 font-bold">측정자</th>
@@ -6234,12 +6299,16 @@ export default function App() {
                     <th className="p-2 font-bold">보정농도</th>
                     <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
                     <th className="p-2 font-bold">비고</th>
+                    <th className="p-2 font-bold">복사</th>
                     <th className="p-2 font-bold">불러오기</th>
                     <th className="p-2 font-bold">삭제</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-600 bg-slate-800">
-                  {savedData.map((data) => (
+                  {savedData.map((data) => {
+                    const reportSheetId = resolveReportSheetId(data);
+                    const reportSheetTitle = SHEET_MENU.find((item) => item.id === reportSheetId)?.title || data.sheetTitle || '-';
+                    return (
                     <tr key={data.id || data.savedAt} className="hover:bg-slate-700/30 transition-colors cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
                       <td className="p-2">
                         <input
@@ -6251,6 +6320,11 @@ export default function App() {
                       </td>
                       <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
                       <td className="p-2 whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
+                      <td className="p-2">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-700 border border-slate-500 text-slate-100 font-bold text-[11px]">
+                          {reportSheetTitle}
+                        </span>
+                      </td>
                       <td className="p-2">{data.company || '-'}</td>
                       <td className="p-2">{data.location || '-'}</td>
                       <td className="p-2">{data.sampler || '-'}</td>
@@ -6270,6 +6344,19 @@ export default function App() {
                       <td className="p-2 text-red-200 font-bold">{data.correctedConcentration || '-'}</td>
                       <td className="p-2">{data.dryFlowRate || '-'}</td>
                       <td className="p-2 text-left max-w-[280px]">{data.remarks || '-'}</td>
+                      <td className="p-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopySavedReportToCurrentSheet(data);
+                          }}
+                          className="px-2 py-1 rounded border border-emerald-400 text-emerald-200 hover:bg-emerald-600/20 font-bold inline-flex items-center gap-1"
+                        >
+                          <CopySheetsIcon className="w-3.5 h-3.5" />
+                          복사
+                        </button>
+                      </td>
                       <td className="p-2">
                         <button
                           type="button"
@@ -6295,7 +6382,8 @@ export default function App() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
