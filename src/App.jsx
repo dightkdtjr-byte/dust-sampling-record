@@ -1091,6 +1091,8 @@ export default function App() {
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
   const [isKFactorEditing, setIsKFactorEditing] = useState(false);
+  const displayUserName = String(profileNickname || '').trim() || activeUser || '';
+  const displayUserNameWithFallback = displayUserName || '미선택';
 
   useEffect(() => {
     cloudSyncBusyRef.current = cloudSyncBusy;
@@ -1820,7 +1822,7 @@ export default function App() {
       return;
     }
 
-    const willDelete = window.confirm(`[${activeUser}] 계정을 삭제할까요?\n저장된 모든 리포트가 함께 삭제됩니다.`);
+    const willDelete = window.confirm(`[${displayUserNameWithFallback}] 계정을 삭제할까요?\n저장된 모든 리포트가 함께 삭제됩니다.`);
     if (!willDelete) return;
 
     const verifyPassword = window.prompt('삭제 확인을 위해 비밀번호를 다시 입력하세요.');
@@ -2227,7 +2229,7 @@ export default function App() {
       alert('먼저 로그인해주세요.');
       return;
     }
-    if (!window.confirm(`'${activeUser}' 사용자의 저장 리포트를 모두 삭제할까요?`)) return;
+    if (!window.confirm(`'${displayUserNameWithFallback}' 사용자의 저장 리포트를 모두 삭제할까요?`)) return;
 
     try {
       await persistReportsEncrypted(activeUser, []);
@@ -3488,7 +3490,7 @@ export default function App() {
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`[${activeUser}] 데이터로 임시 저장되었습니다.`);
+      alert(`[${displayUserNameWithFallback}] 데이터로 임시 저장되었습니다.`);
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
@@ -4626,7 +4628,7 @@ export default function App() {
                     <div className="shrink-0 flex flex-col items-center gap-2">
                       <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center">
                         {profileAvatarUrl ? (
-                          <img src={profileAvatarUrl} alt={`${activeUser} 프로필`} className="w-full h-full object-cover" />
+                          <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
                         )}
@@ -4634,10 +4636,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 text-center md:text-left">
                       <p className="text-sm text-slate-600">현재 사용자</p>
-                      <p className="text-xl font-black text-slate-900">{profileNickname || activeUser}</p>
-                      {profileNickname && (
-                        <p className="text-xs text-slate-500 mt-0.5">아이디: {activeUser}</p>
-                      )}
+                      <p className="text-xl font-black text-slate-900">{displayUserNameWithFallback}</p>
                       <p className="text-xs text-slate-600 mt-1">
                         상태: <span className="font-black text-emerald-700">로그인됨</span>
                         {' '}| 저장 건수: <span className="font-black text-emerald-700">{savedData.length}</span>건
@@ -5121,7 +5120,7 @@ export default function App() {
 
         <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
           <p className="text-xs text-slate-600">
-            사용자: <span className="font-black text-slate-900">{activeUser || '미선택'}</span>
+            사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
             {' '}| 상태: <span className={`font-black ${isUserUnlocked ? activeTheme.accentText : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
             {' '}| 계정 설정은 초기 화면에서 가능합니다.
           </p>
@@ -6198,7 +6197,7 @@ export default function App() {
         <div className="bg-slate-800 p-6 rounded-2xl shadow-lg mt-8 text-white border border-slate-700">
           <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-slate-700 pb-4">
             <h2 className={`text-xl font-bold ${activeTheme.accentText}`}>
-              저장된 종합 리포트 ({activeUser})
+              저장된 종합 리포트 ({displayUserNameWithFallback})
             </h2>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-slate-300 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
