@@ -1651,6 +1651,33 @@ export default function App() {
     setSheetCheckedReportKeys(checked ? sheetSelectableReportKeys : []);
   };
 
+  const handleDeleteCheckedSheetReports = async () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 선택 삭제가 가능합니다.');
+      return;
+    }
+    if (sheetCheckedReportKeysValid.length === 0) {
+      alert('삭제할 리포트를 먼저 선택해주세요.');
+      return;
+    }
+    if (!window.confirm(`선택한 ${sheetCheckedReportKeysValid.length}건 리포트를 삭제할까요?`)) return;
+
+    const selectedSet = new Set(sheetCheckedReportKeysValid);
+    const nextReports = (activeUserReports || []).filter(
+      (item) => !selectedSet.has(buildReportKey(item.id, item.savedAt))
+    );
+
+    try {
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
+      setSheetCheckedReportKeys([]);
+      setMenuCheckedReportKeys((prev) => prev.filter((key) => !selectedSet.has(key)));
+    } catch (error) {
+      console.error(error);
+      alert('선택 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const parseCsvLine = (line) => {
     const result = [];
     let curr = '';
@@ -5073,6 +5100,12 @@ export default function App() {
             </h2>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-slate-300 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
+              <button
+                onClick={handleDeleteCheckedSheetReports}
+                className="px-5 py-2.5 border border-red-400 text-red-200 hover:bg-red-600/20 font-bold rounded-xl transition-colors shadow-md text-sm"
+              >
+                선택 삭제
+              </button>
               <button
                 onClick={handleExportSelectedTemplateExcel}
                 className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
