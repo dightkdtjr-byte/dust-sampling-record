@@ -556,11 +556,21 @@ const THEME_OVERRIDE_CSS = `
 const STORAGE_KEYS = {
   nozzles: 'dust-sampling.nozzles.v1',
   samplers: 'dust-sampling.samplers.v1',
+  nozzlesUserPrefix: 'dust-sampling.nozzles.user.v1.',
+  samplersUserPrefix: 'dust-sampling.samplers.user.v1.',
   secureUsers: 'dust-sampling.secure-users.v2',
   activeUser: 'dust-sampling.secure-active-user.v2',
   lastLoginId: 'dust-sampling.last-login-id.v1',
   sessionAuth: 'dust-sampling.session-auth.v1',
 };
+
+const getUserNozzlesStorageKey = (userId) => (
+  `${STORAGE_KEYS.nozzlesUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
+
+const getUserSamplersStorageKey = (userId) => (
+  `${STORAGE_KEYS.samplersUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
 
 const persistSessionAuth = (userId, password) => {
   try {
@@ -622,6 +632,86 @@ const sanitizeSamplers = (value) => {
         dHAt: item.dHAt === undefined || item.dHAt === null ? '' : String(item.dHAt),
       };
     });
+};
+
+const getStoredNozzlesForUser = (userId) => {
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  const canUseScoped = normalizedId && normalizedId !== 'user' && normalizedId !== 'user1';
+  if (!canUseScoped) {
+    try {
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.nozzles);
+      if (legacyRaw) {
+        const legacyParsed = sanitizeNozzleSet(JSON.parse(legacyRaw));
+        if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+      }
+    } catch (error) {
+      console.error('기존 노즐 프리셋 로딩 실패:', error);
+    }
+    return cloneDefaultNozzles();
+  }
+
+  const scopedKey = getUserNozzlesStorageKey(userId);
+  try {
+    const scopedRaw = localStorage.getItem(scopedKey);
+    if (scopedRaw) {
+      const scopedParsed = sanitizeNozzleSet(JSON.parse(scopedRaw));
+      if (scopedParsed && scopedParsed.length > 0) return scopedParsed;
+    }
+  } catch (error) {
+    console.error('사용자 노즐 프리셋 로딩 실패:', error);
+  }
+
+  try {
+    const legacyRaw = localStorage.getItem(STORAGE_KEYS.nozzles);
+    if (legacyRaw) {
+      const legacyParsed = sanitizeNozzleSet(JSON.parse(legacyRaw));
+      if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+    }
+  } catch (error) {
+    console.error('기존 노즐 프리셋 로딩 실패:', error);
+  }
+
+  return cloneDefaultNozzles();
+};
+
+const getStoredSamplersForUser = (userId) => {
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  const canUseScoped = normalizedId && normalizedId !== 'user' && normalizedId !== 'user1';
+  if (!canUseScoped) {
+    try {
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.samplers);
+      if (legacyRaw) {
+        const legacyParsed = sanitizeSamplers(JSON.parse(legacyRaw));
+        if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+      }
+    } catch (error) {
+      console.error('기존 샘플러 프리셋 로딩 실패:', error);
+    }
+    return cloneDefaultSamplers();
+  }
+
+  const scopedKey = getUserSamplersStorageKey(userId);
+  try {
+    const scopedRaw = localStorage.getItem(scopedKey);
+    if (scopedRaw) {
+      const scopedParsed = sanitizeSamplers(JSON.parse(scopedRaw));
+      if (scopedParsed && scopedParsed.length > 0) return scopedParsed;
+    }
+  } catch (error) {
+    console.error('사용자 샘플러 프리셋 로딩 실패:', error);
+  }
+
+  try {
+    const legacyRaw = localStorage.getItem(STORAGE_KEYS.samplers);
+    if (legacyRaw) {
+      const legacyParsed = sanitizeSamplers(JSON.parse(legacyRaw));
+      if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+    }
+  } catch (error) {
+    console.error('기존 샘플러 프리셋 로딩 실패:', error);
+  }
+
+  return cloneDefaultSamplers();
 };
 
 const sanitizeSecureUsers = (value) => {
@@ -871,6 +961,7 @@ export default function App() {
   const [profileNickname, setProfileNickname] = useState('');
   const [authModal, setAuthModal] = useState('');
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
+  const isPresetHydratingRef = useRef(false);
   const vaultKeyRef = useRef({});
   const csvImportInputRef = useRef(null);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
@@ -880,6 +971,11 @@ export default function App() {
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
   const [isKFactorEditing, setIsKFactorEditing] = useState(false);
+
+  const canUseUserScopedPresets = (userId) => {
+    const normalizedId = String(userId || '').trim().toLowerCase();
+    return Boolean(normalizedId) && normalizedId !== BETA_USER_ID && normalizedId !== LEGACY_BETA_USER_ID;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -970,22 +1066,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isStorageHydrated) return;
+    if (!isStorageHydrated || isPresetHydratingRef.current) return;
     try {
-      localStorage.setItem(STORAGE_KEYS.nozzles, JSON.stringify(nozzleSet));
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserNozzlesStorageKey(activeUser)
+        : STORAGE_KEYS.nozzles;
+      localStorage.setItem(targetKey, JSON.stringify(nozzleSet));
     } catch (error) {
       console.error('노즐 설정 저장 실패:', error);
     }
-  }, [nozzleSet, isStorageHydrated]);
+  }, [nozzleSet, isStorageHydrated, activeUser]);
 
   useEffect(() => {
-    if (!isStorageHydrated) return;
+    if (!isStorageHydrated || isPresetHydratingRef.current) return;
     try {
-      localStorage.setItem(STORAGE_KEYS.samplers, JSON.stringify(samplers));
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserSamplersStorageKey(activeUser)
+        : STORAGE_KEYS.samplers;
+      localStorage.setItem(targetKey, JSON.stringify(samplers));
     } catch (error) {
       console.error('샘플러 설정 저장 실패:', error);
     }
-  }, [samplers, isStorageHydrated]);
+  }, [samplers, isStorageHydrated, activeUser]);
 
   useEffect(() => {
     if (!isStorageHydrated) return;
@@ -1072,7 +1174,10 @@ export default function App() {
   const saveNozzlePresets = () => {
     const sanitized = sanitizeNozzleSet(nozzleSet) || [];
     try {
-      localStorage.setItem(STORAGE_KEYS.nozzles, JSON.stringify(sanitized));
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserNozzlesStorageKey(activeUser)
+        : STORAGE_KEYS.nozzles;
+      localStorage.setItem(targetKey, JSON.stringify(sanitized));
       setNozzleSet(sanitized);
       alert('노즐 프리셋을 저장했습니다.');
     } catch (error) {
@@ -1117,7 +1222,10 @@ export default function App() {
   const saveSamplerPresets = () => {
     const sanitized = sanitizeSamplers(samplers) || [];
     try {
-      localStorage.setItem(STORAGE_KEYS.samplers, JSON.stringify(sanitized));
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserSamplersStorageKey(activeUser)
+        : STORAGE_KEYS.samplers;
+      localStorage.setItem(targetKey, JSON.stringify(sanitized));
       setSamplers(sanitized);
       alert('샘플러 프리셋을 저장했습니다.');
     } catch (error) {
@@ -1198,15 +1306,25 @@ export default function App() {
 
   const openUserSession = (userId, key, reports, userRecord = null) => {
     const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
+    const userNozzles = getStoredNozzlesForUser(userId);
+    const userSamplers = getStoredSamplersForUser(userId);
+
+    isPresetHydratingRef.current = true;
     vaultKeyRef.current[userId] = key;
     setActiveUser(userId);
     setLoginUserId(userId);
     localStorage.setItem(STORAGE_KEYS.lastLoginId, userId);
+    setNozzleSet(userNozzles);
+    setSamplers(userSamplers);
     setActiveUserReports(Array.isArray(reports) ? reports : []);
     setIsUserUnlocked(true);
     setLoginPassword('');
     setProfileAvatarUrl(fixedAvatarUrl);
     setProfileNickname((userRecord && userRecord.nickname) || '');
+
+    setTimeout(() => {
+      isPresetHydratingRef.current = false;
+    }, 0);
   };
 
   const updateActiveUserProfile = (profilePatch) => {
