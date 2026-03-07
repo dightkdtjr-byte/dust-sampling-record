@@ -4826,7 +4826,7 @@ export default function App() {
                         htmlFor="profile-csv-import"
                         className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] cursor-pointer"
                       >
-                        CSV 임포트
+                        선택 기록부 엑셀로 추출
                       </label>
                       <input
                         id="profile-csv-import"
