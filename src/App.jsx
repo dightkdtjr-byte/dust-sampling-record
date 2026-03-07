@@ -1601,6 +1601,12 @@ export default function App() {
 
   const handleGasAnalyzerChange = (index, field, value) => {
     setFormData(prev => {
+      if (field === 'time') {
+        const clearedAnalyzer = prev.gasAnalyzer.map((item, i) =>
+          i === index ? { ...item, time: '' } : { ...item, time: '' }
+        );
+        return { ...prev, gasAnalyzer: clearedAnalyzer };
+      }
       const newAnalyzer = prev.gasAnalyzer.map((item, i) => 
         i === index ? { ...item, [field]: value } : item
       );
@@ -3658,12 +3664,13 @@ export default function App() {
                           <td className="p-2 border-r border-slate-100 font-medium text-slate-700 flex justify-center items-center gap-2">
                             <span className="whitespace-nowrap">{idx + 1}회차</span>
                             <input
-                              type="time"
+                              type="text"
                               name={`gas-time-${idx}`}
                               autoComplete="off"
-                              value={gas.time || ''}
-                              onChange={(e) => handleGasAnalyzerChange(idx, 'time', e.target.value)}
-                              className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-teal-500"
+                              value=""
+                              readOnly
+                              placeholder="공란"
+                              className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none bg-slate-50 text-slate-400"
                             />
                           </td>
                           <td className="p-1 border-r border-slate-100">
