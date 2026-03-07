@@ -723,6 +723,7 @@ export default function App() {
   const vaultKeyRef = useRef({});
   const csvImportInputRef = useRef(null);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
+  const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
@@ -900,6 +901,12 @@ export default function App() {
     if (nums.length === 0) return '-';
     return (nums.reduce((acc, cur) => acc + cur, 0) / nums.length).toFixed(2);
   })();
+  const sheetSelectableReportKeys = savedData.map(getReportKey).filter(Boolean);
+  const sheetSelectableReportKeySet = new Set(sheetSelectableReportKeys);
+  const sheetCheckedReportKeysValid = sheetCheckedReportKeys.filter((key) => sheetSelectableReportKeySet.has(key));
+  const sheetCheckedReportKeySet = new Set(sheetCheckedReportKeysValid);
+  const isAllSheetReportsChecked =
+    sheetSelectableReportKeys.length > 0 && sheetCheckedReportKeysValid.length === sheetSelectableReportKeys.length;
 
   const getConfiguredNozzles = () => {
     return nozzleSet
@@ -1333,6 +1340,7 @@ export default function App() {
       setProfileAvatarUrl('');
       setProfileNickname('');
       setMenuCheckedReportKeys([]);
+      setSheetCheckedReportKeys([]);
       setSelectedSheet('');
       if (window.location.hash) {
         window.history.pushState(null, '', window.location.pathname + window.location.search);
@@ -1358,6 +1366,7 @@ export default function App() {
     setProfileAvatarUrl('');
     setProfileNickname('');
     setMenuCheckedReportKeys([]);
+    setSheetCheckedReportKeys([]);
     setAuthModal('');
     setSelectedSheet('');
     if (window.location.hash) {
@@ -1377,6 +1386,7 @@ export default function App() {
       await persistReportsEncrypted(activeUser, []);
       setActiveUserReports([]);
       setMenuCheckedReportKeys([]);
+      setSheetCheckedReportKeys([]);
     } catch (error) {
       console.error(error);
       alert('리포트 삭제 중 오류가 발생했습니다.');
@@ -1400,6 +1410,7 @@ export default function App() {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
       setMenuCheckedReportKeys((prev) => prev.filter((key) => key !== targetKey));
+      setSheetCheckedReportKeys((prev) => prev.filter((key) => key !== targetKey));
     } catch (error) {
       console.error(error);
       alert('리포트 삭제 중 오류가 발생했습니다.');
@@ -1440,10 +1451,26 @@ export default function App() {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
       setMenuCheckedReportKeys([]);
+      setSheetCheckedReportKeys((prev) => prev.filter((key) => !selectedSet.has(key)));
     } catch (error) {
       console.error(error);
       alert('선택 삭제 중 오류가 발생했습니다.');
     }
+  };
+
+  const toggleSheetReportCheck = (reportKey, checked) => {
+    if (!reportKey) return;
+    setSheetCheckedReportKeys((prev) => {
+      if (checked) {
+        if (prev.includes(reportKey)) return prev;
+        return [...prev, reportKey];
+      }
+      return prev.filter((key) => key !== reportKey);
+    });
+  };
+
+  const toggleSheetAllReportChecks = (checked) => {
+    setSheetCheckedReportKeys(checked ? sheetSelectableReportKeys : []);
   };
 
   const parseCsvLine = (line) => {
@@ -2374,8 +2401,86 @@ export default function App() {
     return sheetMap;
   };
 
-  const exportToTemplateExcel = async () => {
+  const exportToTemplateExcel = async (sourceReport = null) => {
     try {
+      const sourceData = sourceReport && typeof sourceReport === 'object' ? sourceReport : formData;
+      const sourcePoints = Array.isArray(sourceData.points) ? sourceData.points : [];
+      const sourceGasAnalyzer = Array.isArray(sourceData.gasAnalyzer) ? sourceData.gasAnalyzer : [];
+      const sourceGasMeters = Array.isArray(sourceData.gasMeters) ? sourceData.gasMeters : [];
+      const sourceMoistures = Array.isArray(sourceData.moistureValues) ? sourceData.moistureValues : [];
+      const sourceImpingers = Array.isArray(sourceData.impingers) ? sourceData.impingers : [];
+      const avg = (vals) => {
+        const valid = vals.filter((v) => Number.isFinite(v));
+        if (valid.length === 0) return NaN;
+        return valid.reduce((acc, cur) => acc + cur, 0) / valid.length;
+      };
+      const toNumStrict = (v) => {
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? n : NaN;
+      };
+      const avgTp = avg(sourcePoints.map((p) => toNumStrict(p?.tp)));
+      const avgSp = avg(sourcePoints.map((p) => toNumStrict(p?.sp)));
+      const avgDp = avg(sourcePoints.map((p) => toNumStrict(p?.dp)));
+      const avgTs = avg(sourcePoints.map((p) => toNumStrict(p?.ts)));
+      const avgTm = avg(sourceGasMeters
+        .filter((_, idx) => idx !== 0)
+        .map((m) => {
+          const inT = toNumStrict(m?.tmIn);
+          const outT = toNumStrict(m?.tmOut);
+          if (Number.isFinite(inT) && Number.isFinite(outT)) return (inT + outT) / 2;
+          if (Number.isFinite(inT)) return inT;
+          if (Number.isFinite(outT)) return outT;
+          return NaN;
+        }));
+      const avgOrifice = avg(sourceGasMeters
+        .filter((_, idx) => idx !== 0)
+        .map((m) => toNumStrict(m?.pressure)));
+      const atmPressure = toNumStrict(sourceData.atmPressure);
+      const stackPressure = Number.isFinite(atmPressure) && Number.isFinite(avgSp)
+        ? atmPressure + (avgSp / 13.6)
+        : NaN;
+
+      const calcGasCompFromSource = () => {
+        const o2 = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.o2)));
+        const co2 = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.co2)));
+        const co = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.co)));
+        const sox = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.sox)));
+        const nox = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.nox)));
+        const safeO2 = Number.isFinite(o2) ? o2 : 0;
+        const safeCo2 = Number.isFinite(co2) ? co2 : 0;
+        const safeCo = Number.isFinite(co) ? co : 0;
+        const coPercent = safeCo / 10000;
+        const n2 = 100 - safeCo2 - safeO2 - coPercent;
+        const sumMx = (32 * safeO2) + (44 * safeCo2) + (28 * coPercent) + (28 * n2);
+        const Md = sumMx / 100;
+        const Xw = avg(sourceMoistures.map((v) => toNumStrict(v)));
+        const safeXw = Number.isFinite(Xw) ? Xw : 0;
+        const Ms = Md * ((100 - safeXw) / 100) + 18 * (safeXw / 100);
+        const r0 = (1 / (22.4 * 100)) * (sumMx * ((100 - safeXw) / 100) + 18 * safeXw);
+        return {
+          o2: safeO2,
+          co2: safeCo2,
+          co: safeCo,
+          sox: Number.isFinite(sox) ? sox : 0,
+          nox: Number.isFinite(nox) ? nox : 0,
+          n2,
+          Md,
+          Ms,
+          Xw: safeXw,
+          r0,
+        };
+      };
+
+      const gasComp = calcGasCompFromSource();
+      const savedMoisture = toNumStrict(sourceData.moisturePercent);
+      const moisturePercent = Number.isFinite(savedMoisture) ? savedMoisture : gasComp.Xw;
+      const savedIso = toNumStrict(sourceData.isokineticRate);
+      const isokineticPercent = Number.isFinite(savedIso) ? savedIso : null;
+      const flowRates = {
+        wet: sourceData.wetFlowRate ?? '-',
+        dry: sourceData.dryFlowRate ?? '-',
+      };
+
       const response = await fetch(dustTemplateUrl);
       if (!response.ok) throw new Error('템플릿 파일을 불러오지 못했습니다.');
 
@@ -2405,28 +2510,16 @@ export default function App() {
         updatesBySheet.get(sheetName).push({ ref, value });
       };
 
-      const gasComp = getGasComposition();
-      const moisturePercent = calcTotalMoistureWeight() > 0 ? toNumber(calcPostMoisture()) : toNumber(calcMoisture());
-      const isokineticPercent = toNumber(calcIsokineticRate(true));
-      const avgTm = getRawAvgTm();
-      const avgOrifice = getRawAvgOrifice();
-      const avgSp = getRawAvgSp();
-      const avgTp = getRawAvgTp();
-      const avgDp = getRawAvgDp();
-      const avgTs = getRawAvgTs();
-      const stackPressure = getRawStackPressure();
-      const flowRates = calcGasFlowRates();
-
-      const gasMeters = formData.gasMeters.slice(0, 10);
+      const gasMeters = sourceGasMeters.slice(0, 10);
       const firstVolume = gasMeters.find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
       const lastVolume = [...gasMeters].reverse().find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
 
-      addUpdate('표지', 'D19', formData.company);
-      addUpdate('표지', 'D20', formData.location);
-      addUpdate('표지', 'D21', toExcelDateSerial(formData.date));
+      addUpdate('표지', 'D19', sourceData.company);
+      addUpdate('표지', 'D20', sourceData.location);
+      addUpdate('표지', 'D21', toExcelDateSerial(sourceData.date));
 
       for (let i = 0; i < 3; i++) {
-        const gas = formData.gasAnalyzer[i] || {};
+        const gas = sourceGasAnalyzer[i] || {};
         const row = 8 + i;
         addUpdate('연소가스자료', `A${row}`, toExcelTimeFraction(gas.time));
         addUpdate('연소가스자료', `B${row}`, toNumber(gas.o2));
@@ -2436,23 +2529,23 @@ export default function App() {
         addUpdate('연소가스자료', `F${row}`, toNumber(gas.sox));
       }
 
-      addUpdate('노즐산정', 'C6', toNumber(formData.samplerId));
-      addUpdate('노즐산정', 'B9', toNumber(formData.atmTemp));
-      addUpdate('노즐산정', 'C9', toNumber(formData.atmPressure));
-      addUpdate('노즐산정', 'D9', toNumber(formData.pitotFactor));
-      addUpdate('노즐산정', 'E9', toNumber(formData.deltaHAt));
-      addUpdate('노즐산정', 'F9', toNumber(formData.gasMeterFactor));
+      addUpdate('노즐산정', 'C6', toNumber(sourceData.samplerId));
+      addUpdate('노즐산정', 'B9', toNumber(sourceData.atmTemp));
+      addUpdate('노즐산정', 'C9', toNumber(sourceData.atmPressure));
+      addUpdate('노즐산정', 'D9', toNumber(sourceData.pitotFactor));
+      addUpdate('노즐산정', 'E9', toNumber(sourceData.deltaHAt));
+      addUpdate('노즐산정', 'F9', toNumber(sourceData.gasMeterFactor));
       addUpdate('노즐산정', 'E15', toNumber(avgTs));
-      addUpdate('노즐산정', 'F15', toNumber(formData.traverseTmIn));
-      addUpdate('노즐산정', 'G15', toNumber(formData.traverseTmOut));
+      addUpdate('노즐산정', 'F15', toNumber(sourceData.traverseTmIn));
+      addUpdate('노즐산정', 'G15', toNumber(sourceData.traverseTmOut));
       addUpdate('노즐산정', 'H15', toNumber(avgTp));
       addUpdate('노즐산정', 'I15', toNumber(avgSp));
       addUpdate('노즐산정', 'J15', toNumber(avgDp));
-      addUpdate('노즐산정', 'B39', toNumber(formData.planSamplingTime));
-      addUpdate('노즐산정', 'K39', toNumber(formData.usedNozzleNum) || toNumber(formData.recommendedNozzleNum));
+      addUpdate('노즐산정', 'B39', toNumber(sourceData.planSamplingTime));
+      addUpdate('노즐산정', 'K39', toNumber(sourceData.usedNozzleNum) || toNumber(sourceData.recommendedNozzleNum));
 
       for (let i = 0; i < 5; i++) {
-        const point = formData.points[i] || {};
+        const point = sourcePoints[i] || {};
         const row = 17 + i;
         addUpdate('노즐산정', `H${row}`, toNumber(point.tp));
         addUpdate('노즐산정', `I${row}`, toNumber(point.sp));
@@ -2469,39 +2562,39 @@ export default function App() {
       addUpdate('수분량', 'D6', 1);
       for (let i = 0; i < 5; i++) {
         addUpdate('수분량', `B${11 + i}`, i + 1);
-        addUpdate('수분량', `C${11 + i}`, toNumber(formData.moistureValues[i]));
+        addUpdate('수분량', `C${11 + i}`, toNumber(sourceMoistures[i]));
       }
       for (let i = 0; i < 4; i++) {
-        const imp = formData.impingers[i] || {};
+        const imp = sourceImpingers[i] || {};
         addUpdate('수분량', `D${34 + i}`, toNumber(imp.initial));
         addUpdate('수분량', `E${34 + i}`, toNumber(imp.final));
       }
       addUpdate('수분량', 'B29', toNumber(firstVolume));
       addUpdate('수분량', 'C29', toNumber(lastVolume));
       addUpdate('수분량', 'E29', Number.isFinite(avgTm) ? avgTm : null);
-      addUpdate('수분량', 'F29', toNumber(formData.atmPressure));
+      addUpdate('수분량', 'F29', toNumber(sourceData.atmPressure));
       addUpdate('수분량', 'G29', Number.isFinite(avgOrifice) ? avgOrifice : null);
 
-      addUpdate('기록지(수분량자동측정기)', 'C5', formData.company);
-      addUpdate('기록지(수분량자동측정기)', 'C6', formData.location);
-      addUpdate('기록지(수분량자동측정기)', 'C7', formData.sampler);
-      addUpdate('기록지(수분량자동측정기)', 'C8', toExcelDateSerial(formData.date));
-      addUpdate('기록지(수분량자동측정기)', 'C9', formData.filterId || '먼지-1');
-      addUpdate('기록지(수분량자동측정기)', 'J5', toNumber(formData.pitotFactor));
-      addUpdate('기록지(수분량자동측정기)', 'J6', toNumber(formData.atmTemp));
-      addUpdate('기록지(수분량자동측정기)', 'J7', toNumber(formData.atmPressure));
+      addUpdate('기록지(수분량자동측정기)', 'C5', sourceData.company);
+      addUpdate('기록지(수분량자동측정기)', 'C6', sourceData.location);
+      addUpdate('기록지(수분량자동측정기)', 'C7', sourceData.sampler);
+      addUpdate('기록지(수분량자동측정기)', 'C8', toExcelDateSerial(sourceData.date));
+      addUpdate('기록지(수분량자동측정기)', 'C9', sourceData.filterId || '먼지-1');
+      addUpdate('기록지(수분량자동측정기)', 'J5', toNumber(sourceData.pitotFactor));
+      addUpdate('기록지(수분량자동측정기)', 'J6', toNumber(sourceData.atmTemp));
+      addUpdate('기록지(수분량자동측정기)', 'J7', toNumber(sourceData.atmPressure));
       addUpdate('기록지(수분량자동측정기)', 'J8', Number.isFinite(stackPressure) ? stackPressure : null);
       addUpdate('기록지(수분량자동측정기)', 'J9', moisturePercent);
-      addUpdate('기록지(수분량자동측정기)', 'J10', toNumber(formData.totalStackDepth));
-      addUpdate('기록지(수분량자동측정기)', 'J11', toNumber(formData.nozzleDiameter) ? toNumber(formData.nozzleDiameter) / 10 : null);
-      addUpdate('기록지(수분량자동측정기)', 'J13', formData.filterId);
+      addUpdate('기록지(수분량자동측정기)', 'J10', toNumber(sourceData.totalStackDepth));
+      addUpdate('기록지(수분량자동측정기)', 'J11', toNumber(sourceData.nozzleDiameter) ? toNumber(sourceData.nozzleDiameter) / 10 : null);
+      addUpdate('기록지(수분량자동측정기)', 'J13', sourceData.filterId);
       addUpdate('기록지(수분량자동측정기)', 'J14', toNumber(avgSp));
       addUpdate('기록지(수분량자동측정기)', 'C11', toNumber(gasComp.o2));
-      addUpdate('기록지(수분량자동측정기)', 'C12', toNumber(formData.kFactor));
+      addUpdate('기록지(수분량자동측정기)', 'C12', toNumber(sourceData.kFactor));
       addUpdate('기록지(수분량자동측정기)', 'C13', isokineticPercent);
-      addUpdate('기록지(수분량자동측정기)', 'B14', formData.standardO2 ? toNumber(formData.standardO2) : '-');
-      addUpdate('기록지(수분량자동측정기)', 'D14', toNumber(formData.filterInitial));
-      addUpdate('기록지(수분량자동측정기)', 'F14', toNumber(formData.filterFinal));
+      addUpdate('기록지(수분량자동측정기)', 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : '-');
+      addUpdate('기록지(수분량자동측정기)', 'D14', toNumber(sourceData.filterInitial));
+      addUpdate('기록지(수분량자동측정기)', 'F14', toNumber(sourceData.filterFinal));
 
       for (let i = 0; i < 10; i++) {
         const row = 17 + i;
@@ -2533,9 +2626,9 @@ export default function App() {
       });
 
       if (sheetPathMap.has('먼지측정결과보고서')) {
-        addUpdate('먼지측정결과보고서', 'C5', formData.company);
-        addUpdate('먼지측정결과보고서', 'C6', formData.location);
-        addUpdate('먼지측정결과보고서', 'A17', formData.remarks);
+        addUpdate('먼지측정결과보고서', 'C5', sourceData.company);
+        addUpdate('먼지측정결과보고서', 'C6', sourceData.location);
+        addUpdate('먼지측정결과보고서', 'A17', sourceData.remarks);
         addUpdate('먼지측정결과보고서', 'G13', toNumber(flowRates.dry));
       }
 
@@ -2557,7 +2650,8 @@ export default function App() {
 
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${activeSheet?.title || '먼지시료채취기록부'}_${formData.date || new Date().toISOString().slice(0, 10)}.xlsm`);
+      const targetSheetTitle = sourceData.sheetTitle || activeSheet?.title || '먼지시료채취기록부';
+      link.setAttribute('download', `${targetSheetTitle}_${sourceData.date || new Date().toISOString().slice(0, 10)}.xlsm`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -2565,6 +2659,31 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert('템플릿 엑셀 저장 중 오류가 발생했습니다. 템플릿 파일 또는 입력값을 확인해주세요.');
+    }
+  };
+
+  const handleExportSelectedTemplateExcel = async () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 추출할 수 있습니다.');
+      return;
+    }
+    if (sheetCheckedReportKeysValid.length === 0) {
+      alert('템플릿으로 추출할 리포트를 먼저 선택해주세요.');
+      return;
+    }
+
+    const selectedSet = new Set(sheetCheckedReportKeysValid);
+    const targetReports = savedData.filter((item) => selectedSet.has(buildReportKey(item.id, item.savedAt)));
+    if (targetReports.length === 0) {
+      alert('선택된 리포트를 찾지 못했습니다.');
+      return;
+    }
+
+    for (const report of targetReports) {
+      // 선택된 리포트 내용을 기반으로 템플릿 파일을 순차 추출합니다.
+      // 파일명은 각 리포트의 기록부명+측정일자로 생성됩니다.
+      // eslint-disable-next-line no-await-in-loop
+      await exportToTemplateExcel(report);
     }
   };
 
@@ -4436,12 +4555,15 @@ export default function App() {
             <h2 className={`text-xl font-bold ${activeTheme.accentText}`}>
               저장된 종합 리포트 ({activeUser})
             </h2>
-            <button
-              onClick={exportToTemplateExcel}
-              className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
-            >
-              템플릿 엑셀로 추출
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-300 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
+              <button
+                onClick={handleExportSelectedTemplateExcel}
+                className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
+              >
+                선택 템플릿 엑셀로 추출
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -4471,9 +4593,16 @@ export default function App() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-700">
-              <table className="w-full text-xs text-center min-w-[1850px]">
+              <table className="w-full text-xs text-center min-w-[1880px]">
                 <thead className="bg-slate-700 text-slate-200">
                   <tr>
+                    <th className="p-2 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={isAllSheetReportsChecked}
+                        onChange={(e) => toggleSheetAllReportChecks(e.target.checked)}
+                      />
+                    </th>
                     <th className="p-2 font-bold">측정일자</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
@@ -4497,6 +4626,14 @@ export default function App() {
                 <tbody className="divide-y divide-slate-600 bg-slate-800">
                   {savedData.map((data) => (
                     <tr key={data.id || data.savedAt} className="hover:bg-slate-700/30 transition-colors cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
+                      <td className="p-2">
+                        <input
+                          type="checkbox"
+                          checked={sheetCheckedReportKeySet.has(buildReportKey(data.id, data.savedAt))}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => toggleSheetReportCheck(buildReportKey(data.id, data.savedAt), e.target.checked)}
+                        />
+                      </td>
                       <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
                       <td className="p-2">{data.company || '-'}</td>
                       <td className="p-2">{data.location || '-'}</td>
