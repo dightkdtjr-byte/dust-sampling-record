@@ -657,6 +657,14 @@ const formatKFactorDisplay = (value) => {
   return Number.isFinite(num) ? num.toFixed(2) : '-';
 };
 
+const PresetSaveIcon = ({ className = 'w-3.5 h-3.5' }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+    <path d="M5 4.75h11.2l2.05 2.05V19.25H5V4.75Z" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M8 4.75V9h7V4.75" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M8 14.25h7v5H8v-5Z" stroke="currentColor" strokeWidth="1.6" />
+  </svg>
+);
+
 const SignatureBadge = () => (
   <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
     sangseok
@@ -828,20 +836,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isStorageHydrated) return;
     try {
       localStorage.setItem(STORAGE_KEYS.nozzles, JSON.stringify(nozzleSet));
     } catch (error) {
       console.error('노즐 설정 저장 실패:', error);
     }
-  }, [nozzleSet]);
+  }, [nozzleSet, isStorageHydrated]);
 
   useEffect(() => {
+    if (!isStorageHydrated) return;
     try {
       localStorage.setItem(STORAGE_KEYS.samplers, JSON.stringify(samplers));
     } catch (error) {
       console.error('샘플러 설정 저장 실패:', error);
     }
-  }, [samplers]);
+  }, [samplers, isStorageHydrated]);
 
   useEffect(() => {
     if (!isStorageHydrated) return;
@@ -926,6 +936,18 @@ export default function App() {
       .sort((a, b) => a.num - b.num);
   };
 
+  const saveNozzlePresets = () => {
+    const sanitized = sanitizeNozzleSet(nozzleSet) || [];
+    try {
+      localStorage.setItem(STORAGE_KEYS.nozzles, JSON.stringify(sanitized));
+      setNozzleSet(sanitized);
+      alert('노즐 프리셋을 저장했습니다.');
+    } catch (error) {
+      console.error('노즐 프리셋 수동 저장 실패:', error);
+      alert('노즐 프리셋 저장에 실패했습니다.');
+    }
+  };
+
   const handleNozzleConfigChange = (index, field, value) => {
     setNozzleSet(prev => prev.map((item, i) => (
       i === index ? { ...item, [field]: value } : item
@@ -957,6 +979,18 @@ export default function App() {
       }
       return next;
     });
+  };
+
+  const saveSamplerPresets = () => {
+    const sanitized = sanitizeSamplers(samplers) || [];
+    try {
+      localStorage.setItem(STORAGE_KEYS.samplers, JSON.stringify(sanitized));
+      setSamplers(sanitized);
+      alert('샘플러 프리셋을 저장했습니다.');
+    } catch (error) {
+      console.error('샘플러 프리셋 수동 저장 실패:', error);
+      alert('샘플러 프리셋 저장에 실패했습니다.');
+    }
   };
 
   const addSamplerPreset = () => {
@@ -4073,6 +4107,10 @@ export default function App() {
                    샘플러 프리셋 직접 편집 (Yd / ΔH@)
                  </summary>
                  <div className="mt-2 flex items-center gap-2">
+                   <button type="button" onClick={saveSamplerPresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
+                     <PresetSaveIcon />
+                     저장
+                   </button>
                    <button type="button" onClick={addSamplerPreset} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
                    <button type="button" onClick={resetSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
                  </div>
@@ -4192,6 +4230,10 @@ export default function App() {
                      <span className="text-[10px] text-slate-500">표 안에서 번호/직경 직접 기입 가능</span>
                   </summary>
                   <div className="mt-2 flex items-center gap-2">
+                    <button type="button" onClick={saveNozzlePresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
+                      <PresetSaveIcon />
+                      저장
+                    </button>
                     <button type="button" onClick={addNozzleConfig} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
                     <button type="button" onClick={resetNozzleDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
                   </div>
