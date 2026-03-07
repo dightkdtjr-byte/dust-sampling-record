@@ -692,9 +692,9 @@ export default function App() {
     totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotFactor: '0.84',
     standardO2: '',
     gasAnalyzer: [
-      { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
-      { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
-      { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' }
+      { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
+      { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
+      { time: '', o2: '', co2: '', co: '', nox: '', sox: '' }
     ],
     moistureValues: ['', '', '', '', ''],
     impingers: [
@@ -1800,11 +1800,19 @@ export default function App() {
   };
 
   const getGasComposition = () => {
-    const o2 = formData.gasAnalyzer.reduce((acc, curr) => acc + (parseFloat(curr.o2) || 0), 0) / 3;
-    const co2 = formData.gasAnalyzer.reduce((acc, curr) => acc + (parseFloat(curr.co2) || 0), 0) / 3;
-    const co = formData.gasAnalyzer.reduce((acc, curr) => acc + (parseFloat(curr.co) || 0), 0) / 3;
-    const sox = formData.gasAnalyzer.reduce((acc, curr) => acc + (parseFloat(curr.sox) || 0), 0) / 3;
-    const nox = formData.gasAnalyzer.reduce((acc, curr) => acc + (parseFloat(curr.nox) || 0), 0) / 3;
+    const getAnalyzerAvg = (field) => {
+      const values = formData.gasAnalyzer
+        .map((item) => parseFloat(item[field]))
+        .filter((v) => Number.isFinite(v));
+      if (values.length === 0) return 0;
+      return values.reduce((acc, cur) => acc + cur, 0) / values.length;
+    };
+
+    const o2 = getAnalyzerAvg('o2');
+    const co2 = getAnalyzerAvg('co2');
+    const co = getAnalyzerAvg('co');
+    const sox = getAnalyzerAvg('sox');
+    const nox = getAnalyzerAvg('nox');
     
     const coPercent = co / 10000; 
     const n2 = 100 - co2 - o2 - coPercent; 
@@ -1819,13 +1827,7 @@ export default function App() {
 
     const r0 = (1 / (22.4 * 100)) * ( sumMx * ((100 - Xw) / 100) + 18 * Xw );
 
-    return { 
-      o2, co2, co, sox, nox, n2, 
-      Md: Number(Md.toFixed(3)), 
-      Ms: Number(Ms.toFixed(3)), 
-      Xw, 
-      r0: Number(r0.toFixed(3)) 
-    };
+    return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0 };
   };
 
   const getRawAvgTp = () => {
@@ -1893,6 +1895,12 @@ export default function App() {
   const getRawAvgOrifice = () => {
     const validPressures = formData.gasMeters.filter((_, i) => i !== 0).map(g => parseFloat(g.pressure)).filter(v => !isNaN(v));
     return validPressures.length === 0 ? NaN : validPressures.reduce((a, b) => a + b, 0) / validPressures.length;
+  };
+
+  const getTraverseMeterTempAvg = () => {
+    const values = [parseFloat(formData.traverseTmIn), parseFloat(formData.traverseTmOut)].filter(v => Number.isFinite(v));
+    if (values.length === 0) return NaN;
+    return values.reduce((acc, cur) => acc + cur, 0) / values.length;
   };
 
   const getRawTotalMoistureWeight = () => {
@@ -1983,13 +1991,13 @@ export default function App() {
     const targetVol = parseFloat(formData.targetVolume) || 1000;
     const configuredNozzles = getConfiguredNozzles();
     if (configuredNozzles.length === 0) return null;
-    
-    const tmIn = parseFloat(formData.traverseTmIn) || parseFloat(formData.atmTemp) || 25;
-    const tmOut = parseFloat(formData.traverseTmOut) || parseFloat(formData.atmTemp) || 25;
-    const Tm = (tmIn + tmOut) / 2;
+
+    // 엑셀 수식의 AVERAGE(F15:G16)과 동일하게, 입력된 입/출구 Tm만 평균
+    const Tm = getTraverseMeterTempAvg();
 
     const Ts = getRawAvgTs();
     const Pm = parseFloat(formData.atmPressure); 
+    if (!Number.isFinite(Tm) || !Number.isFinite(Ts) || !Number.isFinite(Pm) || Pm <= 0) return null;
     
     const validSps = formData.points.map(p => parseFloat(p.sp)).filter(v => !isNaN(v));
     const avgSp = validSps.length === 0 ? 0 : validSps.reduce((a, b) => a + b, 0) / validSps.length;
@@ -1997,6 +2005,7 @@ export default function App() {
 
     const gasComp = getGasComposition();
     const Md = gasComp.Md, Ms = gasComp.Ms, Xw = gasComp.Xw;
+    if (!Number.isFinite(Md) || !Number.isFinite(Ms) || Ms === 0 || !Number.isFinite(Xw)) return null;
 
     const Cp = parseFloat(formData.pitotFactor) || 0.84;
     const Yd = parseFloat(formData.gasMeterFactor) || 1.0;
@@ -2043,12 +2052,22 @@ export default function App() {
     const Vs = getRawGasVelocity(), Ts = getRawAvgTs(), Ps = getRawStackPressure(), dpAvg = getRawAvgDp();
     const Y = parseFloat(formData.gasMeterFactor), dHAt = parseFloat(formData.deltaHAt);
     const configuredNozzles = getConfiguredNozzles();
+    const traverseTm = getTraverseMeterTempAvg();
 
     if (isNaN(Y) || Y <= 0 || isNaN(dHAt) || dHAt <= 0) { alert('장비 교정 성적서에 명시된 [보정계수(Yd)]와 [오리피스 계수(ΔH@)]를 먼저 정확히 입력해주세요.'); return; }
+    if (!Number.isFinite(traverseTm)) { alert('K-Factor 정확 계산을 위해 [미터온도(Tm) 입구/출구]를 입력해주세요.'); return; }
     if (Vs === 0 || isNaN(Vs) || isNaN(Ts) || isNaN(Ps) || isNaN(dpAvg) || dpAvg === 0) { alert('오류: 4번 항목의 유속(동압 및 온도) 기초 데이터가 먼저 입력되어야 산정이 가능합니다.'); return; }
     if (configuredNozzles.length === 0) { alert('노즐 목록이 비어 있습니다. 노즐 설정에서 최소 1개 이상 입력해주세요.'); return; }
 
-    setRecommendations({ fast: generateRecommendation('fast'), standard: generateRecommendation('standard'), stable: generateRecommendation('stable') });
+    const fast = generateRecommendation('fast');
+    const standard = generateRecommendation('standard');
+    const stable = generateRecommendation('stable');
+    if (!fast || !standard || !stable) {
+      alert('K-Factor 계산 입력값을 다시 확인해주세요. (Tm, Ts, 압력, 가스조성)');
+      return;
+    }
+
+    setRecommendations({ fast, standard, stable });
   };
 
   const applyRecommendation = (opt) => {
@@ -2748,18 +2767,14 @@ export default function App() {
     if (!isNaN(k) && !isNaN(dp)) dH = calcExpectedOrificeDH(k, dp);
 
     const Ts = getRawAvgTs(), Ps = getRawStackPressure(), Pm = parseFloat(formData.atmPressure);
-    
-    // 동정압 측정 시 입력한 예비조사 미터온도를 기반으로 산출
-    const tmIn = parseFloat(formData.traverseTmIn) || parseFloat(formData.atmTemp) || 25;
-    const tmOut = parseFloat(formData.traverseTmOut) || parseFloat(formData.atmTemp) || 25;
-    const Tm = (tmIn + tmOut) / 2;
+    const Tm = getTraverseMeterTempAvg();
 
     const gasComp = getGasComposition();
     const Xw = gasComp.Xw;
     const Yd = parseFloat(formData.gasMeterFactor) || 1.0;
     const targetVol = parseFloat(formData.targetVolume) || 1000;
 
-    if (!isNaN(d) && !isNaN(Vs) && Vs > 0 && !isNaN(Ts) && !isNaN(Ps) && Pm > 0 && !isNaN(Xw)) {
+    if (!isNaN(d) && !isNaN(Vs) && Vs > 0 && !isNaN(Ts) && !isNaN(Tm) && !isNaN(Ps) && Pm > 0 && !isNaN(Xw)) {
         const An = Math.PI * Math.pow(d / 2000, 2);
         const Q_m = (Vs * An * 60 * 1000 * ((Tm + 273) / (Ts + 273)) * (Ps / Pm) * (1 - Xw / 100)) / Yd;
         const Q_sl = Q_m * Yd * (273 / (273 + Tm)) * (Pm / 760);
@@ -4258,10 +4273,7 @@ export default function App() {
                              const nozzleNum = parseInt(n.num, 10);
                              const Dn = parseFloat(n.d);
                              const vs = getRawGasVelocity(), cP = parseFloat(formData.pitotFactor)||0.84, ts = getRawAvgTs(), pm = parseFloat(formData.atmPressure), ps = getRawStackPressure();
-                             
-                             const tmIn = parseFloat(formData.traverseTmIn) || parseFloat(formData.atmTemp) || 25;
-                             const tmOut = parseFloat(formData.traverseTmOut) || parseFloat(formData.atmTemp) || 25;
-                             const tm = (tmIn + tmOut) / 2;
+                             const tm = getTraverseMeterTempAvg();
                              
                              const validSps = formData.points.map(p => parseFloat(p.sp)).filter(v => !isNaN(v));
                              const avgSp = validSps.length === 0 ? 0 : validSps.reduce((a, b) => a + b, 0) / validSps.length;
@@ -4272,7 +4284,7 @@ export default function App() {
                              const y = parseFloat(formData.gasMeterFactor)||1.0;
                              const dHAt = parseFloat(formData.deltaHAt);
 
-                             if(!isNaN(nozzleNum) && !isNaN(Dn) && Dn > 0 && vs>0 && ps && pm>0) {
+                             if(!isNaN(nozzleNum) && !isNaN(Dn) && Dn > 0 && vs > 0 && Number.isFinite(ts) && Number.isFinite(tm) && Number.isFinite(ps) && Number.isFinite(pm) && pm > 0 && Number.isFinite(Md) && Number.isFinite(Ms) && Ms !== 0 && Number.isFinite(Xw)) {
                                 const k_val = 8.001e-5 * Math.pow(Dn, 4) * dHAt * Math.pow(cP, 2) * Math.pow(1 - Xw / 100, 2) * (Md / Ms) * ((tm + 273) / (ts + 273)) * ps_ratio;
                                 k = formatKFactorDisplay(k_val);
                                 dh = calcExpectedOrificeDH(k_val, getRawAvgDp());
