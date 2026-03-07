@@ -2633,6 +2633,13 @@ export default function App() {
   }, [activeUser, isUserUnlocked]);
 
   useEffect(() => {
+    if (!selectedSheet) return;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+  }, [selectedSheet]);
+
+  useEffect(() => {
     if (selectedSheet) return undefined;
     const spawnLegendary = () => {
       setLegendaryFlight(pickRandomLegendaryFlight());
@@ -3181,7 +3188,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-xs min-w-[980px]">
+                  <table className="w-full text-xs min-w-[1080px]">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
                         <th className="p-2 font-bold text-center">구분</th>
@@ -3192,6 +3199,7 @@ export default function App() {
                         <th className="p-2 font-bold text-center">실측농도</th>
                         <th className="p-2 font-bold text-center">보정농도</th>
                         <th className="p-2 font-bold text-center">불러오기</th>
+                        <th className="p-2 font-bold text-center">삭제</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -3214,6 +3222,18 @@ export default function App() {
                               className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold"
                             >
                               불러오기
+                            </button>
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeSavedReport(data.id, data.savedAt);
+                              }}
+                              className="px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50 font-bold"
+                            >
+                              삭제
                             </button>
                           </td>
                         </tr>
@@ -3434,7 +3454,7 @@ export default function App() {
           <button
             type="button"
             onClick={navigateToMenu}
-            className="absolute right-4 top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
+            className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
           >
             기록부 선택
           </button>
