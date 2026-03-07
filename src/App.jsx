@@ -1973,6 +1973,11 @@ export default function App() {
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
+  const getRawAvgSamplingTs = () => {
+    const validTemps = formData.gasMeters.map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
+    return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
+  };
+
   const getRawAvgOrifice = () => {
     // 시작행(0분)의 오리피스압도 평균에 포함
     const validPressures = formData.gasMeters.map(g => parseFloat(g.pressure)).filter(v => Number.isFinite(v));
@@ -2048,7 +2053,21 @@ export default function App() {
     return (21 - o2_ref) / (21 - o2_act);
   };
 
-  const getSamplingMinutes = () => formData.gasMeters.reduce((sum, meter, idx) => idx === 0 ? sum : sum + (isNaN(parseFloat(meter.time)) ? 0 : parseFloat(meter.time)), 0);
+  const getSamplingMinutes = () => {
+    const times = formData.gasMeters
+      .slice(1)
+      .map((meter) => parseFloat(meter.time))
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    if (times.length === 0) return 0;
+
+    const isCumulativeTimeline = times.length >= 2
+      && times.every((v, i) => i === 0 || v > times[i - 1]);
+
+    return isCumulativeTimeline
+      ? times[times.length - 1]
+      : times.reduce((sum, value) => sum + value, 0);
+  };
 
   const calcGasFlowRates = () => {
     const Vs = getRawGasVelocity(); 
@@ -2341,7 +2360,9 @@ export default function App() {
 
   const calcIsokineticRate = (isPost = false) => {
     const Vm = getRawGasMeterVolDiff();
-    const Ts = getRawAvgTs();
+    const traverseTs = getRawAvgTs();
+    const samplingTs = getRawAvgSamplingTs();
+    const Ts = Number.isFinite(samplingTs) ? samplingTs : traverseTs;
     const rawTm = getRawAvgTm();
     const Tm = isNaN(rawTm) ? Ts : rawTm; 
     const Dn = parseFloat(formData.nozzleDiameter);
@@ -2354,14 +2375,18 @@ export default function App() {
 
     if (Vm > 0 && Dn > 0 && Vs > 0 && theta > 0 && !isNaN(Ts) && !isNaN(Pa) && !isNaN(dH_avg) && !isNaN(Ps)) {
       const An = Math.PI * Math.pow(Dn / 2000, 2);
+      const DnCm = Dn / 10;
+      const AnCm2 = (Math.PI / 4) * Math.pow(DnCm, 2);
       const Pm_abs = Pa + dH_avg / 13.6;
 
       if (isPost) {
-        const Vic = getRawTotalMoistureWeight(); 
+        // 엑셀식 대응:
+        // =(((Ts+273)*(0.00346*Vic + (Vm*Y/1000)*(Pa+Pm)/(Tm+273))) / ((Pa+Ps)*theta*Vs*(PI()/4*Dn^2))) * 16670
+        const Vic = getRawTotalMoistureWeight();
         const Vm_m3 = Vm / 1000;
         const part1 = 0.00346 * Vic;
-        const part2 = (Vm_m3 * Y / (Tm + 273)) * Pm_abs;
-        const I = (Ts + 273) * (part1 + part2) * 1.667 / (theta * Vs * Ps * An);
+        const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
+        const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(1);
       } else {
         const gasComp = getGasComposition();
