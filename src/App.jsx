@@ -2036,6 +2036,34 @@ export default function App() {
       .filter((row, idx) => isActiveMeterRow(row, idx))
   );
 
+  const getRawGasVelocityFromMeterRows = () => {
+    const activeRows = getActiveMeterRows();
+    const dpValues = activeRows
+      .map((row) => parseFloat(row.dp))
+      .filter((v) => Number.isFinite(v) && v >= 0);
+    const tsValues = activeRows
+      .map((row) => parseFloat(row.stackTemp))
+      .filter((v) => Number.isFinite(v));
+
+    if (dpValues.length === 0 || tsValues.length === 0) return NaN;
+
+    const avgDp = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
+    const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
+    const C = parseFloat(formData.pitotFactor) || 0.84;
+    const P = getRawStackPressure();
+    const gasComp = getGasComposition();
+
+    if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return NaN;
+    if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
+
+    const r = gasComp.r0 * (273 / (273 + avgTs)) * (P / 760);
+    if (!Number.isFinite(r) || r <= 0) return NaN;
+
+    const velocity = C * Math.pow((2 * 9.81 * avgDp) / r, 0.5);
+    if (!Number.isFinite(velocity) || velocity <= 0) return NaN;
+    return velocity;
+  };
+
   const getRawGasMeterVolDiff = () => {
     const initial = parseFloat(formData.gasMeters[0]?.volume);
     if (!Number.isFinite(initial)) return 0;
@@ -2486,7 +2514,9 @@ export default function App() {
     const rawTm = getRawAvgTm();
     const Tm = isNaN(rawTm) ? Ts : rawTm; 
     const Dn = parseFloat(formData.nozzleDiameter);
-    const Vs = getRawGasVelocity();
+    // 최종 등속흡인율은 적산유량계 기록표의 평균 동압 기반 유속을 우선 사용
+    const meterBasedVs = getRawGasVelocityFromMeterRows();
+    const Vs = Number.isFinite(meterBasedVs) && meterBasedVs > 0 ? meterBasedVs : getRawGasVelocity();
     const theta = getSamplingMinutes();
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
     const Pa = parseFloat(formData.atmPressure);
