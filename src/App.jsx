@@ -838,6 +838,21 @@ const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
 const MAGIKARP_POKEMON_ID = 129;
+
+const getImpingerStageCount = (sheetId) => (sheetId === 'pahs' ? 6 : 4);
+
+const normalizeImpingers = (value, stageCount) => {
+  const targetCount = Number.isFinite(stageCount) && stageCount > 0 ? stageCount : 4;
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length: targetCount }, (_, idx) => {
+    const current = source[idx] || {};
+    return {
+      id: idx + 1,
+      initial: current.initial === undefined || current.initial === null ? '' : String(current.initial),
+      final: current.final === undefined || current.final === null ? '' : String(current.final),
+    };
+  });
+};
 const CLOUD_SYNC_FILE_NAME = 'stackpilot-cloud.json';
 const CLOUD_SYNC_VERSION = 1;
 
@@ -1023,10 +1038,7 @@ export default function App() {
       { time: '', o2: '', co2: '', co: '', nox: '', sox: '' }
     ],
     moistureValues: ['', '', '', '', ''],
-    impingers: [
-      { id: 1, initial: '', final: '' }, { id: 2, initial: '', final: '' },
-      { id: 3, initial: '', final: '' }, { id: 4, initial: '', final: '' },
-    ],
+    impingers: normalizeImpingers([], getImpingerStageCount('dust')),
     // 동정압 측정 시 가스미터 온도 (예비조사 Tm)
     traverseTmIn: '', traverseTmOut: '',
     points: [
@@ -2439,6 +2451,9 @@ export default function App() {
       return;
     }
 
+    const targetSheet = resolveReportSheetId(report);
+    const targetImpingerCount = getImpingerStageCount(targetSheet);
+
     setFormData(prev => {
       const nextForm = { ...prev };
       Object.keys(nextForm).forEach((key) => {
@@ -2453,12 +2468,11 @@ export default function App() {
           }
         }
       });
+      nextForm.impingers = normalizeImpingers(nextForm.impingers, targetImpingerCount);
       return nextForm;
     });
 
     setRecommendations(null);
-
-    const targetSheet = resolveReportSheetId(report);
     if (selectedSheet !== targetSheet) {
       window.location.hash = `sheet=${targetSheet}`;
     }
@@ -2521,9 +2535,9 @@ export default function App() {
 
   const handleImpingerChange = (index, field, value) => {
     setFormData(prev => {
-      const newImpingers = prev.impingers.map((item, i) => 
-        i === index ? { ...item, [field]: value } : item
-      );
+      const stageCount = Math.max(getImpingerStageCount(selectedSheet), index + 1);
+      const baseImpingers = normalizeImpingers(prev.impingers, stageCount);
+      const newImpingers = baseImpingers.map((item, i) => (i === index ? { ...item, [field]: value } : item));
       return { ...prev, impingers: newImpingers };
     });
   };
@@ -4069,6 +4083,8 @@ export default function App() {
   const activeSheet = SHEET_MENU.find(item => item.id === selectedSheet);
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
+  const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
+  const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
   const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
   const isMobileLightMode = isMobileViewport;
   const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
@@ -4124,6 +4140,14 @@ export default function App() {
     if (!selectedSheet) return;
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+  }, [selectedSheet]);
+
+  useEffect(() => {
+    if (!selectedSheet) return;
+    setFormData((prev) => {
+      const nextImpingers = normalizeImpingers(prev.impingers, getImpingerStageCount(selectedSheet));
+      return { ...prev, impingers: nextImpingers };
     });
   }, [selectedSheet]);
 
@@ -5299,9 +5323,9 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {formData.impingers.map((imp, idx) => (
+                        {visibleImpingers.map((imp, idx) => (
                           <tr key={imp.id} className="hover:bg-slate-50">
-                            <td className="p-2 border border-slate-200 text-slate-700 font-bold">{imp.id}단{imp.id === 4 ? '(실리카겔)' : ''}</td>
+                            <td className="p-2 border border-slate-200 text-slate-700 font-bold">{imp.id}단{imp.id === impingerStageCount ? '(실리카겔)' : ''}</td>
                             <td className="p-1 border border-slate-200">
                               <input type="number" step="0.01" value={imp.initial} onChange={(e) => handleImpingerChange(idx, 'initial', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500" />
                             </td>
