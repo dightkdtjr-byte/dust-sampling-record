@@ -983,7 +983,7 @@ export default function App() {
   const [formData, setFormData] = useState({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
-    totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotFactor: '0.84',
+    totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotInfo: '', pitotFactor: '0.84',
     pitotPresetId: '',
     standardO2: '',
     gasAnalyzer: [
@@ -2096,7 +2096,7 @@ export default function App() {
     }
     const preset = pitotPresets.find(item => item.id === parseInt(id, 10));
     if (preset) {
-      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor }));
+      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor, pitotInfo: preset.name || prev.pitotInfo }));
     }
   };
 
@@ -2472,6 +2472,11 @@ export default function App() {
   const calcMoisture = () => getRawPreMoisture().toFixed(3);
   const calcPostMoisture = () => getRawPostMoisture().toFixed(3);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
+  const calcFinalGasVelocity = () => {
+    const v = getRawGasVelocityFromMeterRows();
+    if (!Number.isFinite(v) || v <= 0) return '-';
+    return v.toFixed(2);
+  };
   const calcGasMeterVolDiff = () => { const v = getRawGasMeterVolDiff(); return v > 0 ? v.toFixed(2) : 0; };
   const getRawGasMeterVolDiffYd = () => {
     const vm = getRawGasMeterVolDiff();
@@ -2935,7 +2940,7 @@ export default function App() {
       moisturePre: calcMoisture(),
       moisturePost: calcPostMoisture(),
       moisturePercent: calcTotalMoistureWeight() > 0 ? calcPostMoisture() : calcMoisture(),
-      avgVelocity: calcGasVelocity(),
+      avgVelocity: calcFinalGasVelocity(),
       isokineticRate,
       isokineticStatus,
       dustWeight: calcDustWeightDiff(),
@@ -4741,6 +4746,17 @@ export default function App() {
                   측정점별 동압 및 온도 (예비조사)
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4">
+                  <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
+                    <label className="text-[11px] font-bold text-slate-700">피토관 정보</label>
+                    <input
+                      type="text"
+                      name="pitotInfo"
+                      value={formData.pitotInfo}
+                      onChange={handleChange}
+                      placeholder="예: 피토 1호기 / S/N"
+                      className="w-36 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                    />
+                  </div>
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
                     <label className="text-[11px] font-bold text-slate-700">피토계수</label>
                     <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -4961,10 +4977,48 @@ export default function App() {
                  </div>
                </details>
                
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3 items-end">
+               <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-3 items-end">
+                 <div>
+                    <label className="block text-xs font-bold text-emerald-800 mb-1">피토관 정보</label>
+                    <input
+                      type="text"
+                      name="pitotInfo"
+                      value={formData.pitotInfo}
+                      onChange={handleChange}
+                      placeholder="예: 피토 1호기 / S/N"
+                      className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700"
+                    />
+                 </div>
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1">목표 채취량 (SL)</label>
                     <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-emerald-300 rounded text-sm bg-white font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-emerald-800 mb-1">피토계수 (C<sub>p</sub>)</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="pitotFactor"
+                        value={formData.pitotFactor}
+                        onChange={handleChange}
+                        placeholder="0.84"
+                        className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700"
+                      />
+                      <select
+                        value={formData.pitotPresetId}
+                        onChange={handlePitotPresetChange}
+                        className="p-2 border border-emerald-300 rounded text-xs font-bold text-emerald-800 bg-emerald-50 focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer"
+                        title="피토 프리셋 선택"
+                      >
+                        <option value="">프리셋</option>
+                        {pitotPresets.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1" title="가스미터 보정계수">보정계수 (Y<sub>d</sub>)</label>
@@ -5431,7 +5485,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
-                      <span className="text-2xl font-bold text-amber-300">{calcGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
+                      <span className="text-2xl font-bold text-amber-300">{calcFinalGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
                   </div>
                   {isDustSheet && (
                     <div className="flex flex-col items-center justify-center p-2">
