@@ -12,7 +12,7 @@ const DEFAULT_NOZZLE_SET = [
 ];
 
 const DEFAULT_SAMPLERS = [
-  { id: 1, name: '샘플러 1호기', yd: '0.991', dHAt: '47.6' },
+  { id: 1, name: '샘플러 1호기', yd: '0.991', dHAt: '47.6079' },
   { id: 2, name: '샘플러 2호기', yd: '1.005', dHAt: '40.2' },
   { id: 3, name: '샘플러 3호기', yd: '0.988', dHAt: '39.5' },
   { id: 4, name: '샘플러 4호기', yd: '1.012', dHAt: '42.1' },
@@ -691,7 +691,7 @@ export default function App() {
       { id: 5, tp: '', sp: '', dp: '', ts: '' },
     ],
     samplerId: '', targetVolume: '1000', planSamplingTime: '65',
-    gasMeterFactor: '0.991', deltaHAt: '47.6',
+    gasMeterFactor: '0.991', deltaHAt: '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
     nozzleDiameter: '', kFactor: '',
     gasMeters: Array.from({ length: 6 }, (_, i) => ({
@@ -3951,7 +3951,7 @@ export default function App() {
                            <td className="border border-emerald-200 p-1">
                              <input
                                type="number"
-                               step="0.1"
+                               step="0.0001"
                                value={s.dHAt}
                                onChange={(e) => handleSamplerPresetChange(idx, 'dHAt', e.target.value)}
                                className="w-full p-1 border border-emerald-300 rounded text-center"
@@ -3980,7 +3980,7 @@ export default function App() {
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1" title="오리피스 계수">오리피스 계수 (ΔH<sub>@</sub>)</label>
-                    <input type="number" step="0.1" name="deltaHAt" value={formData.deltaHAt} onChange={handleChange} placeholder="ΔH@" className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" />
+                    <input type="number" step="0.0001" name="deltaHAt" value={formData.deltaHAt} onChange={handleChange} placeholder="ΔH@" className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" />
                  </div>
                </div>
 
