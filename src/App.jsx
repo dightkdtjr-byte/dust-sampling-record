@@ -654,7 +654,7 @@ const calcExpectedOrificeDH = (kVal, dpVal) => {
 
 const formatKFactorDisplay = (value) => {
   const num = parseFloat(value);
-  return Number.isFinite(num) ? num.toFixed(5) : '-';
+  return Number.isFinite(num) ? num.toFixed(2) : '-';
 };
 
 const SignatureBadge = () => (
