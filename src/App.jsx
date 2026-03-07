@@ -2178,7 +2178,10 @@ export default function App() {
   const calcAvgTm = () => { const v = getRawAvgTm(); return isNaN(v) ? '-' : v.toFixed(1); };
   const calcAvgOrifice = () => { const v = getRawAvgOrifice(); return isNaN(v) ? '-' : v.toFixed(1); };
   const calcTotalMoistureWeight = () => getRawTotalMoistureWeight();
-  const getVmStd = () => { const v = getRawVmStd(); return v > 0 ? v.toFixed(3) : '0.000'; };
+  const getVmStd = () => {
+    const v = getRawVmStd();
+    return v > 0 ? (v / 1000).toFixed(3) : '0.000';
+  };
   const calcVmStdSL = () => {
     const v = getRawVmStd();
     return v > 0 ? v.toFixed(1) : '-';
@@ -2503,7 +2506,7 @@ export default function App() {
   const calcRowMoistureCapture = (idx) => {
     const raw = getRowMoistureCaptureRaw(idx);
     if (!Number.isFinite(raw) || raw < 0) return '-';
-    return raw.toFixed(9);
+    return raw.toFixed(2);
   };
 
   const calcIsokineticRate = (isPost = false) => {
@@ -2557,12 +2560,13 @@ export default function App() {
   };
 
   const calcDustConcentrations = () => {
-    const Vm_std = getRawVmStd();
+    const Vm_std_sm3 = getRawVmStd() / 1000;
     const Wm = getRawDustWeightDiff();
     let actualC = '-', correctedC = '-';
 
-    if (Vm_std > 0 && Wm > 0) {
-      const C = Wm / Vm_std; 
+    // 실측농도(mg/Sm3) = 채취무게(mg) / 표준가스량(Sm3)
+    if (Vm_std_sm3 > 0 && Wm > 0) {
+      const C = Wm / Vm_std_sm3;
       actualC = C.toFixed(2);
       const K = calcO2CorrectionFactor();
       correctedC = (C * K).toFixed(2);
