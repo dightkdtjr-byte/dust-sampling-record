@@ -5364,7 +5364,7 @@ export default function App() {
                 </div>
               </div>
 
-              <details className="mb-3 bg-white border border-emerald-200 rounded-lg p-2">
+              <details className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                 <summary className="cursor-pointer text-[11px] font-bold text-emerald-800">
                   피토 프리셋 직접 편집 (C<sub>p</sub>)
                 </summary>
