@@ -1557,6 +1557,12 @@ export default function App() {
           nextForm[key] = report[key];
         }
       });
+      if (Array.isArray(nextForm.gasAnalyzer)) {
+        nextForm.gasAnalyzer = nextForm.gasAnalyzer.map((item) => ({
+          ...item,
+          time: '',
+        }));
+      }
 
       return nextForm;
     });
@@ -2124,6 +2130,10 @@ export default function App() {
     const isokineticRate = calcIsokineticRate(true);
     const isokineticNum = parseFloat(isokineticRate);
     const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 95 && isokineticNum <= 105 ? '적합' : '부적합';
+    const normalizedGasAnalyzer = (formData.gasAnalyzer || []).map((item) => ({
+      ...item,
+      time: '',
+    }));
 
     const result = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2132,7 +2142,8 @@ export default function App() {
       sheetId: selectedSheet || 'dust',
       sheetTitle: activeSheet?.title || '먼지시료채취기록부',
       ...formData,
-      sampler: formData.sampler || activeUser,
+      sampler: formData.sampler || '',
+      gasAnalyzer: normalizedGasAnalyzer,
       moisturePre: calcMoisture(),
       moisturePost: calcPostMoisture(),
       moisturePercent: calcTotalMoistureWeight() > 0 ? calcPostMoisture() : calcMoisture(),
