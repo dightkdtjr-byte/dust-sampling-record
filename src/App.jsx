@@ -2187,11 +2187,18 @@ export default function App() {
     const VmCum = currentVol - startVol;
     if (!Number.isFinite(VmCum) || VmCum <= 0) return '-';
 
-    // θ는 시작 이후 누적 시간(분)으로 계산
-    const thetaCum = formData.gasMeters.slice(1, idx + 1).reduce((sum, row) => {
-      const t = parseFloat(row.time);
-      return sum + (Number.isFinite(t) && t > 0 ? t : 0);
-    }, 0);
+    const elapsedRows = formData.gasMeters.slice(1, idx + 1);
+    const timeValues = elapsedRows
+      .map((row) => parseFloat(row.time))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (timeValues.length === 0) return '-';
+
+    // 시간 입력이 누적(예: 5,10,18...)이면 마지막 값을 θ로, 구간(예: 5,5,5...)이면 합계를 θ로 사용
+    const isCumulativeTimeline = timeValues.length >= 2
+      && timeValues.every((v, i) => i === 0 || v > timeValues[i - 1]);
+    const thetaCum = isCumulativeTimeline
+      ? timeValues[timeValues.length - 1]
+      : timeValues.reduce((sum, value) => sum + value, 0);
     if (!Number.isFinite(thetaCum) || thetaCum <= 0) return '-';
 
     const rangeRows = formData.gasMeters.slice(0, idx + 1);
@@ -2228,8 +2235,7 @@ export default function App() {
 
     const gasComp = getGasComposition();
     const r0 = gasComp.r0;
-    const Xw = gasComp.Xw;
-    if (!Number.isFinite(r0) || r0 <= 0 || !Number.isFinite(Xw) || Xw >= 100) return '-';
+    if (!Number.isFinite(r0) || r0 <= 0) return '-';
 
     const currentTs = parseFloat(currentRow.stackTemp);
     const TsForVelocity = Number.isFinite(currentTs) ? currentTs : TsAvg;
@@ -2241,11 +2247,20 @@ export default function App() {
 
     const Dn = parseFloat(formData.nozzleDiameter);
     if (!Number.isFinite(Dn) || Dn <= 0) return '-';
-    const An = Math.PI * Math.pow(Dn / 2000, 2);
+    const DnCm = Dn / 10;
 
-    // 엑셀 기록지와 동일하게, 시작행 포함 누적값으로 건식 순간등속 계산
-    const rate = (VmCum * Y * (TsAvg + 273) * PmAbs * 100)
-      / ((TmAvg + 273) * Vs * An * 60 * 1000 * thetaCum * Ps * (1 - Xw / 100));
+    const totalVic = getRawTotalMoistureWeight();
+    const totalVm = getRawGasMeterVolDiff();
+    const vicCum = Number.isFinite(totalVic) && totalVic > 0 && Number.isFinite(totalVm) && totalVm > 0
+      ? totalVic * (VmCum / totalVm)
+      : 0;
+
+    // 엑셀 L열 수식과 동일한 누적 순간등속(시작행 포함)
+    const postTerm = (0.00346 * vicCum)
+      + (((VmCum * Y) / 1000) / (273 + TmAvg)) * PmAbs;
+    const rate = ((273 + TsAvg) * postTerm)
+      / (Ps * thetaCum * Vs * (Math.PI / 4) * Math.pow(DnCm, 2))
+      * 16670;
 
     if (!Number.isFinite(rate) || rate <= 0) return '-';
     return rate.toFixed(1);
