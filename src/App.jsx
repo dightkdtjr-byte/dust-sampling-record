@@ -2237,9 +2237,8 @@ export default function App() {
     const r0 = gasComp.r0;
     if (!Number.isFinite(r0) || r0 <= 0) return '-';
 
-    const currentTs = parseFloat(currentRow.stackTemp);
-    const TsForVelocity = Number.isFinite(currentTs) ? currentTs : TsAvg;
-    const rRow = r0 * (273 / (273 + TsForVelocity)) * (Ps / 760);
+    // 엑셀처럼 누적 평균 배출가스온도로 밀도(r)를 보정
+    const rRow = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
     if (!Number.isFinite(rRow) || rRow <= 0) return '-';
 
     const Vs = Cp * Math.pow((2 * 9.81 * dp) / rRow, 0.5);
@@ -2290,6 +2289,22 @@ export default function App() {
 
     if (!Number.isFinite(rate) || rate <= 0) return '-';
     return rate.toFixed(1);
+  };
+
+  const calcRowCorrectedGasDensity = (idx) => {
+    if (idx < 0) return '-';
+    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
+    if (tsValues.length === 0) return '-';
+
+    const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
+    const Ps = getRawStackPressure();
+    const r0 = getGasComposition().r0;
+    if (!Number.isFinite(Ps) || !Number.isFinite(r0) || r0 <= 0) return '-';
+
+    const correctedDensity = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
+    if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return '-';
+    return correctedDensity.toFixed(2);
   };
 
   const calcIsokineticRate = (isPost = false) => {
@@ -4596,6 +4611,7 @@ export default function App() {
                       <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-500">입구 | 출구</span></th>
                       <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>
                       <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>
+                      <th className="p-1 font-bold whitespace-nowrap">배출가스보정<br/>밀도(kg/m³)</th>
                       <th className="p-1 font-black text-emerald-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
                       <th className="p-1"></th>
                     </tr>
@@ -4604,6 +4620,7 @@ export default function App() {
                     {formData.gasMeters.map((meter, idx) => {
                       const isStartRow = idx === 0;
                       const rowRate = calcRowIsokineticRate(idx);
+                      const rowDensity = calcRowCorrectedGasDensity(idx);
                       const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 90 && parseFloat(rowRate) <= 110;
                       
                       return (
@@ -4649,6 +4666,11 @@ export default function App() {
                           </td>
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.impingerTemp} onChange={(e) => handleGasMeterChange(idx, 'impingerTemp', e.target.value)} placeholder="온도" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                          </td>
+                          <td className="p-1 w-16">
+                            <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowDensity === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
+                              {rowDensity}
+                            </span>
                           </td>
                           
                           <td className="p-1 border-l border-slate-200 w-16">
