@@ -2248,37 +2248,8 @@ export default function App() {
     if (!Number.isFinite(Dn) || Dn <= 0) return '-';
     const DnCm = Dn / 10;
 
-    const totalVic = getRawTotalMoistureWeight();
-    let vicCum = 0;
-    if (Number.isFinite(totalVic) && totalVic > 0) {
-      // 엑셀 O열과 동일: 구간별 표준화 체적(ΔVm_std) 비율로 누적 수분량 배분
-      let totalVmStd = 0;
-      let cumulativeVmStd = 0;
-      for (let i = 1; i < formData.gasMeters.length; i += 1) {
-        const prevVol = parseFloat(formData.gasMeters[i - 1]?.volume);
-        const currVol = parseFloat(formData.gasMeters[i]?.volume);
-        if (!Number.isFinite(prevVol) || !Number.isFinite(currVol) || currVol <= prevVol) continue;
-        const deltaVm = currVol - prevVol;
-
-        const tmInSeg = parseFloat(formData.gasMeters[i]?.tmIn);
-        const tmOutSeg = parseFloat(formData.gasMeters[i]?.tmOut);
-        const tmSegValues = [tmInSeg, tmOutSeg].filter(v => Number.isFinite(v));
-        const tmSeg = tmSegValues.length > 0
-          ? (tmSegValues.reduce((a, b) => a + b, 0) / tmSegValues.length)
-          : TmAvg;
-
-        const pmSegRaw = parseFloat(formData.gasMeters[i]?.pressure);
-        const pmSeg = Number.isFinite(pmSegRaw) ? pmSegRaw : PmAvg;
-        const deltaVmStd = deltaVm * Y * (273 / (273 + tmSeg)) * ((Pa + pmSeg / 13.6) / 760);
-
-        if (!Number.isFinite(deltaVmStd) || deltaVmStd <= 0) continue;
-        totalVmStd += deltaVmStd;
-        if (i <= idx) cumulativeVmStd += deltaVmStd;
-      }
-      if (totalVmStd > 0 && cumulativeVmStd >= 0) {
-        vicCum = totalVic * (cumulativeVmStd / totalVmStd);
-      }
-    }
+    const vicCum = getRowMoistureCaptureRaw(idx);
+    if (!Number.isFinite(vicCum) || vicCum < 0) return '-';
 
     // 엑셀 L열 수식과 동일한 누적 순간등속(시작행 포함)
     const postTerm = (0.00346 * vicCum)
@@ -2305,6 +2276,49 @@ export default function App() {
     const correctedDensity = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
     if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return '-';
     return correctedDensity.toFixed(2);
+  };
+
+  const getRowMoistureCaptureRaw = (idx) => {
+    if (idx <= 0) return NaN;
+    const startRow = formData.gasMeters[0];
+    const currentRow = formData.gasMeters[idx];
+    if (!startRow || !currentRow) return NaN;
+
+    const startVol = parseFloat(startRow.volume);
+    const currentVol = parseFloat(currentRow.volume);
+    if (!Number.isFinite(startVol) || !Number.isFinite(currentVol)) return NaN;
+    const VmCum = currentVol - startVol;
+    if (!Number.isFinite(VmCum) || VmCum <= 0) return NaN;
+
+    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const tmValues = rangeRows.flatMap((row) => {
+      const inT = parseFloat(row.tmIn);
+      const outT = parseFloat(row.tmOut);
+      const vals = [];
+      if (Number.isFinite(inT)) vals.push(inT);
+      if (Number.isFinite(outT)) vals.push(outT);
+      return vals;
+    });
+    if (tmValues.length === 0) return NaN;
+    const TmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length;
+
+    const pmValues = rangeRows.map(row => parseFloat(row.pressure)).filter(v => Number.isFinite(v));
+    if (pmValues.length === 0) return NaN;
+    const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
+
+    const Pa = parseFloat(formData.atmPressure);
+    const Y = parseFloat(formData.gasMeterFactor) || 1.0;
+    const Xw = getGasComposition().Xw;
+    if (!Number.isFinite(Pa) || !Number.isFinite(TmAvg) || !Number.isFinite(PmAvg) || !Number.isFinite(Xw) || Xw <= 0 || Xw >= 100) return NaN;
+
+    // 엑셀 O열 수식 동일: 누적 수분량(ml)
+    return (((VmCum * Y * (273 / (273 + TmAvg)) * ((Pa + PmAvg / 13.6) / 760) * Xw) / (100 - Xw)) * (18 / 22.4));
+  };
+
+  const calcRowMoistureCapture = (idx) => {
+    const raw = getRowMoistureCaptureRaw(idx);
+    if (!Number.isFinite(raw) || raw < 0) return '-';
+    return raw.toFixed(9);
   };
 
   const calcIsokineticRate = (isPost = false) => {
@@ -4612,6 +4626,7 @@ export default function App() {
                       <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>
                       <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스보정<br/>밀도(kg/m³)</th>
+                      <th className="p-1 font-bold whitespace-nowrap">수분량<br/>(ml)</th>
                       <th className="p-1 font-black text-emerald-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
                       <th className="p-1"></th>
                     </tr>
@@ -4621,6 +4636,7 @@ export default function App() {
                       const isStartRow = idx === 0;
                       const rowRate = calcRowIsokineticRate(idx);
                       const rowDensity = calcRowCorrectedGasDensity(idx);
+                      const rowMoisture = calcRowMoistureCapture(idx);
                       const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 90 && parseFloat(rowRate) <= 110;
                       
                       return (
@@ -4670,6 +4686,11 @@ export default function App() {
                           <td className="p-1 w-16">
                             <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowDensity === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
                               {rowDensity}
+                            </span>
+                          </td>
+                          <td className="p-1 w-20">
+                            <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowMoisture === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
+                              {rowMoisture}
                             </span>
                           </td>
                           
