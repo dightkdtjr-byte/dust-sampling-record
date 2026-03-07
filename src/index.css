@@ -6,3 +6,17 @@ body,
   margin: 0;
   min-height: 100%;
 }
+
+/* Keep date input height identical to text inputs across mobile/desktop browsers. */
+input.date-input-fixed[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  height: 2.5rem !important;
+  min-height: 2.5rem;
+  line-height: 1.25rem;
+}
+
+input.date-input-fixed[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
