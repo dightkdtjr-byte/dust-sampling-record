@@ -1964,13 +1964,20 @@ export default function App() {
     const sumMx = (M_O2 * o2) + (M_CO2 * co2) + (M_CO * coPercent) + (M_N2 * n2);
 
     const Md = sumMx / 100;
-    const validVals = formData.moistureValues.map(v => parseFloat(v)).filter(v => !isNaN(v));
-    const Xw = validVals.length > 0 ? (validVals.reduce((a, b) => a + b, 0) / validVals.length) : 0;
+    const Xw = getRawPreMoisture();
     const Ms = Md * ((100 - Xw) / 100) + 18 * (Xw / 100);
 
     const r0 = (1 / (22.4 * 100)) * ( sumMx * ((100 - Xw) / 100) + 18 * Xw );
 
     return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0 };
+  };
+
+  const getRawPreMoisture = () => {
+    const validVals = formData.moistureValues
+      .map((v) => parseFloat(v))
+      .filter((v) => Number.isFinite(v));
+    if (validVals.length === 0) return 0;
+    return validVals.reduce((a, b) => a + b, 0) / validVals.length;
   };
 
   const getRawAvgTp = () => {
@@ -2090,7 +2097,8 @@ export default function App() {
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
     if (Wm > 0 && Vm > 0 && !isNaN(Tm) && !isNaN(Pa)) {
       const Vm_std = Vm * Y * (273 / (273 + Tm)) * ((Pa + Pm / 13.6) / 760);
-      const Vw_std = Wm * (22.4 / 18.015);
+      // 엑셀 상수와 동일하게 22.4/18 사용
+      const Vw_std = Wm * (22.4 / 18);
       return (Vw_std / (Vm_std + Vw_std)) * 100;
     }
     return 0;
@@ -2120,12 +2128,23 @@ export default function App() {
   const calcAvgDp = () => getRawAvgDp(); 
   const calcAvgTs = () => getRawAvgTs();
   const calcStackPressure = () => getRawStackPressure();
-  const calcMoisture = () => getGasComposition().Xw.toFixed(2);
-  const calcPostMoisture = () => getRawPostMoisture().toFixed(2);
+  const calcMoisture = () => getRawPreMoisture().toFixed(3);
+  const calcPostMoisture = () => getRawPostMoisture().toFixed(3);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
   const calcGasMeterVolDiff = () => { const v = getRawGasMeterVolDiff(); return v > 0 ? v.toFixed(2) : 0; };
+  const getRawGasMeterVolDiffYd = () => {
+    const vm = getRawGasMeterVolDiff();
+    const y = parseFloat(formData.gasMeterFactor);
+    if (!Number.isFinite(vm) || vm <= 0) return 0;
+    if (!Number.isFinite(y) || y <= 0) return vm;
+    return vm * y;
+  };
+  const calcGasMeterVolDiffYdL = () => {
+    const v = getRawGasMeterVolDiffYd();
+    return v > 0 ? v.toFixed(2) : '-';
+  };
   const calcGasMeterVolDiffM3 = () => {
-    const v = getRawGasMeterVolDiff();
+    const v = getRawGasMeterVolDiffYd();
     return v > 0 ? (v / 1000).toFixed(3) : '-';
   };
   const calcAvgTm = () => { const v = getRawAvgTm(); return isNaN(v) ? '-' : v.toFixed(1); };
@@ -2559,7 +2578,8 @@ export default function App() {
       correctedConcentration: correctedC,
       wetFlowRate: flowRates.wet,
       dryFlowRate: flowRates.dry,
-      gasMeterVolume: calcGasMeterVolDiff(),
+      gasMeterVolumeRaw: calcGasMeterVolDiff(),
+      gasMeterVolume: calcGasMeterVolDiffYdL(),
       gasMeterVolumeM3: calcGasMeterVolDiffM3(),
       vmStd: getVmStd(),
       vmStdSL: calcVmStdSL(),
@@ -4886,7 +4906,7 @@ export default function App() {
                 <span className="text-lg font-black text-slate-800">{getSamplingMinutes()}</span>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-emerald-700 font-bold mb-1">총 채취 가스량 (m³)</span>
+                <span className="text-xs text-emerald-700 font-bold mb-1">총 시료채취량 (m³, Yd 적용)</span>
                 <span className="text-xl font-black text-emerald-900">{calcGasMeterVolDiffM3()}</span>
               </div>
               <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
@@ -5073,7 +5093,7 @@ export default function App() {
                     <th className="p-2 font-bold">노즐(No./mm)</th>
                     <th className="p-2 font-bold">K-Factor</th>
                     <th className="p-2 font-bold">채취시간(분)</th>
-                    <th className="p-2 font-bold">채취량 Vm(L)</th>
+                    <th className="p-2 font-bold">채취량 Vm×Yd(L)</th>
                     <th className="p-2 font-bold">Vm_std(Sm³)</th>
                     <th className="p-2 font-bold">수분량(%)</th>
                     <th className="p-2 font-bold">등속흡인율(%)</th>
