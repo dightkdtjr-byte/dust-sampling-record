@@ -217,6 +217,16 @@ const SKY_PREVIEW_OPTIONS = [
   { id: 'night', label: '밤' },
 ];
 
+const MOBILE_LIGHT_MAX_WIDTH = 768;
+
+const isMobileViewportWidth = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth <= MOBILE_LIGHT_MAX_WIDTH;
+};
+
+const makeSparseLayout = (items, step = 2) =>
+  items.filter((_, idx) => idx % step === 0 || idx === items.length - 1);
+
 const PIXEL_MOUNTAIN_CLIP_PATH = 'polygon(0 100%, 0 78%, 8% 78%, 8% 66%, 16% 66%, 16% 54%, 24% 54%, 24% 42%, 32% 42%, 32% 30%, 40% 30%, 40% 18%, 48% 18%, 48% 8%, 56% 8%, 56% 18%, 64% 18%, 64% 30%, 72% 30%, 72% 42%, 80% 42%, 80% 54%, 88% 54%, 88% 66%, 96% 66%, 96% 78%, 100% 78%, 100% 100%)';
 const PIXEL_HILL_CLIP_PATH = 'polygon(0 100%, 0 72%, 6% 72%, 6% 64%, 14% 64%, 14% 56%, 22% 56%, 22% 62%, 30% 62%, 30% 52%, 38% 52%, 38% 44%, 46% 44%, 46% 50%, 54% 50%, 54% 42%, 62% 42%, 62% 50%, 70% 50%, 70% 60%, 78% 60%, 78% 54%, 86% 54%, 86% 66%, 94% 66%, 94% 74%, 100% 74%, 100% 100%)';
 
@@ -727,6 +737,7 @@ export default function App() {
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
+  const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
 
   useEffect(() => {
     let cancelled = false;
@@ -2737,16 +2748,20 @@ export default function App() {
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
   const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
-  const sceneStarsMenu = SKYLINE_STARS;
-  const sceneStarsSheet = SKYLINE_STARS.slice(0, 30);
-  const sceneMountains = SKYLINE_MOUNTAINS;
-  const sceneTreeBelt = SKYLINE_TREE_BELT;
-  const sceneFrontTreeBelt = SKYLINE_FRONT_TREE_BELT;
-  const sceneBackTowers = SKYLINE_BACK_TOWERS;
-  const sceneFactoryBlocks = SKYLINE_FACTORY_BLOCKS;
-  const sceneCoolingTowers = SKYLINE_COOLING_TOWERS;
-  const sceneStacks = SKYLINE_STACKS;
-  const getSmokeParticleTotal = (stack) => stack.smokeCount + 4;
+  const isMobileLightMode = isMobileViewport;
+  const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
+  const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
+  const sceneMountains = isMobileLightMode ? makeSparseLayout(SKYLINE_MOUNTAINS, 2) : SKYLINE_MOUNTAINS;
+  const sceneTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_TREE_BELT, 3) : SKYLINE_TREE_BELT;
+  const sceneFrontTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_FRONT_TREE_BELT, 3) : SKYLINE_FRONT_TREE_BELT;
+  const sceneBackTowers = isMobileLightMode ? makeSparseLayout(SKYLINE_BACK_TOWERS, 2) : SKYLINE_BACK_TOWERS;
+  const sceneFactoryBlocks = isMobileLightMode ? makeSparseLayout(SKYLINE_FACTORY_BLOCKS, 2) : SKYLINE_FACTORY_BLOCKS;
+  const sceneCoolingTowers = isMobileLightMode ? makeSparseLayout(SKYLINE_COOLING_TOWERS, 2) : SKYLINE_COOLING_TOWERS;
+  const sceneStacks = isMobileLightMode ? makeSparseLayout(SKYLINE_STACKS, 2) : SKYLINE_STACKS;
+  const getSmokeParticleTotal = (stack) => {
+    const baseCount = stack.smokeCount + 4;
+    return isMobileLightMode ? Math.max(3, Math.round(baseCount * 0.4)) : baseCount;
+  };
   const navigateToMenu = () => {
     setSelectedSheet('');
     if (window.location.hash) {
@@ -2799,6 +2814,19 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const updateViewportState = () => {
+      setIsMobileViewport(isMobileViewportWidth());
+    };
+    updateViewportState();
+    window.addEventListener('resize', updateViewportState);
+    window.addEventListener('orientationchange', updateViewportState);
+    return () => {
+      window.removeEventListener('resize', updateViewportState);
+      window.removeEventListener('orientationchange', updateViewportState);
+    };
+  }, []);
+
   if (!selectedSheet) {
     return (
       <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
@@ -2814,6 +2842,11 @@ export default function App() {
             {opt.label}
           </button>
         ))}
+        {isMobileLightMode && (
+          <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-black">
+            모바일 경량
+          </span>
+        )}
       </div>
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
@@ -3418,6 +3451,11 @@ export default function App() {
             {opt.label}
           </button>
         ))}
+        {isMobileLightMode && (
+          <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-black">
+            모바일 경량
+          </span>
+        )}
       </div>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
