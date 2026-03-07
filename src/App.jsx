@@ -2250,10 +2250,36 @@ export default function App() {
     const DnCm = Dn / 10;
 
     const totalVic = getRawTotalMoistureWeight();
-    const totalVm = getRawGasMeterVolDiff();
-    const vicCum = Number.isFinite(totalVic) && totalVic > 0 && Number.isFinite(totalVm) && totalVm > 0
-      ? totalVic * (VmCum / totalVm)
-      : 0;
+    let vicCum = 0;
+    if (Number.isFinite(totalVic) && totalVic > 0) {
+      // 엑셀 O열과 동일: 구간별 표준화 체적(ΔVm_std) 비율로 누적 수분량 배분
+      let totalVmStd = 0;
+      let cumulativeVmStd = 0;
+      for (let i = 1; i < formData.gasMeters.length; i += 1) {
+        const prevVol = parseFloat(formData.gasMeters[i - 1]?.volume);
+        const currVol = parseFloat(formData.gasMeters[i]?.volume);
+        if (!Number.isFinite(prevVol) || !Number.isFinite(currVol) || currVol <= prevVol) continue;
+        const deltaVm = currVol - prevVol;
+
+        const tmInSeg = parseFloat(formData.gasMeters[i]?.tmIn);
+        const tmOutSeg = parseFloat(formData.gasMeters[i]?.tmOut);
+        const tmSegValues = [tmInSeg, tmOutSeg].filter(v => Number.isFinite(v));
+        const tmSeg = tmSegValues.length > 0
+          ? (tmSegValues.reduce((a, b) => a + b, 0) / tmSegValues.length)
+          : TmAvg;
+
+        const pmSegRaw = parseFloat(formData.gasMeters[i]?.pressure);
+        const pmSeg = Number.isFinite(pmSegRaw) ? pmSegRaw : PmAvg;
+        const deltaVmStd = deltaVm * Y * (273 / (273 + tmSeg)) * ((Pa + pmSeg / 13.6) / 760);
+
+        if (!Number.isFinite(deltaVmStd) || deltaVmStd <= 0) continue;
+        totalVmStd += deltaVmStd;
+        if (i <= idx) cumulativeVmStd += deltaVmStd;
+      }
+      if (totalVmStd > 0 && cumulativeVmStd >= 0) {
+        vicCum = totalVic * (cumulativeVmStd / totalVmStd);
+      }
+    }
 
     // 엑셀 L열 수식과 동일한 누적 순간등속(시작행 포함)
     const postTerm = (0.00346 * vicCum)
