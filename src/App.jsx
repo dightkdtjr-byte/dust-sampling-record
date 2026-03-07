@@ -721,10 +721,11 @@ export default function App() {
   const [authModal, setAuthModal] = useState('');
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
   const vaultKeyRef = useRef({});
+  const csvImportInputRef = useRef(null);
+  const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
-  const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -880,16 +881,16 @@ export default function App() {
       _sheetTitle: sheetMeta ? sheetMeta.title : (report.sheetTitle || '먼지시료채취기록부'),
     };
   });
+  const menuSelectableReportKeys = profileCombinedReports.map(getReportKey).filter(Boolean);
+  const menuSelectableReportKeySet = new Set(menuSelectableReportKeys);
+  const menuCheckedReportKeysValid = menuCheckedReportKeys.filter((key) => menuSelectableReportKeySet.has(key));
+  const menuCheckedReportKeySet = new Set(menuCheckedReportKeysValid);
+  const isAllMenuReportsChecked =
+    menuSelectableReportKeys.length > 0 && menuCheckedReportKeysValid.length === menuSelectableReportKeys.length;
   const profileSheetCounts = SHEET_MENU.reduce((acc, item) => {
     acc[item.id] = profileCombinedReports.filter(report => report._sheetId === item.id).length;
     return acc;
   }, {});
-  const menuSelectableReportKeys = profileCombinedReports
-    .map((report) => getReportKey(report))
-    .filter((key) => key);
-  const menuCheckedReportKeysValid = menuCheckedReportKeys.filter((key) => menuSelectableReportKeys.includes(key));
-  const menuCheckedReportKeySet = new Set(menuCheckedReportKeysValid);
-  const isAllMenuReportsChecked = menuSelectableReportKeys.length > 0 && menuCheckedReportKeysValid.length === menuSelectableReportKeys.length;
   const savedFitCount = savedData.filter(item => item.isokineticStatus === '적합').length;
   const savedFailCount = savedData.filter(item => item.isokineticStatus === '부적합').length;
   const savedAvgActualC = (() => {
@@ -1345,7 +1346,6 @@ export default function App() {
   };
 
   const handleLockActiveUser = () => {
-    const currentId = activeUser;
     if (activeUser) {
       delete vaultKeyRef.current[activeUser];
     }
@@ -1376,6 +1376,7 @@ export default function App() {
     try {
       await persistReportsEncrypted(activeUser, []);
       setActiveUserReports([]);
+      setMenuCheckedReportKeys([]);
     } catch (error) {
       console.error(error);
       alert('리포트 삭제 중 오류가 발생했습니다.');
@@ -1388,86 +1389,140 @@ export default function App() {
       alert('삭제할 리포트 키를 찾지 못했습니다.');
       return;
     }
-    const deleted = await removeSavedReportsByKeys([targetKey]);
-    if (deleted) {
-      setMenuCheckedReportKeys(prev => prev.filter((key) => key !== targetKey));
-    }
-  };
-
-  const removeSavedReportsByKeys = async (reportKeys = []) => {
     if (!activeUser || !isUserUnlocked) {
       alert('로그인 후 삭제할 수 있습니다.');
-      return false;
+      return;
     }
 
-    const keySet = new Set(reportKeys.filter((key) => key));
-    if (keySet.size === 0) return false;
-    const nextReports = (activeUserReports || []).filter((item) => !keySet.has(getReportKey(item)));
+    const nextReports = (activeUserReports || []).filter((item) => buildReportKey(item.id, item.savedAt) !== targetKey);
 
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      setMenuCheckedReportKeys(prev => prev.filter((key) => !keySet.has(key)));
-      return true;
+      setMenuCheckedReportKeys((prev) => prev.filter((key) => key !== targetKey));
     } catch (error) {
       console.error(error);
       alert('리포트 삭제 중 오류가 발생했습니다.');
-      return false;
     }
   };
 
   const toggleMenuReportCheck = (reportKey, checked) => {
     if (!reportKey) return;
     setMenuCheckedReportKeys((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(reportKey);
-      else next.delete(reportKey);
-      return Array.from(next);
+      if (checked) {
+        if (prev.includes(reportKey)) return prev;
+        return [...prev, reportKey];
+      }
+      return prev.filter((key) => key !== reportKey);
     });
   };
 
   const toggleMenuAllReportChecks = (checked) => {
-    if (!checked) {
-      setMenuCheckedReportKeys([]);
-      return;
-    }
-    setMenuCheckedReportKeys(menuSelectableReportKeys);
-  };
-
-  const handleImportCheckedMenuReports = () => {
-    if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 임포트할 수 있습니다.');
-      return;
-    }
-    if (menuCheckedReportKeysValid.length === 0) {
-      alert('임포트할 리포트를 체크해주세요.');
-      return;
-    }
-    if (menuCheckedReportKeysValid.length > 1) {
-      alert('임포트는 1건씩 가능합니다. 체크를 1건만 선택해주세요.');
-      return;
-    }
-
-    const selectedKey = menuCheckedReportKeysValid[0];
-    const targetReport = profileCombinedReports.find((report) => getReportKey(report) === selectedKey);
-    if (!targetReport) {
-      alert('선택한 리포트를 찾지 못했습니다.');
-      return;
-    }
-    handleLoadSavedReport(targetReport);
-    setMenuCheckedReportKeys([]);
+    setMenuCheckedReportKeys(checked ? menuSelectableReportKeys : []);
   };
 
   const handleDeleteCheckedMenuReports = async () => {
-    if (menuCheckedReportKeysValid.length === 0) {
-      alert('삭제할 리포트를 체크해주세요.');
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 선택 삭제가 가능합니다.');
       return;
     }
-    const confirmed = window.confirm(`선택한 ${menuCheckedReportKeysValid.length}건 리포트를 삭제할까요?`);
-    if (!confirmed) return;
-    const deleted = await removeSavedReportsByKeys(menuCheckedReportKeysValid);
-    if (deleted) {
+    if (menuCheckedReportKeysValid.length === 0) {
+      alert('삭제할 리포트를 먼저 선택해주세요.');
+      return;
+    }
+    if (!window.confirm(`선택한 ${menuCheckedReportKeysValid.length}건 리포트를 삭제할까요?`)) return;
+
+    const selectedSet = new Set(menuCheckedReportKeysValid);
+    const nextReports = (activeUserReports || []).filter(
+      (item) => !selectedSet.has(buildReportKey(item.id, item.savedAt))
+    );
+    try {
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
       setMenuCheckedReportKeys([]);
+    } catch (error) {
+      console.error(error);
+      alert('선택 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleImportExcelReports = async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 엑셀 임포트가 가능합니다.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      const { read, utils } = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      const workbook = read(buffer, { type: 'array' });
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        alert('엑셀 시트가 비어있습니다.');
+        event.target.value = '';
+        return;
+      }
+
+      const importedRows = workbook.SheetNames.flatMap((sheetName) => {
+        const ws = workbook.Sheets[sheetName];
+        if (!ws) return [];
+        return utils.sheet_to_json(ws, { defval: '', raw: false });
+      });
+
+      const importedReports = importedRows.map((row, idx) => {
+        const rowObj = row && typeof row === 'object' ? row : {};
+        const getField = (...keys) => {
+          for (const key of keys) {
+            const value = rowObj[key];
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+              return String(value).trim();
+            }
+          }
+          return '';
+        };
+
+        const sheetTitle = getField('구분', '기록부', '시트구분') || '먼지시료채취기록부';
+        const matchedSheet = SHEET_MENU.find((item) => item.title === sheetTitle);
+        return {
+          id: `excel-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          savedAt: new Date().toISOString(),
+          user: activeUser,
+          sheetId: matchedSheet?.id || 'dust',
+          sheetTitle: matchedSheet?.title || sheetTitle,
+          date: getField('측정일자', '측정일시', 'date'),
+          company: getField('사업장명', '사업장', 'company'),
+          location: getField('배출구명', '배출구', 'location'),
+          moisturePercent: getField('수분량(%)', 'moisturePercent'),
+          isokineticRate: getField('등속흡인율(%)', 'isokineticRate'),
+          dustWeight: getField('먼지무게(mg)', 'dustWeight'),
+          actualConcentration: getField('실측농도', 'actualConcentration'),
+          correctedConcentration: getField('보정농도', 'correctedConcentration'),
+          remarks: getField('비고', 'remarks'),
+          gasAnalyzer: [
+            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
+            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
+            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
+          ],
+        };
+      }).filter((item) => item.date || item.company || item.location);
+
+      if (importedReports.length === 0) {
+        alert('임포트할 유효 리포트가 없습니다. 엑셀 헤더를 확인해주세요.');
+        event.target.value = '';
+        return;
+      }
+
+      const nextReports = [...activeUserReports, ...importedReports];
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
+      alert(`${importedReports.length}건 엑셀 리포트를 임포트했습니다.`);
+    } catch (error) {
+      console.error(error);
+      alert('엑셀 임포트 중 오류가 발생했습니다.');
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -1490,7 +1545,6 @@ export default function App() {
     });
 
     setRecommendations(null);
-    setMenuCheckedReportKeys([]);
 
     const targetSheet = resolveReportSheetId(report);
     if (selectedSheet !== targetSheet) {
@@ -2881,7 +2935,7 @@ export default function App() {
               <p className="text-sm text-slate-600 mt-2">로그인 완료: 원하는 기록부 아이콘을 누르면 해당 기록부로 이동합니다.</p>
             )}
           </div>
-          <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6">
+          <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
@@ -2948,6 +3002,14 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-4 flex flex-col items-center">
+                <button
+                  type="button"
+                  aria-label="설정 열기"
+                  onClick={() => setAuthModal('settings')}
+                  className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-20"
+                >
+                  ⚙ 설정
+                </button>
                 <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
@@ -2958,14 +3020,6 @@ export default function App() {
                           <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        aria-label="설정 열기"
-                        onClick={() => setAuthModal('settings')}
-                        className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
-                      >
-                        ⚙ 설정
-                      </button>
                     </div>
                     <div className="flex-1 text-center md:text-left">
                       <p className="text-sm text-slate-600">현재 사용자</p>
@@ -3112,11 +3166,18 @@ export default function App() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={handleImportCheckedMenuReports}
+                        onClick={() => csvImportInputRef.current?.click()}
                         className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px]"
                       >
-                        선택 임포트
+                        엑셀 임포트
                       </button>
+                      <input
+                        ref={csvImportInputRef}
+                        type="file"
+                        accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12"
+                        onChange={handleImportExcelReports}
+                        className="hidden"
+                      />
                       <button
                         type="button"
                         onClick={handleDeleteCheckedMenuReports}
@@ -3151,7 +3212,7 @@ export default function App() {
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
                         <th className="p-2 font-bold text-center">실측농도</th>
                         <th className="p-2 font-bold text-center">보정농도</th>
-                        <th className="p-2 font-bold text-center">임포트</th>
+                        <th className="p-2 font-bold text-center">불러오기</th>
                         <th className="p-2 font-bold text-center">삭제</th>
                       </tr>
                     </thead>
@@ -3183,7 +3244,7 @@ export default function App() {
                               }}
                               className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold"
                             >
-                              임포트
+                              불러오기
                             </button>
                           </td>
                           <td className="p-2 text-center">
