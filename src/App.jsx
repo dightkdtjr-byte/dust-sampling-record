@@ -19,6 +19,12 @@ const DEFAULT_SAMPLERS = [
   { id: 5, name: '샘플러 5호기', yd: '0.998', dHAt: '41.5' }
 ];
 
+const DEFAULT_PITOT_PRESETS = [
+  { id: 1, name: '피토 1호기', factor: '0.84' },
+  { id: 2, name: '피토 2호기', factor: '0.85' },
+  { id: 3, name: '피토 3호기', factor: '0.83' },
+];
+
 const SHEET_MENU = [
   {
     id: 'dust',
@@ -556,8 +562,10 @@ const THEME_OVERRIDE_CSS = `
 const STORAGE_KEYS = {
   nozzles: 'dust-sampling.nozzles.v1',
   samplers: 'dust-sampling.samplers.v1',
+  pitotPresets: 'dust-sampling.pitot-presets.v1',
   nozzlesUserPrefix: 'dust-sampling.nozzles.user.v1.',
   samplersUserPrefix: 'dust-sampling.samplers.user.v1.',
+  pitotUserPrefix: 'dust-sampling.pitot-presets.user.v1.',
   secureUsers: 'dust-sampling.secure-users.v2',
   activeUser: 'dust-sampling.secure-active-user.v2',
   lastLoginId: 'dust-sampling.last-login-id.v1',
@@ -570,6 +578,10 @@ const getUserNozzlesStorageKey = (userId) => (
 
 const getUserSamplersStorageKey = (userId) => (
   `${STORAGE_KEYS.samplersUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
+
+const getUserPitotStorageKey = (userId) => (
+  `${STORAGE_KEYS.pitotUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
 );
 
 const persistSessionAuth = (userId, password) => {
@@ -608,6 +620,7 @@ const clearSessionAuth = () => {
 
 const cloneDefaultNozzles = () => DEFAULT_NOZZLE_SET.map(item => ({ ...item }));
 const cloneDefaultSamplers = () => DEFAULT_SAMPLERS.map(item => ({ ...item }));
+const cloneDefaultPitotPresets = () => DEFAULT_PITOT_PRESETS.map(item => ({ ...item }));
 
 const sanitizeNozzleSet = (value) => {
   if (!Array.isArray(value)) return null;
@@ -630,6 +643,20 @@ const sanitizeSamplers = (value) => {
         name: typeof item.name === 'string' && item.name.trim() ? item.name : `샘플러 ${idx + 1}호기`,
         yd: item.yd === undefined || item.yd === null ? '' : String(item.yd),
         dHAt: item.dHAt === undefined || item.dHAt === null ? '' : String(item.dHAt),
+      };
+    });
+};
+
+const sanitizePitotPresets = (value) => {
+  if (!Array.isArray(value)) return null;
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map((item, idx) => {
+      const parsedId = parseInt(item.id, 10);
+      return {
+        id: Number.isFinite(parsedId) ? parsedId : idx + 1,
+        name: typeof item.name === 'string' && item.name.trim() ? item.name : `피토 ${idx + 1}호기`,
+        factor: item.factor === undefined || item.factor === null ? '' : String(item.factor),
       };
     });
 };
@@ -712,6 +739,46 @@ const getStoredSamplersForUser = (userId) => {
   }
 
   return cloneDefaultSamplers();
+};
+
+const getStoredPitotPresetsForUser = (userId) => {
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  const canUseScoped = normalizedId && normalizedId !== 'user' && normalizedId !== 'user1';
+  if (!canUseScoped) {
+    try {
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.pitotPresets);
+      if (legacyRaw) {
+        const legacyParsed = sanitizePitotPresets(JSON.parse(legacyRaw));
+        if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+      }
+    } catch (error) {
+      console.error('기존 피토 프리셋 로딩 실패:', error);
+    }
+    return cloneDefaultPitotPresets();
+  }
+
+  const scopedKey = getUserPitotStorageKey(userId);
+  try {
+    const scopedRaw = localStorage.getItem(scopedKey);
+    if (scopedRaw) {
+      const scopedParsed = sanitizePitotPresets(JSON.parse(scopedRaw));
+      if (scopedParsed && scopedParsed.length > 0) return scopedParsed;
+    }
+  } catch (error) {
+    console.error('사용자 피토 프리셋 로딩 실패:', error);
+  }
+
+  try {
+    const legacyRaw = localStorage.getItem(STORAGE_KEYS.pitotPresets);
+    if (legacyRaw) {
+      const legacyParsed = sanitizePitotPresets(JSON.parse(legacyRaw));
+      if (legacyParsed && legacyParsed.length > 0) return legacyParsed;
+    }
+  } catch (error) {
+    console.error('기존 피토 프리셋 로딩 실패:', error);
+  }
+
+  return cloneDefaultPitotPresets();
 };
 
 const sanitizeSecureUsers = (value) => {
@@ -911,11 +978,13 @@ export default function App() {
   const [selectedSheet, setSelectedSheet] = useState('');
   const [nozzleSet, setNozzleSet] = useState(cloneDefaultNozzles);
   const [samplers, setSamplers] = useState(cloneDefaultSamplers);
+  const [pitotPresets, setPitotPresets] = useState(cloneDefaultPitotPresets);
 
   const [formData, setFormData] = useState({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
     totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotFactor: '0.84',
+    pitotPresetId: '',
     standardO2: '',
     gasAnalyzer: [
       { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
@@ -984,6 +1053,7 @@ export default function App() {
       try {
         const rawNozzles = localStorage.getItem(STORAGE_KEYS.nozzles);
         const rawSamplers = localStorage.getItem(STORAGE_KEYS.samplers);
+        const rawPitotPresets = localStorage.getItem(STORAGE_KEYS.pitotPresets);
         const rawSecureUsers = localStorage.getItem(STORAGE_KEYS.secureUsers);
         const rawLastLoginId = localStorage.getItem(STORAGE_KEYS.lastLoginId);
 
@@ -995,6 +1065,11 @@ export default function App() {
         if (rawSamplers) {
           const parsedSamplers = sanitizeSamplers(JSON.parse(rawSamplers));
           if (!cancelled && parsedSamplers && parsedSamplers.length > 0) setSamplers(parsedSamplers);
+        }
+
+        if (rawPitotPresets) {
+          const parsedPitotPresets = sanitizePitotPresets(JSON.parse(rawPitotPresets));
+          if (!cancelled && parsedPitotPresets && parsedPitotPresets.length > 0) setPitotPresets(parsedPitotPresets);
         }
 
         const parsedUsers = rawSecureUsers ? sanitizeSecureUsers(JSON.parse(rawSecureUsers)) : null;
@@ -1088,6 +1163,18 @@ export default function App() {
       console.error('샘플러 설정 저장 실패:', error);
     }
   }, [samplers, isStorageHydrated, activeUser]);
+
+  useEffect(() => {
+    if (!isStorageHydrated || isPresetHydratingRef.current) return;
+    try {
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserPitotStorageKey(activeUser)
+        : STORAGE_KEYS.pitotPresets;
+      localStorage.setItem(targetKey, JSON.stringify(pitotPresets));
+    } catch (error) {
+      console.error('피토 프리셋 저장 실패:', error);
+    }
+  }, [pitotPresets, isStorageHydrated, activeUser]);
 
   useEffect(() => {
     if (!isStorageHydrated) return;
@@ -1257,6 +1344,55 @@ export default function App() {
     setFormData(prev => ({ ...prev, samplerId: '' }));
   };
 
+  const handlePitotPresetConfigChange = (index, field, value) => {
+    setPitotPresets(prev => {
+      const next = prev.map((item, i) => (i === index ? { ...item, [field]: value } : item));
+      const selected = next.find(item => String(item.id) === formData.pitotPresetId);
+      if (selected) {
+        setFormData(current => ({ ...current, pitotFactor: selected.factor }));
+      }
+      return next;
+    });
+  };
+
+  const savePitotPresets = () => {
+    const sanitized = sanitizePitotPresets(pitotPresets) || [];
+    try {
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserPitotStorageKey(activeUser)
+        : STORAGE_KEYS.pitotPresets;
+      localStorage.setItem(targetKey, JSON.stringify(sanitized));
+      setPitotPresets(sanitized);
+      alert('피토 프리셋을 저장했습니다.');
+    } catch (error) {
+      console.error('피토 프리셋 수동 저장 실패:', error);
+      alert('피토 프리셋 저장에 실패했습니다.');
+    }
+  };
+
+  const addPitotPreset = () => {
+    setPitotPresets(prev => {
+      const maxId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+      return [...prev, { id: maxId + 1, name: `피토 ${maxId + 1}호기`, factor: '0.84' }];
+    });
+  };
+
+  const removePitotPreset = (index) => {
+    setPitotPresets(prev => {
+      const removed = prev[index];
+      const next = prev.filter((_, i) => i !== index);
+      if (removed && String(removed.id) === formData.pitotPresetId) {
+        setFormData(current => ({ ...current, pitotPresetId: '' }));
+      }
+      return next;
+    });
+  };
+
+  const resetPitotDefaults = () => {
+    setPitotPresets(cloneDefaultPitotPresets());
+    setFormData(prev => ({ ...prev, pitotPresetId: '' }));
+  };
+
   const persistReportsEncrypted = async (userName, reports, keyOverride = null) => {
     const targetUser = secureUsers[userName];
     if (!targetUser) throw new Error('사용자 정보가 없습니다.');
@@ -1308,6 +1444,7 @@ export default function App() {
     const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
     const userNozzles = getStoredNozzlesForUser(userId);
     const userSamplers = getStoredSamplersForUser(userId);
+    const userPitotPresets = getStoredPitotPresetsForUser(userId);
 
     isPresetHydratingRef.current = true;
     vaultKeyRef.current[userId] = key;
@@ -1316,6 +1453,7 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.lastLoginId, userId);
     setNozzleSet(userNozzles);
     setSamplers(userSamplers);
+    setPitotPresets(userPitotPresets);
     setActiveUserReports(Array.isArray(reports) ? reports : []);
     setIsUserUnlocked(true);
     setLoginPassword('');
@@ -1933,6 +2071,7 @@ export default function App() {
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
       if (name === 'gasMeterFactor' || name === 'deltaHAt') newData.samplerId = '';
+      if (name === 'pitotFactor') newData.pitotPresetId = '';
       if (name === 'totalStackDepth' || name === 'flangeLength') {
         const total = parseFloat(newData.totalStackDepth);
         const flange = parseFloat(newData.flangeLength) || 0; 
@@ -1947,6 +2086,18 @@ export default function App() {
     if (id === '') { setFormData(prev => ({ ...prev, samplerId: '' })); return; }
     const sampler = samplers.find(s => s.id === parseInt(id, 10));
     if (sampler) setFormData(prev => ({ ...prev, samplerId: id, gasMeterFactor: sampler.yd, deltaHAt: sampler.dHAt }));
+  };
+
+  const handlePitotPresetChange = (e) => {
+    const id = e.target.value;
+    if (id === '') {
+      setFormData(prev => ({ ...prev, pitotPresetId: '' }));
+      return;
+    }
+    const preset = pitotPresets.find(item => item.id === parseInt(id, 10));
+    if (preset) {
+      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor }));
+    }
   };
 
   const handleGasAnalyzerChange = (index, field, value) => {
@@ -2411,7 +2562,7 @@ export default function App() {
     const Q_wet = Vs * A * tempTerm * pressureTerm * 3600;
     const Q_dry = Vs * A * tempTerm * pressureTerm * (1 - moistureRatio) * 3600;
 
-    return { wet: Q_wet.toFixed(0), dry: Q_dry.toFixed(0) };
+    return { wet: Q_wet.toFixed(2), dry: Q_dry.toFixed(2) };
   };
 
   const generateRecommendation = (mode) => {
@@ -4590,9 +4741,22 @@ export default function App() {
                   측정점별 동압 및 온도 (예비조사)
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4">
-                  <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
                     <label className="text-[11px] font-bold text-slate-700">피토계수</label>
                     <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <select
+                      value={formData.pitotPresetId}
+                      onChange={handlePitotPresetChange}
+                      className="p-1 border border-slate-300 rounded text-[11px] font-bold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      title="피토 프리셋 선택"
+                    >
+                      <option value="">피토 프리셋</option>
+                      {pitotPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800">미터온도(T<sub>m</sub>)</label>
@@ -4602,6 +4766,59 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              <details className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                <summary className="cursor-pointer text-[11px] font-bold text-slate-800">
+                  피토 프리셋 편집
+                </summary>
+                <div className="mt-2 flex items-center gap-2">
+                  <button type="button" onClick={savePitotPresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
+                    <PresetSaveIcon />
+                    저장
+                  </button>
+                  <button type="button" onClick={addPitotPreset} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
+                  <button type="button" onClick={resetPitotDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
+                </div>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-[11px] text-center border border-slate-200">
+                    <thead className="bg-slate-100 text-slate-800">
+                      <tr>
+                        <th className="border border-slate-200 p-1">피토명</th>
+                        <th className="border border-slate-200 p-1">피토계수</th>
+                        <th className="border border-slate-200 p-1">삭제</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pitotPresets.map((preset, idx) => (
+                        <tr key={preset.id} className="bg-white">
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              type="text"
+                              value={preset.name}
+                              onChange={(e) => handlePitotPresetConfigChange(idx, 'name', e.target.value)}
+                              className="w-full p-1 border border-slate-300 rounded text-center"
+                            />
+                          </td>
+                          <td className="border border-slate-200 p-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={preset.factor}
+                              onChange={(e) => handlePitotPresetConfigChange(idx, 'factor', e.target.value)}
+                              className="w-full p-1 border border-slate-300 rounded text-center"
+                            />
+                          </td>
+                          <td className="border border-slate-200 p-1">
+                            <button type="button" onClick={() => removePitotPreset(idx)} className="text-red-500 hover:text-red-700 text-[11px] font-bold p-1">
+                              삭제
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
               
               <div className="flex-1 overflow-auto bg-slate-50/50 p-2 rounded border border-slate-200 mb-4">
                 <table className="w-full text-sm text-center">
@@ -5203,7 +5420,7 @@ export default function App() {
                <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-600 pb-3">
                  최종 산출 결과 요약
                </h3>
-               <div className={`grid grid-cols-2 ${isDustSheet ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
+               <div className={`grid grid-cols-1 ${isDustSheet ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 습가스 유량 (Q<sub>sw</sub>)</span>
                       <span className="text-2xl font-bold text-emerald-300">{calcGasFlowRates().wet} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
@@ -5211,6 +5428,10 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 건조가스 유량 (Q<sub>s</sub>)</span>
                       <span className="text-2xl font-bold text-cyan-300">{calcGasFlowRates().dry} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center p-2">
+                      <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
+                      <span className="text-2xl font-bold text-amber-300">{calcGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
                   </div>
                   {isDustSheet && (
                     <div className="flex flex-col items-center justify-center p-2">
