@@ -2624,6 +2624,24 @@ export default function App() {
     return Number.isFinite(manualPressure) ? manualPressure : NaN;
   };
 
+  const getRawCorrectedDensityFromTs = (ts) => {
+    const gasComp = getGasComposition();
+    const Ps = getRawStackPressure();
+    if (!Number.isFinite(ts) || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
+    const density = gasComp.r0 * (273 / (273 + ts)) * (Ps / 760);
+    return Number.isFinite(density) && density > 0 ? density : NaN;
+  };
+
+  const getRawAvgCorrectedDensityFromMeterRows = () => {
+    // 적산유량계 기록표(초기~마지막 유량행) 보정밀도 원값 평균
+    const meterRows = getMeterRowsUntilLastVolume();
+    const densities = meterRows
+      .map((row) => getRawCorrectedDensityFromTs(parseFloat(row?.stackTemp)))
+      .filter((v) => Number.isFinite(v));
+    if (densities.length === 0) return NaN;
+    return densities.reduce((a, b) => a + b, 0) / densities.length;
+  };
+
   const getRawGasVelocityFactorsFromMeterRows = () => {
     const meterRows = getMeterRowsUntilLastVolume();
     const dpValues = meterRows
@@ -2638,30 +2656,19 @@ export default function App() {
     const avgDp = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
     const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
     const C = parseFloat(formData.pitotFactor) || 0.84;
-    const P = getRawStackPressure();
     const gasComp = getGasComposition();
 
     if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
-    if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
+    if (!Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
 
-    // 적산유량계 기록표 기준:
-    // 각 행 Ts로 보정밀도 r_i를 계산하고, 그 원값 평균(r_avg)을 유속식에 사용
-    const densityValues = meterRows
-      .map((row) => {
-        const ts = parseFloat(row.stackTemp);
-        if (!Number.isFinite(ts)) return NaN;
-        const density = gasComp.r0 * (273 / (273 + ts)) * (P / 760);
-        return Number.isFinite(density) && density > 0 ? density : NaN;
-      })
-      .filter((v) => Number.isFinite(v));
-    if (densityValues.length === 0) return null;
-
-    const r = densityValues.reduce((a, b) => a + b, 0) / densityValues.length;
+    // 요청식:
+    // Vs = Cp * sqrt((2*9.81*초기포함 평균동압) / (초기포함 평균 보정밀도))
+    const r = getRawAvgCorrectedDensityFromMeterRows();
     if (!Number.isFinite(r) || r <= 0) return null;
 
     const velocity = C * Math.pow((2 * 9.81 * avgDp) / r, 0.5);
     if (!Number.isFinite(velocity) || velocity <= 0) return null;
-    return { velocity, avgDp, avgTs, C, P, r0: gasComp.r0, r, avgDensity: r, densityCount: densityValues.length };
+    return { velocity, avgDp, avgTs, C, r0: gasComp.r0, r, avgDensity: r };
   };
 
   const getRawGasVelocityFromMeterRows = () => {
