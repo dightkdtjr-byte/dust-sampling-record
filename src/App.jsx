@@ -2543,12 +2543,14 @@ export default function App() {
     const sumMx = (M_O2 * o2) + (M_CO2 * co2) + (M_CO * coPercent) + (M_N2 * n2);
 
     const Md = sumMx / 100;
-    const Xw = getRawPreMoisture();
+    // 엑셀 수분량!C16 경로와 맞추기 위해 사전 수분량은 소수 셋째자리 반올림값 사용
+    const XwRaw = getRawPreMoisture();
+    const Xw = Math.round((XwRaw + Number.EPSILON) * 1000) / 1000;
     const Ms = Md * ((100 - Xw) / 100) + 18 * (Xw / 100);
 
     const r0 = (1 / (22.4 * 100)) * ( sumMx * ((100 - Xw) / 100) + 18 * Xw );
 
-    return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0 };
+    return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0, XwRaw };
   };
 
   const getRawPreMoisture = () => {
@@ -3617,7 +3619,8 @@ export default function App() {
         const sumMx = (32 * safeO2) + (44 * safeCo2) + (38 * coPercent) + (28 * n2);
         const Md = sumMx / 100;
         const Xw = avg(sourceMoistures.map((v) => toNumStrict(v)));
-        const safeXw = Number.isFinite(Xw) ? Xw : 0;
+        const safeXwRaw = Number.isFinite(Xw) ? Xw : 0;
+        const safeXw = Math.round((safeXwRaw + Number.EPSILON) * 1000) / 1000;
         const Ms = Md * ((100 - safeXw) / 100) + 18 * (safeXw / 100);
         const r0 = (1 / (22.4 * 100)) * (sumMx * ((100 - safeXw) / 100) + 18 * safeXw);
         return {
