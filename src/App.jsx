@@ -925,6 +925,13 @@ const roundDH = (val) => {
   return (Math.round((val + Number.EPSILON) * 100) / 100).toFixed(2);
 };
 
+const roundFixed = (val, digits = 2) => {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '-';
+  const factor = Math.pow(10, digits);
+  return (Math.round((num + Number.EPSILON) * factor) / factor).toFixed(digits);
+};
+
 const calcExpectedOrificeDH = (kVal, dpVal) => {
   const kNum = parseFloat(kVal);
   const dpNum = parseFloat(dpVal);
@@ -2538,6 +2545,7 @@ export default function App() {
     // 표준가스 유량:
     // 정압은 본 측정 전(측정점) 평균 정압,
     // 유속은 적산유량계 기록표 평균 동압으로 구한 값 사용
+    // 건조 유량의 수분량(Xw)은 사후 수분량(임핀저 무게법) 기준
     const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
     const Ts = getRawAvgSamplingTs();
     const Vs = getRawGasVelocityFromMeterRows();
@@ -2567,7 +2575,7 @@ export default function App() {
     const Q_wet = Vs * A * tempTerm * pressureTerm * 3600;
     const Q_dry = Vs * A * tempTerm * pressureTerm * (1 - moistureRatio) * 3600;
 
-    return { wet: Q_wet.toFixed(2), dry: Q_dry.toFixed(2) };
+    return { wet: roundFixed(Q_wet, 2), dry: roundFixed(Q_dry, 2) };
   };
 
   const generateRecommendation = (mode) => {
@@ -4783,9 +4791,9 @@ export default function App() {
                 </div>
               </div>
 
-              <details className="mb-3 bg-slate-50 border border-slate-200 rounded-lg p-2">
-                <summary className="cursor-pointer text-[11px] font-bold text-slate-800">
-                  피토 프리셋 편집
+              <details open className="mb-3 bg-white border border-emerald-200 rounded-lg p-2">
+                <summary className="cursor-pointer text-[11px] font-bold text-emerald-800">
+                  피토 프리셋 직접 편집 (C<sub>p</sub>)
                 </summary>
                 <div className="mt-2 flex items-center gap-2">
                   <button type="button" onClick={savePitotPresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
@@ -4796,35 +4804,35 @@ export default function App() {
                   <button type="button" onClick={resetPitotDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
                 </div>
                 <div className="mt-2 overflow-x-auto">
-                  <table className="w-full text-[11px] text-center border border-slate-200">
-                    <thead className="bg-slate-100 text-slate-800">
+                  <table className="w-full text-[11px] text-center border border-emerald-200">
+                    <thead className="bg-emerald-100 text-slate-800">
                       <tr>
-                        <th className="border border-slate-200 p-1">피토명</th>
-                        <th className="border border-slate-200 p-1">피토계수</th>
-                        <th className="border border-slate-200 p-1">삭제</th>
+                        <th className="border border-emerald-200 p-1">피토명</th>
+                        <th className="border border-emerald-200 p-1">C<sub>p</sub></th>
+                        <th className="border border-emerald-200 p-1">삭제</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pitotPresets.map((preset, idx) => (
                         <tr key={preset.id} className="bg-white">
-                          <td className="border border-slate-200 p-1">
+                          <td className="border border-emerald-200 p-1">
                             <input
                               type="text"
                               value={preset.name}
                               onChange={(e) => handlePitotPresetConfigChange(idx, 'name', e.target.value)}
-                              className="w-full p-1 border border-slate-300 rounded text-center"
+                              className="w-full p-1 border border-emerald-300 rounded text-center"
                             />
                           </td>
-                          <td className="border border-slate-200 p-1">
+                          <td className="border border-emerald-200 p-1">
                             <input
                               type="number"
                               step="0.01"
                               value={preset.factor}
                               onChange={(e) => handlePitotPresetConfigChange(idx, 'factor', e.target.value)}
-                              className="w-full p-1 border border-slate-300 rounded text-center"
+                              className="w-full p-1 border border-emerald-300 rounded text-center"
                             />
                           </td>
-                          <td className="border border-slate-200 p-1">
+                          <td className="border border-emerald-200 p-1">
                             <button type="button" onClick={() => removePitotPreset(idx)} className="text-red-500 hover:text-red-700 text-[11px] font-bold p-1">
                               삭제
                             </button>
@@ -4977,7 +4985,7 @@ export default function App() {
                  </div>
                </details>
                
-               <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-3 items-end">
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3 items-end">
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1">피토관 정보</label>
                     <input
@@ -4992,33 +5000,6 @@ export default function App() {
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1">목표 채취량 (SL)</label>
                     <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-emerald-300 rounded text-sm bg-white font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
-                 </div>
-                 <div>
-                    <label className="block text-xs font-bold text-emerald-800 mb-1">피토계수 (C<sub>p</sub>)</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="pitotFactor"
-                        value={formData.pitotFactor}
-                        onChange={handleChange}
-                        placeholder="0.84"
-                        className="w-full p-2 border border-emerald-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700"
-                      />
-                      <select
-                        value={formData.pitotPresetId}
-                        onChange={handlePitotPresetChange}
-                        className="p-2 border border-emerald-300 rounded text-xs font-bold text-emerald-800 bg-emerald-50 focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer"
-                        title="피토 프리셋 선택"
-                      >
-                        <option value="">프리셋</option>
-                        {pitotPresets.map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1" title="가스미터 보정계수">보정계수 (Y<sub>d</sub>)</label>
