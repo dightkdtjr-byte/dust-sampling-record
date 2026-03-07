@@ -839,6 +839,10 @@ export default function App() {
   const [legendaryFlight, setLegendaryFlight] = useState(() => pickRandomLegendaryFlight());
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
+  const [lowSpecMode, setLowSpecMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /iPhone|iPad|Android|Mobile/i.test(window.navigator.userAgent);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -2581,6 +2585,17 @@ export default function App() {
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
   const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
+  const sceneStarsMenu = lowSpecMode ? SKYLINE_STARS.slice(0, 12) : SKYLINE_STARS;
+  const sceneStarsSheet = lowSpecMode ? SKYLINE_STARS.slice(0, 10) : SKYLINE_STARS.slice(0, 30);
+  const sceneFlyers = lowSpecMode ? SKYLINE_FLYERS.slice(0, 4) : SKYLINE_FLYERS;
+  const sceneMountains = lowSpecMode ? SKYLINE_MOUNTAINS.slice(0, 2) : SKYLINE_MOUNTAINS;
+  const sceneTreeBelt = lowSpecMode ? SKYLINE_TREE_BELT.slice(0, 14) : SKYLINE_TREE_BELT;
+  const sceneFrontTreeBelt = lowSpecMode ? SKYLINE_FRONT_TREE_BELT.slice(0, 12) : SKYLINE_FRONT_TREE_BELT;
+  const sceneBackTowers = lowSpecMode ? SKYLINE_BACK_TOWERS.slice(0, 5) : SKYLINE_BACK_TOWERS;
+  const sceneFactoryBlocks = lowSpecMode ? SKYLINE_FACTORY_BLOCKS.slice(0, 3) : SKYLINE_FACTORY_BLOCKS;
+  const sceneCoolingTowers = lowSpecMode ? SKYLINE_COOLING_TOWERS.slice(0, 1) : SKYLINE_COOLING_TOWERS;
+  const sceneStacks = lowSpecMode ? SKYLINE_STACKS.slice(0, 3) : SKYLINE_STACKS;
+  const getSmokeParticleTotal = (stack) => (lowSpecMode ? Math.min(4, stack.smokeCount) : stack.smokeCount + 4);
   const navigateToMenu = () => {
     setSelectedSheet('');
     if (window.location.hash) {
@@ -2651,15 +2666,22 @@ export default function App() {
               {opt.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setLowSpecMode((prev) => !prev)}
+            className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${lowSpecMode ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+          >
+            경량
+          </button>
         </div>
         <div className="pointer-events-none absolute inset-0 z-0">
           <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
-          <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
-          <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${isNightSky ? 'bg-violet-400/15' : 'bg-sky-200/65'}`} />
+          <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full ${lowSpecMode ? 'blur-xl' : 'blur-3xl'} ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
+          <div className={`absolute right-4 top-2 h-72 w-72 rounded-full ${lowSpecMode ? 'blur-xl' : 'blur-3xl'} ${isNightSky ? 'bg-violet-400/15' : 'bg-sky-200/65'}`} />
           <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
           {isNightSky && (
             <div className="absolute inset-0">
-              {SKYLINE_STARS.map((star) => (
+              {sceneStarsMenu.map((star) => (
                 <span
                   key={star.id}
                   className="skyline-star"
@@ -2676,7 +2698,7 @@ export default function App() {
             </div>
           )}
           <div className="absolute inset-0 overflow-hidden">
-            {SKYLINE_FLYERS.map((flyer, idx) => {
+            {sceneFlyers.map((flyer, idx) => {
               const visibleStartOffset = Math.min(flyer.duration * (0.24 + (idx % 5) * 0.12), flyer.duration * 0.8);
               return (
                 <div
@@ -2729,14 +2751,14 @@ export default function App() {
             <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl">
               <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${isNightSky ? 'bg-gradient-to-b from-[#233a33] via-[#16282c] to-[#080f15]' : 'bg-gradient-to-b from-[#5e8c67] via-[#4e7458] to-[#2c3f37]'}`} />
               <div className={`absolute bottom-16 left-0 right-0 h-14 ${isNightSky ? 'bg-gradient-to-t from-[#0c1424]/60 to-transparent' : 'bg-gradient-to-t from-[#d3e6ff]/40 to-transparent'}`} />
-              {SKYLINE_MOUNTAINS.map((mountain) => (
+              {sceneMountains.map((mountain) => (
                 <div
                   key={mountain.id}
                   className={`absolute bottom-[6.4rem] rounded-t-[45%] ${isNightSky ? 'bg-gradient-to-b from-[#35446c]/80 to-[#1a243f]/75' : 'bg-gradient-to-b from-[#90a9c9]/78 to-[#6784aa]/72'}`}
                   style={{ left: mountain.left, width: mountain.width, height: `${mountain.height}px` }}
                 />
               ))}
-              {SKYLINE_TREE_BELT.map((tree, treeIdx) => (
+              {sceneTreeBelt.map((tree, treeIdx) => (
                 <div
                   key={tree.id}
                   className="absolute bottom-[5.7rem]"
@@ -2791,7 +2813,7 @@ export default function App() {
                 </div>
               ))}
 
-              {SKYLINE_BACK_TOWERS.map((tower) => (
+              {sceneBackTowers.map((tower) => (
                 <div
                   key={tower.id}
                   className="absolute bottom-[5.4rem] rounded-t-[2px] border-2 border-[#2b3558]/80 bg-gradient-to-b from-[#6c7cab] via-[#495a8a] to-[#243052] shadow-[inset_-6px_-8px_0_rgba(15,23,42,0.36)]"
@@ -2803,7 +2825,7 @@ export default function App() {
                 </div>
               ))}
 
-              {SKYLINE_FACTORY_BLOCKS.map((block) => (
+              {sceneFactoryBlocks.map((block) => (
                 <div
                   key={block.id}
                   className="absolute bottom-[4.6rem] rounded-t-[3px] border-2 border-[#2f2d45] bg-gradient-to-b from-[#8f7668] via-[#6e5850] to-[#3d3033] shadow-[inset_-8px_-8px_0_rgba(15,23,42,0.3)]"
@@ -2827,7 +2849,7 @@ export default function App() {
                 </div>
               ))}
 
-              {SKYLINE_COOLING_TOWERS.map((tower) => (
+              {sceneCoolingTowers.map((tower) => (
                 <div
                   key={tower.id}
                   className="absolute bottom-[4.6rem] rounded-t-[42%] border-2 border-[#4c5a71] bg-gradient-to-b from-[#dde3ee] via-[#b7bfcd] to-[#70798d] shadow-[inset_-10px_-8px_0_rgba(15,23,42,0.22)]"
@@ -2837,7 +2859,7 @@ export default function App() {
                 </div>
               ))}
 
-              {SKYLINE_STACKS.map((stack) => (
+              {sceneStacks.map((stack) => (
                 (() => {
                   const palette = stack.variant === 'brick'
                     ? {
@@ -2873,7 +2895,7 @@ export default function App() {
                       <div className="absolute inset-x-[14%] top-[30%] h-[3px]" style={{ background: palette.lineB }} />
                       <div className="absolute inset-x-[14%] top-[44%] h-[4px]" style={{ background: palette.lineA }} />
                       <div className="absolute inset-x-[14%] top-[58%] h-[3px]" style={{ background: palette.lineB }} />
-                      {Array.from({ length: stack.smokeCount + 4 }).map((_, smokeIdx) => (
+                      {Array.from({ length: getSmokeParticleTotal(stack) }).map((_, smokeIdx) => (
                         <span
                           key={`${stack.id}-smoke-${smokeIdx}`}
                           className="stack-heart-smoke"
@@ -2884,7 +2906,7 @@ export default function App() {
                   );
                 })()
               ))}
-              {SKYLINE_FRONT_TREE_BELT.map((tree, treeIdx) => (
+              {sceneFrontTreeBelt.map((tree, treeIdx) => (
                 <div
                   key={tree.id}
                   className="absolute bottom-[3.9rem]"
@@ -3023,9 +3045,9 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+              <div className="space-y-4 flex flex-col items-center">
+                <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 justify-center">
                     <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
                       {profileAvatarUrl ? (
                         <img src={profileAvatarUrl} alt={`${activeUser} 프로필`} className="w-full h-full object-cover" />
@@ -3033,7 +3055,7 @@ export default function App() {
                         <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 text-center md:text-left">
                       <p className="text-sm text-slate-600">현재 사용자</p>
                       <p className="text-xl font-black text-slate-900">{profileNickname || activeUser}</p>
                       {profileNickname && (
@@ -3043,7 +3065,7 @@ export default function App() {
                         상태: <span className="font-black text-emerald-700">로그인됨</span>
                         {' '}| 저장 건수: <span className="font-black text-emerald-700">{savedData.length}</span>건
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center justify-center md:justify-start gap-2">
                         <button
                           type="button"
                           onClick={() => setAuthModal('nickname')}
@@ -3096,7 +3118,7 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap justify-center gap-2">
                   <button
                     type="button"
                     onClick={clearActiveUserReports}
@@ -3222,13 +3244,20 @@ export default function App() {
             {opt.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setLowSpecMode((prev) => !prev)}
+          className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${lowSpecMode ? 'bg-emerald-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+        >
+          경량
+        </button>
       </div>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
         <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/42 via-[#1d2f64]/16 to-transparent' : 'bg-gradient-to-b from-white/28 via-sky-100/12 to-transparent'}`} />
         <div className={isNightSky ? 'skyline-moon' : 'skyline-sun'} />
-        {isNightSky && SKYLINE_STARS.slice(0, 30).map((star) => (
+        {isNightSky && sceneStarsSheet.map((star) => (
           <span
             key={`sheet-${star.id}`}
             className="skyline-star"
@@ -3245,14 +3274,14 @@ export default function App() {
         <div className="absolute bottom-0 left-0 right-0">
           <div className="relative mx-auto h-44 md:h-56 max-w-7xl">
             <div className={`absolute bottom-0 left-0 right-0 h-20 ${isNightSky ? 'bg-gradient-to-b from-[#223733] to-[#070d14]' : 'bg-gradient-to-b from-[#6b8f70] to-[#395447]'}`} />
-            {SKYLINE_MOUNTAINS.map((mountain) => (
+            {sceneMountains.map((mountain) => (
               <div
                 key={`sheet-${mountain.id}`}
                 className={`absolute bottom-16 rounded-t-[45%] ${isNightSky ? 'bg-gradient-to-b from-[#35446c]/72 to-[#1a243f]/68' : 'bg-gradient-to-b from-[#90a9c9]/70 to-[#6784aa]/66'}`}
                 style={{ left: mountain.left, width: mountain.width, height: `${Math.round(mountain.height * 0.38)}px` }}
               />
             ))}
-            {SKYLINE_TREE_BELT.map((tree, treeIdx) => (
+            {sceneTreeBelt.map((tree, treeIdx) => (
               <div
                 key={`sheet-tree-${tree.id}`}
                 className="absolute bottom-[3.9rem]"
@@ -3306,28 +3335,28 @@ export default function App() {
                 })()}
               </div>
             ))}
-            {SKYLINE_BACK_TOWERS.map((tower) => (
+            {sceneBackTowers.map((tower) => (
               <div
                 key={`sheet-${tower.id}`}
                 className={`absolute bottom-14 rounded-t-[2px] border ${isNightSky ? 'border-[#2b3558]/70 bg-gradient-to-b from-[#6c7cab] via-[#495a8a] to-[#243052]' : 'border-[#51667e]/55 bg-gradient-to-b from-[#9cb4d1] via-[#7f9cbf] to-[#5f7d9f]'}`}
                 style={{ left: tower.left, width: tower.width, height: `${Math.round(tower.height * 0.48)}px` }}
               />
             ))}
-            {SKYLINE_FACTORY_BLOCKS.map((block) => (
+            {sceneFactoryBlocks.map((block) => (
               <div
                 key={`sheet-${block.id}`}
                 className={`absolute bottom-12 rounded-t-[3px] border ${isNightSky ? 'border-[#2f2d45]/80 bg-gradient-to-b from-[#8f7668] via-[#6e5850] to-[#3d3033]' : 'border-[#5a5b72]/65 bg-gradient-to-b from-[#b89c89] via-[#967b6f] to-[#6c5550]'}`}
                 style={{ left: block.left, width: block.width, height: `${Math.round(block.height * 0.52)}px` }}
               />
             ))}
-            {SKYLINE_STACKS.map((stack) => (
+            {sceneStacks.map((stack) => (
               <div
                 key={`sheet-${stack.id}`}
                 className={`absolute bottom-12 rounded-t-[3px] border ${isNightSky ? 'border-[#2a3148]/80 bg-gradient-to-b from-[#a4afc0] via-[#7f8ba0] to-[#4d596e]' : 'border-[#51667a]/65 bg-gradient-to-b from-[#bfd0e0] via-[#98adc4] to-[#6f89a3]'}`}
                 style={{ left: stack.left, width: `${Math.round(stack.width * 0.82)}px`, height: `${Math.round(stack.height * 0.52)}px` }}
               />
             ))}
-            {SKYLINE_FRONT_TREE_BELT.map((tree, treeIdx) => (
+            {sceneFrontTreeBelt.map((tree, treeIdx) => (
               <div
                 key={`sheet-front-${tree.id}`}
                 className="absolute bottom-[3rem]"
