@@ -2004,18 +2004,39 @@ export default function App() {
     return C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
   };
 
+  const isActiveMeterRow = (row, idx) => (
+    idx === 0 || String(row?.pointNum || '').trim() !== ''
+  );
+
+  const getActiveMeterRows = () => (
+    formData.gasMeters.filter((row, idx) => isActiveMeterRow(row, idx))
+  );
+
+  const getActiveMeterRowsUntil = (endIdx) => (
+    formData.gasMeters
+      .slice(0, endIdx + 1)
+      .filter((row, idx) => isActiveMeterRow(row, idx))
+  );
+
   const getRawGasMeterVolDiff = () => {
-    const validVols = formData.gasMeters.map(g => g.volume).filter(v => v !== '');
-    if (validVols.length > 1) {
-      const initial = parseFloat(validVols[0]), final = parseFloat(validVols[validVols.length - 1]);
-      if (!isNaN(initial) && !isNaN(final)) return final - initial;
-    }
+    const initial = parseFloat(formData.gasMeters[0]?.volume);
+    if (!Number.isFinite(initial)) return 0;
+
+    const activeSamplingRows = formData.gasMeters.filter((row, idx) => idx > 0 && String(row?.pointNum || '').trim() !== '');
+    const lastValidRow = [...activeSamplingRows].reverse().find((row) => {
+      const volume = parseFloat(row?.volume);
+      return Number.isFinite(volume);
+    });
+    if (!lastValidRow) return 0;
+
+    const final = parseFloat(lastValidRow.volume);
+    if (Number.isFinite(final) && final > initial) return final - initial;
     return 0;
   };
 
   const getRawAvgTm = () => {
     // 시작행(0분)의 미터온도도 평균에 포함
-    const validTemps = formData.gasMeters.flatMap(g => {
+    const validTemps = getActiveMeterRows().flatMap(g => {
       const inT = parseFloat(g.tmIn);
       const outT = parseFloat(g.tmOut);
       const values = [];
@@ -2027,13 +2048,13 @@ export default function App() {
   };
 
   const getRawAvgSamplingTs = () => {
-    const validTemps = formData.gasMeters.map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
+    const validTemps = getActiveMeterRows().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
   const getRawAvgOrifice = () => {
     // 시작행(0분)의 오리피스압도 평균에 포함
-    const validPressures = formData.gasMeters.map(g => parseFloat(g.pressure)).filter(v => Number.isFinite(v));
+    const validPressures = getActiveMeterRows().map(g => parseFloat(g.pressure)).filter(v => Number.isFinite(v));
     return validPressures.length === 0 ? NaN : validPressures.reduce((a, b) => a + b, 0) / validPressures.length;
   };
 
@@ -2092,10 +2113,22 @@ export default function App() {
   const calcPostMoisture = () => getRawPostMoisture().toFixed(2);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
   const calcGasMeterVolDiff = () => { const v = getRawGasMeterVolDiff(); return v > 0 ? v.toFixed(2) : 0; };
+  const calcGasMeterVolDiffM3 = () => {
+    const v = getRawGasMeterVolDiff();
+    return v > 0 ? (v / 1000).toFixed(3) : '-';
+  };
   const calcAvgTm = () => { const v = getRawAvgTm(); return isNaN(v) ? '-' : v.toFixed(1); };
   const calcAvgOrifice = () => { const v = getRawAvgOrifice(); return isNaN(v) ? '-' : v.toFixed(1); };
   const calcTotalMoistureWeight = () => getRawTotalMoistureWeight();
   const getVmStd = () => { const v = getRawVmStd(); return v > 0 ? v.toFixed(3) : '0.000'; };
+  const calcVmStdSL = () => {
+    const v = getRawVmStd();
+    return v > 0 ? v.toFixed(1) : '-';
+  };
+  const calcVmStdSm3 = () => {
+    const v = getRawVmStd();
+    return v > 0 ? (v / 1000).toFixed(3) : '-';
+  };
   const calcDustWeightDiff = () => { const v = getRawDustWeightDiff(); return v.toFixed(4); };
 
   const calcO2CorrectionFactor = () => {
@@ -2108,7 +2141,7 @@ export default function App() {
 
   const getSamplingMinutes = () => {
     const times = formData.gasMeters
-      .slice(1)
+      .filter((meter, idx) => idx > 0 && String(meter?.pointNum || '').trim() !== '')
       .map((meter) => parseFloat(meter.time))
       .filter((v) => Number.isFinite(v) && v > 0);
 
@@ -2249,6 +2282,7 @@ export default function App() {
 
   const calcRowIsokineticRate = (idx) => {
     if (idx === 0) return '-';
+    if (String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return '-';
     const startRow = formData.gasMeters[0];
     const currentRow = formData.gasMeters[idx];
     if (!startRow || !currentRow) return '-';
@@ -2259,7 +2293,7 @@ export default function App() {
     const VmCum = currentVol - startVol;
     if (!Number.isFinite(VmCum) || VmCum <= 0) return '-';
 
-    const elapsedRows = formData.gasMeters.slice(1, idx + 1);
+    const elapsedRows = getActiveMeterRowsUntil(idx).slice(1);
     const timeValues = elapsedRows
       .map((row) => parseFloat(row.time))
       .filter((v) => Number.isFinite(v) && v > 0);
@@ -2273,7 +2307,7 @@ export default function App() {
       : timeValues.reduce((sum, value) => sum + value, 0);
     if (!Number.isFinite(thetaCum) || thetaCum <= 0) return '-';
 
-    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const rangeRows = getActiveMeterRowsUntil(idx);
     const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
     if (tsValues.length === 0) return '-';
     const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
@@ -2325,7 +2359,8 @@ export default function App() {
 
   const getRowCorrectedGasDensityRaw = (idx) => {
     if (idx < 0) return NaN;
-    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    if (idx > 0 && String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return NaN;
+    const rangeRows = getActiveMeterRowsUntil(idx);
     const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
     if (tsValues.length === 0) return NaN;
 
@@ -2347,7 +2382,8 @@ export default function App() {
 
   const getRowGasVelocityRaw = (idx) => {
     if (idx <= 0) return NaN;
-    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    if (String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return NaN;
+    const rangeRows = getActiveMeterRowsUntil(idx);
     const dpValues = rangeRows.map(row => parseFloat(row.dp)).filter(v => Number.isFinite(v) && v >= 0);
     if (dpValues.length === 0) return NaN;
     const dpAvg = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
@@ -2370,6 +2406,7 @@ export default function App() {
 
   const getRowMoistureCaptureRaw = (idx) => {
     if (idx <= 0) return NaN;
+    if (String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return NaN;
     const startRow = formData.gasMeters[0];
     const currentRow = formData.gasMeters[idx];
     if (!startRow || !currentRow) return NaN;
@@ -2380,7 +2417,7 @@ export default function App() {
     const VmCum = currentVol - startVol;
     if (!Number.isFinite(VmCum) || VmCum <= 0) return NaN;
 
-    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const rangeRows = getActiveMeterRowsUntil(idx);
     const tmValues = rangeRows.flatMap((row) => {
       const inT = parseFloat(row.tmIn);
       const outT = parseFloat(row.tmOut);
@@ -2512,7 +2549,10 @@ export default function App() {
       wetFlowRate: flowRates.wet,
       dryFlowRate: flowRates.dry,
       gasMeterVolume: calcGasMeterVolDiff(),
+      gasMeterVolumeM3: calcGasMeterVolDiffM3(),
       vmStd: getVmStd(),
+      vmStdSL: calcVmStdSL(),
+      vmStdSm3: calcVmStdSm3(),
       totalSamplingMinutes: String(getSamplingMinutes()),
       avgTm: calcAvgTm(),
       avgOrifice: calcAvgOrifice(),
@@ -4827,14 +4867,22 @@ export default function App() {
             </div>
 
             {/* 유량계 기록 요약표 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
                 <span className="text-xs text-slate-600 font-bold mb-1">총 채취 시간 (분)</span>
                 <span className="text-lg font-black text-slate-800">{getSamplingMinutes()}</span>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-emerald-700 font-bold mb-1">총 채취 가스량 (V<sub>m</sub>)</span>
-                <span className="text-xl font-black text-emerald-900">{calcGasMeterVolDiff() > 0 ? calcGasMeterVolDiff() : '-'}</span>
+                <span className="text-xs text-emerald-700 font-bold mb-1">총 채취 가스량 (m³)</span>
+                <span className="text-xl font-black text-emerald-900">{calcGasMeterVolDiffM3()}</span>
+              </div>
+              <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
+                <span className="text-xs text-cyan-700 font-bold mb-1">표준 채취량 (SL)</span>
+                <span className="text-lg font-black text-cyan-900">{calcVmStdSL()}</span>
+              </div>
+              <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
+                <span className="text-xs text-cyan-700 font-bold mb-1">표준 채취량 (Sm³)</span>
+                <span className="text-lg font-black text-cyan-900">{calcVmStdSm3()}</span>
               </div>
               <div className="bg-teal-50 border border-teal-200 p-3 rounded-xl flex flex-col items-center justify-center">
                 <span className="text-xs text-teal-700 font-bold mb-1">평균 온도 (T<sub>m</sub>, ℃)</span>
