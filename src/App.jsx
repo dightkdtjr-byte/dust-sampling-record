@@ -956,6 +956,12 @@ const formatFlowDisplay = (val) => {
   return num.toFixed(5);
 };
 
+const formatFixed15 = (val) => {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '-';
+  return num.toFixed(15);
+};
+
 const calcExpectedOrificeDH = (kVal, dpVal) => {
   const kNum = parseFloat(kVal);
   const dpNum = parseFloat(dpVal);
@@ -2617,11 +2623,11 @@ export default function App() {
   };
 
   const getRawGasVelocityFromMeterRows = () => {
-    const activeRows = getActiveMeterRows();
-    const dpValues = activeRows
+    const meterRows = getMeterRowsUntilLastVolume();
+    const dpValues = meterRows
       .map((row) => parseFloat(row.dp))
       .filter((v) => Number.isFinite(v) && v >= 0);
-    const tsValues = activeRows
+    const tsValues = meterRows
       .map((row) => parseFloat(row.stackTemp))
       .filter((v) => Number.isFinite(v));
 
@@ -2674,7 +2680,7 @@ export default function App() {
   };
 
   const getRawAvgSamplingTs = () => {
-    const validTemps = getActiveMeterRows().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
+    const validTemps = getMeterRowsUntilLastVolume().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
@@ -2856,6 +2862,7 @@ export default function App() {
     // 유속은 적산유량계 기록표 평균 동압으로 구한 값 사용
     // 건조 유량의 수분량(Xw)은 사후 수분량(임핀저 무게법) 기준
     const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
+    const flowRows = getMeterRowsUntilLastVolume();
     const Ts = getRawAvgSamplingTs();
     const Vs = getRawGasVelocityFromMeterRows();
     const Pa = parseFloat(formData.atmPressure);
@@ -2888,6 +2895,7 @@ export default function App() {
       Pa,
       Ps,
       XwPercent: postMoisture,
+      flowRowCount: flowRows.length,
       moistureRatio,
       tempTerm,
       pressureTerm,
@@ -3825,6 +3833,7 @@ export default function App() {
   const samplingPointsData = getSamplingPoints();
   const configuredNozzles = getConfiguredNozzles();
   const gasFlowRates = calcGasFlowRates();
+  const gasFlowFactors = gasFlowRates.factors;
   
   const getExpectedValues = () => {
     const d = parseFloat(formData.nozzleDiameter), k = parseFloat(formData.kFactor), dp = getRawAvgDp(), Vs = getRawGasVelocity();
@@ -5917,6 +5926,15 @@ export default function App() {
                     </div>
                   )}
                </div>
+               {gasFlowFactors && (
+                 <div className="mt-4 p-3 rounded-lg border border-slate-600 bg-slate-900/40 text-[10px] text-slate-300">
+                   <p className="font-bold text-slate-200 mb-1">유량 계산 인수 (raw)</p>
+                   <p>rows={gasFlowFactors.flowRowCount} | v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
+                   <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw={formatFixed15(gasFlowFactors.XwPercent)}</p>
+                   <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
+                   <p>Qw(raw15)={formatFixed15(gasFlowFactors.Q_wet)} | Qd(raw15)={formatFixed15(gasFlowFactors.Q_dry)} | Qd(display)={gasFlowRates.dry}</p>
+                 </div>
+               )}
             </div>
 
             <div className="mt-2">
