@@ -10,10 +10,12 @@ createRoot(document.getElementById('root')).render(
 )
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    const swUrl = `${import.meta.env.BASE_URL}sw.js`
-    navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL }).catch((error) => {
-      console.error('Service worker registration failed:', error)
-    })
+  window.addEventListener('load', async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((reg) => reg.unregister()))
+    } catch (error) {
+      console.error('Service worker unregister failed:', error)
+    }
   })
 }
