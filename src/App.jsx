@@ -20,9 +20,9 @@ const DEFAULT_SAMPLERS = [
 ];
 
 const DEFAULT_PITOT_PRESETS = [
-  { id: 1, name: '피토 1호기', factor: '0.84' },
-  { id: 2, name: '피토 2호기', factor: '0.85' },
-  { id: 3, name: '피토 3호기', factor: '0.83' },
+  { id: 1, sn: '1910162K', factor: '0.84' },
+  { id: 2, sn: '1910163K', factor: '0.84' },
+  { id: 3, sn: '1910164K', factor: '0.84' },
 ];
 
 const SHEET_MENU = [
@@ -653,9 +653,11 @@ const sanitizePitotPresets = (value) => {
     .filter(item => item && typeof item === 'object')
     .map((item, idx) => {
       const parsedId = parseInt(item.id, 10);
+      const legacyName = typeof item.name === 'string' ? item.name.trim() : '';
+      const snRaw = item.sn === undefined || item.sn === null ? '' : String(item.sn).trim();
       return {
         id: Number.isFinite(parsedId) ? parsedId : idx + 1,
-        name: typeof item.name === 'string' && item.name.trim() ? item.name : `피토 ${idx + 1}호기`,
+        sn: snRaw || legacyName || '',
         factor: item.factor === undefined || item.factor === null ? '' : String(item.factor),
       };
     });
@@ -1356,7 +1358,12 @@ export default function App() {
       const next = prev.map((item, i) => (i === index ? { ...item, [field]: value } : item));
       const selected = next.find(item => String(item.id) === formData.pitotPresetId);
       if (selected) {
-        setFormData(current => ({ ...current, pitotFactor: selected.factor }));
+        const selectedSn = String(selected.sn || '').trim();
+        setFormData(current => ({
+          ...current,
+          pitotFactor: selected.factor,
+          pitotInfo: selectedSn || current.pitotInfo,
+        }));
       }
       return next;
     });
@@ -1380,7 +1387,7 @@ export default function App() {
   const addPitotPreset = () => {
     setPitotPresets(prev => {
       const maxId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
-      return [...prev, { id: maxId + 1, name: `피토 ${maxId + 1}호기`, factor: '0.84' }];
+      return [...prev, { id: maxId + 1, sn: '', factor: '0.84' }];
     });
   };
 
@@ -2103,7 +2110,8 @@ export default function App() {
     }
     const preset = pitotPresets.find(item => item.id === parseInt(id, 10));
     if (preset) {
-      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor, pitotInfo: preset.name || prev.pitotInfo }));
+      const nextInfo = String(preset.sn || '').trim();
+      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor, pitotInfo: nextInfo || prev.pitotInfo }));
     }
   };
 
@@ -4754,17 +4762,6 @@ export default function App() {
                   측정점별 동압 및 온도 (예비조사)
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4">
-                  <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
-                    <label className="text-[11px] font-bold text-slate-700">피토관 정보</label>
-                    <input
-                      type="text"
-                      name="pitotInfo"
-                      value={formData.pitotInfo}
-                      onChange={handleChange}
-                      placeholder="예: 피토 1호기 / S/N"
-                      className="w-36 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                    />
-                  </div>
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
                     <label className="text-[11px] font-bold text-slate-700">피토계수</label>
                     <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -4777,7 +4774,7 @@ export default function App() {
                       <option value="">피토 프리셋</option>
                       {pitotPresets.map((preset) => (
                         <option key={preset.id} value={preset.id}>
-                          {preset.name}
+                          {preset.sn ? `S/N ${preset.sn}` : `S/N 미입력 (${preset.id})`}
                         </option>
                       ))}
                     </select>
@@ -4807,7 +4804,7 @@ export default function App() {
                   <table className="w-full text-[11px] text-center border border-emerald-200">
                     <thead className="bg-emerald-100 text-slate-800">
                       <tr>
-                        <th className="border border-emerald-200 p-1">피토명</th>
+                        <th className="border border-emerald-200 p-1">S/N</th>
                         <th className="border border-emerald-200 p-1">C<sub>p</sub></th>
                         <th className="border border-emerald-200 p-1">삭제</th>
                       </tr>
@@ -4818,9 +4815,10 @@ export default function App() {
                           <td className="border border-emerald-200 p-1">
                             <input
                               type="text"
-                              value={preset.name}
-                              onChange={(e) => handlePitotPresetConfigChange(idx, 'name', e.target.value)}
+                              value={preset.sn}
+                              onChange={(e) => handlePitotPresetConfigChange(idx, 'sn', e.target.value)}
                               className="w-full p-1 border border-emerald-300 rounded text-center"
+                              placeholder="예: 1910162K"
                             />
                           </td>
                           <td className="border border-emerald-200 p-1">
