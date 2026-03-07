@@ -1064,6 +1064,12 @@ export default function App() {
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
   const isPresetHydratingRef = useRef(false);
   const vaultKeyRef = useRef({});
+  const cloudSyncBusyRef = useRef(false);
+  const autoCloudRestoreDoneRef = useRef({});
+  const autoCloudRestoreInFlightRef = useRef(false);
+  const autoCloudUploadTimerRef = useRef(null);
+  const autoCloudUploadInFlightRef = useRef(false);
+  const lastAutoCloudUploadSignatureRef = useRef('');
   const csvImportInputRef = useRef(null);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
   const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
@@ -1072,6 +1078,10 @@ export default function App() {
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
   const [isKFactorEditing, setIsKFactorEditing] = useState(false);
+
+  useEffect(() => {
+    cloudSyncBusyRef.current = cloudSyncBusy;
+  }, [cloudSyncBusy]);
 
   const canUseUserScopedPresets = (userId) => {
     const normalizedId = String(userId || '').trim().toLowerCase();
@@ -1903,6 +1913,23 @@ export default function App() {
     };
   };
 
+  const buildCloudSyncPayloadSignature = () => {
+    const userRecord = secureUsers[activeUser];
+    if (!userRecord || !activeUser) return '';
+    try {
+      return JSON.stringify({
+        userId: activeUser,
+        secureUser: userRecord,
+        nozzles: sanitizeNozzleSet(nozzleSet) || [],
+        samplers: sanitizeSamplers(samplers) || [],
+        pitotPresets: sanitizePitotPresets(pitotPresets) || [],
+      });
+    } catch (error) {
+      console.error('클라우드 시그니처 생성 실패:', error);
+      return '';
+    }
+  };
+
   const handleSaveCloudSyncConfig = () => {
     if (!activeUser || !isUserUnlocked) {
       alert('로그인 후 설정 가능합니다.');
@@ -1912,18 +1939,23 @@ export default function App() {
     alert('클라우드 동기화 설정을 저장했습니다.');
   };
 
-  const handleCloudUploadToGist = async () => {
+  const uploadCloudSyncToGist = async ({ silent = false } = {}) => {
     if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 업로드 가능합니다.');
-      return;
+      if (!silent) alert('로그인 후 업로드 가능합니다.');
+      return { ok: false, reason: 'not-authenticated' };
+    }
+    if (cloudSyncBusyRef.current) {
+      if (!silent) alert('클라우드 동기화가 진행 중입니다.');
+      return { ok: false, reason: 'busy' };
     }
     const token = String(cloudSyncConfig.token || '').trim();
     if (!token) {
-      alert('GitHub PAT를 입력해주세요.');
-      return;
+      if (!silent) alert('GitHub PAT를 입력해주세요.');
+      return { ok: false, reason: 'missing-token' };
     }
 
     try {
+      cloudSyncBusyRef.current = true;
       setCloudSyncBusy(true);
       const payload = buildCloudSyncPayload();
       const content = JSON.stringify(payload, null, 2);
@@ -1965,32 +1997,40 @@ export default function App() {
       if (!nextGistId) throw new Error('Gist ID를 확인할 수 없습니다.');
 
       persistCloudSyncConfig({ token, gistId: nextGistId });
-      alert('클라우드 백업 업로드가 완료되었습니다.');
+      if (!silent) alert('클라우드 백업 업로드가 완료되었습니다.');
+      return { ok: true, gistId: nextGistId };
     } catch (error) {
       console.error('클라우드 업로드 실패:', error);
-      alert(`클라우드 업로드 실패: ${error?.message || '알 수 없는 오류'}`);
+      if (!silent) alert(`클라우드 업로드 실패: ${error?.message || '알 수 없는 오류'}`);
+      return { ok: false, reason: error?.message || 'upload-failed' };
     } finally {
+      cloudSyncBusyRef.current = false;
       setCloudSyncBusy(false);
     }
   };
 
-  const handleCloudRestoreFromGist = async () => {
+  const restoreCloudSyncFromGist = async ({ silent = false } = {}) => {
     if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 복원 가능합니다.');
-      return;
+      if (!silent) alert('로그인 후 복원 가능합니다.');
+      return { ok: false, reason: 'not-authenticated' };
+    }
+    if (cloudSyncBusyRef.current) {
+      if (!silent) alert('클라우드 동기화가 진행 중입니다.');
+      return { ok: false, reason: 'busy' };
     }
     const token = String(cloudSyncConfig.token || '').trim();
     const gistId = String(cloudSyncConfig.gistId || '').trim();
     if (!token) {
-      alert('GitHub PAT를 입력해주세요.');
-      return;
+      if (!silent) alert('GitHub PAT를 입력해주세요.');
+      return { ok: false, reason: 'missing-token' };
     }
     if (!gistId) {
-      alert('Gist ID를 입력해주세요.');
-      return;
+      if (!silent) alert('Gist ID를 입력해주세요.');
+      return { ok: false, reason: 'missing-gist-id' };
     }
 
     try {
+      cloudSyncBusyRef.current = true;
       setCloudSyncBusy(true);
       const headers = {
         Accept: 'application/vnd.github+json',
@@ -2072,14 +2112,101 @@ export default function App() {
       persistCloudSyncConfig({ token, gistId });
       setMenuCheckedReportKeys([]);
       setSheetCheckedReportKeys([]);
-      alert(`클라우드 복원 완료: 리포트 ${restoredReports.length}건`);
+      if (!silent) alert(`클라우드 복원 완료: 리포트 ${restoredReports.length}건`);
+      return { ok: true, restoredCount: restoredReports.length };
     } catch (error) {
       console.error('클라우드 복원 실패:', error);
-      alert(`클라우드 복원 실패: ${error?.message || '알 수 없는 오류'}`);
+      if (!silent) alert(`클라우드 복원 실패: ${error?.message || '알 수 없는 오류'}`);
+      return { ok: false, reason: error?.message || 'restore-failed' };
     } finally {
+      cloudSyncBusyRef.current = false;
       setCloudSyncBusy(false);
     }
   };
+
+  const handleCloudUploadToGist = async () => {
+    await uploadCloudSyncToGist({ silent: false });
+  };
+
+  const handleCloudRestoreFromGist = async () => {
+    await restoreCloudSyncFromGist({ silent: false });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (autoCloudUploadTimerRef.current) {
+        clearTimeout(autoCloudUploadTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    lastAutoCloudUploadSignatureRef.current = '';
+    if (autoCloudUploadTimerRef.current) {
+      clearTimeout(autoCloudUploadTimerRef.current);
+      autoCloudUploadTimerRef.current = null;
+    }
+  }, [activeUser, cloudSyncConfig.token, cloudSyncConfig.gistId]);
+
+  useEffect(() => {
+    if (!isStorageHydrated || !activeUser || !isUserUnlocked) return;
+    const token = String(cloudSyncConfig.token || '').trim();
+    const gistId = String(cloudSyncConfig.gistId || '').trim();
+    if (!token || !gistId) return;
+    const restoreKey = `${activeUser}|${token}|${gistId}`;
+    if (autoCloudRestoreDoneRef.current[restoreKey]) return;
+
+    autoCloudRestoreDoneRef.current[restoreKey] = true;
+    autoCloudRestoreInFlightRef.current = true;
+    void (async () => {
+      await restoreCloudSyncFromGist({ silent: true });
+      autoCloudRestoreInFlightRef.current = false;
+    })();
+  }, [isStorageHydrated, activeUser, isUserUnlocked, cloudSyncConfig.token, cloudSyncConfig.gistId]);
+
+  useEffect(() => {
+    if (!isStorageHydrated || !activeUser || !isUserUnlocked) return;
+    if (cloudSyncBusyRef.current || autoCloudRestoreInFlightRef.current || autoCloudUploadInFlightRef.current) return;
+
+    const token = String(cloudSyncConfig.token || '').trim();
+    const gistId = String(cloudSyncConfig.gistId || '').trim();
+    if (!token) return;
+    if (gistId) {
+      const restoreKey = `${activeUser}|${token}|${gistId}`;
+      if (!autoCloudRestoreDoneRef.current[restoreKey]) return;
+    }
+
+    const nextSignature = buildCloudSyncPayloadSignature();
+    if (!nextSignature || nextSignature === lastAutoCloudUploadSignatureRef.current) return;
+
+    if (autoCloudUploadTimerRef.current) {
+      clearTimeout(autoCloudUploadTimerRef.current);
+      autoCloudUploadTimerRef.current = null;
+    }
+
+    autoCloudUploadTimerRef.current = setTimeout(async () => {
+      if (autoCloudUploadInFlightRef.current || cloudSyncBusyRef.current || autoCloudRestoreInFlightRef.current) return;
+      autoCloudUploadInFlightRef.current = true;
+      const result = await uploadCloudSyncToGist({ silent: true });
+      if (result?.ok) {
+        lastAutoCloudUploadSignatureRef.current = nextSignature;
+      }
+      autoCloudUploadInFlightRef.current = false;
+      autoCloudUploadTimerRef.current = null;
+    }, 1200);
+  }, [
+    isStorageHydrated,
+    activeUser,
+    isUserUnlocked,
+    cloudSyncConfig.token,
+    cloudSyncConfig.gistId,
+    cloudSyncBusy,
+    activeUserReports,
+    nozzleSet,
+    samplers,
+    pitotPresets,
+    secureUsers,
+  ]);
 
   const clearActiveUserReports = async () => {
     if (!activeUser) return;
