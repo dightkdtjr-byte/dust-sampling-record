@@ -525,10 +525,12 @@ const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,64}$/;
 const normalizeHintText = (value) => String(value || '').trim().toLowerCase();
 const ADMIN_USER_ID = 'dightkdtjr';
 const ADMIN_PASSWORD = 'ss22127016!';
+const CHARIZARD_POKEMON_ID = 6;
 const BETA_USER_ID = 'user';
 const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
+const MAGIKARP_POKEMON_ID = 129;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -607,7 +609,24 @@ const hashHintAnswer = async (answerText) => {
 };
 
 const getFixedAvatarUrlForUser = (userId) => {
-  return '';
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  if (normalizedId === ADMIN_USER_ID) {
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${CHARIZARD_POKEMON_ID}.png`;
+  }
+  if (normalizedId === BETA_USER_ID) {
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${MAGIKARP_POKEMON_ID}.png`;
+  }
+
+  if (!normalizedId) {
+    return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png';
+  }
+
+  let hash = 0;
+  for (let i = 0; i < normalizedId.length; i++) {
+    hash = (hash * 31 + normalizedId.charCodeAt(i)) % 2147483647;
+  }
+  const pokemonId = (Math.abs(hash) % 151) + 1;
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
 };
 
 // 자바스크립트 부동소수점 오차 방지용 안전한 반올림 함수 (K * dp 오차 보정용)
