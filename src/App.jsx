@@ -3047,7 +3047,7 @@ export default function App() {
             ) : (
               <div className="space-y-4 flex flex-col items-center">
                 <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4 justify-center">
+                  <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
                       {profileAvatarUrl ? (
                         <img src={profileAvatarUrl} alt={`${activeUser} 프로필`} className="w-full h-full object-cover" />
