@@ -50,56 +50,6 @@ const SHEET_MENU = [
   },
 ];
 
-const SKYLINE_FLYERS = [
-  { id: 148, name: '신뇽', top: '40%', size: 54, direction: 'right', duration: 34, delay: 6, bob: 3.2 },
-  { id: 149, name: '망나뇽', top: '46%', size: 62, direction: 'left', duration: 29, delay: 2, bob: 2.8 },
-  { id: 146, name: '파이어', top: '28%', size: 66, direction: 'right', duration: 30, delay: 4, bob: 3.0 },
-  { id: 145, name: '썬더', top: '22%', size: 64, direction: 'left', duration: 27, delay: 7, bob: 2.6 },
-  { id: 144, name: '프리져', top: '12%', size: 64, direction: 'right', duration: 33, delay: 1, bob: 3.3 },
-  { id: 142, name: '프테라', top: '33%', size: 60, direction: 'right', duration: 26, delay: 11, bob: 2.7 },
-  { id: 6, name: '리자몽', top: '52%', size: 68, direction: 'left', duration: 32, delay: 5, bob: 3.1 },
-  { id: 15, name: '독침붕', top: '36%', size: 50, direction: 'right', duration: 22, delay: 8, bob: 2.2 },
-  { id: 18, name: '피존튜', top: '58%', size: 58, direction: 'left', duration: 28, delay: 13, bob: 2.5 },
-  { id: 150, name: '뮤츠', top: '19%', size: 56, direction: 'right', duration: 31, delay: 10, bob: 2.9 },
-];
-const SKYLINE_FLYER_UNIFIED_SIZE = 96;
-
-const LEGENDARY_SKYLINE_CHOICES = [
-  {
-    id: 249,
-    name: '루기아',
-    size: 420,
-    url: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/249.png',
-  },
-  {
-    id: 250,
-    name: '칠색조',
-    size: 400,
-    url: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/250.png',
-  },
-  {
-    id: 151,
-    name: '뮤',
-    size: 380,
-    url: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/home/151.png',
-  },
-];
-
-const pickRandomLegendaryFlight = () => {
-  const chosen = LEGENDARY_SKYLINE_CHOICES[Math.floor(Math.random() * LEGENDARY_SKYLINE_CHOICES.length)];
-  const duration = 13 + Math.random() * 4;
-  return {
-    ...chosen,
-    direction: Math.random() < 0.5 ? 'right' : 'left',
-    duration,
-    // 산/굴뚝 라인(하단부)에서 시작하도록 위치를 아래쪽으로 고정
-    top: `${58 + Math.random() * 12}%`,
-    left: `${16 + Math.random() * 62}%`,
-    startOffset: 0,
-    key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  };
-};
-
 const getSkyPhaseByHour = (date = new Date()) => {
   const hour = date.getHours();
   return hour >= 9 && hour < 17 ? 'day' : 'night';
@@ -320,62 +270,9 @@ const SKYLINE_STACKS = [
 ];
 
 const SKYLINE_FLYER_CSS = `
-@keyframes skylineFlyRight {
-  0% { transform: translateX(-8vw) scaleX(1); }
-  100% { transform: translateX(108vw) scaleX(1); }
-}
-@keyframes skylineFlyLeft {
-  0% { transform: translateX(108vw) scaleX(-1); }
-  100% { transform: translateX(-8vw) scaleX(-1); }
-}
-@keyframes skylineBob {
-  0% { transform: translateY(-6px); }
-  100% { transform: translateY(6px); }
-}
 @keyframes skylineTwinkle {
   0%, 100% { opacity: 0.26; transform: scale(0.9); }
   50% { opacity: 0.95; transform: scale(1.08); }
-}
-@keyframes legendaryDiagonalRight {
-  0% {
-    transform: translateX(0) translateY(14vh) scaleX(1);
-    opacity: 0;
-  }
-  12% {
-    opacity: 0.94;
-  }
-  92% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translateX(34vw) translateY(-76vh) scaleX(1);
-    opacity: 0;
-  }
-}
-@keyframes legendaryDiagonalLeft {
-  0% {
-    transform: translateX(0) translateY(14vh) scaleX(-1);
-    opacity: 0;
-  }
-  12% {
-    opacity: 0.94;
-  }
-  92% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translateX(-34vw) translateY(-76vh) scaleX(-1);
-    opacity: 0;
-  }
-}
-.skyline-flyer {
-  position: absolute;
-  left: 0;
-  will-change: transform;
-}
-.skyline-flyer-inner {
-  animation: skylineBob var(--bob-duration, 3s) ease-in-out infinite alternate;
-  filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.4));
 }
 .skyline-star {
   position: absolute;
@@ -414,17 +311,6 @@ const SKYLINE_FLYER_CSS = `
   border-radius: 9999px;
   background: radial-gradient(circle at 36% 34%, rgba(254, 249, 195, 1), rgba(253, 230, 138, 0.95) 48%, rgba(251, 191, 36, 0.88));
   box-shadow: 0 0 0 12px rgba(254, 240, 138, 0.25), 0 0 36px rgba(250, 204, 21, 0.35), 0 0 70px rgba(249, 115, 22, 0.2);
-}
-.legendary-flyer {
-  position: absolute;
-  left: 0;
-  will-change: transform, opacity;
-  pointer-events: none;
-  opacity: 0;
-}
-.legendary-flyer img {
-  display: block;
-  filter: drop-shadow(0 18px 28px rgba(15, 23, 42, 0.32));
 }
 @keyframes stackHeartRise {
   0% {
@@ -639,12 +525,10 @@ const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,64}$/;
 const normalizeHintText = (value) => String(value || '').trim().toLowerCase();
 const ADMIN_USER_ID = 'dightkdtjr';
 const ADMIN_PASSWORD = 'ss22127016!';
-const CHARIZARD_POKEMON_ID = 6;
 const BETA_USER_ID = 'user';
 const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
-const MAGIKARP_POKEMON_ID = 129;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -723,24 +607,7 @@ const hashHintAnswer = async (answerText) => {
 };
 
 const getFixedAvatarUrlForUser = (userId) => {
-  const normalizedId = String(userId || '').trim().toLowerCase();
-  if (normalizedId === ADMIN_USER_ID) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${CHARIZARD_POKEMON_ID}.png`;
-  }
-  if (normalizedId === BETA_USER_ID) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${MAGIKARP_POKEMON_ID}.png`;
-  }
-
-  if (!normalizedId) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png`;
-  }
-
-  let hash = 0;
-  for (let i = 0; i < normalizedId.length; i++) {
-    hash = (hash * 31 + normalizedId.charCodeAt(i)) % 2147483647;
-  }
-  const pokemonId = (Math.abs(hash) % 151) + 1;
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
+  return '';
 };
 
 // 자바스크립트 부동소수점 오차 방지용 안전한 반올림 함수 (K * dp 오차 보정용)
@@ -836,13 +703,10 @@ export default function App() {
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
   const vaultKeyRef = useRef({});
   const [recommendations, setRecommendations] = useState(null);
-  const [legendaryFlight, setLegendaryFlight] = useState(() => pickRandomLegendaryFlight());
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
-  const [lowSpecMode, setLowSpecMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return /iPhone|iPad|Android|Mobile/i.test(window.navigator.userAgent);
-  });
+  const [lowSpecMode, setLowSpecMode] = useState(true);
+  const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -966,6 +830,9 @@ export default function App() {
     }
   }, [activeUser, isStorageHydrated]);
 
+  const buildReportKey = (id, savedAt) => String(id || savedAt || '');
+  const getReportKey = (report) => buildReportKey(report?.id, report?.savedAt);
+
   const savedData = [...activeUserReports].sort((a, b) => {
     // 측정일자(date)를 우선 정렬 기준으로 사용하고, 없을 때만 저장시각(savedAt)로 보조 정렬
     const aMeasured = a.date ? new Date(a.date).getTime() : NaN;
@@ -999,6 +866,12 @@ export default function App() {
     acc[item.id] = profileCombinedReports.filter(report => report._sheetId === item.id).length;
     return acc;
   }, {});
+  const menuSelectableReportKeys = profileCombinedReports
+    .map((report) => getReportKey(report))
+    .filter((key) => key);
+  const menuCheckedReportKeysValid = menuCheckedReportKeys.filter((key) => menuSelectableReportKeys.includes(key));
+  const menuCheckedReportKeySet = new Set(menuCheckedReportKeysValid);
+  const isAllMenuReportsChecked = menuSelectableReportKeys.length > 0 && menuCheckedReportKeysValid.length === menuSelectableReportKeys.length;
   const savedFitCount = savedData.filter(item => item.isokineticStatus === '적합').length;
   const savedFailCount = savedData.filter(item => item.isokineticStatus === '부적합').length;
   const savedAvgActualC = (() => {
@@ -1269,7 +1142,7 @@ export default function App() {
   };
 
   const openAdminLoginModal = () => {
-    setLoginUserId(ADMIN_USER_ID);
+    setLoginUserId('');
     setLoginPassword('');
     setAuthModal('admin');
   };
@@ -1440,6 +1313,7 @@ export default function App() {
       setLoginPassword('');
       setProfileAvatarUrl('');
       setProfileNickname('');
+      setMenuCheckedReportKeys([]);
       setSelectedSheet('');
       if (window.location.hash) {
         window.history.pushState(null, '', window.location.pathname + window.location.search);
@@ -1465,6 +1339,7 @@ export default function App() {
     setLoginPassword('');
     setProfileAvatarUrl('');
     setProfileNickname('');
+    setMenuCheckedReportKeys([]);
     setAuthModal('');
     setSelectedSheet('');
     if (window.location.hash) {
@@ -1490,22 +1365,91 @@ export default function App() {
   };
 
   const removeSavedReport = async (id, savedAt) => {
-    if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 삭제할 수 있습니다.');
+    const targetKey = buildReportKey(id, savedAt);
+    if (!targetKey) {
+      alert('삭제할 리포트 키를 찾지 못했습니다.');
       return;
     }
+    const deleted = await removeSavedReportsByKeys([targetKey]);
+    if (deleted) {
+      setMenuCheckedReportKeys(prev => prev.filter((key) => key !== targetKey));
+    }
+  };
 
-    const nextReports = (activeUserReports || []).filter((item) => {
-      if (id) return item.id !== id;
-      return item.savedAt !== savedAt;
-    });
+  const removeSavedReportsByKeys = async (reportKeys = []) => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 삭제할 수 있습니다.');
+      return false;
+    }
+
+    const keySet = new Set(reportKeys.filter((key) => key));
+    if (keySet.size === 0) return false;
+    const nextReports = (activeUserReports || []).filter((item) => !keySet.has(getReportKey(item)));
 
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
+      setMenuCheckedReportKeys(prev => prev.filter((key) => !keySet.has(key)));
+      return true;
     } catch (error) {
       console.error(error);
       alert('리포트 삭제 중 오류가 발생했습니다.');
+      return false;
+    }
+  };
+
+  const toggleMenuReportCheck = (reportKey, checked) => {
+    if (!reportKey) return;
+    setMenuCheckedReportKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(reportKey);
+      else next.delete(reportKey);
+      return Array.from(next);
+    });
+  };
+
+  const toggleMenuAllReportChecks = (checked) => {
+    if (!checked) {
+      setMenuCheckedReportKeys([]);
+      return;
+    }
+    setMenuCheckedReportKeys(menuSelectableReportKeys);
+  };
+
+  const handleImportCheckedMenuReports = () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('로그인 후 임포트할 수 있습니다.');
+      return;
+    }
+    if (menuCheckedReportKeysValid.length === 0) {
+      alert('임포트할 리포트를 체크해주세요.');
+      return;
+    }
+    if (menuCheckedReportKeysValid.length > 1) {
+      alert('임포트는 1건씩 가능합니다. 체크를 1건만 선택해주세요.');
+      return;
+    }
+
+    const selectedKey = menuCheckedReportKeysValid[0];
+    const targetReport = profileCombinedReports.find((report) => getReportKey(report) === selectedKey);
+    if (!targetReport) {
+      alert('선택한 리포트를 찾지 못했습니다.');
+      return;
+    }
+    handleLoadSavedReport(targetReport);
+    setMenuCheckedReportKeys([]);
+  };
+
+  const handleDeleteCheckedMenuReports = async () => {
+    if (menuCheckedReportKeysValid.length === 0) {
+      alert('삭제할 리포트를 체크해주세요.');
+      return;
+    }
+    const confirmed = window.confirm(`선택한 ${menuCheckedReportKeysValid.length}건 리포트를 삭제할까요?`);
+    if (!confirmed) return;
+    const deleted = await removeSavedReportsByKeys(menuCheckedReportKeysValid);
+    if (deleted) {
+      setMenuCheckedReportKeys([]);
     }
   };
 
@@ -1528,6 +1472,7 @@ export default function App() {
     });
 
     setRecommendations(null);
+    setMenuCheckedReportKeys([]);
 
     const targetSheet = resolveReportSheetId(report);
     if (selectedSheet !== targetSheet) {
@@ -2587,7 +2532,6 @@ export default function App() {
   const isNightSky = skyPreviewMode === 'auto' ? skyPhase === 'night' : skyPreviewMode === 'night';
   const sceneStarsMenu = lowSpecMode ? SKYLINE_STARS.slice(0, 12) : SKYLINE_STARS;
   const sceneStarsSheet = lowSpecMode ? SKYLINE_STARS.slice(0, 10) : SKYLINE_STARS.slice(0, 30);
-  const sceneFlyers = lowSpecMode ? SKYLINE_FLYERS.slice(0, 4) : SKYLINE_FLYERS;
   const sceneMountains = lowSpecMode ? SKYLINE_MOUNTAINS.slice(0, 2) : SKYLINE_MOUNTAINS;
   const sceneTreeBelt = lowSpecMode ? SKYLINE_TREE_BELT.slice(0, 14) : SKYLINE_TREE_BELT;
   const sceneFrontTreeBelt = lowSpecMode ? SKYLINE_FRONT_TREE_BELT.slice(0, 12) : SKYLINE_FRONT_TREE_BELT;
@@ -2637,16 +2581,6 @@ export default function App() {
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     });
-  }, [selectedSheet]);
-
-  useEffect(() => {
-    if (selectedSheet) return undefined;
-    const spawnLegendary = () => {
-      setLegendaryFlight(pickRandomLegendaryFlight());
-    };
-    spawnLegendary();
-    const timer = window.setInterval(spawnLegendary, 60 * 1000);
-    return () => window.clearInterval(timer);
   }, [selectedSheet]);
 
   useEffect(() => {
@@ -2704,56 +2638,6 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="absolute inset-0 overflow-hidden">
-            {sceneFlyers.map((flyer, idx) => {
-              const visibleStartOffset = Math.min(flyer.duration * (0.24 + (idx % 5) * 0.12), flyer.duration * 0.8);
-              return (
-                <div
-                  key={flyer.id}
-                  className="skyline-flyer opacity-90"
-                  style={{
-                    top: flyer.top,
-                    animationName: flyer.direction === 'right' ? 'skylineFlyRight' : 'skylineFlyLeft',
-                    animationDuration: `${flyer.duration}s`,
-                    animationTimingFunction: 'linear',
-                    animationIterationCount: 'infinite',
-                    animationDelay: `-${visibleStartOffset}s`,
-                  }}
-                >
-                  <div className="skyline-flyer-inner" style={{ '--bob-duration': `${flyer.bob}s` }}>
-                    <img
-                      src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${flyer.id}.png`}
-                      alt={flyer.name}
-                      className="block"
-                      style={{ width: `${SKYLINE_FLYER_UNIFIED_SIZE}px`, height: `${SKYLINE_FLYER_UNIFIED_SIZE}px`, imageRendering: 'pixelated' }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            {legendaryFlight && (
-              <div
-                key={legendaryFlight.key}
-                className="legendary-flyer"
-                style={{
-                  top: legendaryFlight.top,
-                  left: legendaryFlight.left,
-                  animationName: legendaryFlight.direction === 'right' ? 'legendaryDiagonalRight' : 'legendaryDiagonalLeft',
-                  animationDuration: `${legendaryFlight.duration}s`,
-                  animationTimingFunction: 'ease-out',
-                  animationIterationCount: '1',
-                  animationFillMode: 'forwards',
-                  animationDelay: `-${legendaryFlight.startOffset}s`,
-                }}
-              >
-                <img
-                  src={legendaryFlight.url}
-                  alt={legendaryFlight.name}
-                  style={{ width: `${legendaryFlight.size}px`, height: `${legendaryFlight.size}px`, objectFit: 'contain' }}
-                />
-              </div>
-            )}
-          </div>
           <div className="absolute bottom-0 left-0 right-0">
             <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl">
               <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${isNightSky ? 'bg-gradient-to-b from-[#233a33] via-[#16282c] to-[#080f15]' : 'bg-gradient-to-b from-[#5e8c67] via-[#4e7458] to-[#2c3f37]'}`} />
@@ -3187,10 +3071,46 @@ export default function App() {
                   저장된 통합 리포트가 없습니다.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3 p-2 rounded-lg border border-slate-200 bg-slate-50">
+                    <p className="text-[11px] font-bold text-slate-700">
+                      체크 선택: {menuCheckedReportKeysValid.length}건
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleImportCheckedMenuReports}
+                        className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px]"
+                      >
+                        선택 임포트
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteCheckedMenuReports}
+                        className="px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50 font-bold text-[11px]"
+                      >
+                        선택 삭제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMenuCheckedReportKeys([])}
+                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-[11px]"
+                      >
+                        선택 해제
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full text-xs min-w-[1080px]">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
+                        <th className="p-2 font-bold text-center">
+                          <input
+                            type="checkbox"
+                            checked={isAllMenuReportsChecked}
+                            onChange={(e) => toggleMenuAllReportChecks(e.target.checked)}
+                          />
+                        </th>
                         <th className="p-2 font-bold text-center">구분</th>
                         <th className="p-2 font-bold text-center">측정일자</th>
                         <th className="p-2 font-bold text-center">사업장</th>
@@ -3198,13 +3118,22 @@ export default function App() {
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
                         <th className="p-2 font-bold text-center">실측농도</th>
                         <th className="p-2 font-bold text-center">보정농도</th>
-                        <th className="p-2 font-bold text-center">불러오기</th>
+                        <th className="p-2 font-bold text-center">임포트</th>
                         <th className="p-2 font-bold text-center">삭제</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {profileCombinedReports.map((data) => (
-                        <tr key={data.id || data.savedAt} className="hover:bg-slate-50 cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
+                      {profileCombinedReports.map((data) => {
+                        const reportKey = getReportKey(data);
+                        return (
+                        <tr key={reportKey || data.savedAt} className="hover:bg-slate-50">
+                          <td className="p-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={menuCheckedReportKeySet.has(reportKey)}
+                              onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
+                            />
+                          </td>
                           <td className="p-2 text-center font-bold text-slate-800">{data._sheetTitle}</td>
                           <td className="p-2 text-center whitespace-nowrap">{data.date || '-'}</td>
                           <td className="p-2 text-center">{data.company || '-'}</td>
@@ -3221,7 +3150,7 @@ export default function App() {
                               }}
                               className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold"
                             >
-                              불러오기
+                              임포트
                             </button>
                           </td>
                           <td className="p-2 text-center">
@@ -3237,9 +3166,10 @@ export default function App() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
+                </div>
                 </div>
               )}
             </div>
@@ -3460,21 +3390,12 @@ export default function App() {
           </button>
         </div>
 
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
           <p className="text-xs text-slate-600">
             사용자: <span className="font-black text-slate-900">{activeUser || '미선택'}</span>
             {' '}| 상태: <span className={`font-black ${isUserUnlocked ? activeTheme.accentText : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
-            {' '}| 계정/로그아웃은 상단 초기 화면에서 설정합니다.
+            {' '}| 계정 설정은 초기 화면에서 가능합니다.
           </p>
-          {isUserUnlocked && (
-            <button
-              type="button"
-              onClick={handleLockActiveUser}
-              className="px-3 py-1.5 bg-slate-700 text-white rounded-lg font-bold text-xs hover:bg-slate-800 self-start md:self-auto"
-            >
-              로그아웃
-            </button>
-          )}
         </div>
 
         <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} className="space-y-6">
