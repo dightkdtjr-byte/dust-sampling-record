@@ -644,7 +644,7 @@ const calcExpectedOrificeDH = (kVal, dpVal) => {
 
 const formatKFactorDisplay = (value) => {
   const num = parseFloat(value);
-  return Number.isFinite(num) ? num.toFixed(2) : '-';
+  return Number.isFinite(num) ? num.toFixed(5) : '-';
 };
 
 const SignatureBadge = () => (
@@ -1865,17 +1865,17 @@ export default function App() {
     for (let n of configuredNozzles) {
         const Dn = n.d;
         const tempK = 8.001e-5 * Math.pow(Dn, 4) * dHAt * Math.pow(Cp, 2) * Math.pow(1 - Xw / 100, 2) * (Md / Ms) * ((Tm + 273) / (Ts + 273)) * Ps_ratio;
-        const expectedDHCheck = parseFloat(calcExpectedOrificeDH(tempK, dpAvg));
-        if (!Number.isFinite(expectedDHCheck)) continue;
+        const expectedDHRaw = tempK * dpAvg;
+        if (!Number.isFinite(expectedDHRaw)) continue;
 
-        if (expectedDHCheck <= 50) {
+        if (expectedDHRaw <= 50) {
             if (mode === 'fast') {
-                if (expectedDHCheck > maxDH) { maxDH = expectedDHCheck; bestNozzle = n; }
+                if (expectedDHRaw > maxDH) { maxDH = expectedDHRaw; bestNozzle = n; }
             } else if (mode === 'standard') {
-                const diff = Math.abs(expectedDHCheck - 25);
+                const diff = Math.abs(expectedDHRaw - 25);
                 if (diff < closestDiffStandard) { closestDiffStandard = diff; bestNozzle = n; }
             } else if (mode === 'stable') {
-                const diff = Math.abs(expectedDHCheck - 10);
+                const diff = Math.abs(expectedDHRaw - 10);
                 if (diff < closestDiffStable) { closestDiffStable = diff; bestNozzle = n; }
             }
         }
@@ -3574,7 +3574,14 @@ export default function App() {
                         <tr key={idx} className="hover:bg-slate-50 border-b border-slate-100">
                           <td className="p-2 border-r border-slate-100 font-medium text-slate-700 flex justify-center items-center gap-2">
                             <span className="whitespace-nowrap">{idx + 1}회차</span>
-                            <input type="time" value={gas.time || ''} onChange={(e) => handleGasAnalyzerChange(idx, 'time', e.target.value)} className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-teal-500" />
+                            <input
+                              type="time"
+                              name={`gas-time-${idx}`}
+                              autoComplete="off"
+                              value={gas.time || ''}
+                              onChange={(e) => handleGasAnalyzerChange(idx, 'time', e.target.value)}
+                              className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-teal-500"
+                            />
                           </td>
                           <td className="p-1 border-r border-slate-100">
                             <input type="number" step="0.01" value={gas.o2} onChange={(e) => handleGasAnalyzerChange(idx, 'o2', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center outline-none focus:ring-2 focus:ring-teal-500" />
