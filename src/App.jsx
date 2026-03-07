@@ -4810,8 +4810,8 @@ export default function App() {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 border-b border-slate-200 pb-3 gap-3">
                 <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <span className="bg-emerald-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">4</span>
-                  측정점별 동압 및 온도 (예비조사)
+                  <span className="bg-emerald-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black shrink-0">4</span>
+                  측정점별 동압 및 온도
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4">
                   <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
