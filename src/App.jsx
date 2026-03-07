@@ -2949,13 +2949,6 @@ export default function App() {
             ) : (
               <div className="space-y-4 flex flex-col items-center">
                 <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
-                  <button
-                    type="button"
-                    onClick={() => setAuthModal('settings')}
-                    className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
-                  >
-                    설정
-                  </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
                       <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center">
