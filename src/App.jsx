@@ -949,6 +949,13 @@ const roundFixed = (val, digits = 2) => {
   return (Math.round((num + Number.EPSILON) * factor) / factor).toFixed(digits);
 };
 
+const formatFlowDisplay = (val) => {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '-';
+  // 엑셀 표시 자릿수와 대조하기 쉽게 소수 5자리 고정
+  return num.toFixed(5);
+};
+
 const formatFixed15 = (val) => {
   const num = Number(val);
   if (!Number.isFinite(num)) return '-';
@@ -2904,8 +2911,8 @@ export default function App() {
     const Q_dry = Q_wet * factors.moistureTerm;
 
     return {
-      wet: roundFixed(Q_wet, 2),
-      dry: roundFixed(Q_dry, 2),
+      wet: formatFlowDisplay(Q_wet),
+      dry: formatFlowDisplay(Q_dry),
       wetRaw: Q_wet,
       dryRaw: Q_dry,
       factors: {
@@ -5925,6 +5932,7 @@ export default function App() {
                    <p>v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
                    <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw(raw15)={formatFixed15(gasFlowFactors.XwPercent)} | Xw(excel14)={roundFixed(gasFlowFactors.XwPercent, 14)}</p>
                    <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
+                   <p>Qw(raw15)={formatFixed15(gasFlowFactors.Q_wet)} | Qd(raw15)={formatFixed15(gasFlowFactors.Q_dry)}</p>
                  </div>
                )}
             </div>
