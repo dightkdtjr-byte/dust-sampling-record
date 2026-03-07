@@ -2602,19 +2602,6 @@ export default function App() {
     return C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
   };
 
-  const getRawPreCorrectedGasDensity = () => {
-    // 사전(예비조사) 기준 보정 배출가스 밀도 r 사용
-    // r = r0 * 273/(273+Ts_pre) * Ps_abs/760
-    const TsPre = getRawAvgTs();
-    const PsAbs = getRawStackPressure();
-    const gasComp = getGasComposition();
-    if (!Number.isFinite(TsPre) || !Number.isFinite(PsAbs) || PsAbs <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) {
-      return NaN;
-    }
-    const rPre = gasComp.r0 * (273 / (273 + TsPre)) * (PsAbs / 760);
-    return Number.isFinite(rPre) && rPre > 0 ? rPre : NaN;
-  };
-
   const isActiveMeterRow = (row, idx) => (
     idx === 0 || String(row?.pointNum || '').trim() !== ''
   );
@@ -2651,14 +2638,18 @@ export default function App() {
     const avgDp = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
     const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
     const C = parseFloat(formData.pitotFactor) || 0.84;
+    const P = getRawStackPressure();
+    const gasComp = getGasComposition();
 
     if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
-    const r = getRawPreCorrectedGasDensity();
+    if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
+
+    const r = gasComp.r0 * (273 / (273 + avgTs)) * (P / 760);
     if (!Number.isFinite(r) || r <= 0) return null;
 
     const velocity = C * Math.pow((2 * 9.81 * avgDp) / r, 0.5);
     if (!Number.isFinite(velocity) || velocity <= 0) return null;
-    return { velocity, avgDp, avgTs, C, r0: getGasComposition().r0, r };
+    return { velocity, avgDp, avgTs, C, P, r0: gasComp.r0, r };
   };
 
   const getRawGasVelocityFromMeterRows = () => {
@@ -3128,8 +3119,18 @@ export default function App() {
   const getRowCorrectedGasDensityRaw = (idx) => {
     if (idx < 0) return NaN;
     if (idx > 0 && String(formData.gasMeters[idx]?.pointNum || '').trim() === '') return NaN;
-    const correctedDensity = getRawPreCorrectedGasDensity();
-    return Number.isFinite(correctedDensity) && correctedDensity > 0 ? correctedDensity : NaN;
+    const rangeRows = getActiveMeterRowsUntil(idx);
+    const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
+    if (tsValues.length === 0) return NaN;
+
+    const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
+    const Ps = getRawStackPressure();
+    const r0 = getGasComposition().r0;
+    if (!Number.isFinite(Ps) || !Number.isFinite(r0) || r0 <= 0) return NaN;
+
+    const correctedDensity = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
+    if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return NaN;
+    return correctedDensity;
   };
 
   const calcRowCorrectedGasDensity = (idx) => {
