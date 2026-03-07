@@ -224,6 +224,11 @@ const SKY_PREVIEW_OPTIONS = [
   { id: 'night', label: '밤' },
 ];
 
+const sanitizeSkyPreviewMode = (value) => {
+  const mode = String(value || '').trim();
+  return SKY_PREVIEW_OPTIONS.some((opt) => opt.id === mode) ? mode : 'auto';
+};
+
 const MOBILE_LIGHT_MAX_WIDTH = 768;
 const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
 const DEFAULT_MEASURE_ROW_COUNT = 12;
@@ -571,6 +576,7 @@ const STORAGE_KEYS = {
   activeUser: 'dust-sampling.secure-active-user.v2',
   lastLoginId: 'dust-sampling.last-login-id.v1',
   sessionAuth: 'dust-sampling.session-auth.v1',
+  skyPreviewMode: 'dust-sampling.sky-preview-mode.v1',
   cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
 };
 
@@ -1088,7 +1094,14 @@ export default function App() {
   const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
-  const [skyPreviewMode, setSkyPreviewMode] = useState('auto');
+  const [skyPreviewMode, setSkyPreviewMode] = useState(() => {
+    try {
+      return sanitizeSkyPreviewMode(localStorage.getItem(STORAGE_KEYS.skyPreviewMode));
+    } catch (error) {
+      console.error('낮/밤 설정 로딩 실패:', error);
+      return 'auto';
+    }
+  });
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
   const [isKFactorEditing, setIsKFactorEditing] = useState(false);
   const displayUserName = String(profileNickname || '').trim() || activeUser || '';
@@ -1097,6 +1110,14 @@ export default function App() {
   useEffect(() => {
     cloudSyncBusyRef.current = cloudSyncBusy;
   }, [cloudSyncBusy]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.skyPreviewMode, sanitizeSkyPreviewMode(skyPreviewMode));
+    } catch (error) {
+      console.error('낮/밤 설정 저장 실패:', error);
+    }
+  }, [skyPreviewMode]);
 
   const canUseUserScopedPresets = (userId) => {
     const normalizedId = String(userId || '').trim().toLowerCase();
@@ -4280,18 +4301,6 @@ export default function App() {
     return (
       <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
         <style>{SKYLINE_FLYER_CSS}</style>
-        <div className="fixed left-4 bottom-4 z-40 flex items-center gap-1 rounded-xl border border-white/70 bg-white/80 px-2 py-1 backdrop-blur">
-        {SKY_PREVIEW_OPTIONS.map((opt) => (
-          <button
-            key={`menu-sky-${opt.id}`}
-            type="button"
-            onClick={() => setSkyPreviewMode(opt.id)}
-            className={`px-2 py-1 rounded text-[11px] font-black transition-colors ${skyPreviewMode === opt.id ? 'bg-slate-800 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className={`absolute inset-0 ${isNightSky ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent' : 'bg-gradient-to-b from-white/35 via-sky-100/10 to-transparent'}`} />
         <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${isNightSky ? 'bg-indigo-300/20' : 'bg-white/80'}`} />
@@ -4719,6 +4728,29 @@ export default function App() {
                         >
                           현재 계정 삭제
                         </button>
+                        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-xs font-black text-slate-800">앱 설정</p>
+                          <p className="text-[11px] text-slate-600 mt-1">배경 낮/밤 표시를 선택합니다.</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {SKY_PREVIEW_OPTIONS.map((opt) => {
+                              const selected = skyPreviewMode === opt.id;
+                              return (
+                                <button
+                                  key={`settings-sky-${opt.id}`}
+                                  type="button"
+                                  onClick={() => setSkyPreviewMode(opt.id)}
+                                  className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
+                                    selected
+                                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist)</p>
                           <p className="text-[11px] text-slate-600 mt-1">다른 기기에서도 같은 계정 리포트를 복원할 수 있습니다.</p>
