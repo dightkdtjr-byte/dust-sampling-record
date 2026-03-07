@@ -4189,7 +4189,8 @@ export default function App() {
   const isMobileLightMode = isMobileViewport;
   const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
   const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
-  const sceneMountains = isMobileLightMode ? makeSparseLayout(SKYLINE_MOUNTAINS, 2) : SKYLINE_MOUNTAINS;
+  // 산 라인은 모바일에서도 전체를 유지해 배경이 끊기거나 잘려 보이지 않게 한다.
+  const sceneMountains = SKYLINE_MOUNTAINS;
   const sceneTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_TREE_BELT, 3) : SKYLINE_TREE_BELT;
   const sceneFrontTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_FRONT_TREE_BELT, 3) : SKYLINE_FRONT_TREE_BELT;
   const sceneBackTowers = isMobileLightMode ? makeSparseLayout(SKYLINE_BACK_TOWERS, 2) : SKYLINE_BACK_TOWERS;
