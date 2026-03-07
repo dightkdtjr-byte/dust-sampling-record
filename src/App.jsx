@@ -5338,13 +5338,13 @@ export default function App() {
                   측정점별 동압 및 온도
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4 md:ml-auto md:justify-end">
-                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200">
-                    <label className="text-[11px] font-bold text-slate-700">피토계수</label>
-                    <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-slate-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
+                  <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
+                    <label className="text-[11px] font-bold text-emerald-800">피토계수</label>
+                    <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
                     <select
                       value={formData.pitotPresetId}
                       onChange={handlePitotPresetChange}
-                      className="p-1 border border-slate-300 rounded text-[11px] font-bold text-slate-700 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                       title="피토 프리셋 선택"
                     >
                       <option value="">피토 프리셋</option>
