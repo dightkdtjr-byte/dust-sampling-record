@@ -776,6 +776,18 @@ const calcExpectedOrificeDH = (kVal, dpVal) => {
   return roundDH(kNum * dpNum);
 };
 
+const formatSavedDateTime = (value) => {
+  const dt = new Date(value);
+  if (!Number.isFinite(dt.getTime())) return '-';
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const min = String(dt.getMinutes()).padStart(2, '0');
+  const ss = String(dt.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+};
+
 const formatKFactorDisplay = (value) => {
   const num = parseFloat(value);
   return Number.isFinite(num) ? num.toFixed(2) : '-';
@@ -997,14 +1009,13 @@ export default function App() {
   const getReportKey = (report) => buildReportKey(report?.id, report?.savedAt);
 
   const savedData = [...activeUserReports].sort((a, b) => {
-    // 측정일자(date)를 우선 정렬 기준으로 사용하고, 없을 때만 저장시각(savedAt)로 보조 정렬
-    const aMeasured = a.date ? new Date(a.date).getTime() : NaN;
-    const bMeasured = b.date ? new Date(b.date).getTime() : NaN;
-    if (Number.isFinite(aMeasured) && Number.isFinite(bMeasured)) return bMeasured - aMeasured;
-
+    // 가장 최근 저장 파일이 항상 맨 위로 오도록 저장시각 기준 내림차순 정렬
     const aTime = new Date(a.savedAt || 0).getTime();
     const bTime = new Date(b.savedAt || 0).getTime();
-    return bTime - aTime;
+    if (Number.isFinite(aTime) && Number.isFinite(bTime)) return bTime - aTime;
+    if (Number.isFinite(bTime)) return 1;
+    if (Number.isFinite(aTime)) return -1;
+    return 0;
   });
   const resolveReportSheetId = (report) => {
     const byId = String(report?.sheetId || '').trim();
@@ -3731,7 +3742,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-xs min-w-[1080px]">
+                  <table className="w-full text-xs min-w-[1200px]">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
                         <th className="p-2 font-bold text-center">
@@ -3743,6 +3754,7 @@ export default function App() {
                         </th>
                         <th className="p-2 font-bold text-center">구분</th>
                         <th className="p-2 font-bold text-center">측정일자</th>
+                        <th className="p-2 font-bold text-center">저장시간</th>
                         <th className="p-2 font-bold text-center">사업장</th>
                         <th className="p-2 font-bold text-center">배출구</th>
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
@@ -3771,6 +3783,7 @@ export default function App() {
                           </td>
                           <td className="p-2 text-center font-bold text-slate-800">{data._sheetTitle}</td>
                           <td className="p-2 text-center whitespace-nowrap">{data.date || '-'}</td>
+                          <td className="p-2 text-center whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
                           <td className="p-2 text-center">{data.company || '-'}</td>
                           <td className="p-2 text-center">{data.location || '-'}</td>
                           <td className="p-2 text-center">{data.isokineticRate || '-'}</td>
@@ -5042,7 +5055,7 @@ export default function App() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-700">
-              <table className="w-full text-xs text-center min-w-[1880px]">
+              <table className="w-full text-xs text-center min-w-[2020px]">
                 <thead className="bg-slate-700 text-slate-200">
                   <tr>
                     <th className="p-2 font-bold">
@@ -5053,6 +5066,7 @@ export default function App() {
                       />
                     </th>
                     <th className="p-2 font-bold">측정일자</th>
+                    <th className="p-2 font-bold">저장시간</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
                     <th className="p-2 font-bold">측정자</th>
@@ -5084,6 +5098,7 @@ export default function App() {
                         />
                       </td>
                       <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
+                      <td className="p-2 whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
                       <td className="p-2">{data.company || '-'}</td>
                       <td className="p-2">{data.location || '-'}</td>
                       <td className="p-2">{data.sampler || '-'}</td>
