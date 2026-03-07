@@ -2374,7 +2374,6 @@ export default function App() {
     const Ps = getRawStackPressure();
 
     if (Vm > 0 && Dn > 0 && Vs > 0 && theta > 0 && !isNaN(Ts) && !isNaN(Pa) && !isNaN(dH_avg) && !isNaN(Ps)) {
-      const An = Math.PI * Math.pow(Dn / 2000, 2);
       const DnCm = Dn / 10;
       const AnCm2 = (Math.PI / 4) * Math.pow(DnCm, 2);
       const Pm_abs = Pa + dH_avg / 13.6;
@@ -2391,7 +2390,16 @@ export default function App() {
       } else {
         const gasComp = getGasComposition();
         const Xw = gasComp.Xw;
-        const I = (Vm * Y * (Ts + 273) * Pm_abs * 100) / ((Tm + 273) * Vs * An * 60 * 1000 * theta * Ps * (1 - Xw / 100));
+        if (!Number.isFinite(Xw) || Xw < 0 || Xw >= 100) return '-';
+
+        // 엑셀 사전수분량 기준 대응:
+        // Vic_pre = ((Vm*Y*(273/(273+Tm))*((Pa+Pm)/760))*Xw/(100-Xw))*(18/22.4)
+        // I_pre = (((Ts+273)*(0.00346*Vic_pre + (Vm*Y/1000)*(Pa+Pm)/(Tm+273))) / (Ps*theta*Vs*(PI()/4*Dn^2))) * 16670
+        const VicPre = ((Vm * Y * (273 / (273 + Tm)) * (Pm_abs / 760) * Xw) / (100 - Xw)) * (18 / 22.4);
+        const Vm_m3 = Vm / 1000;
+        const part1 = 0.00346 * VicPre;
+        const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
+        const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(1);
       }
     }
