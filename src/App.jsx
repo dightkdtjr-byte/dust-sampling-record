@@ -956,12 +956,6 @@ const formatFlowDisplay = (val) => {
   return num.toFixed(5);
 };
 
-const formatFixed15 = (val) => {
-  const num = Number(val);
-  if (!Number.isFinite(num)) return '-';
-  return num.toFixed(15);
-};
-
 const calcExpectedOrificeDH = (kVal, dpVal) => {
   const kNum = parseFloat(kVal);
   const dpNum = parseFloat(dpVal);
@@ -2499,9 +2493,9 @@ export default function App() {
     return {
       perRadius: isCenterOnly ? 1 : rnCoeffs.length,
       isCenterOnly,
-      area: formatFixed15(area),
-      nearInsertion: nearDistances.map(d => (d + flange).toFixed(4)),
-      farInsertion: farDistances.map(d => (d + flange).toFixed(4)),
+      area: area.toFixed(2),
+      nearInsertion: nearDistances.map(d => ((d + flange) * 100).toFixed(2)),
+      farInsertion: farDistances.map(d => ((d + flange) * 100).toFixed(2)),
     };
   };
 
@@ -3831,7 +3825,6 @@ export default function App() {
   const samplingPointsData = getSamplingPoints();
   const configuredNozzles = getConfiguredNozzles();
   const gasFlowRates = calcGasFlowRates();
-  const gasFlowFactors = gasFlowRates.factors;
   
   const getExpectedValues = () => {
     const d = parseFloat(formData.nozzleDiameter), k = parseFloat(formData.kFactor), dp = getRawAvgDp(), Vs = getRawGasVelocity();
@@ -4936,7 +4929,7 @@ export default function App() {
                     <table className="w-full text-xs text-center border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-slate-700">
-                          <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치)</th>
+                          <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치, cm)</th>
                           <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
                         </tr>
                         <tr className="bg-slate-50 text-slate-700">
@@ -4952,7 +4945,7 @@ export default function App() {
                           </td>
                           {samplingPointsData.nearInsertion.map((d, i) => (
                             <td key={i} className="border-l border-b border-slate-200 p-2 font-black text-emerald-700 bg-white">
-                              {d} m
+                              {d} cm
                             </td>
                           ))}
                         </tr>
@@ -4963,7 +4956,7 @@ export default function App() {
                             </td>
                             {samplingPointsData.farInsertion.map((d, i) => (
                               <td key={i} className="border-l border-slate-200 p-2 font-black text-red-600 bg-red-50/50">
-                                {d} m
+                                {d} cm
                               </td>
                             ))}
                           </tr>
@@ -5899,12 +5892,10 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 습가스 유량 (Q<sub>sw</sub>)</span>
                       <span className="text-2xl font-bold text-emerald-300">{gasFlowRates.wet} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
-                      <span className="text-[10px] mt-1 text-slate-400">{formatFixed15(gasFlowRates.wetRaw)}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">표준 건조가스 유량 (Q<sub>s</sub>)</span>
                       <span className="text-2xl font-bold text-cyan-300">{gasFlowRates.dry} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
-                      <span className="text-[10px] mt-1 text-slate-400">{formatFixed15(gasFlowRates.dryRaw)}</span>
                   </div>
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
@@ -5926,15 +5917,6 @@ export default function App() {
                     </div>
                   )}
                </div>
-               {gasFlowFactors && (
-                 <div className="mt-4 p-3 rounded-lg border border-slate-600 bg-slate-900/40 text-[10px] text-slate-300">
-                   <p className="font-bold text-slate-200 mb-1">유량 계산 인수 (소수 15자리)</p>
-                   <p>v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
-                   <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw(raw15)={formatFixed15(gasFlowFactors.XwPercent)} | Xw(excel14)={roundFixed(gasFlowFactors.XwPercent, 14)}</p>
-                   <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
-                   <p>Qw(raw15)={formatFixed15(gasFlowFactors.Q_wet)} | Qd(raw15)={formatFixed15(gasFlowFactors.Q_dry)}</p>
-                 </div>
-               )}
             </div>
 
             <div className="mt-2">
