@@ -1590,9 +1590,9 @@ export default function App() {
           correctedConcentration: row['보정농도'] || '',
           remarks: row['비고'] || '',
           gasAnalyzer: [
-            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
-            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
-            { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
+            { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
+            { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
+            { time: '', o2: '', co2: '', co: '', nox: '', sox: '' },
           ],
         };
       }).filter((item) => item.date || item.company || item.location);
