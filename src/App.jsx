@@ -6223,7 +6223,7 @@ export default function App() {
                 onClick={handleCopyCheckedReportsToCurrentSheet}
                 className="px-5 py-2.5 bg-emerald-600 border border-emerald-700 text-white hover:bg-emerald-700 font-bold rounded-xl transition-colors shadow-md text-sm"
               >
-                선택항목 복사
+                현재 시트로 복사
               </button>
               <button
                 onClick={handleExportSelectedTemplateExcel}
@@ -6289,7 +6289,7 @@ export default function App() {
                     <th className="p-2 font-bold">보정농도</th>
                     <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
                     <th className="p-2 font-bold">비고</th>
-                    <th className="p-2 font-bold">현재시트 복사</th>
+                    <th className="p-2 font-bold">현재 시트로 복사</th>
                     <th className="p-2 font-bold">불러오기</th>
                     <th className="p-2 font-bold">삭제</th>
                   </tr>
@@ -6343,7 +6343,7 @@ export default function App() {
                           }}
                           className="px-2 py-1 rounded bg-emerald-600 border border-emerald-700 text-white hover:bg-emerald-700 font-bold"
                         >
-                          복사
+                          현재 시트로 복사
                         </button>
                       </td>
                       <td className="p-2">
