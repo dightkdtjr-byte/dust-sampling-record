@@ -670,7 +670,7 @@ export default function App() {
 
   const [formData, setFormData] = useState({
     date: '', company: '', location: '', sampler: '',
-    weather: '맑음', atmTemp: '20', atmPressure: '760',
+    weather: '', atmTemp: '', atmPressure: '',
     totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotFactor: '0.84',
     standardO2: '',
     gasAnalyzer: [
