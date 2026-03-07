@@ -305,6 +305,52 @@ const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_
   return rows;
 };
 
+const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
+  const sourceRows = Array.isArray(rows)
+    ? rows.filter((row) => row && typeof row === 'object')
+    : [];
+
+  const safeRows = sourceRows.length > 0
+    ? sourceRows
+    : createGasMeterRowsByPoints(Math.max(1, Number(fallbackPointCount) || 1));
+
+  const normalizedRows = safeRows.map((row, idx) => ({
+    id: idx,
+    pointNum: idx === 0
+      ? '시작'
+      : (row.pointNum === undefined || row.pointNum === null ? '' : String(row.pointNum)),
+    time: idx === 0
+      ? '0'
+      : (row.time === undefined || row.time === null ? '' : String(row.time)),
+    stackTemp: row.stackTemp === undefined || row.stackTemp === null ? '' : String(row.stackTemp),
+    dp: row.dp === undefined || row.dp === null ? '' : String(row.dp),
+    pressure: row.pressure === undefined || row.pressure === null ? '' : String(row.pressure),
+    volume: row.volume === undefined || row.volume === null ? '' : String(row.volume),
+    tmIn: row.tmIn === undefined || row.tmIn === null ? '' : String(row.tmIn),
+    tmOut: row.tmOut === undefined || row.tmOut === null ? '' : String(row.tmOut),
+    vacuum: row.vacuum === undefined || row.vacuum === null ? '' : String(row.vacuum),
+    impingerTemp: row.impingerTemp === undefined || row.impingerTemp === null ? '' : String(row.impingerTemp),
+  }));
+
+  if (normalizedRows.length === 1) {
+    normalizedRows.push({
+      id: 1,
+      pointNum: '',
+      time: String(DEFAULT_SLOT_MINUTES),
+      stackTemp: '',
+      dp: '',
+      pressure: '',
+      volume: '',
+      tmIn: '',
+      tmOut: '',
+      vacuum: '',
+      impingerTemp: '',
+    });
+  }
+
+  return normalizedRows;
+};
+
 const PIXEL_MOUNTAIN_CLIP_PATH = 'polygon(0 100%, 0 78%, 8% 78%, 8% 66%, 16% 66%, 16% 54%, 24% 54%, 24% 42%, 32% 42%, 32% 30%, 40% 30%, 40% 18%, 48% 18%, 48% 8%, 56% 8%, 56% 18%, 64% 18%, 64% 30%, 72% 30%, 72% 42%, 80% 42%, 80% 54%, 88% 54%, 88% 66%, 96% 66%, 96% 78%, 100% 78%, 100% 100%)';
 const PIXEL_HILL_CLIP_PATH = 'polygon(0 100%, 0 72%, 6% 72%, 6% 64%, 14% 64%, 14% 56%, 22% 56%, 22% 62%, 30% 62%, 30% 52%, 38% 52%, 38% 44%, 46% 44%, 46% 50%, 54% 50%, 54% 42%, 62% 42%, 62% 50%, 70% 50%, 70% 60%, 78% 60%, 78% 54%, 86% 54%, 86% 66%, 94% 66%, 94% 74%, 100% 74%, 100% 100%)';
 
@@ -1702,7 +1748,14 @@ export default function App() {
       const nextForm = { ...prev };
       Object.keys(nextForm).forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(report, key)) {
-          nextForm[key] = report[key];
+          if (key === 'gasMeters') {
+            const pointCount = Array.isArray(report.points) && report.points.length > 0
+              ? report.points.length
+              : nextForm.points.length;
+            nextForm.gasMeters = normalizeGasMeterRows(report.gasMeters, pointCount);
+          } else {
+            nextForm[key] = report[key];
+          }
         }
       });
       return nextForm;
@@ -2436,6 +2489,7 @@ export default function App() {
     const isokineticRate = calcIsokineticRate(true);
     const isokineticNum = parseFloat(isokineticRate);
     const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 90 && isokineticNum <= 110 ? '적합' : '부적합';
+    const normalizedGasMeters = normalizeGasMeterRows(formData.gasMeters, formData.points.length);
 
     const result = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2444,6 +2498,7 @@ export default function App() {
       sheetId: selectedSheet || 'dust',
       sheetTitle: activeSheet?.title || '먼지시료채취기록부',
       ...formData,
+      gasMeters: normalizedGasMeters,
       sampler: formData.sampler || '',
       moisturePre: calcMoisture(),
       moisturePost: calcPostMoisture(),
@@ -4693,8 +4748,8 @@ export default function App() {
                       const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 90 && parseFloat(rowRate) <= 110;
                       
                       return (
-                        <tr key={meter.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors`}>
-                          <td className="p-1 font-bold text-slate-500 w-8">{isStartRow ? '초기' : meter.id}</td>
+                        <tr key={`meter-row-${idx}`} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors`}>
+                          <td className="p-1 font-bold text-slate-500 w-8">{isStartRow ? '초기' : idx}</td>
                           <td className="p-1 w-12">
                             {isStartRow ? (
                               <span className="font-bold text-slate-400">시작</span>
