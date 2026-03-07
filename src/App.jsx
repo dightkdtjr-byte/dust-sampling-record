@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import JSZip from 'jszip';
+import mainLogoImage from './assets/mainlogo.png';
 
 const DEFAULT_NOZZLE_SET = [
   { num: 4, d: 3.21 }, { num: 5, d: 3.97 }, { num: 6, d: 4.79 },
@@ -767,6 +768,16 @@ const SignatureBadge = () => (
 );
 
 export default function App() {
+  const logoCandidates = [
+    mainLogoImage,
+    `${import.meta.env.BASE_URL}mainlogo.png`,
+    `${import.meta.env.BASE_URL}app-logo.png`,
+    `${import.meta.env.BASE_URL}mainlogo.jpg`,
+    `${import.meta.env.BASE_URL}app-logo.jpg`,
+  ];
+  const [logoIndex, setLogoIndex] = useState(0);
+  const mainLogoSrc = logoCandidates[Math.min(logoIndex, logoCandidates.length - 1)];
+  const dustTemplateUrl = `${import.meta.env.BASE_URL}templates/dust-template.xlsm`;
   const [selectedSheet, setSelectedSheet] = useState('');
   const [nozzleSet, setNozzleSet] = useState(cloneDefaultNozzles);
   const [samplers, setSamplers] = useState(cloneDefaultSamplers);
@@ -2328,7 +2339,7 @@ export default function App() {
 
   const exportToTemplateExcel = async () => {
     try {
-      const response = await fetch('/templates/dust-template.xlsm');
+      const response = await fetch(dustTemplateUrl);
       if (!response.ok) throw new Error('템플릿 파일을 불러오지 못했습니다.');
 
       const templateBuffer = await response.arrayBuffer();
@@ -2935,7 +2946,12 @@ export default function App() {
         <div className="relative z-30 max-w-6xl mx-auto">
           <div className="mb-6 p-2 text-center">
             <h1 className="text-slate-900 tracking-tight flex justify-center">
-              <img src="/mainlogo.png" alt="STACKPILOT" className="h-[2.6rem] md:h-[4rem] w-auto select-none" />
+              <img
+                src={mainLogoSrc}
+                alt="STACKPILOT"
+                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
+                className="h-[2.6rem] md:h-[4rem] w-auto select-none"
+              />
             </h1>
             {isUserUnlocked && (
               <p className="text-sm text-slate-600 mt-2">로그인 완료: 원하는 기록부 아이콘을 누르면 해당 기록부로 이동합니다.</p>
@@ -3374,7 +3390,12 @@ export default function App() {
         <div className={`bg-white p-6 rounded-xl shadow-md border-t-4 relative ${activeTheme.headerBorder}`}>
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl font-black text-slate-900">
-              <img src="/mainlogo.png" alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none" />
+              <img
+                src={mainLogoSrc}
+                alt="STACKPILOT"
+                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
+                className="h-[2.2rem] md:h-[3.2rem] w-auto select-none"
+              />
             </h1>
             <p className="text-slate-600 mt-2 text-sm font-medium">
               <span className="font-black text-slate-800">{activeSheet?.title || '먼지시료채취기록부'}</span>
