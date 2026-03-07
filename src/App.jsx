@@ -2147,24 +2147,41 @@ export default function App() {
   };
 
   const getRawPostMoisture = () => {
-    const Wm = getRawTotalMoistureWeight(), Vm = getRawGasMeterVolDiff(), Tm = getRawAvgTm();
-    const Pa = parseFloat(formData.atmPressure), Pm = getRawAvgOrifice() || 0;
-    const Y = parseFloat(formData.gasMeterFactor) || 1.0;
-    if (Wm > 0 && Vm > 0 && !isNaN(Tm) && !isNaN(Pa)) {
-      const Vm_std = Vm * Y * (273 / (273 + Tm)) * ((Pa + Pm / 13.6) / 760);
+    // 사후 수분량 항:
+    // 1) 가스미터 값 차이 ΔVm(L)
+    // 2) 가스미터 온도 평균 Tm
+    // 3) 대기압 Pa
+    // 4) 가스미터압 보정항 Pm/13.6
+    const Wm = getRawTotalMoistureWeight(); // 임핀저 포집 수분량(ml≈g)
+    const deltaVmL = getRawGasMeterVolDiff(); // ΔVm (L)
+    const tmAvg = getRawAvgTm(); // Tm 평균(℃)
+    const pa = parseFloat(formData.atmPressure); // Pa (mmHg)
+    const pmAvg = getRawAvgOrifice(); // Pm 평균(mmH2O)
+    const yd = parseFloat(formData.gasMeterFactor) || 1.0;
+
+    if (Wm > 0 && deltaVmL > 0 && Number.isFinite(tmAvg) && Number.isFinite(pa) && Number.isFinite(pmAvg)) {
+      const pmAbsTerm = pa + (pmAvg / 13.6);
+      if (!Number.isFinite(pmAbsTerm) || pmAbsTerm <= 0) return 0;
+
+      const vmStdL = deltaVmL * yd * (273 / (273 + tmAvg)) * (pmAbsTerm / 760);
       // 엑셀 상수와 동일하게 22.4/18 사용
-      const Vw_std = Wm * (22.4 / 18);
-      return (Vw_std / (Vm_std + Vw_std)) * 100;
+      const vwStdL = Wm * (22.4 / 18);
+      return (vwStdL / (vmStdL + vwStdL)) * 100;
     }
     return 0;
   };
 
   const getRawVmStd = () => {
-    const Vm = getRawGasMeterVolDiff(), Tm = getRawAvgTm();
-    const Pa = parseFloat(formData.atmPressure), Pm = getRawAvgOrifice() || 0;
-    const Y = parseFloat(formData.gasMeterFactor) || 1.0;
-    if (Vm > 0 && !isNaN(Tm) && !isNaN(Pa)) {
-      return Vm * Y * (273 / (273 + Tm)) * ((Pa + Pm / 13.6) / 760);
+    const deltaVmL = getRawGasMeterVolDiff();
+    const tmAvg = getRawAvgTm();
+    const pa = parseFloat(formData.atmPressure);
+    const pmAvg = getRawAvgOrifice();
+    const yd = parseFloat(formData.gasMeterFactor) || 1.0;
+
+    if (deltaVmL > 0 && Number.isFinite(tmAvg) && Number.isFinite(pa) && Number.isFinite(pmAvg)) {
+      const pmAbsTerm = pa + (pmAvg / 13.6);
+      if (!Number.isFinite(pmAbsTerm) || pmAbsTerm <= 0) return 0;
+      return deltaVmL * yd * (273 / (273 + tmAvg)) * (pmAbsTerm / 760);
     }
     return 0;
   };
