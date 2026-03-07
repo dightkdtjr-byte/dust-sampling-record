@@ -2274,15 +2274,17 @@ export default function App() {
 
     const dpAvg = pointDp.reduce((a, b) => a + b, 0) / pointDp.length;
     const spAvg = pointSp.reduce((a, b) => a + b, 0) / pointSp.length;
-    const Ps = Pa + (spAvg / 13.6);
+    const Pw = Pa;
+    const Ps = spAvg / 13.6;
+    const absPressure = Pw + Ps;
     const C = parseFloat(formData.pitotFactor) || 0.84;
     const r0 = getGasComposition().r0;
 
-    if (!Number.isFinite(dpAvg) || dpAvg <= 0 || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(r0) || r0 <= 0 || !Number.isFinite(C) || C <= 0) {
+    if (!Number.isFinite(dpAvg) || dpAvg <= 0 || !Number.isFinite(absPressure) || absPressure <= 0 || !Number.isFinite(r0) || r0 <= 0 || !Number.isFinite(C) || C <= 0) {
       return { dry: '-', wet: '-' };
     }
 
-    const r = r0 * (273 / (273 + Ts)) * (Ps / 760);
+    const r = r0 * (273 / (273 + Ts)) * (absPressure / 760);
     if (!Number.isFinite(r) || r <= 0) return { dry: '-', wet: '-' };
     const Vs = C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
     if (!Number.isFinite(Vs) || Vs <= 0) return { dry: '-', wet: '-' };
@@ -2290,9 +2292,12 @@ export default function App() {
     const A = Math.PI * Math.pow(D / 2, 2);
     const postMoisture = getRawPostMoisture();
     const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
+    const tempTerm = 273 / (273 + Ts);
+    const pressureTerm = (Pw + Ps) / 760;
 
-    const Q_wet = Vs * A * (273 / (273 + Ts)) * (Ps / 760) * 3600;
-    const Q_dry = Q_wet * (1 - moistureRatio);
+    // Qn(건조) = v * A * 273/(273+Ts) * (Pa+Ps)/760 * (1 - Xw/100) * 3600
+    const Q_wet = Vs * A * tempTerm * pressureTerm * 3600;
+    const Q_dry = Vs * A * tempTerm * pressureTerm * (1 - moistureRatio) * 3600;
 
     return { wet: Q_wet.toFixed(0), dry: Q_dry.toFixed(0) };
   };
