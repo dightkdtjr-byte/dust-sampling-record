@@ -1004,6 +1004,15 @@ const PresetSaveIcon = ({ className = 'w-3.5 h-3.5' }) => (
   </svg>
 );
 
+const CopySheetsIcon = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+    <rect x="3" y="7" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
+    <rect x="10" y="3" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M9 13h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M14 10l3 3-3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const SignatureBadge = () => (
   <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
     sangseok
@@ -3425,31 +3434,24 @@ export default function App() {
     return { actualC, correctedC };
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    if (!activeUser) {
-      alert('먼저 아이디/비밀번호로 로그인해주세요.');
-      return;
-    }
-    if (!isUserUnlocked) {
-      alert('저장하려면 먼저 로그인해주세요.');
-      return;
-    }
-
+  const buildReportSnapshot = (targetSheetId = (selectedSheet || 'dust')) => {
     const { actualC, correctedC } = calcDustConcentrations();
     const flowRates = calcGasFlowRates();
     const isokineticRate = calcIsokineticRate(true);
     const isokineticNum = parseFloat(isokineticRate);
     const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 90 && isokineticNum <= 110 ? '적합' : '부적합';
     const normalizedGasMeters = normalizeGasMeterRows(formData.gasMeters, formData.points.length);
+    const sheetMeta = SHEET_MENU.find((item) => item.id === targetSheetId);
+    const targetImpingers = normalizeImpingers(formData.impingers, getImpingerStageCount(targetSheetId));
 
-    const result = {
+    return {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       savedAt: new Date().toISOString(),
       user: activeUser,
-      sheetId: selectedSheet || 'dust',
-      sheetTitle: activeSheet?.title || '먼지시료채취기록부',
+      sheetId: targetSheetId,
+      sheetTitle: sheetMeta?.title || activeSheet?.title || '먼지시료채취기록부',
       ...formData,
+      impingers: targetImpingers,
       gasMeters: normalizedGasMeters,
       sampler: formData.sampler || '',
       moisturePre: calcMoisture(),
@@ -3477,6 +3479,19 @@ export default function App() {
       nozzleDiameterUsed: formData.nozzleDiameter || '-',
       kFactorApplied: formData.kFactor || '-',
     };
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!activeUser) {
+      alert('먼저 아이디/비밀번호로 로그인해주세요.');
+      return;
+    }
+    if (!isUserUnlocked) {
+      alert('저장하려면 먼저 로그인해주세요.');
+      return;
+    }
+    const result = buildReportSnapshot(selectedSheet || 'dust');
 
     const nextReports = [...activeUserReports, result];
     try {
@@ -3486,6 +3501,35 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCopyCurrentToOtherSheets = async () => {
+    if (!activeUser) {
+      alert('먼저 아이디/비밀번호로 로그인해주세요.');
+      return;
+    }
+    if (!isUserUnlocked) {
+      alert('로그인 후 복사할 수 있습니다.');
+      return;
+    }
+    const fromSheetId = selectedSheet || 'dust';
+    const targetSheetIds = SHEET_MENU.map((item) => item.id).filter((id) => id !== fromSheetId);
+    if (targetSheetIds.length === 0) return;
+
+    const copiedReports = targetSheetIds.map((sheetId) => buildReportSnapshot(sheetId));
+    const nextReports = [...activeUserReports, ...copiedReports];
+    const targetNames = targetSheetIds
+      .map((sheetId) => SHEET_MENU.find((item) => item.id === sheetId)?.title || sheetId)
+      .join(', ');
+
+    try {
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
+      alert(`현재 기록을 다음 기록부로 복사 저장했습니다.\n${targetNames}`);
+    } catch (error) {
+      console.error(error);
+      alert('기록 복사 저장 중 오류가 발생했습니다.');
     }
   };
 
@@ -6099,6 +6143,14 @@ export default function App() {
           <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyCurrentToOtherSheets}
+              className="px-6 py-3.5 bg-white border border-emerald-300 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors shadow-sm inline-flex items-center gap-2"
+            >
+              <CopySheetsIcon className="w-4 h-4" />
+              다른 기록부로 복사 저장
             </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
               기록부 데이터 저장
