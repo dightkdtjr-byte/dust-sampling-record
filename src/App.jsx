@@ -2225,23 +2225,12 @@ export default function App() {
 
     const Pa = parseFloat(formData.atmPressure);
     const Ps = getRawStackPressure();
-    const Cp = parseFloat(formData.pitotFactor) || 0.84;
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
-    if (!Number.isFinite(Pa) || !Number.isFinite(Ps)) return '-';
+    if (!Number.isFinite(Pa) || !Number.isFinite(Ps) || Ps <= 0) return '-';
     const PmAbs = Pa + (PmAvg / 13.6);
 
-    const dp = parseFloat(currentRow.dp);
-    if (!Number.isFinite(dp) || dp < 0) return '-';
-
-    const gasComp = getGasComposition();
-    const r0 = gasComp.r0;
-    if (!Number.isFinite(r0) || r0 <= 0) return '-';
-
-    // 엑셀처럼 누적 평균 배출가스온도로 밀도(r)를 보정
-    const rRow = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
-    if (!Number.isFinite(rRow) || rRow <= 0) return '-';
-
-    const Vs = Cp * Math.pow((2 * 9.81 * dp) / rRow, 0.5);
+    // 엑셀 M열과 동일하게 누적 평균 동압 기반의 배출가스속도를 사용
+    const Vs = getRowGasVelocityRaw(idx);
     if (!Number.isFinite(Vs) || Vs <= 0) return '-';
 
     const Dn = parseFloat(formData.nozzleDiameter);
@@ -2262,20 +2251,49 @@ export default function App() {
     return rate.toFixed(1);
   };
 
-  const calcRowCorrectedGasDensity = (idx) => {
-    if (idx < 0) return '-';
+  const getRowCorrectedGasDensityRaw = (idx) => {
+    if (idx < 0) return NaN;
     const rangeRows = formData.gasMeters.slice(0, idx + 1);
     const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
-    if (tsValues.length === 0) return '-';
+    if (tsValues.length === 0) return NaN;
 
     const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
     const Ps = getRawStackPressure();
     const r0 = getGasComposition().r0;
-    if (!Number.isFinite(Ps) || !Number.isFinite(r0) || r0 <= 0) return '-';
+    if (!Number.isFinite(Ps) || !Number.isFinite(r0) || r0 <= 0) return NaN;
 
     const correctedDensity = r0 * (273 / (273 + TsAvg)) * (Ps / 760);
+    if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return NaN;
+    return correctedDensity;
+  };
+
+  const calcRowCorrectedGasDensity = (idx) => {
+    const correctedDensity = getRowCorrectedGasDensityRaw(idx);
     if (!Number.isFinite(correctedDensity) || correctedDensity <= 0) return '-';
     return correctedDensity.toFixed(2);
+  };
+
+  const getRowGasVelocityRaw = (idx) => {
+    if (idx <= 0) return NaN;
+    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const dpValues = rangeRows.map(row => parseFloat(row.dp)).filter(v => Number.isFinite(v) && v >= 0);
+    if (dpValues.length === 0) return NaN;
+    const dpAvg = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
+    if (!Number.isFinite(dpAvg) || dpAvg <= 0) return NaN;
+
+    const density = getRowCorrectedGasDensityRaw(idx);
+    const C = parseFloat(formData.pitotFactor) || 0.84;
+    if (!Number.isFinite(density) || density <= 0 || !Number.isFinite(C) || C <= 0) return NaN;
+
+    const velocity = C * Math.pow((2 * 9.81 * dpAvg) / density, 0.5);
+    if (!Number.isFinite(velocity) || velocity <= 0) return NaN;
+    return velocity;
+  };
+
+  const calcRowGasVelocity = (idx) => {
+    const velocity = getRowGasVelocityRaw(idx);
+    if (!Number.isFinite(velocity) || velocity <= 0) return '-';
+    return velocity.toFixed(2);
   };
 
   const getRowMoistureCaptureRaw = (idx) => {
@@ -4625,6 +4643,7 @@ export default function App() {
                       <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-500">입구 | 출구</span></th>
                       <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>
                       <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>
+                      <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>속도(m/s)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스보정<br/>밀도(kg/m³)</th>
                       <th className="p-1 font-bold whitespace-nowrap">수분량<br/>(ml)</th>
                       <th className="p-1 font-black text-emerald-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
@@ -4635,6 +4654,7 @@ export default function App() {
                     {formData.gasMeters.map((meter, idx) => {
                       const isStartRow = idx === 0;
                       const rowRate = calcRowIsokineticRate(idx);
+                      const rowVelocity = calcRowGasVelocity(idx);
                       const rowDensity = calcRowCorrectedGasDensity(idx);
                       const rowMoisture = calcRowMoistureCapture(idx);
                       const isRateValid = rowRate !== '-' && parseFloat(rowRate) >= 90 && parseFloat(rowRate) <= 110;
@@ -4682,6 +4702,11 @@ export default function App() {
                           </td>
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.impingerTemp} onChange={(e) => handleGasMeterChange(idx, 'impingerTemp', e.target.value)} placeholder="온도" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                          </td>
+                          <td className="p-1 w-16">
+                            <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowVelocity === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
+                              {rowVelocity}
+                            </span>
                           </td>
                           <td className="p-1 w-16">
                             <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowDensity === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
