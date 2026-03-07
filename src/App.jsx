@@ -1960,18 +1960,21 @@ export default function App() {
   };
 
   const getRawAvgTm = () => {
-    const validTemps = formData.gasMeters.filter((_, i) => i !== 0).map(g => {
-      const inT = parseFloat(g.tmIn), outT = parseFloat(g.tmOut);
-      if (!isNaN(inT) && !isNaN(outT)) return (inT + outT) / 2;
-      if (!isNaN(inT)) return inT;
-      if (!isNaN(outT)) return outT;
-      return NaN;
-    }).filter(v => !isNaN(v));
+    // 시작행(0분)의 미터온도도 평균에 포함
+    const validTemps = formData.gasMeters.flatMap(g => {
+      const inT = parseFloat(g.tmIn);
+      const outT = parseFloat(g.tmOut);
+      const values = [];
+      if (Number.isFinite(inT)) values.push(inT);
+      if (Number.isFinite(outT)) values.push(outT);
+      return values;
+    });
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
   const getRawAvgOrifice = () => {
-    const validPressures = formData.gasMeters.filter((_, i) => i !== 0).map(g => parseFloat(g.pressure)).filter(v => !isNaN(v));
+    // 시작행(0분)의 오리피스압도 평균에 포함
+    const validPressures = formData.gasMeters.map(g => parseFloat(g.pressure)).filter(v => Number.isFinite(v));
     return validPressures.length === 0 ? NaN : validPressures.reduce((a, b) => a + b, 0) / validPressures.length;
   };
 
@@ -2173,58 +2176,77 @@ export default function App() {
 
   const calcRowIsokineticRate = (idx) => {
     if (idx === 0) return '-';
-    const meter = formData.gasMeters[idx];
-    
-    let prevVolStr = '';
-    for (let i = idx - 1; i >= 0; i--) {
-      if (formData.gasMeters[i].volume) { prevVolStr = formData.gasMeters[i].volume; break; }
-    }
-    
-    const currVolStr = meter.volume, pressureStr = meter.pressure, inT = meter.tmIn, outT = meter.tmOut, timeStr = meter.time; 
-    if (!prevVolStr || !currVolStr || !timeStr || !pressureStr || (inT === '' && outT === '')) return '-';
-    
-    const prevVol = parseFloat(prevVolStr), currVol = parseFloat(currVolStr), Vm = currVol - prevVol; 
-    if (Vm <= 0 || isNaN(Vm)) return '-';
-    
-    let theta = parseFloat(timeStr);
-    if (isNaN(theta) || theta <= 0) return '-';
-    
-    let Tm;
-    if (inT !== '' && outT !== '') Tm = (parseFloat(inT) + parseFloat(outT)) / 2;
-    else if (inT !== '') Tm = parseFloat(inT);
-    else Tm = parseFloat(outT);
-    if (isNaN(Tm)) return '-';
-    
-    let Ts = parseFloat(meter.stackTemp);
-    if (isNaN(Ts)) Ts = getRawAvgTs();
-    if (isNaN(Ts)) return '-';
-    
+    const startRow = formData.gasMeters[0];
+    const currentRow = formData.gasMeters[idx];
+    if (!startRow || !currentRow) return '-';
+
+    const startVol = parseFloat(startRow.volume);
+    const currentVol = parseFloat(currentRow.volume);
+    if (!Number.isFinite(startVol) || !Number.isFinite(currentVol)) return '-';
+    const VmCum = currentVol - startVol;
+    if (!Number.isFinite(VmCum) || VmCum <= 0) return '-';
+
+    // θ는 시작 이후 누적 시간(분)으로 계산
+    const thetaCum = formData.gasMeters.slice(1, idx + 1).reduce((sum, row) => {
+      const t = parseFloat(row.time);
+      return sum + (Number.isFinite(t) && t > 0 ? t : 0);
+    }, 0);
+    if (!Number.isFinite(thetaCum) || thetaCum <= 0) return '-';
+
+    const rangeRows = formData.gasMeters.slice(0, idx + 1);
+    const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
+    if (tsValues.length === 0) return '-';
+    const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
+
+    // 엑셀 AVERAGE(H17:I19)처럼 입구/출구 모두 누적 평균
+    const tmValues = rangeRows.flatMap((row) => {
+      const inT = parseFloat(row.tmIn);
+      const outT = parseFloat(row.tmOut);
+      const vals = [];
+      if (Number.isFinite(inT)) vals.push(inT);
+      if (Number.isFinite(outT)) vals.push(outT);
+      return vals;
+    });
+    if (tmValues.length === 0) return '-';
+    const TmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length;
+
+    // 엑셀 AVERAGE(F17:F19)처럼 오리피스압 누적 평균
+    const pmValues = rangeRows.map(row => parseFloat(row.pressure)).filter(v => Number.isFinite(v));
+    if (pmValues.length === 0) return '-';
+    const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
+
     const Pa = parseFloat(formData.atmPressure);
-    const Pm_val = parseFloat(pressureStr);
-    const Ps = getRawStackPressure(), Cp = parseFloat(formData.pitotFactor) || 0.84;
+    const Ps = getRawStackPressure();
+    const Cp = parseFloat(formData.pitotFactor) || 0.84;
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
-    if (isNaN(Ps) || isNaN(Pa) || isNaN(Pm_val)) return '-';
-    
-    const Pm_abs = Pa + Pm_val / 13.6;
+    if (!Number.isFinite(Pa) || !Number.isFinite(Ps)) return '-';
+    const PmAbs = Pa + (PmAvg / 13.6);
+
+    const dp = parseFloat(currentRow.dp);
+    if (!Number.isFinite(dp) || dp < 0) return '-';
+
     const gasComp = getGasComposition();
     const r0 = gasComp.r0;
     const Xw = gasComp.Xw;
-    
-    const dpStr = meter.dp;
-    if (!dpStr) return '-';
-    const dp = parseFloat(dpStr);
-    if (dp < 0 || isNaN(dp)) return '-';
+    if (!Number.isFinite(r0) || r0 <= 0 || !Number.isFinite(Xw) || Xw >= 100) return '-';
 
-    const r_row = Number((r0 * (273 / (273 + Ts)) * (Ps / 760)).toFixed(3));
+    const currentTs = parseFloat(currentRow.stackTemp);
+    const TsForVelocity = Number.isFinite(currentTs) ? currentTs : TsAvg;
+    const rRow = r0 * (273 / (273 + TsForVelocity)) * (Ps / 760);
+    if (!Number.isFinite(rRow) || rRow <= 0) return '-';
 
-    const Vs = Cp * Math.pow((2 * 9.81 * dp) / r_row, 0.5);
-    if (Vs <= 0 || isNaN(Vs)) return '-';
-    
+    const Vs = Cp * Math.pow((2 * 9.81 * dp) / rRow, 0.5);
+    if (!Number.isFinite(Vs) || Vs <= 0) return '-';
+
     const Dn = parseFloat(formData.nozzleDiameter);
-    if (isNaN(Dn) || Dn <= 0) return '-';
+    if (!Number.isFinite(Dn) || Dn <= 0) return '-';
     const An = Math.PI * Math.pow(Dn / 2000, 2);
-    
-    const rate = (Vm * Y * (Ts + 273) * Pm_abs * 100) / ((Tm + 273) * Vs * An * 60 * 1000 * theta * Ps * (1 - Xw / 100));
+
+    // 엑셀 기록지와 동일하게, 시작행 포함 누적값으로 건식 순간등속 계산
+    const rate = (VmCum * Y * (TsAvg + 273) * PmAbs * 100)
+      / ((TmAvg + 273) * Vs * An * 60 * 1000 * thetaCum * Ps * (1 - Xw / 100));
+
+    if (!Number.isFinite(rate) || rate <= 0) return '-';
     return rate.toFixed(1);
   };
 
