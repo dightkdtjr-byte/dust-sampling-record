@@ -2644,12 +2644,24 @@ export default function App() {
     if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
     if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
 
-    const r = gasComp.r0 * (273 / (273 + avgTs)) * (P / 760);
+    // 적산유량계 기록표 기준:
+    // 각 행 Ts로 보정밀도 r_i를 계산하고, 그 원값 평균(r_avg)을 유속식에 사용
+    const densityValues = meterRows
+      .map((row) => {
+        const ts = parseFloat(row.stackTemp);
+        if (!Number.isFinite(ts)) return NaN;
+        const density = gasComp.r0 * (273 / (273 + ts)) * (P / 760);
+        return Number.isFinite(density) && density > 0 ? density : NaN;
+      })
+      .filter((v) => Number.isFinite(v));
+    if (densityValues.length === 0) return null;
+
+    const r = densityValues.reduce((a, b) => a + b, 0) / densityValues.length;
     if (!Number.isFinite(r) || r <= 0) return null;
 
     const velocity = C * Math.pow((2 * 9.81 * avgDp) / r, 0.5);
     if (!Number.isFinite(velocity) || velocity <= 0) return null;
-    return { velocity, avgDp, avgTs, C, P, r0: gasComp.r0, r };
+    return { velocity, avgDp, avgTs, C, P, r0: gasComp.r0, r, avgDensity: r, densityCount: densityValues.length };
   };
 
   const getRawGasVelocityFromMeterRows = () => {
