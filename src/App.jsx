@@ -1557,13 +1557,6 @@ export default function App() {
           nextForm[key] = report[key];
         }
       });
-      if (Array.isArray(nextForm.gasAnalyzer)) {
-        nextForm.gasAnalyzer = nextForm.gasAnalyzer.map((item) => ({
-          ...item,
-          time: '',
-        }));
-      }
-
       return nextForm;
     });
 
@@ -1601,12 +1594,6 @@ export default function App() {
 
   const handleGasAnalyzerChange = (index, field, value) => {
     setFormData(prev => {
-      if (field === 'time') {
-        const clearedAnalyzer = prev.gasAnalyzer.map((item, i) =>
-          i === index ? { ...item, time: '' } : { ...item, time: '' }
-        );
-        return { ...prev, gasAnalyzer: clearedAnalyzer };
-      }
       const newAnalyzer = prev.gasAnalyzer.map((item, i) => 
         i === index ? { ...item, [field]: value } : item
       );
@@ -2136,10 +2123,6 @@ export default function App() {
     const isokineticRate = calcIsokineticRate(true);
     const isokineticNum = parseFloat(isokineticRate);
     const isokineticStatus = !isNaN(isokineticNum) && isokineticNum >= 95 && isokineticNum <= 105 ? '적합' : '부적합';
-    const normalizedGasAnalyzer = (formData.gasAnalyzer || []).map((item) => ({
-      ...item,
-      time: '',
-    }));
 
     const result = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2149,7 +2132,6 @@ export default function App() {
       sheetTitle: activeSheet?.title || '먼지시료채취기록부',
       ...formData,
       sampler: formData.sampler || '',
-      gasAnalyzer: normalizedGasAnalyzer,
       moisturePre: calcMoisture(),
       moisturePost: calcPostMoisture(),
       moisturePercent: calcTotalMoistureWeight() > 0 ? calcPostMoisture() : calcMoisture(),
@@ -3664,13 +3646,12 @@ export default function App() {
                           <td className="p-2 border-r border-slate-100 font-medium text-slate-700 flex justify-center items-center gap-2">
                             <span className="whitespace-nowrap">{idx + 1}회차</span>
                             <input
-                              type="text"
+                              type="time"
                               name={`gas-time-${idx}`}
                               autoComplete="off"
-                              value=""
-                              readOnly
-                              placeholder="공란"
-                              className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none bg-slate-50 text-slate-400"
+                              value={gas.time || ''}
+                              onChange={(e) => handleGasAnalyzerChange(idx, 'time', e.target.value)}
+                              className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-teal-500"
                             />
                           </td>
                           <td className="p-1 border-r border-slate-100">
