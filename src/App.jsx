@@ -2288,11 +2288,11 @@ export default function App() {
     if (!Number.isFinite(Vs) || Vs <= 0) return { dry: '-', wet: '-' };
 
     const A = Math.PI * Math.pow(D / 2, 2);
-    const gasComp = getGasComposition(); 
-    const Xw = gasComp.Xw;
+    const postMoisture = getRawPostMoisture();
+    const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
 
     const Q_wet = Vs * A * (273 / (273 + Ts)) * (Ps / 760) * 3600;
-    const Q_dry = Q_wet * (1 - Xw / 100);
+    const Q_dry = Q_wet * (1 - moistureRatio);
 
     return { wet: Q_wet.toFixed(0), dry: Q_dry.toFixed(0) };
   };
