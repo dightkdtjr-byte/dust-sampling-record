@@ -1651,7 +1651,7 @@ export default function App() {
       if (name === 'totalStackDepth' || name === 'flangeLength') {
         const total = parseFloat(newData.totalStackDepth);
         const flange = parseFloat(newData.flangeLength) || 0; 
-        if (!isNaN(total)) newData.stackDiameter = Math.max(0, total - flange).toFixed(3);
+        if (!isNaN(total)) newData.stackDiameter = Math.max(0, total - flange).toFixed(4);
       }
       return newData;
     });
@@ -1779,7 +1779,13 @@ export default function App() {
         farDistances.push(R + (rnCoeffs[i] * R));
       }
     }
-    return { perRadius: isCenterOnly ? 1 : rnCoeffs.length, isCenterOnly, area: area.toFixed(3), nearInsertion: nearDistances.map(d => (d + flange).toFixed(3)), farInsertion: farDistances.map(d => (d + flange).toFixed(3)) };
+    return {
+      perRadius: isCenterOnly ? 1 : rnCoeffs.length,
+      isCenterOnly,
+      area: area.toFixed(4),
+      nearInsertion: nearDistances.map(d => (d + flange).toFixed(4)),
+      farInsertion: farDistances.map(d => (d + flange).toFixed(4)),
+    };
   };
 
   const applySamplingPointsToTable = () => {
@@ -3733,15 +3739,15 @@ export default function App() {
             <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50 p-4 rounded-lg border border-emerald-200">
               <div>
                 <label className="block text-xs font-bold text-emerald-800 mb-1">총 측정 깊이 (m)</label>
-                <input type="number" step="0.001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="끝벽까지의 총 길이" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
+                <input type="number" step="0.0001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="끝벽까지의 총 길이" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-emerald-800 mb-1">플랜지 길이 (m)</label>
-                <input type="number" step="0.001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
+                <input type="number" step="0.0001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-emerald-900 mb-1">순수 굴뚝 내경 (D, m)</label>
-                <input type="number" step="0.001" name="stackDiameter" value={formData.stackDiameter} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded focus:ring-2 focus:ring-emerald-500 bg-emerald-100 font-black text-emerald-900 outline-none" placeholder="자동계산 (총 깊이 - 플랜지)" />
+                <input type="number" step="0.0001" name="stackDiameter" value={formData.stackDiameter} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded focus:ring-2 focus:ring-emerald-500 bg-emerald-100 font-black text-emerald-900 outline-none" placeholder="자동계산 (총 깊이 - 플랜지)" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-emerald-900 mb-1">단면적 (A, ㎡)</label>
