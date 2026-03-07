@@ -6223,7 +6223,7 @@ export default function App() {
                 onClick={handleCopyCheckedReportsToCurrentSheet}
                 className="px-5 py-2.5 bg-emerald-600 border border-emerald-700 text-white hover:bg-emerald-700 font-bold rounded-xl transition-colors shadow-md text-sm"
               >
-                현재 시트로 복사
+                선택 항목 현재 시트로 복사
               </button>
               <button
                 onClick={handleExportSelectedTemplateExcel}
