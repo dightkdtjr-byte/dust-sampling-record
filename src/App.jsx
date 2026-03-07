@@ -2957,12 +2957,22 @@ export default function App() {
                     설정
                   </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
-                    <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden shrink-0 flex items-center justify-center">
-                      {profileAvatarUrl ? (
-                        <img src={profileAvatarUrl} alt={`${activeUser} 프로필`} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
-                      )}
+                    <div className="shrink-0 flex flex-col items-center gap-2">
+                      <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center">
+                        {profileAvatarUrl ? (
+                          <img src={profileAvatarUrl} alt={`${activeUser} 프로필`} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="설정 열기"
+                        onClick={() => setAuthModal('settings')}
+                        className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                      >
+                        ⚙ 설정
+                      </button>
                     </div>
                     <div className="flex-1 text-center md:text-left">
                       <p className="text-sm text-slate-600">현재 사용자</p>
