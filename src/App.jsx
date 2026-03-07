@@ -5136,13 +5136,13 @@ export default function App() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
               <div><label className="block text-xs font-bold text-slate-600 mb-1">측정 일자</label>
-                <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
+                <input type="date" name="date" value={formData.date} onChange={handleChange} className="w-full h-10 p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">사업장명</label>
-                <input type="text" name="company" value={formData.company} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
+                <input type="text" name="company" value={formData.company} onChange={handleChange} className="w-full h-10 p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">배출구명 (위치)</label>
-                <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
+                <input type="text" name="location" value={formData.location} onChange={handleChange} className="w-full h-10 p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
               <div><label className="block text-xs font-bold text-slate-600 mb-1">측정자</label>
-                <input type="text" name="sampler" value={formData.sampler} onChange={handleChange} className="w-full p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
+                <input type="text" name="sampler" value={formData.sampler} onChange={handleChange} className="w-full h-10 p-2 bg-emerald-50/50 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none transition-colors" /></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50/30 p-4 rounded-lg border border-emerald-100">
               <div><label className="block text-xs font-bold text-slate-600 mb-1">날씨</label>
