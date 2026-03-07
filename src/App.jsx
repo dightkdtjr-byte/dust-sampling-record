@@ -2622,7 +2622,7 @@ export default function App() {
     return Number.isFinite(manualPressure) ? manualPressure : NaN;
   };
 
-  const getRawGasVelocityFromMeterRows = () => {
+  const getRawGasVelocityFactorsFromMeterRows = () => {
     const meterRows = getMeterRowsUntilLastVolume();
     const dpValues = meterRows
       .map((row) => parseFloat(row.dp))
@@ -2631,7 +2631,7 @@ export default function App() {
       .map((row) => parseFloat(row.stackTemp))
       .filter((v) => Number.isFinite(v));
 
-    if (dpValues.length === 0 || tsValues.length === 0) return NaN;
+    if (dpValues.length === 0 || tsValues.length === 0) return null;
 
     const avgDp = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
     const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
@@ -2639,15 +2639,20 @@ export default function App() {
     const P = getRawStackPressure();
     const gasComp = getGasComposition();
 
-    if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return NaN;
-    if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
+    if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
+    if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
 
     const r = gasComp.r0 * (273 / (273 + avgTs)) * (P / 760);
-    if (!Number.isFinite(r) || r <= 0) return NaN;
+    if (!Number.isFinite(r) || r <= 0) return null;
 
     const velocity = C * Math.pow((2 * 9.81 * avgDp) / r, 0.5);
-    if (!Number.isFinite(velocity) || velocity <= 0) return NaN;
-    return velocity;
+    if (!Number.isFinite(velocity) || velocity <= 0) return null;
+    return { velocity, avgDp, avgTs, C, P, r0: gasComp.r0, r };
+  };
+
+  const getRawGasVelocityFromMeterRows = () => {
+    const factors = getRawGasVelocityFactorsFromMeterRows();
+    return factors ? factors.velocity : NaN;
   };
 
   const getRawGasMeterVolDiff = () => {
@@ -3834,6 +3839,7 @@ export default function App() {
   const configuredNozzles = getConfiguredNozzles();
   const gasFlowRates = calcGasFlowRates();
   const gasFlowFactors = gasFlowRates.factors;
+  const gasVelocityFactors = getRawGasVelocityFactorsFromMeterRows();
   
   const getExpectedValues = () => {
     const d = parseFloat(formData.nozzleDiameter), k = parseFloat(formData.kFactor), dp = getRawAvgDp(), Vs = getRawGasVelocity();
@@ -5119,7 +5125,7 @@ export default function App() {
                       <div key={idx}>
                         <label className="block text-[10px] text-slate-500 text-center mb-1">{idx + 1}회차</label>
                         <input 
-                          type="number" step="0.1" value={val} 
+                          type="number" step="0.01" value={val} 
                           onChange={(e) => handleMoistureChange(idx, e.target.value)} 
                           className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-cyan-500 bg-slate-50 text-center text-sm outline-none" 
                         />
@@ -5931,6 +5937,9 @@ export default function App() {
                    <p className="font-bold text-slate-200 mb-1">유량 계산 인수 (raw)</p>
                    <p>rows={gasFlowFactors.flowRowCount} | v={formatFixed15(gasFlowFactors.Vs)} | A={formatFixed15(gasFlowFactors.A)} | Ts={formatFixed15(gasFlowFactors.Ts)}</p>
                    <p>Pa={formatFixed15(gasFlowFactors.Pa)} | Ps={formatFixed15(gasFlowFactors.Ps)} | Xw={formatFixed15(gasFlowFactors.XwPercent)}</p>
+                   {gasVelocityFactors && (
+                     <p>Cp={formatFixed15(gasVelocityFactors.C)} | dpAvg={formatFixed15(gasVelocityFactors.avgDp)} | r0(pre)={formatFixed15(gasVelocityFactors.r0)} | r={formatFixed15(gasVelocityFactors.r)}</p>
+                   )}
                    <p>273/(273+Ts)={formatFixed15(gasFlowFactors.tempTerm)} | (Pa+Ps)/760={formatFixed15(gasFlowFactors.pressureTerm)} | (1-Xw/100)={formatFixed15(gasFlowFactors.moistureTerm)} | 3600={formatFixed15(gasFlowFactors.constant3600)}</p>
                    <p>Qw(raw15)={formatFixed15(gasFlowFactors.Q_wet)} | Qd(raw15)={formatFixed15(gasFlowFactors.Q_dry)} | Qd(display)={gasFlowRates.dry}</p>
                  </div>
