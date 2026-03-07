@@ -1446,60 +1446,77 @@ export default function App() {
     }
   };
 
-  const handleImportExcelReports = async (event) => {
+  const parseCsvLine = (line) => {
+    const result = [];
+    let curr = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          curr += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(curr);
+        curr = '';
+      } else {
+        curr += ch;
+      }
+    }
+    result.push(curr);
+    return result.map((val) => val.trim());
+  };
+
+  const handleImportCsvReports = async (event) => {
     const file = event?.target?.files?.[0];
     if (!file) return;
     if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 엑셀 임포트가 가능합니다.');
+      alert('로그인 후 CSV 임포트가 가능합니다.');
       event.target.value = '';
       return;
     }
 
     try {
-      const { read, utils } = await import('xlsx');
-      const buffer = await file.arrayBuffer();
-      const workbook = read(buffer, { type: 'array' });
-      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
-        alert('엑셀 시트가 비어있습니다.');
+      const rawText = await file.text();
+      const normalized = rawText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      const lines = normalized.split('\n').filter((line) => line.trim() !== '');
+      if (lines.length < 2) {
+        alert('CSV 데이터가 비어있거나 형식이 올바르지 않습니다.');
         event.target.value = '';
         return;
       }
 
-      const importedRows = workbook.SheetNames.flatMap((sheetName) => {
-        const ws = workbook.Sheets[sheetName];
-        if (!ws) return [];
-        return utils.sheet_to_json(ws, { defval: '', raw: false });
+      const headers = parseCsvLine(lines[0]);
+      const importedRows = lines.slice(1).map((line) => {
+        const cols = parseCsvLine(line);
+        const row = {};
+        headers.forEach((header, idx) => {
+          row[header] = cols[idx] ?? '';
+        });
+        return row;
       });
 
       const importedReports = importedRows.map((row, idx) => {
-        const rowObj = row && typeof row === 'object' ? row : {};
-        const getField = (...keys) => {
-          for (const key of keys) {
-            const value = rowObj[key];
-            if (value !== undefined && value !== null && String(value).trim() !== '') {
-              return String(value).trim();
-            }
-          }
-          return '';
-        };
-
-        const sheetTitle = getField('구분', '기록부', '시트구분') || '먼지시료채취기록부';
+        const sheetTitle = row['구분'] || '먼지시료채취기록부';
         const matchedSheet = SHEET_MENU.find((item) => item.title === sheetTitle);
         return {
-          id: `excel-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `csv-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
           savedAt: new Date().toISOString(),
           user: activeUser,
           sheetId: matchedSheet?.id || 'dust',
           sheetTitle: matchedSheet?.title || sheetTitle,
-          date: getField('측정일자', '측정일시', 'date'),
-          company: getField('사업장명', '사업장', 'company'),
-          location: getField('배출구명', '배출구', 'location'),
-          moisturePercent: getField('수분량(%)', 'moisturePercent'),
-          isokineticRate: getField('등속흡인율(%)', 'isokineticRate'),
-          dustWeight: getField('먼지무게(mg)', 'dustWeight'),
-          actualConcentration: getField('실측농도', 'actualConcentration'),
-          correctedConcentration: getField('보정농도', 'correctedConcentration'),
-          remarks: getField('비고', 'remarks'),
+          date: row['측정일자'] || row['측정일시'] || '',
+          company: row['사업장명'] || row['사업장'] || '',
+          location: row['배출구명'] || row['배출구'] || '',
+          moisturePercent: row['수분량(%)'] || '',
+          isokineticRate: row['등속흡인율(%)'] || '',
+          dustWeight: row['먼지무게(mg)'] || '',
+          actualConcentration: row['실측농도'] || '',
+          correctedConcentration: row['보정농도'] || '',
+          remarks: row['비고'] || '',
           gasAnalyzer: [
             { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
             { time: '', o2: '21.00', co2: '0.00', co: '0.00', nox: '0.00', sox: '0.00' },
@@ -1509,7 +1526,7 @@ export default function App() {
       }).filter((item) => item.date || item.company || item.location);
 
       if (importedReports.length === 0) {
-        alert('임포트할 유효 리포트가 없습니다. 엑셀 헤더를 확인해주세요.');
+        alert('임포트할 유효 리포트가 없습니다. CSV 헤더를 확인해주세요.');
         event.target.value = '';
         return;
       }
@@ -1517,10 +1534,10 @@ export default function App() {
       const nextReports = [...activeUserReports, ...importedReports];
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`${importedReports.length}건 엑셀 리포트를 임포트했습니다.`);
+      alert(`${importedReports.length}건 CSV 리포트를 임포트했습니다.`);
     } catch (error) {
       console.error(error);
-      alert('엑셀 임포트 중 오류가 발생했습니다.');
+      alert('CSV 임포트 중 오류가 발생했습니다.');
     } finally {
       event.target.value = '';
     }
@@ -2936,6 +2953,16 @@ export default function App() {
             )}
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
+            {isUserUnlocked && (
+              <button
+                type="button"
+                aria-label="설정 열기"
+                onClick={() => setAuthModal('settings')}
+                className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-20"
+              >
+                ⚙ 설정
+              </button>
+            )}
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
@@ -3002,14 +3029,6 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-4 flex flex-col items-center">
-                <button
-                  type="button"
-                  aria-label="설정 열기"
-                  onClick={() => setAuthModal('settings')}
-                  className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-20"
-                >
-                  ⚙ 설정
-                </button>
                 <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
@@ -3164,18 +3183,18 @@ export default function App() {
                       체크 선택: {menuCheckedReportKeysValid.length}건
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => csvImportInputRef.current?.click()}
-                        className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px]"
+                      <label
+                        htmlFor="profile-csv-import"
+                        className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] cursor-pointer"
                       >
-                        엑셀 임포트
-                      </button>
+                        CSV 임포트
+                      </label>
                       <input
+                        id="profile-csv-import"
                         ref={csvImportInputRef}
                         type="file"
-                        accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12"
-                        onChange={handleImportExcelReports}
+                        accept=".csv,text/csv"
+                        onChange={handleImportCsvReports}
                         className="hidden"
                       />
                       <button
@@ -3212,7 +3231,6 @@ export default function App() {
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
                         <th className="p-2 font-bold text-center">실측농도</th>
                         <th className="p-2 font-bold text-center">보정농도</th>
-                        <th className="p-2 font-bold text-center">불러오기</th>
                         <th className="p-2 font-bold text-center">삭제</th>
                       </tr>
                     </thead>
@@ -3220,7 +3238,12 @@ export default function App() {
                       {profileCombinedReports.map((data) => {
                         const reportKey = getReportKey(data);
                         return (
-                        <tr key={reportKey || data.savedAt} className="hover:bg-slate-50">
+                        <tr
+                          key={reportKey || data.savedAt}
+                          className="hover:bg-slate-50 cursor-pointer"
+                          onDoubleClick={() => handleLoadSavedReport(data)}
+                          title="더블클릭하면 불러오기"
+                        >
                           <td className="p-2 text-center">
                             <input
                               type="checkbox"
@@ -3235,18 +3258,6 @@ export default function App() {
                           <td className="p-2 text-center">{data.isokineticRate || '-'}</td>
                           <td className="p-2 text-center">{data.actualConcentration || '-'}</td>
                           <td className="p-2 text-center">{data.correctedConcentration || '-'}</td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleLoadSavedReport(data);
-                              }}
-                              className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold"
-                            >
-                              불러오기
-                            </button>
-                          </td>
                           <td className="p-2 text-center">
                             <button
                               type="button"
