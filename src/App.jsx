@@ -3211,7 +3211,7 @@ export default function App() {
   return (
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${isNightSky ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]' : 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
-      <div className="fixed right-4 top-4 z-40 flex items-center gap-1 rounded-xl border border-white/70 bg-white/80 px-2 py-1 backdrop-blur">
+      <div className="fixed right-4 top-20 md:top-24 z-40 flex items-center gap-1 rounded-xl border border-white/70 bg-white/80 px-2 py-1 backdrop-blur">
         {SKY_PREVIEW_OPTIONS.map((opt) => (
           <button
             key={`sheet-sky-${opt.id}`}
