@@ -1004,15 +1004,6 @@ const PresetSaveIcon = ({ className = 'w-3.5 h-3.5' }) => (
   </svg>
 );
 
-const CopySheetsIcon = ({ className = 'w-4 h-4' }) => (
-  <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-    <rect x="3" y="7" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
-    <rect x="10" y="3" width="11" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
-    <path d="M9 13h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M14 10l3 3-3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const SignatureBadge = () => (
   <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
     sangseok
@@ -6230,16 +6221,15 @@ export default function App() {
               </button>
               <button
                 onClick={handleCopyCheckedReportsToCurrentSheet}
-                className="px-5 py-2.5 border border-emerald-400 text-emerald-200 hover:bg-emerald-600/20 font-bold rounded-xl transition-colors shadow-md text-sm inline-flex items-center gap-1.5"
+                className="px-5 py-2.5 bg-emerald-600 border border-emerald-700 text-white hover:bg-emerald-700 font-bold rounded-xl transition-colors shadow-md text-sm"
               >
-                <CopySheetsIcon className="w-4 h-4" />
-                선택 복사
+                선택항목 복사
               </button>
               <button
                 onClick={handleExportSelectedTemplateExcel}
                 className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
               >
-                선택 템플릿 엑셀로 추출
+                선택 기록부 엑셀로 추출
               </button>
             </div>
           </div>
@@ -6299,7 +6289,7 @@ export default function App() {
                     <th className="p-2 font-bold">보정농도</th>
                     <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
                     <th className="p-2 font-bold">비고</th>
-                    <th className="p-2 font-bold">복사</th>
+                    <th className="p-2 font-bold">현재시트 복사</th>
                     <th className="p-2 font-bold">불러오기</th>
                     <th className="p-2 font-bold">삭제</th>
                   </tr>
@@ -6351,9 +6341,8 @@ export default function App() {
                             e.stopPropagation();
                             handleCopySavedReportToCurrentSheet(data);
                           }}
-                          className="px-2 py-1 rounded border border-emerald-400 text-emerald-200 hover:bg-emerald-600/20 font-bold inline-flex items-center gap-1"
+                          className="px-2 py-1 rounded bg-emerald-600 border border-emerald-700 text-white hover:bg-emerald-700 font-bold"
                         >
-                          <CopySheetsIcon className="w-3.5 h-3.5" />
                           복사
                         </button>
                       </td>
