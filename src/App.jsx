@@ -3723,6 +3723,200 @@ export default function App() {
     return cells.find(cell => (cell.getAttribute('r') || '').toUpperCase() === cellRef) || null;
   };
 
+  const splitCellRef = (cellRef) => {
+    const match = /^([A-Z]+)(\d+)$/i.exec(String(cellRef || '').toUpperCase());
+    if (!match) return null;
+    return { col: match[1], row: parseInt(match[2], 10) };
+  };
+
+  const shiftFormulaRowRefs = (formula, delta) => {
+    if (!formula || !Number.isFinite(delta) || delta === 0) return formula;
+    return String(formula).replace(/(^|[^A-Z0-9_])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
+      if (rowAbs === '$') return full;
+      const row = parseInt(rowText, 10);
+      if (!Number.isFinite(row)) return full;
+      const shifted = Math.max(1, row + delta);
+      return `${prefix}${colPart}${shifted}`;
+    });
+  };
+
+  const shiftFormulaRowRefsFromRow = (formula, fromRow, delta) => {
+    if (!formula || !Number.isFinite(delta) || delta === 0) return formula;
+    return String(formula).replace(/(^|[^A-Z0-9_])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
+      if (rowAbs === '$') return full;
+      const row = parseInt(rowText, 10);
+      if (!Number.isFinite(row) || row < fromRow) return full;
+      const shifted = Math.max(1, row + delta);
+      return `${prefix}${colPart}${shifted}`;
+    });
+  };
+
+  const shiftCellRefRowsFrom = (refText, fromRow, delta) => {
+    const cellMatch = /^([A-Z]+)(\d+)$/i.exec(String(refText || '').toUpperCase());
+    if (cellMatch) {
+      const rowNum = parseInt(cellMatch[2], 10);
+      if (!Number.isFinite(rowNum) || rowNum < fromRow) return refText;
+      return `${cellMatch[1]}${rowNum + delta}`;
+    }
+
+    const rangeMatch = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(String(refText || '').toUpperCase());
+    if (rangeMatch) {
+      const startRow = parseInt(rangeMatch[2], 10);
+      const endRow = parseInt(rangeMatch[4], 10);
+      const nextStart = Number.isFinite(startRow) && startRow >= fromRow ? startRow + delta : startRow;
+      const nextEnd = Number.isFinite(endRow) && endRow >= fromRow ? endRow + delta : endRow;
+      return `${rangeMatch[1]}${nextStart}:${rangeMatch[3]}${nextEnd}`;
+    }
+
+    return refText;
+  };
+
+  const shiftSheetRowsDown = (sheetData, fromRow, delta) => {
+    const rows = getChildElementsByLocalName(sheetData, 'row')
+      .map((rowEl) => {
+        const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+        return { rowEl, rowNum };
+      })
+      .filter((item) => Number.isFinite(item.rowNum) && item.rowNum >= fromRow)
+      .sort((a, b) => b.rowNum - a.rowNum);
+
+    rows.forEach(({ rowEl, rowNum }) => {
+      const nextRowNum = rowNum + delta;
+      rowEl.setAttribute('r', String(nextRowNum));
+      getChildElementsByLocalName(rowEl, 'c').forEach((cellEl) => {
+        const parsed = splitCellRef(cellEl.getAttribute('r'));
+        if (!parsed) return;
+        cellEl.setAttribute('r', `${parsed.col}${nextRowNum}`);
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '').trim();
+        if (!formulaText) return;
+        fNode.textContent = shiftFormulaRowRefsFromRow(formulaText, fromRow, delta);
+      });
+    });
+  };
+
+  const shiftMergedCellsRowsDown = (worksheet, fromRow, delta) => {
+    const mergeCellsNode = worksheet.getElementsByTagNameNS('*', 'mergeCells')[0];
+    if (!mergeCellsNode) return;
+    const mergeCells = getChildElementsByLocalName(mergeCellsNode, 'mergeCell');
+    mergeCells.forEach((mergeCell) => {
+      const ref = mergeCell.getAttribute('ref');
+      if (!ref) return;
+      mergeCell.setAttribute('ref', shiftCellRefRowsFrom(ref, fromRow, delta));
+    });
+  };
+
+  const buildSharedFormulaInfoMap = (sheetData) => {
+    const map = new Map();
+    const rows = getChildElementsByLocalName(sheetData, 'row');
+    rows.forEach((rowEl) => {
+      const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+      if (!Number.isFinite(rowNum)) return;
+      getChildElementsByLocalName(rowEl, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        if (fNode.getAttribute('t') !== 'shared') return;
+        const si = fNode.getAttribute('si');
+        const text = String(fNode.textContent || '').trim();
+        if (!si || !text) return;
+        if (!map.has(si)) map.set(si, { formula: text, row: rowNum });
+      });
+    });
+    return map;
+  };
+
+  const insertClonedMeterRow = (sheetData, sourceRowNum, targetRowNum, sharedFormulaMap) => {
+    const sourceRow = findExistingRow(sheetData, sourceRowNum);
+    if (!sourceRow) return;
+
+    const newRow = sourceRow.cloneNode(true);
+    newRow.setAttribute('r', String(targetRowNum));
+
+    getChildElementsByLocalName(newRow, 'c').forEach((cellEl) => {
+      const parsed = splitCellRef(cellEl.getAttribute('r'));
+      if (parsed) {
+        cellEl.setAttribute('r', `${parsed.col}${targetRowNum}`);
+      }
+
+      const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+      if (fNode) {
+        const formulaType = fNode.getAttribute('t');
+        const si = fNode.getAttribute('si');
+        let sourceFormula = String(fNode.textContent || '').trim();
+
+        if (formulaType === 'shared' && si && sharedFormulaMap.has(si)) {
+          const master = sharedFormulaMap.get(si);
+          sourceFormula = shiftFormulaRowRefs(master.formula, sourceRowNum - master.row);
+        }
+
+        if (sourceFormula) {
+          const shiftedFormula = shiftFormulaRowRefs(sourceFormula, targetRowNum - sourceRowNum);
+          fNode.removeAttribute('t');
+          fNode.removeAttribute('si');
+          fNode.removeAttribute('ref');
+          fNode.textContent = shiftedFormula;
+        } else {
+          cellEl.removeChild(fNode);
+        }
+
+        getChildElementsByLocalName(cellEl, 'v').forEach((vNode) => cellEl.removeChild(vNode));
+      }
+    });
+
+    const nextRow = getChildElementsByLocalName(sheetData, 'row').find((rowEl) => {
+      const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+      return Number.isFinite(rowNum) && rowNum > targetRowNum;
+    });
+    if (nextRow) sheetData.insertBefore(newRow, nextRow);
+    else sheetData.appendChild(newRow);
+  };
+
+  const expandRecordSheetMeterRows = (worksheet, requiredRowCount) => {
+    const sheetData = worksheet.getElementsByTagNameNS('*', 'sheetData')[0];
+    if (!sheetData) return;
+
+    const meterStartRow = 17;
+    const meterTemplateEndRow = 26;
+    const templateCapacity = meterTemplateEndRow - meterStartRow + 1;
+    if (!Number.isFinite(requiredRowCount) || requiredRowCount <= templateCapacity) return;
+
+    const extraRows = requiredRowCount - templateCapacity;
+    const sharedFormulaMap = buildSharedFormulaInfoMap(sheetData);
+
+    for (let i = 0; i < extraRows; i += 1) {
+      const insertRow = meterTemplateEndRow + 1 + i;
+      const sourceRowNum = insertRow - 1;
+      shiftSheetRowsDown(sheetData, insertRow, 1);
+      shiftMergedCellsRowsDown(worksheet, insertRow, 1);
+      insertClonedMeterRow(sheetData, sourceRowNum, insertRow, sharedFormulaMap);
+    }
+
+    const summaryRowNum = meterTemplateEndRow + 1 + extraRows;
+    const meterEndRow = meterTemplateEndRow + extraRows;
+    const summaryRow = findExistingRow(sheetData, summaryRowNum);
+    if (summaryRow) {
+      getChildElementsByLocalName(summaryRow, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '').trim();
+        if (!formulaText) return;
+        const extended = formulaText.replace(/(\$?[A-Z]+\$?17:\$?[A-Z]+\$?)(\d+)/g, (full, head) => `${head}${meterEndRow}`);
+        fNode.textContent = extended;
+      });
+    }
+
+    const dimensionNode = worksheet.getElementsByTagNameNS('*', 'dimension')[0];
+    if (dimensionNode) {
+      const currentRef = dimensionNode.getAttribute('ref');
+      if (currentRef && currentRef.includes(':')) {
+        const [startRef, endRef] = currentRef.split(':');
+        const nextEndRef = shiftCellRefRowsFrom(endRef, meterTemplateEndRow + 1, extraRows);
+        dimensionNode.setAttribute('ref', `${startRef}:${nextEndRef}`);
+      }
+    }
+  };
+
   const setXmlCellValue = (cell, value, ns) => {
     getChildElementsByLocalName(cell, 'f').forEach(node => cell.removeChild(node));
     getChildElementsByLocalName(cell, 'v').forEach(node => cell.removeChild(node));
@@ -3754,7 +3948,7 @@ export default function App() {
     cell.appendChild(isNode);
   };
 
-  const patchWorksheetXml = (sheetXml, updates) => {
+  const patchWorksheetXml = (sheetXml, updates, options = {}) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(sheetXml, 'application/xml');
     if (doc.getElementsByTagName('parsererror').length > 0) {
@@ -3766,6 +3960,10 @@ export default function App() {
     const sheetData = worksheet.getElementsByTagNameNS('*', 'sheetData')[0];
     if (!sheetData) {
       throw new Error('시트 데이터(sheetData)를 찾지 못했습니다.');
+    }
+
+    if (Number.isFinite(options.expandMeterRowsTo)) {
+      expandRecordSheetMeterRows(worksheet, options.expandMeterRowsTo);
     }
 
     updates.forEach(({ ref, value }) => {
@@ -4000,7 +4198,17 @@ export default function App() {
         addUpdate(fallbackSheet, fallbackRef, value);
       };
 
-      const gasMeters = sourceGasMeters.slice(0, 10);
+      const lastMeaningfulIdx = sourceGasMeters.reduce((lastIdx, meter, idx) => {
+        const fields = ['pointNum', 'time', 'stackTemp', 'dp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
+        const hasValue = fields.some((field) => {
+          const raw = meter?.[field];
+          return raw !== null && raw !== undefined && String(raw).trim() !== '';
+        });
+        if (hasValue || idx === 0) return idx;
+        return lastIdx;
+      }, 0);
+      const gasMeters = sourceGasMeters.slice(0, Math.max(1, lastMeaningfulIdx + 1));
+      const meterRowsForTemplate = Math.max(10, gasMeters.length);
       const firstVolume = gasMeters.find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
       const lastVolume = [...gasMeters].reverse().find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
 
@@ -4086,7 +4294,7 @@ export default function App() {
       addUpdateByName('Ws', '기록지(수분량자동측정기)', 'D14', toNumber(sourceData.filterInitial));
       addUpdateByName('We', '기록지(수분량자동측정기)', 'F14', toNumber(sourceData.filterFinal));
 
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < meterRowsForTemplate; i++) {
         const row = 17 + i;
         addUpdate('기록지(수분량자동측정기)', `A${row}`, null);
         addUpdate('기록지(수분량자동측정기)', `B${row}`, null);
@@ -4130,7 +4338,13 @@ export default function App() {
           throw new Error(`시트 파일 누락: ${sheetName} (${sheetPath})`);
         }
         const xml = await file.async('string');
-        const patched = patchWorksheetXml(xml, updates);
+        const patched = patchWorksheetXml(
+          xml,
+          updates,
+          sheetName === '기록지(수분량자동측정기)'
+            ? { expandMeterRowsTo: meterRowsForTemplate }
+            : {}
+        );
         zip.file(sheetPath, patched);
       }
 
