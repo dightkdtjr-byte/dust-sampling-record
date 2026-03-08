@@ -3712,43 +3712,15 @@ export default function App() {
     );
   };
 
-  const findOrCreateRow = (sheetData, rowNum, ns) => {
+  const findExistingRow = (sheetData, rowNum) => {
     const rows = getChildElementsByLocalName(sheetData, 'row');
     const rowKey = String(rowNum);
-    const existing = rows.find(row => row.getAttribute('r') === rowKey);
-    if (existing) return existing;
-
-    const newRow = sheetData.ownerDocument.createElementNS(ns, 'row');
-    newRow.setAttribute('r', rowKey);
-
-    const nextRow = rows.find((row) => {
-      const current = parseInt(row.getAttribute('r'), 10);
-      return Number.isFinite(current) && current > rowNum;
-    });
-
-    if (nextRow) sheetData.insertBefore(newRow, nextRow);
-    else sheetData.appendChild(newRow);
-
-    return newRow;
+    return rows.find(row => row.getAttribute('r') === rowKey) || null;
   };
 
-  const findOrCreateCell = (rowEl, cellRef, colIdx, ns) => {
+  const findExistingCell = (rowEl, cellRef) => {
     const cells = getChildElementsByLocalName(rowEl, 'c');
-    const existing = cells.find(cell => (cell.getAttribute('r') || '').toUpperCase() === cellRef);
-    if (existing) return existing;
-
-    const newCell = rowEl.ownerDocument.createElementNS(ns, 'c');
-    newCell.setAttribute('r', cellRef);
-
-    const nextCell = cells.find((cell) => {
-      const parsed = parseCellRef(cell.getAttribute('r') || '');
-      return parsed && parsed.col > colIdx;
-    });
-
-    if (nextCell) rowEl.insertBefore(newCell, nextCell);
-    else rowEl.appendChild(newCell);
-
-    return newCell;
+    return cells.find(cell => (cell.getAttribute('r') || '').toUpperCase() === cellRef) || null;
   };
 
   const setXmlCellValue = (cell, value, ns) => {
@@ -3799,8 +3771,11 @@ export default function App() {
     updates.forEach(({ ref, value }) => {
       const parsed = parseCellRef(ref);
       if (!parsed) return;
-      const row = findOrCreateRow(sheetData, parsed.row, ns);
-      const cell = findOrCreateCell(row, parsed.ref, parsed.col, ns);
+      if (value === null || value === undefined || value === '') return;
+      const row = findExistingRow(sheetData, parsed.row);
+      if (!row) return;
+      const cell = findExistingCell(row, parsed.ref);
+      if (!cell) return;
       setXmlCellValue(cell, value, ns);
     });
 
