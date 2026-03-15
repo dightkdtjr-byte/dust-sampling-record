@@ -510,6 +510,61 @@ const SKYLINE_FLYER_CSS = `
   filter: blur(0.45px) drop-shadow(0 0 14px rgba(167, 139, 250, 0.28));
   animation: stackHeartRise var(--rise-duration, 18s) ease-out infinite;
 }
+@keyframes skylineCharizardCruise {
+  0% {
+    transform: translate3d(-22vw, 0vh, 0);
+  }
+  24% {
+    transform: translate3d(10vw, -0.8vh, 0);
+  }
+  50% {
+    transform: translate3d(43vw, 0.7vh, 0);
+  }
+  76% {
+    transform: translate3d(77vw, -0.6vh, 0);
+  }
+  100% {
+    transform: translate3d(118vw, 0.2vh, 0);
+  }
+}
+@keyframes skylineCharizardBob {
+  0%, 100% {
+    transform: translateY(0) rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) rotate(2deg) scale(1.03);
+  }
+}
+.skyline-charizard-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 6;
+}
+.skyline-charizard-flyer {
+  position: absolute;
+  top: 14%;
+  left: 0;
+  width: clamp(110px, 14vw, 180px);
+  will-change: transform;
+  animation: skylineCharizardCruise 26s linear infinite;
+}
+.skyline-charizard-flyer img {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+  filter: drop-shadow(0 8px 16px rgba(15, 23, 42, 0.3));
+  animation: skylineCharizardBob 2.8s ease-in-out infinite;
+}
+@media (max-width: 768px) {
+  .skyline-charizard-flyer {
+    top: 18%;
+    width: clamp(90px, 22vw, 150px);
+    animation-duration: 24s;
+  }
+}
 `;
 
 const SHEET_THEMES = {
@@ -867,6 +922,7 @@ const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
 const MAGIKARP_POKEMON_ID = 129;
+const CHARIZARD_FLYER_IMAGE_URL = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${CHARIZARD_POKEMON_ID}.png`;
 
 const getImpingerStageCount = (sheetId) => (sheetId === 'pahs' ? 6 : 4);
 
@@ -4643,6 +4699,11 @@ export default function App() {
         <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
         <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
+        <div className="skyline-charizard-track" aria-hidden="true">
+          <div className="skyline-charizard-flyer">
+            <img src={CHARIZARD_FLYER_IMAGE_URL} alt="" />
+          </div>
+        </div>
           {isNightSky && (
             <div className="absolute inset-0">
               {sceneStarsMenu.map((star) => (
