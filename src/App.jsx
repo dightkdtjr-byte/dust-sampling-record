@@ -857,6 +857,8 @@ const sanitizeSecureUsers = (value) => {
   return result;
 };
 
+// 배포용(데스크톱 exe) 빌드 여부: Electron에서는 app:// 프로토콜로 실행됨
+const IS_DESKTOP_BUILD = typeof window !== 'undefined' && window.location.protocol === 'app:';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,64}$/;
 const normalizeHintText = (value) => String(value || '').trim().toLowerCase();
 const ADMIN_USER_ID = 'dightkdtjr';
@@ -4347,6 +4349,10 @@ export default function App() {
   };
 
   const handleExportSelectedTemplateExcel = async () => {
+    if (IS_DESKTOP_BUILD) {
+      alert('배포용 버전에서는 엑셀 추출 기능을 사용할 수 없습니다.');
+      return;
+    }
     if (!activeUser || !isUserUnlocked) {
       alert('로그인 후 추출할 수 있습니다.');
       return;
@@ -6563,12 +6569,14 @@ export default function App() {
               >
                 선택 항목 현재 시트로 복사
               </button>
-              <button
-                onClick={handleExportSelectedTemplateExcel}
-                className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
-              >
-                선택 항목 엑셀로 추출
-              </button>
+              {!IS_DESKTOP_BUILD && (
+                <button
+                  onClick={handleExportSelectedTemplateExcel}
+                  className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
+                >
+                  선택 항목 엑셀로 추출
+                </button>
+              )}
             </div>
           </div>
 

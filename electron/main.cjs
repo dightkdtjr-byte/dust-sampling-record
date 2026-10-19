@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, protocol, net, shell } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 
 const APP_SCHEME = 'app';
@@ -23,6 +24,9 @@ function registerAppProtocol() {
     const target = path.normalize(path.join(DIST_DIR, pathname));
     if (!target.startsWith(DIST_DIR)) {
       return new Response('Forbidden', { status: 403 });
+    }
+    if (!fs.existsSync(target)) {
+      return new Response('Not Found', { status: 404 });
     }
     return net.fetch(pathToFileURL(target).toString());
   });
