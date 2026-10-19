@@ -1169,24 +1169,6 @@ export default function App() {
 
     const bootstrap = async () => {
       try {
-        if (IS_DESKTOP_BUILD) {
-          // 배포용 최초 실행 시: 이전 버전 exe가 PC에 저장해 둔 장비 프리셋(회사 값 포함)을 1회 제거
-          const purgeFlag = 'dust-sampling.desktop-preset-purge.v1';
-          if (!localStorage.getItem(purgeFlag)) {
-            const presetPrefixes = [
-              STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets,
-              STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix,
-            ];
-            const staleKeys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key && presetPrefixes.some((prefix) => key.startsWith(prefix))) staleKeys.push(key);
-            }
-            staleKeys.forEach((key) => localStorage.removeItem(key));
-            localStorage.setItem(purgeFlag, new Date().toISOString());
-          }
-        }
-
         const rawNozzles = localStorage.getItem(STORAGE_KEYS.nozzles);
         const rawSamplers = localStorage.getItem(STORAGE_KEYS.samplers);
         const rawPitotPresets = localStorage.getItem(STORAGE_KEYS.pitotPresets);
@@ -1558,11 +1540,26 @@ export default function App() {
     }
   };
 
+  // 설정 창의 "장비 프리셋 초기화": 이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지우고 기본 상태로 되돌림
   const resetAllEquipmentPresets = () => {
     const message = IS_DESKTOP_BUILD
-      ? '노즐/샘플러/피토관 프리셋을 모두 비우고 저장할까요?'
-      : '노즐/샘플러/피토관 프리셋을 모두 초기값으로 되돌리고 저장할까요?';
+      ? '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지울까요?\n(지운 뒤에는 빈 상태에서 다시 입력합니다.)'
+      : '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지우고 초기값으로 되돌릴까요?';
     if (!window.confirm(message)) return;
+    const presetPrefixes = [
+      STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets,
+      STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix,
+    ];
+    try {
+      const staleKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && presetPrefixes.some((prefix) => key.startsWith(prefix))) staleKeys.push(key);
+      }
+      staleKeys.forEach((key) => localStorage.removeItem(key));
+    } catch (error) {
+      console.error('장비 프리셋 초기화 실패:', error);
+    }
     const nozzles = cloneDefaultNozzles();
     const samplerList = cloneDefaultSamplers();
     const pitotList = cloneDefaultPitotPresets();
@@ -1575,6 +1572,7 @@ export default function App() {
     setSamplers(samplerList);
     setPitotPresets(pitotList);
     setFormData(prev => ({ ...prev, samplerId: '', pitotPresetId: '' }));
+    alert('장비 프리셋을 초기화했습니다.');
   };
 
   const persistReportsEncrypted = async (userName, reports, keyOverride = null) => {
@@ -5131,6 +5129,17 @@ export default function App() {
                           현재 계정 삭제
                         </button>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-xs font-black text-slate-800">장비 프리셋</p>
+                          <p className="text-[11px] text-slate-600 mt-1">이 PC에 저장된 노즐 / 샘플러 / 피토관 프리셋을 모두 지웁니다.</p>
+                          <button
+                            type="button"
+                            onClick={resetAllEquipmentPresets}
+                            className="mt-2 w-full px-3 py-2 rounded border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm"
+                          >
+                            장비 프리셋 초기화
+                          </button>
+                        </div>
+                        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
                           <p className="text-[11px] text-slate-600 mt-1">배경 시간대(아침/낮/밤) 표시를 선택합니다.</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -5568,13 +5577,6 @@ export default function App() {
             >
               <PresetSaveIcon />
               프리셋 저장하기
-            </button>
-            <button
-              type="button"
-              onClick={resetAllEquipmentPresets}
-              className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-700 rounded-lg border border-slate-300 hover:bg-slate-200"
-            >
-              프리셋 초기화
             </button>
           </div>
         </div>
