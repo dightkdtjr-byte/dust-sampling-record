@@ -861,12 +861,10 @@ const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,64}$/;
 const normalizeHintText = (value) => String(value || '').trim().toLowerCase();
 const ADMIN_USER_ID = 'dightkdtjr';
 const ADMIN_PASSWORD = 'ss22127016!';
-const CHARIZARD_POKEMON_ID = 6;
 const BETA_USER_ID = 'user';
 const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
 const LEGACY_BETA_USER_PASSWORD = 'beta-user1';
-const MAGIKARP_POKEMON_ID = 129;
 
 const getImpingerStageCount = (sheetId) => (sheetId === 'pahs' ? 6 : 4);
 
@@ -961,26 +959,8 @@ const hashHintAnswer = async (answerText) => {
   return bytesToBase64(new Uint8Array(digest));
 };
 
-const getFixedAvatarUrlForUser = (userId) => {
-  const normalizedId = String(userId || '').trim().toLowerCase();
-  if (normalizedId === ADMIN_USER_ID) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${CHARIZARD_POKEMON_ID}.png`;
-  }
-  if (normalizedId === BETA_USER_ID) {
-    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${MAGIKARP_POKEMON_ID}.png`;
-  }
-
-  if (!normalizedId) {
-    return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png';
-  }
-
-  let hash = 0;
-  for (let i = 0; i < normalizedId.length; i++) {
-    hash = (hash * 31 + normalizedId.charCodeAt(i)) % 2147483647;
-  }
-  const pokemonId = (Math.abs(hash) % 151) + 1;
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
-};
+// 프로필 이미지는 사용하지 않음 (이름 첫 글자로 표시)
+const getFixedAvatarUrlForUser = () => '';
 
 // 자바스크립트 부동소수점 오차 방지용 안전한 반올림 함수 (K * dp 오차 보정용)
 const roundDH = (val) => {
@@ -4974,7 +4954,9 @@ export default function App() {
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-slate-400 text-xs font-bold">NO IMAGE</span>
+                          <span className="w-full h-full flex items-center justify-center bg-emerald-600 text-white text-4xl font-black select-none">
+                            {String(displayUserNameWithFallback || '').trim().charAt(0).toUpperCase() || '?'}
+                          </span>
                         )}
                       </div>
                     </div>
