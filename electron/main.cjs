@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -42,6 +42,7 @@ function createWindow() {
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -54,12 +55,36 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // Wrap native dialogs so the window regains keyboard focus after they close.
+  win.webContents.on('dom-ready', () => {
+    win.webContents.executeJavaScript(`(() => {
+      if (window.__stackpilotDialogsWrapped) return;
+      window.__stackpilotDialogsWrapped = true;
+      const refocus = () => {
+        try { window.stackpilotDesktop && window.stackpilotDesktop.refocus(); } catch (e) {}
+        try { const el = document.activeElement; if (el && el.blur) { el.blur(); setTimeout(() => el.focus(), 0); } } catch (e) {}
+      };
+      for (const name of ['alert', 'confirm']) {
+        const original = window[name].bind(window);
+        window[name] = (...args) => { const result = original(...args); refocus(); return result; };
+      }
+    })();`).catch(() => {});
+  });
+
   if (DEV_SERVER_URL) {
     win.loadURL(DEV_SERVER_URL);
   } else {
     win.loadURL(`${APP_SCHEME}://bundle/index.html`);
   }
 }
+
+ipcMain.on('desktop:refocus', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return;
+  win.blur();
+  win.focus();
+  event.sender.focus();
+});
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
