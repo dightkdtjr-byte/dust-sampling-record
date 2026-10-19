@@ -522,6 +522,21 @@ const SKYLINE_FLYER_CSS = `
   filter: blur(0.45px) drop-shadow(0 0 14px rgba(167, 139, 250, 0.28));
   animation: stackHeartRise var(--rise-duration, 18s) ease-out infinite;
 }
+/* 배포용: 하트 대신 매연/수증기처럼 뭉게뭉게 올라가는 연기 */
+.stack-puff-smoke {
+  position: absolute;
+  left: 50%;
+  top: -30px;
+  width: var(--size, 16px);
+  height: var(--size, 16px);
+  border-radius: 46% 54% 50% 50% / 52% 48% 52% 48%;
+  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.78), rgba(226, 232, 240, 0.52) 48%, rgba(148, 163, 184, 0.18) 78%, rgba(148, 163, 184, 0) 100%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(2.2px);
+  animation: stackHeartRise var(--rise-duration, 18s) ease-out infinite;
+}
 `;
 
 const SHEET_THEMES = {
@@ -4894,7 +4909,7 @@ export default function App() {
                       {Array.from({ length: getSmokeParticleTotal(stack) }).map((_, smokeIdx) => (
                         <span
                           key={`${stack.id}-smoke-${smokeIdx}`}
-                          className="stack-heart-smoke"
+                          className={IS_DESKTOP_BUILD ? 'stack-puff-smoke' : 'stack-heart-smoke'}
                           style={buildSmokeParticleStyle(stack.id, smokeIdx)}
                         />
                       ))}
