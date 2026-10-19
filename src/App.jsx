@@ -725,13 +725,53 @@ const sanitizePitotPresets = (value) => {
       const parsedId = parseInt(item.id, 10);
       const legacyName = typeof item.name === 'string' ? item.name.trim() : '';
       const snRaw = item.sn === undefined || item.sn === null ? '' : String(item.sn).trim();
+      const cpByVelocity = Array.isArray(item.cpByVelocity)
+        ? item.cpByVelocity
+            .filter(row => row && typeof row === 'object')
+            .map(row => ({
+              v: row.v === undefined || row.v === null ? '' : String(row.v),
+              cp: row.cp === undefined || row.cp === null ? '' : String(row.cp),
+            }))
+            .filter(row => row.v !== '' || row.cp !== '')
+        : [];
       return {
         id: Number.isFinite(parsedId) ? parsedId : idx + 1,
         sn: snRaw || legacyName || '',
         factor: item.factor === undefined || item.factor === null ? '' : String(item.factor),
+        cpByVelocity,
       };
     });
 };
+
+// 유속별 피토계수 표에서 현재 유속에 맞는 Cp를 구함 (표 사이는 직선 보간, 범위 밖은 끝값)
+const getPitotVelocityRows = (preset) => (
+  Array.isArray(preset?.cpByVelocity)
+    ? preset.cpByVelocity
+        .map(row => ({ v: parseFloat(row.v), cp: parseFloat(row.cp) }))
+        .filter(row => Number.isFinite(row.v) && row.v > 0 && Number.isFinite(row.cp) && row.cp > 0)
+        .sort((a, b) => a.v - b.v)
+    : []
+);
+
+const resolvePitotCpByVelocity = (preset, velocity) => {
+  const nominal = parseFloat(preset?.factor);
+  const rows = getPitotVelocityRows(preset);
+  if (rows.length === 0) return Number.isFinite(nominal) ? nominal : NaN;
+  if (!Number.isFinite(velocity) || velocity <= 0) return Number.isFinite(nominal) ? nominal : rows[0].cp;
+  if (velocity <= rows[0].v) return rows[0].cp;
+  const last = rows[rows.length - 1];
+  if (velocity >= last.v) return last.cp;
+  for (let i = 0; i < rows.length - 1; i++) {
+    const a = rows[i], b = rows[i + 1];
+    if (velocity >= a.v && velocity <= b.v) {
+      if (b.v === a.v) return a.cp;
+      return a.cp + ((velocity - a.v) / (b.v - a.v)) * (b.cp - a.cp);
+    }
+  }
+  return last.cp;
+};
+
+const formatPitotCp = (value) => (Number.isFinite(value) ? String(Math.round(value * 10000) / 10000) : '');
 
 const getStoredNozzlesForUser = (userId) => {
   const normalizedId = String(userId || '').trim().toLowerCase();
@@ -1493,6 +1533,30 @@ export default function App() {
     });
   };
 
+  const handlePitotCpRowChange = (presetIndex, rowIndex, field, value) => {
+    setPitotPresets(prev => prev.map((item, i) => {
+      if (i !== presetIndex) return item;
+      const rows = Array.isArray(item.cpByVelocity) ? item.cpByVelocity : [];
+      return { ...item, cpByVelocity: rows.map((row, r) => (r === rowIndex ? { ...row, [field]: value } : row)) };
+    }));
+  };
+
+  const addPitotCpRow = (presetIndex) => {
+    setPitotPresets(prev => prev.map((item, i) => (
+      i === presetIndex
+        ? { ...item, cpByVelocity: [...(Array.isArray(item.cpByVelocity) ? item.cpByVelocity : []), { v: '', cp: '' }] }
+        : item
+    )));
+  };
+
+  const removePitotCpRow = (presetIndex, rowIndex) => {
+    setPitotPresets(prev => prev.map((item, i) => (
+      i === presetIndex
+        ? { ...item, cpByVelocity: (Array.isArray(item.cpByVelocity) ? item.cpByVelocity : []).filter((_, r) => r !== rowIndex) }
+        : item
+    )));
+  };
+
   const savePitotPresets = () => {
     const sanitized = sanitizePitotPresets(pitotPresets) || [];
     try {
@@ -1511,7 +1575,7 @@ export default function App() {
   const addPitotPreset = () => {
     setPitotPresets(prev => {
       const maxId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
-      return [...prev, { id: maxId + 1, sn: '', factor: '0.84' }];
+      return [...prev, { id: maxId + 1, sn: '', factor: '0.84', cpByVelocity: [] }];
     });
   };
 
@@ -2654,6 +2718,11 @@ export default function App() {
     }
   };
 
+  // 선택된 피토관 프리셋에 유속별 Cp 표가 있으면, 예비조사 유속에 맞는 Cp를 자동 적용
+  const activePitotPreset = pitotPresets.find(item => String(item.id) === String(formData.pitotPresetId)) || null;
+  const activePitotVelocityRows = activePitotPreset ? getPitotVelocityRows(activePitotPreset) : [];
+  const isPitotCpAutoApplied = activePitotVelocityRows.length > 0;
+
   const handleGasAnalyzerChange = (index, field, value) => {
     setFormData(prev => {
       const newAnalyzer = prev.gasAnalyzer.map((item, i) => 
@@ -2874,6 +2943,17 @@ export default function App() {
     // 각 점을 따로 계산하지 않고, '평균 동압(dpAvg)'을 식에 한 번에 넣어서 엑셀과 완전히 똑같이 계산합니다.
     return C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
   };
+
+  // (유속 함수 정의 이후) 선택된 피토관 프리셋의 유속별 Cp 자동 적용
+  const appliedPitotVelocity = isPitotCpAutoApplied ? getRawGasVelocity() : NaN;
+  useEffect(() => {
+    if (!isPitotCpAutoApplied) return;
+    const nextCp = resolvePitotCpByVelocity(activePitotPreset, appliedPitotVelocity);
+    if (!Number.isFinite(nextCp)) return;
+    const current = parseFloat(formData.pitotFactor);
+    if (Number.isFinite(current) && Math.abs(current - nextCp) < 0.00005) return;
+    setFormData(prev => ({ ...prev, pitotFactor: formatPitotCp(nextCp) }));
+  }, [isPitotCpAutoApplied, activePitotPreset, appliedPitotVelocity, formData.pitotFactor]);
 
   const isActiveMeterRow = (row, idx) => (
     idx === 0 || String(row?.pointNum || '').trim() !== ''
@@ -5957,7 +6037,23 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2 md:gap-4 md:ml-auto md:justify-end">
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800">피토계수</label>
-                    <input type="number" step="0.01" name="pitotFactor" value={formData.pitotFactor} onChange={handleChange} className="w-14 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="pitotFactor"
+                      value={formData.pitotFactor}
+                      onChange={handleChange}
+                      readOnly={isPitotCpAutoApplied}
+                      title={isPitotCpAutoApplied ? '유속별 Cp 표에서 자동 적용 중 (직접 입력하려면 프리셋 선택을 해제)' : undefined}
+                      className={`w-16 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isPitotCpAutoApplied ? 'bg-emerald-100 font-black text-emerald-900' : ''}`}
+                    />
+                    {isPitotCpAutoApplied && (
+                      <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
+                        {Number.isFinite(appliedPitotVelocity) && appliedPitotVelocity > 0
+                          ? `유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동`
+                          : '동압 입력 시 유속별 자동'}
+                      </span>
+                    )}
                     <select
                       value={formData.pitotPresetId}
                       onChange={handlePitotPresetChange}
@@ -5998,7 +6094,8 @@ export default function App() {
                     <thead className="bg-emerald-100 text-slate-800">
                       <tr>
                         <th className="border border-emerald-200 p-1">S/N</th>
-                        <th className="border border-emerald-200 p-1">C<sub>p</sub></th>
+                        <th className="border border-emerald-200 p-1">기본 C<sub>p</sub></th>
+                        <th className="border border-emerald-200 p-1">유속별 C<sub>p</sub> (교정 성적서)</th>
                         <th className="border border-emerald-200 p-1">삭제</th>
                       </tr>
                     </thead>
@@ -6022,6 +6119,36 @@ export default function App() {
                               onChange={(e) => handlePitotPresetConfigChange(idx, 'factor', e.target.value)}
                               className="w-full p-1 border border-emerald-300 rounded text-center"
                             />
+                          </td>
+                          <td className="border border-emerald-200 p-1 text-left">
+                            <div className="flex flex-col gap-1">
+                              {(Array.isArray(preset.cpByVelocity) ? preset.cpByVelocity : []).map((row, rowIdx) => (
+                                <div key={`${preset.id}-cp-${rowIdx}`} className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    value={row.v}
+                                    onChange={(e) => handlePitotCpRowChange(idx, rowIdx, 'v', e.target.value)}
+                                    className="w-16 p-1 border border-emerald-300 rounded text-center"
+                                    placeholder="m/s"
+                                  />
+                                  <span className="text-slate-500">m/s →</span>
+                                  <input
+                                    type="number"
+                                    step="0.001"
+                                    value={row.cp}
+                                    onChange={(e) => handlePitotCpRowChange(idx, rowIdx, 'cp', e.target.value)}
+                                    className="w-16 p-1 border border-emerald-300 rounded text-center"
+                                    placeholder="Cp"
+                                  />
+                                  <button type="button" onClick={() => removePitotCpRow(idx, rowIdx)} className="text-red-500 hover:text-red-700 font-bold px-1" title="구간 삭제">×</button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => addPitotCpRow(idx)} className="self-start px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-300 font-bold">
+                                + 유속 구간 추가
+                              </button>
+                              <span className="text-[10px] text-slate-500">표가 비어 있으면 기본 Cp를 사용합니다. 유속 사이 값은 직선 보간, 범위 밖은 끝값을 적용합니다.</span>
+                            </div>
                           </td>
                           <td className="border border-emerald-200 p-1">
                             <button type="button" onClick={() => removePitotPreset(idx)} className="text-red-500 hover:text-red-700 text-[11px] font-bold p-1">
