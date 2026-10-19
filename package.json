@@ -1,13 +1,15 @@
 {
-  "name": "tmp-react-app",
+  "name": "stackpilot",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:start": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder --win portable"
   },
   "dependencies": {
     "jszip": "^3.10.1",
@@ -23,6 +25,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.27",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -30,5 +34,31 @@
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "vite": "^7.3.1"
+  },
+  "description": "굴뚝 시료채취 기록부 (StackPilot)",
+  "author": "dightkdtjr-byte",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "io.github.dightkdtjr-byte.stackpilot",
+    "productName": "StackPilot",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "StackPilot-Portable-${version}.exe"
+    }
   }
 }
