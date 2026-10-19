@@ -1169,6 +1169,24 @@ export default function App() {
 
     const bootstrap = async () => {
       try {
+        if (IS_DESKTOP_BUILD) {
+          // 배포용 최초 실행 시: 이전 버전 exe가 PC에 저장해 둔 장비 프리셋(회사 값 포함)을 1회 제거
+          const purgeFlag = 'dust-sampling.desktop-preset-purge.v1';
+          if (!localStorage.getItem(purgeFlag)) {
+            const presetPrefixes = [
+              STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets,
+              STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix,
+            ];
+            const staleKeys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && presetPrefixes.some((prefix) => key.startsWith(prefix))) staleKeys.push(key);
+            }
+            staleKeys.forEach((key) => localStorage.removeItem(key));
+            localStorage.setItem(purgeFlag, new Date().toISOString());
+          }
+        }
+
         const rawNozzles = localStorage.getItem(STORAGE_KEYS.nozzles);
         const rawSamplers = localStorage.getItem(STORAGE_KEYS.samplers);
         const rawPitotPresets = localStorage.getItem(STORAGE_KEYS.pitotPresets);
