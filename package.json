@@ -59,7 +59,7 @@
       "icon": "build/icon.png"
     },
     "portable": {
-      "artifactName": "StackPilot-Portable-${version}.exe"
+      "artifactName": "StackPilot.exe"
     }
   }
 }
