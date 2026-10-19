@@ -6036,7 +6036,7 @@ export default function App() {
                 </h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-4 md:ml-auto md:justify-end">
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
-                    <label className="text-[11px] font-bold text-emerald-800">피토계수</label>
+                    <label className="text-[11px] font-bold text-emerald-800 whitespace-nowrap">피토계수</label>
                     <input
                       type="number"
                       step="0.01"
