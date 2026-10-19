@@ -1575,6 +1575,24 @@ export default function App() {
     alert('장비 프리셋을 초기화했습니다.');
   };
 
+  // 설정 창의 "전체 초기화": 이 PC에 저장된 앱 데이터를 모두 지우고 처음 상태로 재시작
+  const resetAllAppData = () => {
+    const first = window.confirm(
+      '전체 초기화를 진행할까요?\n\n이 PC에 저장된 모든 데이터가 삭제됩니다.\n- 모든 계정과 저장된 리포트\n- 노즐 / 샘플러 / 피토관 프리셋\n- 로그인 상태, 클라우드 동기화 설정, 앱 설정'
+    );
+    if (!first) return;
+    const second = window.confirm('정말 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.');
+    if (!second) return;
+    try {
+      localStorage.clear();
+    } catch (error) {
+      console.error('전체 초기화 실패:', error);
+      alert('전체 초기화에 실패했습니다.');
+      return;
+    }
+    window.location.reload();
+  };
+
   const persistReportsEncrypted = async (userName, reports, keyOverride = null) => {
     const targetUser = secureUsers[userName];
     if (!targetUser) throw new Error('사용자 정보가 없습니다.');
@@ -5137,6 +5155,17 @@ export default function App() {
                             className="mt-2 w-full px-3 py-2 rounded border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-sm"
                           >
                             장비 프리셋 초기화
+                          </button>
+                        </div>
+                        <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
+                          <p className="text-xs font-black text-red-800">전체 초기화</p>
+                          <p className="text-[11px] text-red-700 mt-1">이 PC에 저장된 모든 계정, 리포트, 프리셋, 설정을 지우고 처음 상태로 되돌립니다.</p>
+                          <button
+                            type="button"
+                            onClick={resetAllAppData}
+                            className="mt-2 w-full px-3 py-2 rounded bg-red-700 text-white hover:bg-red-800 font-bold text-sm"
+                          >
+                            전체 초기화 (모든 데이터 삭제)
                           </button>
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
