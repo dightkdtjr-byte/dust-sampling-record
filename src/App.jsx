@@ -2,8 +2,20 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import JSZip from 'jszip';
 import mainLogoImage from './assets/mainlogo.png';
+import samplingPoint1 from './assets/sampling-points/point-1.png';
+import samplingPoint2 from './assets/sampling-points/point-2.png';
+import samplingPoint3 from './assets/sampling-points/point-3.png';
+import samplingPoint4 from './assets/sampling-points/point-4.png';
+import samplingPoint5 from './assets/sampling-points/point-5.png';
 
-const DEFAULT_NOZZLE_SET = [
+// 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
+// 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
+const IS_DESKTOP_BUILD = import.meta.env.VITE_DESKTOP_BUILD === '1';
+
+// 측정점 수(반경당 1~5점)에 따른 측정점 위치 그림
+const SAMPLING_POINT_IMAGES = [samplingPoint1, samplingPoint2, samplingPoint3, samplingPoint4, samplingPoint5];
+
+const DEFAULT_NOZZLE_SET = IS_DESKTOP_BUILD ? [] : [
   { num: 4, d: 3.21 }, { num: 5, d: 3.97 }, { num: 6, d: 4.79 },
   { num: 7, d: 5.54 }, { num: 8, d: 6.28 }, { num: 9, d: 7.10 },
   { num: 10, d: 7.86 }, { num: 11, d: 8.40 }, { num: 12, d: 9.24 },
@@ -12,7 +24,7 @@ const DEFAULT_NOZZLE_SET = [
   { num: 20, d: 15.95 }, { num: 22, d: 17.51 }, { num: 26, d: 20.72 }
 ];
 
-const DEFAULT_SAMPLERS = [
+const DEFAULT_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
   { id: 1, name: '샘플러 1호기', yd: '0.991', dHAt: '47.6079' },
   { id: 2, name: '샘플러 2호기', yd: '1.005', dHAt: '40.2' },
   { id: 3, name: '샘플러 3호기', yd: '0.988', dHAt: '39.5' },
@@ -20,7 +32,7 @@ const DEFAULT_SAMPLERS = [
   { id: 5, name: '샘플러 5호기', yd: '0.998', dHAt: '41.5' }
 ];
 
-const DEFAULT_PITOT_PRESETS = [
+const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
   { id: 1, sn: '1910162K', factor: '0.84' },
   { id: 2, sn: '1910163K', factor: '0.84' },
   { id: 3, sn: '1910164K', factor: '0.84' },
@@ -857,12 +869,10 @@ const sanitizeSecureUsers = (value) => {
   return result;
 };
 
-// 배포용(데스크톱 exe) 빌드 여부: Electron에서는 app:// 프로토콜로 실행됨
-const IS_DESKTOP_BUILD = typeof window !== 'undefined' && window.location.protocol === 'app:';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9\s])\S{8,64}$/;
 const normalizeHintText = (value) => String(value || '').trim().toLowerCase();
 const ADMIN_USER_ID = 'dightkdtjr';
-const ADMIN_PASSWORD = 'ss22127016!';
+const ADMIN_PASSWORD_SHA256 = 'd3a8457d2972ea9b7c9973753a47336eec669a2479d3286a39b622dc53659bdb';
 const BETA_USER_ID = 'user';
 const BETA_USER_PASSWORD = 'beta-user';
 const LEGACY_BETA_USER_ID = 'user1';
@@ -887,6 +897,12 @@ const CLOUD_SYNC_VERSION = 1;
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
+const sha256Hex = async (text) => {
+  const digest = await crypto.subtle.digest('SHA-256', textEncoder.encode(String(text || '')));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+const isAdminPassword = async (password) => Boolean(password) && (await sha256Hex(password)) === ADMIN_PASSWORD_SHA256;
 
 const bytesToBase64 = (bytes) => {
   const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -1058,7 +1074,7 @@ export default function App() {
       { id: 5, tp: '', sp: '', dp: '', ts: '' },
     ],
     samplerId: '', targetVolume: '1000', planSamplingTime: '65',
-    gasMeterFactor: '0.991', deltaHAt: '47.6079',
+    gasMeterFactor: IS_DESKTOP_BUILD ? '' : '0.991', deltaHAt: IS_DESKTOP_BUILD ? '' : '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
     nozzleDiameter: '', kFactor: '',
     gasMeters: createGasMeterRowsByPoints(5),
@@ -1500,6 +1516,49 @@ export default function App() {
     setFormData(prev => ({ ...prev, pitotPresetId: '' }));
   };
 
+  // 노즐/샘플러/피토 프리셋을 한 번에 저장
+  const persistAllEquipmentPresets = (nozzles, samplerList, pitotList) => {
+    const scoped = canUseUserScopedPresets(activeUser);
+    localStorage.setItem(scoped ? getUserNozzlesStorageKey(activeUser) : STORAGE_KEYS.nozzles, JSON.stringify(nozzles));
+    localStorage.setItem(scoped ? getUserSamplersStorageKey(activeUser) : STORAGE_KEYS.samplers, JSON.stringify(samplerList));
+    localStorage.setItem(scoped ? getUserPitotStorageKey(activeUser) : STORAGE_KEYS.pitotPresets, JSON.stringify(pitotList));
+  };
+
+  const saveAllEquipmentPresets = () => {
+    const nozzles = sanitizeNozzleSet(nozzleSet) || [];
+    const samplerList = sanitizeSamplers(samplers) || [];
+    const pitotList = sanitizePitotPresets(pitotPresets) || [];
+    try {
+      persistAllEquipmentPresets(nozzles, samplerList, pitotList);
+      setNozzleSet(nozzles);
+      setSamplers(samplerList);
+      setPitotPresets(pitotList);
+      alert(`장비 프리셋을 저장했습니다.\n노즐 ${nozzles.length}개 / 샘플러 ${samplerList.length}개 / 피토관 ${pitotList.length}개`);
+    } catch (error) {
+      console.error('장비 프리셋 전체 저장 실패:', error);
+      alert('장비 프리셋 저장에 실패했습니다.');
+    }
+  };
+
+  const resetAllEquipmentPresets = () => {
+    const message = IS_DESKTOP_BUILD
+      ? '노즐/샘플러/피토관 프리셋을 모두 비우고 저장할까요?'
+      : '노즐/샘플러/피토관 프리셋을 모두 초기값으로 되돌리고 저장할까요?';
+    if (!window.confirm(message)) return;
+    const nozzles = cloneDefaultNozzles();
+    const samplerList = cloneDefaultSamplers();
+    const pitotList = cloneDefaultPitotPresets();
+    try {
+      persistAllEquipmentPresets(nozzles, samplerList, pitotList);
+    } catch (error) {
+      console.error('장비 프리셋 초기화 저장 실패:', error);
+    }
+    setNozzleSet(nozzles);
+    setSamplers(samplerList);
+    setPitotPresets(pitotList);
+    setFormData(prev => ({ ...prev, samplerId: '', pitotPresetId: '' }));
+  };
+
   const persistReportsEncrypted = async (userName, reports, keyOverride = null) => {
     const targetUser = secureUsers[userName];
     if (!targetUser) throw new Error('사용자 정보가 없습니다.');
@@ -1727,7 +1786,7 @@ export default function App() {
       alert('이미 존재하는 사용자 이름입니다.');
       return;
     }
-    if (normalizedId === ADMIN_USER_ID && newUserPassword !== ADMIN_PASSWORD) {
+    if (normalizedId === ADMIN_USER_ID && !(await isAdminPassword(newUserPassword))) {
       alert('관리자 계정 비밀번호는 지정된 값으로만 생성할 수 있습니다.');
       return;
     }
@@ -1777,10 +1836,12 @@ export default function App() {
       return;
     }
 
+    const isAdminLogin = userId.toLowerCase() === ADMIN_USER_ID && (await isAdminPassword(loginPassword));
+
     try {
       let targetUser = secureUsers[userId];
-      if (!targetUser && userId.toLowerCase() === ADMIN_USER_ID && loginPassword === ADMIN_PASSWORD) {
-        const created = await createVaultUserRecord(userId, ADMIN_PASSWORD, []);
+      if (!targetUser && isAdminLogin) {
+        const created = await createVaultUserRecord(userId, loginPassword, []);
         targetUser = created.record;
         setSecureUsers(prev => ({ ...prev, [userId]: created.record }));
         openUserSession(userId, created.key, [], created.record);
@@ -1819,9 +1880,9 @@ export default function App() {
     } catch (error) {
       console.error(error);
 
-      if (userId.toLowerCase() === ADMIN_USER_ID && loginPassword === ADMIN_PASSWORD) {
+      if (isAdminLogin) {
         try {
-          const recreated = await createVaultUserRecord(userId, ADMIN_PASSWORD, []);
+          const recreated = await createVaultUserRecord(userId, loginPassword, []);
           setSecureUsers(prev => ({ ...prev, [userId]: recreated.record }));
           openUserSession(userId, recreated.key, [], recreated.record);
           persistSessionAuth(userId, loginPassword);
@@ -5474,12 +5535,30 @@ export default function App() {
           </button>
         </div>
 
-        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <p className="text-xs text-slate-600">
             사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
             {' '}| 상태: <span className={`font-black ${isUserUnlocked ? activeTheme.accentText : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
             {' '}| 계정 설정은 초기 화면에서 가능합니다.
           </p>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="text-[11px] font-bold text-slate-500">장비 프리셋 (노즐/샘플러/피토관)</span>
+            <button
+              type="button"
+              onClick={saveAllEquipmentPresets}
+              className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg border border-emerald-700 hover:bg-emerald-700 inline-flex items-center gap-1"
+            >
+              <PresetSaveIcon />
+              프리셋 저장하기
+            </button>
+            <button
+              type="button"
+              onClick={resetAllEquipmentPresets}
+              className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-700 rounded-lg border border-slate-300 hover:bg-slate-200"
+            >
+              프리셋 초기화
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} className="space-y-6">
@@ -5544,11 +5623,17 @@ export default function App() {
                 </div>
                 
                 <div className="flex flex-col xl:flex-row gap-4 items-start">
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <div className="bg-slate-100 px-3 py-2 rounded border border-slate-200 text-center shadow-sm">
+                  <div className="flex flex-col gap-2 shrink-0 items-center">
+                    <div className="bg-slate-100 px-3 py-2 rounded border border-slate-200 text-center shadow-sm w-full">
                       <span className="block text-[10px] text-slate-600 font-bold">1개 측정공(Port) 기준</span>
                       <span className="font-black text-emerald-700 text-lg">총 {samplingPointsData.perRadius}개</span>
                     </div>
+                    <img
+                      src={SAMPLING_POINT_IMAGES[Math.min(Math.max(samplingPointsData.perRadius, 1), 5) - 1]}
+                      alt={`반경당 ${samplingPointsData.perRadius}점 측정점 위치`}
+                      className="w-56 max-w-full h-auto rounded border border-slate-200 bg-white"
+                    />
+                    <span className="text-[10px] text-slate-500">측정점 위치 (반경당 {samplingPointsData.perRadius}점)</span>
                   </div>
                   
                   <div className="flex-1 w-full overflow-x-auto bg-white rounded border border-slate-200">
@@ -5842,7 +5927,7 @@ export default function App() {
                     저장
                   </button>
                   <button type="button" onClick={addPitotPreset} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
-                  <button type="button" onClick={resetPitotDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
+                  <button type="button" onClick={resetPitotDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
                 </div>
                 <div className="mt-2 overflow-x-auto">
                   <table className="w-full text-[11px] text-center border border-emerald-200">
@@ -5862,7 +5947,7 @@ export default function App() {
                               value={preset.sn}
                               onChange={(e) => handlePitotPresetConfigChange(idx, 'sn', e.target.value)}
                               className="w-full p-1 border border-emerald-300 rounded text-center"
-                              placeholder="예: 1910162K"
+                              placeholder="피토관 S/N"
                             />
                           </td>
                           <td className="border border-emerald-200 p-1">
@@ -5974,7 +6059,7 @@ export default function App() {
                      저장
                    </button>
                    <button type="button" onClick={addSamplerPreset} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
-                   <button type="button" onClick={resetSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
+                   <button type="button" onClick={resetSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
                  </div>
                  <div className="mt-2 overflow-x-auto">
                    <table className="w-full text-[11px] text-center border border-emerald-200">
@@ -6097,7 +6182,7 @@ export default function App() {
                       저장
                     </button>
                     <button type="button" onClick={addNozzleConfig} className="px-2 py-1 text-[11px] font-bold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">행 추가</button>
-                    <button type="button" onClick={resetNozzleDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">초기값 복원</button>
+                    <button type="button" onClick={resetNozzleDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
                   </div>
                   <div className="mt-3 overflow-x-auto">
                      <table className="w-full text-xs text-center border-collapse border border-emerald-300">

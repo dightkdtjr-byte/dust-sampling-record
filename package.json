@@ -8,8 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:start": "npm run build && electron .",
-    "electron:build": "npm run build && electron-builder --win portable"
+    "electron:start": "npm run build:desktop && electron .",
+    "electron:build": "npm run build:desktop && electron-builder --win portable",
+    "build:desktop": "vite build --mode desktop"
   },
   "dependencies": {
     "jszip": "^3.10.1",
