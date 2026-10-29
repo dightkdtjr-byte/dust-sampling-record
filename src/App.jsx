@@ -38,6 +38,14 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
   { id: 3, sn: '1910164K', factor: '0.84' },
 ];
 
+// 엑셀 양식(A00)별 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
+const EXPORT_TEMPLATE_LAYOUTS = {
+  dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지' },
+  metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속' },
+  mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은' },
+  pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs' },
+};
+
 const SHEET_MENU = [
   {
     id: 'dust',
@@ -1102,7 +1110,11 @@ export default function App() {
   ];
   const [logoIndex, setLogoIndex] = useState(0);
   const mainLogoSrc = logoCandidates[Math.min(logoIndex, logoCandidates.length - 1)];
-  const dustTemplateUrl = `${import.meta.env.BASE_URL}templates/dust-template.xlsm`;
+  // 기록부 종류별 엑셀 양식 (먼지와 금속은 같은 양식 사용)
+  const getTemplateUrlForSheet = (sheetId) => {
+    const layout = EXPORT_TEMPLATE_LAYOUTS[sheetId] || EXPORT_TEMPLATE_LAYOUTS.dust;
+    return `${import.meta.env.BASE_URL}templates/${layout.file}`;
+  };
   const [selectedSheet, setSelectedSheet] = useState('');
   const [nozzleSet, setNozzleSet] = useState(cloneDefaultNozzles);
   const [samplers, setSamplers] = useState(cloneDefaultSamplers);
@@ -3904,7 +3916,7 @@ export default function App() {
   const shiftFormulaRowRefs = (formula, delta) => {
     if (!formula || !Number.isFinite(delta) || delta === 0) return formula;
     return String(formula).replace(/(^|[^A-Z0-9_])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
-      if (rowAbs === '$') return full;
+      if (rowAbs === '$' || prefix === '!') return full; // 절대행, 다른 시트 참조는 그대로
       const row = parseInt(rowText, 10);
       if (!Number.isFinite(row)) return full;
       const shifted = Math.max(1, row + delta);
@@ -3915,7 +3927,7 @@ export default function App() {
   const shiftFormulaRowRefsFromRow = (formula, fromRow, delta) => {
     if (!formula || !Number.isFinite(delta) || delta === 0) return formula;
     return String(formula).replace(/(^|[^A-Z0-9_])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
-      if (rowAbs === '$') return full;
+      if (rowAbs === '$' || prefix === '!') return full; // 절대행, 다른 시트 참조는 그대로
       const row = parseInt(rowText, 10);
       if (!Number.isFinite(row) || row < fromRow) return full;
       const shifted = Math.max(1, row + delta);
@@ -4044,12 +4056,12 @@ export default function App() {
     else sheetData.appendChild(newRow);
   };
 
-  const expandRecordSheetMeterRows = (worksheet, requiredRowCount) => {
+  const expandRecordSheetMeterRows = (worksheet, requiredRowCount, layout = {}) => {
     const sheetData = worksheet.getElementsByTagNameNS('*', 'sheetData')[0];
     if (!sheetData) return;
 
-    const meterStartRow = 17;
-    const meterTemplateEndRow = 26;
+    const meterStartRow = Number.isFinite(layout.meterStartRow) ? layout.meterStartRow : 17;
+    const meterTemplateEndRow = Number.isFinite(layout.meterTemplateEndRow) ? layout.meterTemplateEndRow : 26;
     const templateCapacity = meterTemplateEndRow - meterStartRow + 1;
     if (!Number.isFinite(requiredRowCount) || requiredRowCount <= templateCapacity) return;
 
@@ -4073,10 +4085,26 @@ export default function App() {
         if (!fNode) return;
         const formulaText = String(fNode.textContent || '').trim();
         if (!formulaText) return;
-        const extended = formulaText.replace(/(\$?[A-Z]+\$?17:\$?[A-Z]+\$?)(\d+)/g, (full, head) => `${head}${meterEndRow}`);
+        const extended = formulaText.replace(
+          new RegExp(`(\\$?[A-Z]+\\$?(?:${meterStartRow}|${meterStartRow + 1}):\\$?[A-Z]+\\$?)(\\d+)`, 'g'),
+          (full, head) => `${head}${meterEndRow}`
+        );
         fNode.textContent = extended;
       });
     }
+
+    // 측정행 위쪽(헤더 영역)의 수식이 평균행 등 아래 행을 가리키면 늘어난 만큼 행 번호를 밀어줌
+    getChildElementsByLocalName(sheetData, 'row').forEach((rowEl) => {
+      const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+      if (!Number.isFinite(rowNum) || rowNum >= meterStartRow) return;
+      getChildElementsByLocalName(rowEl, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '').trim();
+        if (!formulaText) return;
+        fNode.textContent = shiftFormulaRowRefsFromRow(formulaText, meterTemplateEndRow + 1, extraRows);
+      });
+    });
 
     const dimensionNode = worksheet.getElementsByTagNameNS('*', 'dimension')[0];
     if (dimensionNode) {
@@ -4104,6 +4132,14 @@ export default function App() {
       const v = cell.ownerDocument.createElementNS(ns, 'v');
       v.textContent = String(value);
       cell.appendChild(v);
+      return;
+    }
+
+    if (typeof value === 'object' && typeof value.formula === 'string') {
+      cell.removeAttribute('t');
+      const f = cell.ownerDocument.createElementNS(ns, 'f');
+      f.textContent = value.formula;
+      cell.appendChild(f);
       return;
     }
 
@@ -4135,20 +4171,73 @@ export default function App() {
     }
 
     if (Number.isFinite(options.expandMeterRowsTo)) {
-      expandRecordSheetMeterRows(worksheet, options.expandMeterRowsTo);
+      expandRecordSheetMeterRows(worksheet, options.expandMeterRowsTo, options.layout || {});
+    }
+
+    if (options.shiftRefsToSheet && Number.isFinite(options.shiftRefsFromRow) && options.shiftRefsDelta) {
+      shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
     }
 
     updates.forEach(({ ref, value }) => {
       const parsed = parseCellRef(ref);
       if (!parsed) return;
-      const row = findExistingRow(sheetData, parsed.row);
-      if (!row) return;
-      const cell = findExistingCell(row, parsed.ref);
-      if (!cell) return;
+      const row = ensureRow(sheetData, parsed.row, ns);
+      const cell = ensureCell(row, parsed, ns);
       setXmlCellValue(cell, value, ns);
     });
 
     return new XMLSerializer().serializeToString(doc);
+  };
+
+  // 행/셀이 XML에 없으면 (빈 칸) 순서에 맞게 만들어 줌
+  const ensureRow = (sheetData, rowNum, ns) => {
+    const existing = findExistingRow(sheetData, rowNum);
+    if (existing) return existing;
+    const newRow = sheetData.ownerDocument.createElementNS(ns, 'row');
+    newRow.setAttribute('r', String(rowNum));
+    const nextRow = getChildElementsByLocalName(sheetData, 'row').find((rowEl) => {
+      const n = parseInt(rowEl.getAttribute('r'), 10);
+      return Number.isFinite(n) && n > rowNum;
+    });
+    if (nextRow) sheetData.insertBefore(newRow, nextRow);
+    else sheetData.appendChild(newRow);
+    return newRow;
+  };
+
+  const ensureCell = (rowEl, parsedRef, ns) => {
+    const existing = findExistingCell(rowEl, parsedRef.ref);
+    if (existing) return existing;
+    const newCell = rowEl.ownerDocument.createElementNS(ns, 'c');
+    newCell.setAttribute('r', parsedRef.ref);
+    const nextCell = getChildElementsByLocalName(rowEl, 'c').find((cellEl) => {
+      const p = parseCellRef(cellEl.getAttribute('r'));
+      return p && p.col > parsedRef.col;
+    });
+    if (nextCell) rowEl.insertBefore(newCell, nextCell);
+    else rowEl.appendChild(newCell);
+    return newCell;
+  };
+
+  // 다른 시트가 기록지 행을 참조하는 수식: 늘어난 행만큼 밀고, 측정행 범위 끝은 확장
+  const shiftCrossSheetRowRefs = (sheetData, targetSheetName, fromRow, delta, extendRangeEndFrom) => {
+    const escaped = targetSheetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const refPattern = new RegExp(`('${escaped}'|${escaped})!(\\$?[A-Z]{1,3}\\$?)(\\d+)(?::(\\$?[A-Z]{1,3}\\$?)(\\d+))?`, 'g');
+    getChildElementsByLocalName(sheetData, 'row').forEach((rowEl) => {
+      getChildElementsByLocalName(rowEl, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '');
+        if (!formulaText.includes(targetSheetName)) return;
+        fNode.textContent = formulaText.replace(refPattern, (full, sheetPart, col1, row1, col2, row2) => {
+          const r1 = parseInt(row1, 10);
+          const shift = (r) => (r >= fromRow ? r + delta : r);
+          if (row2 === undefined) return `${sheetPart}!${col1}${shift(r1)}`;
+          const r2 = parseInt(row2, 10);
+          const nextEnd = (Number.isFinite(extendRangeEndFrom) && r2 === extendRangeEndFrom) ? r2 + delta : shift(r2);
+          return `${sheetPart}!${col1}${shift(r1)}:${col2}${nextEnd}`;
+        });
+      });
+    });
   };
 
   const normalizeWorksheetPath = (targetPath) => {
@@ -4188,64 +4277,6 @@ export default function App() {
     return sheetMap;
   };
 
-  const parseDefinedNameToCellRef = (formulaText) => {
-    const raw = String(formulaText || '').trim();
-    if (!raw || raw.includes('#REF!') || raw.includes('[')) return null;
-
-    const firstToken = raw.replace(/^=/, '').split(',')[0].trim();
-    if (!firstToken) return null;
-
-    const quotedMatch = /^'((?:[^']|'')+)'!\$?([A-Z]+)\$?(\d+)(?::\$?[A-Z]+\$?\d+)?$/i.exec(firstToken);
-    if (quotedMatch) {
-      return {
-        sheetName: quotedMatch[1].replace(/''/g, "'"),
-        ref: `${quotedMatch[2].toUpperCase()}${quotedMatch[3]}`,
-      };
-    }
-
-    const plainMatch = /^([^'!]+)!\$?([A-Z]+)\$?(\d+)(?::\$?[A-Z]+\$?\d+)?$/i.exec(firstToken);
-    if (plainMatch) {
-      return {
-        sheetName: plainMatch[1].trim(),
-        ref: `${plainMatch[2].toUpperCase()}${plainMatch[3]}`,
-      };
-    }
-
-    return null;
-  };
-
-  const buildDefinedNameCellMap = (workbookXml) => {
-    const parser = new DOMParser();
-    const workbookDoc = parser.parseFromString(workbookXml, 'application/xml');
-    if (workbookDoc.getElementsByTagName('parsererror').length > 0) {
-      throw new Error('워크북 정의 이름 파싱에 실패했습니다.');
-    }
-
-    const map = new Map();
-    const nodes = Array.from(workbookDoc.getElementsByTagNameNS('*', 'definedName'));
-    nodes.forEach((node) => {
-      const name = node.getAttribute('name');
-      if (!name) return;
-
-      const parsed = parseDefinedNameToCellRef(node.textContent);
-      if (!parsed) return;
-
-      const isLocal = node.hasAttribute('localSheetId');
-      const existing = map.get(name);
-      if (!existing) {
-        map.set(name, { ...parsed, isLocal });
-        return;
-      }
-
-      // Prefer global scoped names over local scoped duplicates.
-      if (existing.isLocal && !isLocal) {
-        map.set(name, { ...parsed, isLocal });
-      }
-    });
-
-    return map;
-  };
-
   const exportToTemplateExcel = async (sourceReport = null) => {
     try {
       const sourceData = sourceReport && typeof sourceReport === 'object' ? sourceReport : formData;
@@ -4263,9 +4294,7 @@ export default function App() {
         const n = parseFloat(v);
         return Number.isFinite(n) ? n : NaN;
       };
-      const avgTp = avg(sourcePoints.map((p) => toNumStrict(p?.tp)));
       const avgSp = avg(sourcePoints.map((p) => toNumStrict(p?.sp)));
-      const avgDp = avg(sourcePoints.map((p) => toNumStrict(p?.dp)));
       const avgTs = avg(sourcePoints.map((p) => toNumStrict(p?.ts)));
       const avgTm = avg(sourceGasMeters
         .filter((_, idx) => idx !== 0)
@@ -4280,54 +4309,12 @@ export default function App() {
       const avgOrifice = avg(sourceGasMeters
         .filter((_, idx) => idx !== 0)
         .map((m) => toNumStrict(m?.pressure)));
-      const atmPressure = toNumStrict(sourceData.atmPressure);
-      const stackPressure = Number.isFinite(atmPressure) && Number.isFinite(avgSp)
-        ? atmPressure + (avgSp / 13.6)
-        : NaN;
 
-      const calcGasCompFromSource = () => {
-        const o2 = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.o2)));
-        const co2 = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.co2)));
-        const co = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.co)));
-        const sox = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.sox)));
-        const nox = avg(sourceGasAnalyzer.map((g) => toNumStrict(g?.nox)));
-        const safeO2 = Number.isFinite(o2) ? o2 : 0;
-        const safeCo2 = Number.isFinite(co2) ? co2 : 0;
-        const safeCo = Number.isFinite(co) ? co : 0;
-        // 엑셀(노즐산정)과 동일한 CO 환산/분자량 경로
-        const coPercent = safeCo / 1000;
-        const n2 = 100 - safeCo2 - safeO2 - coPercent;
-        const sumMx = (32 * safeO2) + (44 * safeCo2) + (38 * coPercent) + (28 * n2);
-        const Md = sumMx / 100;
-        const Xw = avg(sourceMoistures.map((v) => toNumStrict(v)));
-        const safeXw = Number.isFinite(Xw) ? Xw : 0;
-        const Ms = Md * ((100 - safeXw) / 100) + 18 * (safeXw / 100);
-        const r0 = (1 / (22.4 * 100)) * (sumMx * ((100 - safeXw) / 100) + 18 * safeXw);
-        return {
-          o2: safeO2,
-          co2: safeCo2,
-          co: safeCo,
-          sox: Number.isFinite(sox) ? sox : 0,
-          nox: Number.isFinite(nox) ? nox : 0,
-          n2,
-          Md,
-          Ms,
-          Xw: safeXw,
-          r0,
-        };
-      };
-
-      const gasComp = calcGasCompFromSource();
-      const savedMoisture = toNumStrict(sourceData.moisturePercent);
-      const moisturePercent = Number.isFinite(savedMoisture) ? savedMoisture : gasComp.Xw;
-      const savedIso = toNumStrict(sourceData.isokineticRate);
-      const isokineticPercent = Number.isFinite(savedIso) ? savedIso : null;
-      const flowRates = {
-        wet: sourceData.wetFlowRate ?? '-',
-        dry: sourceData.dryFlowRate ?? '-',
-      };
-
-      const response = await fetch(dustTemplateUrl);
+      const exportSheetId = (sourceReport && typeof sourceReport === 'object')
+        ? resolveReportSheetId(sourceReport)
+        : (activeSheet?.id || 'dust');
+      const layout = EXPORT_TEMPLATE_LAYOUTS[exportSheetId] || EXPORT_TEMPLATE_LAYOUTS.dust;
+      const response = await fetch(getTemplateUrlForSheet(exportSheetId));
       if (!response.ok) throw new Error('템플릿 파일을 불러오지 못했습니다.');
 
       const templateBuffer = await response.arrayBuffer();
@@ -4342,7 +4329,6 @@ export default function App() {
       const workbookXml = await workbookFile.async('string');
       const workbookRelsXml = await relsFile.async('string');
       const sheetPathMap = buildSheetPathMap(workbookXml, workbookRelsXml);
-      const definedNameMap = buildDefinedNameCellMap(workbookXml);
 
       const requiredSheets = ['표지', '연소가스자료', '노즐산정', '수분량', '기록지(수분량자동측정기)'];
       requiredSheets.forEach((sheetName) => {
@@ -4356,20 +4342,6 @@ export default function App() {
         if (!updatesBySheet.has(sheetName)) updatesBySheet.set(sheetName, []);
         updatesBySheet.get(sheetName).push({ ref, value });
       };
-      const addUpdateByName = (nameOrNames, fallbackSheet, fallbackRef, value) => {
-        const names = Array.isArray(nameOrNames) ? nameOrNames : [nameOrNames];
-        const resolved = names
-          .map((name) => definedNameMap.get(name))
-          .find((hit) => hit && sheetPathMap.has(hit.sheetName));
-
-        if (resolved) {
-          addUpdate(resolved.sheetName, resolved.ref, value);
-          return;
-        }
-
-        addUpdate(fallbackSheet, fallbackRef, value);
-      };
-
       const lastMeaningfulIdx = sourceGasMeters.reduce((lastIdx, meter, idx) => {
         const fields = ['pointNum', 'time', 'stackTemp', 'dp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
         const hasValue = fields.some((field) => {
@@ -4380,14 +4352,22 @@ export default function App() {
         return lastIdx;
       }, 0);
       const gasMeters = sourceGasMeters.slice(0, Math.max(1, lastMeaningfulIdx + 1));
-      const meterRowsForTemplate = Math.max(10, gasMeters.length);
+      const meterTemplateCapacity = layout.meterTemplateEndRow - layout.meterStartRow + 1;
+      const meterRowsForTemplate = Math.max(meterTemplateCapacity, gasMeters.length);
+      const meterExtraRows = meterRowsForTemplate - meterTemplateCapacity;
       const firstVolume = gasMeters.find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
       const lastVolume = [...gasMeters].reverse().find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
 
+      const recordSheet = '기록지(수분량자동측정기)';
+      const filterNumber = String(sourceData.filterId || '').trim() || `${layout.filterPrefix}-1`;
+      const pitotSerial = String(sourceData.pitotInfo || '').trim();
+
+      // 표지
       addUpdate('표지', 'D19', sourceData.company);
       addUpdate('표지', 'D20', sourceData.location);
       addUpdate('표지', 'D21', toExcelDateSerial(sourceData.date));
 
+      // 연소가스자료 (가스분석기 3회)
       for (let i = 0; i < 3; i++) {
         const gas = sourceGasAnalyzer[i] || {};
         const row = 8 + i;
@@ -4399,107 +4379,93 @@ export default function App() {
         addUpdate('연소가스자료', `F${row}`, toNumber(gas.sox));
       }
 
-      addUpdate('노즐산정', 'C6', toNumber(sourceData.samplerId));
-      addUpdate('노즐산정', 'B9', toNumber(sourceData.atmTemp));
-      addUpdate('노즐산정', 'C9', toNumber(sourceData.atmPressure));
-      addUpdate('노즐산정', 'D9', toNumber(sourceData.pitotFactor));
-      addUpdate('노즐산정', 'E9', toNumber(sourceData.deltaHAt));
-      addUpdate('노즐산정', 'F9', toNumber(sourceData.gasMeterFactor));
-      addUpdate('노즐산정', 'E15', toNumber(avgTs));
-      addUpdate('노즐산정', 'F15', toNumber(sourceData.traverseTmIn));
-      addUpdate('노즐산정', 'G15', toNumber(sourceData.traverseTmOut));
-      addUpdate('노즐산정', 'H15', toNumber(avgTp));
-      addUpdate('노즐산정', 'I15', toNumber(avgSp));
-      addUpdate('노즐산정', 'J15', toNumber(avgDp));
-      addUpdate('노즐산정', 'B39', toNumber(sourceData.planSamplingTime));
-      addUpdate('노즐산정', 'K39', toNumber(sourceData.usedNozzleNum) || toNumber(sourceData.recommendedNozzleNum));
-
+      // 노즐산정: 대기 조건, 피토관, 샘플러 계수
+      addUpdate('노즐산정', 'B5', toNumber(sourceData.samplerId));
+      addUpdate('노즐산정', 'A8', toNumber(sourceData.atmTemp));
+      addUpdate('노즐산정', 'B8', toNumber(sourceData.atmPressure));
+      if (pitotSerial) addUpdate('노즐산정', 'C8', pitotSerial);
+      addUpdate('노즐산정', 'C10', toNumber(sourceData.pitotFactor));
+      addUpdate('노즐산정', 'F8', toNumber(sourceData.deltaHAt));
+      addUpdate('노즐산정', 'G8', toNumber(sourceData.gasMeterFactor));
+      addUpdate('노즐산정', 'D15', toNumber(sourceData.traverseTmIn));
+      addUpdate('노즐산정', 'F15', toNumber(sourceData.traverseTmOut));
+      addUpdate('노즐산정', 'G15', Number.isFinite(avgTs) ? avgTs : null);
       for (let i = 0; i < 5; i++) {
         const point = sourcePoints[i] || {};
         const row = 17 + i;
+        addUpdate('노즐산정', `G${row}`, toNumber(point.ts));
         addUpdate('노즐산정', `H${row}`, toNumber(point.tp));
         addUpdate('노즐산정', `I${row}`, toNumber(point.sp));
         addUpdate('노즐산정', `J${row}`, toNumber(point.dp));
       }
-
-      for (let i = 0; i < 18; i++) {
+      addUpdate('노즐산정', 'A39', toNumber(sourceData.planSamplingTime));
+      addUpdate('노즐산정', 'K39', toNumber(sourceData.usedNozzleNum) || toNumber(sourceData.recommendedNozzleNum));
+      for (let i = 0; i < layout.nozzleRows; i++) {
         const row = 39 + i;
         const nozzle = nozzleSet[i];
-        addUpdate('노즐산정', `C${row}`, nozzle ? toNumber(nozzle.num) : null);
-        addUpdate('노즐산정', `D${row}`, nozzle ? toNumber(nozzle.d) : null);
+        addUpdate('노즐산정', `B${row}`, nozzle ? toNumber(nozzle.num) : null);
+        addUpdate('노즐산정', `C${row}`, nozzle ? toNumber(nozzle.d) : null);
       }
 
-      addUpdate('수분량', 'D6', 1);
+      // 시료측정위치: 전체 길이(m), 플랜지 길이(cm)
+      addUpdate('시료측정위치', 'B34', toNumber(sourceData.totalStackDepth));
+      const flangeCm = toNumber(sourceData.flangeLength);
+      addUpdate('시료측정위치', 'B37', flangeCm === null ? null : flangeCm * 100);
+
+      // 수분량: 자동측정기 5회값, 사전 가스미터, 사후 임핀저 무게
+      addUpdate('수분량', 'C5', 1);
       for (let i = 0; i < 5; i++) {
-        addUpdate('수분량', `B${11 + i}`, i + 1);
-        addUpdate('수분량', `C${11 + i}`, toNumber(sourceMoistures[i]));
+        addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       }
-      for (let i = 0; i < 4; i++) {
+      addUpdate('수분량', 'A28', toNumber(firstVolume));
+      addUpdate('수분량', 'B28', toNumber(lastVolume));
+      addUpdate('수분량', 'D28', Number.isFinite(avgTm) ? avgTm : null);
+      addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
+      addUpdate('수분량', 'F28', Number.isFinite(avgOrifice) ? avgOrifice : null);
+      addUpdate('수분량', 'G28', Number.isFinite(avgOrifice) ? avgOrifice / 13.6 : null);
+      for (let i = 0; i < layout.impingerRows; i++) {
         const imp = sourceImpingers[i] || {};
-        addUpdate('수분량', `D${34 + i}`, toNumber(imp.initial));
-        addUpdate('수분량', `E${34 + i}`, toNumber(imp.final));
+        addUpdate('수분량', `C${33 + i}`, toNumber(imp.initial));
+        addUpdate('수분량', `D${33 + i}`, toNumber(imp.final));
+        addUpdate('수분량', `E${33 + i}`, { formula: `D${33 + i}-C${33 + i}` });
       }
-      addUpdate('수분량', 'B29', toNumber(firstVolume));
-      addUpdate('수분량', 'C29', toNumber(lastVolume));
-      addUpdate('수분량', 'E29', Number.isFinite(avgTm) ? avgTm : null);
-      addUpdate('수분량', 'F29', toNumber(sourceData.atmPressure));
-      addUpdate('수분량', 'G29', Number.isFinite(avgOrifice) ? avgOrifice : null);
 
-      addUpdateByName('Plant_Name', '기록지(수분량자동측정기)', 'C5', sourceData.company);
-      addUpdateByName('Sampling_Location', '기록지(수분량자동측정기)', 'C6', sourceData.location);
-      addUpdateByName('Operator', '기록지(수분량자동측정기)', 'C7', sourceData.sampler);
-      addUpdateByName('Date', '기록지(수분량자동측정기)', 'C8', toExcelDateSerial(sourceData.date));
-      addUpdate('기록지(수분량자동측정기)', 'C9', sourceData.filterId || '먼지-1');
-      addUpdateByName('Cp', '기록지(수분량자동측정기)', 'J5', toNumber(sourceData.pitotFactor));
-      addUpdate('기록지(수분량자동측정기)', 'J6', toNumber(sourceData.atmTemp));
-      addUpdateByName('Pa', '기록지(수분량자동측정기)', 'J7', toNumber(sourceData.atmPressure));
-      addUpdateByName('Pas', '기록지(수분량자동측정기)', 'J8', Number.isFinite(stackPressure) ? stackPressure : null);
-      addUpdateByName('Xw', '기록지(수분량자동측정기)', 'J9', moisturePercent);
-      addUpdate('기록지(수분량자동측정기)', 'J10', toNumber(sourceData.totalStackDepth));
-      addUpdateByName('Dn', '기록지(수분량자동측정기)', 'J11', toNumber(sourceData.nozzleDiameter) ? toNumber(sourceData.nozzleDiameter) / 10 : null);
-      addUpdate('기록지(수분량자동측정기)', 'J13', sourceData.filterId);
-      addUpdate('기록지(수분량자동측정기)', 'J14', toNumber(avgSp));
-      addUpdateByName('Oa', '기록지(수분량자동측정기)', 'C11', toNumber(gasComp.o2));
-      addUpdate('기록지(수분량자동측정기)', 'C12', toNumber(sourceData.kFactor));
-      addUpdateByName('I', '기록지(수분량자동측정기)', 'C13', isokineticPercent);
-      addUpdateByName('Os', '기록지(수분량자동측정기)', 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : '-');
-      addUpdateByName('Ws', '기록지(수분량자동측정기)', 'D14', toNumber(sourceData.filterInitial));
-      addUpdateByName('We', '기록지(수분량자동측정기)', 'F14', toNumber(sourceData.filterFinal));
+      // 기록지: 머리글 (계산 셀은 양식 수식을 그대로 두고 입력 셀만 기록)
+      addUpdate(recordSheet, 'C5', sourceData.company);
+      addUpdate(recordSheet, 'C6', sourceData.location);
+      addUpdate(recordSheet, 'C7', sourceData.sampler);
+      addUpdate(recordSheet, 'C8', toExcelDateSerial(sourceData.date));
+      addUpdate(recordSheet, 'C9', filterNumber);
+      addUpdate(recordSheet, 'J13', filterNumber);
+      addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
+      if (toNumber(sourceData.filterInitial) !== null) addUpdate(recordSheet, 'D14', toNumber(sourceData.filterInitial));
+      if (toNumber(sourceData.filterFinal) !== null) addUpdate(recordSheet, 'F14', toNumber(sourceData.filterFinal));
 
+      // 기록지: 측정행 (양식 예시값을 지우고 기록)
+      const meterColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'P'];
       for (let i = 0; i < meterRowsForTemplate; i++) {
-        const row = 17 + i;
-        addUpdate('기록지(수분량자동측정기)', `A${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `B${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `C${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `D${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `E${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `F${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `G${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `H${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `I${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `J${row}`, null);
-        addUpdate('기록지(수분량자동측정기)', `K${row}`, null);
+        const row = layout.meterStartRow + i;
+        meterColumns.forEach((col) => addUpdate(recordSheet, `${col}${row}`, null));
       }
-
       gasMeters.forEach((meter, idx) => {
-        const row = 17 + idx;
-        addUpdate('기록지(수분량자동측정기)', `A${row}`, meter.pointNum || (idx === 0 ? '시작' : ''));
-        addUpdate('기록지(수분량자동측정기)', `B${row}`, toNumber(meter.time));
-        addUpdate('기록지(수분량자동측정기)', `C${row}`, toNumber(meter.vacuum));
-        addUpdate('기록지(수분량자동측정기)', `D${row}`, toNumber(meter.stackTemp));
-        addUpdate('기록지(수분량자동측정기)', `E${row}`, toNumber(meter.dp));
-        addUpdate('기록지(수분량자동측정기)', `F${row}`, toNumber(meter.pressure));
-        addUpdate('기록지(수분량자동측정기)', `G${row}`, toNumber(meter.volume));
-        addUpdate('기록지(수분량자동측정기)', `H${row}`, toNumber(meter.tmIn));
-        addUpdate('기록지(수분량자동측정기)', `I${row}`, toNumber(meter.tmOut));
-        addUpdate('기록지(수분량자동측정기)', `K${row}`, toNumber(meter.impingerTemp));
+        const row = layout.meterStartRow + idx;
+        addUpdate(recordSheet, `A${row}`, meter.pointNum || (idx === 0 ? '시작' : ''));
+        addUpdate(recordSheet, `B${row}`, toNumber(meter.time));
+        addUpdate(recordSheet, `C${row}`, toNumber(meter.vacuum));
+        addUpdate(recordSheet, `D${row}`, toNumber(meter.stackTemp));
+        addUpdate(recordSheet, `E${row}`, toNumber(meter.dp));
+        addUpdate(recordSheet, `F${row}`, toNumber(meter.pressure));
+        addUpdate(recordSheet, `G${row}`, toNumber(meter.volume));
+        addUpdate(recordSheet, `H${row}`, toNumber(meter.tmIn));
+        addUpdate(recordSheet, `I${row}`, toNumber(meter.tmOut));
+        addUpdate(recordSheet, `K${row}`, toNumber(meter.impingerTemp));
+        addUpdate(recordSheet, `P${row}`, Number.isFinite(avgSp) ? avgSp : null);
       });
 
       if (sheetPathMap.has('먼지측정결과보고서')) {
         addUpdate('먼지측정결과보고서', 'C5', sourceData.company);
         addUpdate('먼지측정결과보고서', 'C6', sourceData.location);
         addUpdate('먼지측정결과보고서', 'A17', sourceData.remarks);
-        addUpdate('먼지측정결과보고서', 'G13', toNumber(flowRates.dry));
       }
 
       for (const [sheetName, updates] of updatesBySheet.entries()) {
@@ -4513,11 +4479,57 @@ export default function App() {
         const patched = patchWorksheetXml(
           xml,
           updates,
-          sheetName === '기록지(수분량자동측정기)'
-            ? { expandMeterRowsTo: meterRowsForTemplate }
-            : {}
+          sheetName === recordSheet
+            ? { expandMeterRowsTo: meterRowsForTemplate, layout }
+            : (meterExtraRows > 0
+              ? {
+                  shiftRefsToSheet: recordSheet,
+                  shiftRefsFromRow: layout.meterTemplateEndRow + 1,
+                  shiftRefsDelta: meterExtraRows,
+                  extendRangeEndFrom: layout.meterTemplateEndRow,
+                }
+              : {})
         );
         zip.file(sheetPath, patched);
+      }
+
+      // 기록지 행이 늘어난 경우, 갱신되지 않은 다른 시트(계산식 등)의 기록지 참조도 함께 보정
+      if (meterExtraRows > 0) {
+        for (const [sheetName, sheetPath] of sheetPathMap.entries()) {
+          if (updatesBySheet.has(sheetName) || sheetName === recordSheet) continue;
+          const file = zip.file(sheetPath);
+          if (!file) continue;
+          const xml = await file.async('string');
+          if (!xml.includes(recordSheet)) continue;
+          zip.file(sheetPath, patchWorksheetXml(xml, [], {
+            shiftRefsToSheet: recordSheet,
+            shiftRefsFromRow: layout.meterTemplateEndRow + 1,
+            shiftRefsDelta: meterExtraRows,
+            extendRangeEndFrom: layout.meterTemplateEndRow,
+          }));
+        }
+        // 계산 체인은 Excel이 다시 만들므로 제거 (행 삽입 후 복구 메시지 방지)
+        if (zip.file('xl/calcChain.xml')) {
+          zip.remove('xl/calcChain.xml');
+          const relsXmlNow = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+          zip.file('xl/_rels/workbook.xml.rels', relsXmlNow.replace(/<Relationship[^>]*calcChain\.xml"[^>]*\/>/g, ''));
+          const ctFile = zip.file('[Content_Types].xml');
+          if (ctFile) {
+            const ctXml = await ctFile.async('string');
+            zip.file('[Content_Types].xml', ctXml.replace(/<Override[^>]*calcChain\.xml"[^>]*\/>/g, ''));
+          }
+        }
+      }
+
+      // 열 때 전체 재계산되도록 설정 (양식의 예시 계산값이 남지 않게)
+      {
+        let wbXml = workbookXml;
+        if (/<calcPr\b[^>]*\/>/.test(wbXml)) {
+          wbXml = wbXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
+        } else {
+          wbXml = wbXml.replace('</workbook>', '<calcPr fullCalcOnLoad="1"/></workbook>');
+        }
+        zip.file('xl/workbook.xml', wbXml);
       }
 
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
@@ -4537,6 +4549,10 @@ export default function App() {
       alert('템플릿 엑셀 저장 중 오류가 발생했습니다. 템플릿 파일 또는 입력값을 확인해주세요.');
     }
   };
+
+  if (import.meta.env.VITE_E2E === '1' && typeof window !== 'undefined') {
+    window.__stackpilotExportForTest = exportToTemplateExcel;
+  }
 
   const handleExportSelectedTemplateExcel = async () => {
     if (IS_DESKTOP_BUILD) {
