@@ -6188,7 +6188,7 @@ export default function App() {
                               step="0.01"
                               value={preset.factor}
                               onChange={(e) => handlePitotPresetConfigChange(idx, 'factor', e.target.value)}
-                              className="w-full p-1 border border-emerald-300 rounded text-center"
+                              className="w-16 min-w-[4.5rem] p-1 border border-emerald-300 rounded text-center"
                             />
                           </td>
                           <td className="border border-emerald-200 p-1 text-left">
