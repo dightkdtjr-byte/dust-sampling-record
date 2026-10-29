@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -68,6 +68,11 @@ function createWindow() {
         const original = window[name].bind(window);
         window[name] = (...args) => { const result = original(...args); refocus(); return result; };
       }
+      const originalClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function (...args) {
+        try { if (this.download && window.stackpilotDesktop) window.stackpilotDesktop.noteDownloadName(this.download); } catch (e) {}
+        return originalClick.apply(this, args);
+      };
     })();`).catch(() => {});
   });
 
@@ -77,6 +82,11 @@ function createWindow() {
     win.loadURL(`${APP_SCHEME}://bundle/index.html`);
   }
 }
+
+let lastDownloadName = '';
+ipcMain.on('desktop:download-name', (event, name) => {
+  lastDownloadName = String(name || '').replace(/[\\/:*?"<>|]/g, '_');
+});
 
 ipcMain.on('desktop:refocus', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -89,6 +99,22 @@ ipcMain.on('desktop:refocus', (event) => {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   registerAppProtocol();
+
+  // 엑셀 추출 등 다운로드: 파일 이름을 채운 "다른 이름으로 저장" 창을 띄움
+  session.defaultSession.on('will-download', (event, item) => {
+    try {
+      const reported = item.getFilename();
+      const fileName = (!reported || reported === 'download' || !reported.includes('.')) && lastDownloadName ? lastDownloadName : reported;
+      lastDownloadName = '';
+      item.setSaveDialogOptions({
+        title: '파일 저장',
+        defaultPath: path.join(app.getPath('downloads'), fileName),
+      });
+    } catch (error) {
+      console.error('download dialog setup failed', error);
+    }
+  });
+
   createWindow();
 
   app.on('activate', () => {

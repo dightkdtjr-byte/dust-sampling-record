@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.dightkdtjr-byte.stackpilot.personal",
+  "productName": "StackPilot Personal",
+  "directories": { "buildResources": "build", "output": "release-personal" },
+  "files": ["dist/**/*", "electron/**/*", "build/icon.png", "package.json"],
+  "win": { "target": ["portable"], "icon": "build/icon.png" },
+  "portable": { "artifactName": "StackPilot-Personal.exe" }
+}

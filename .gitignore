@@ -26,3 +26,4 @@ dist-ssr
 
 # Electron build output
 release
+release-personal

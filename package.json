@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "electron:start": "npm run build:desktop && electron .",
     "electron:build": "npm run build:desktop && electron-builder --win portable",
-    "build:desktop": "vite build --mode desktop"
+    "build:desktop": "vite build --mode desktop",
+    "electron:build:personal": "npm run build && electron-builder --win portable --config electron-builder.personal.json"
   },
   "dependencies": {
     "jszip": "^3.10.1",
