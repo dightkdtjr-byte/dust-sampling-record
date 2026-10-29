@@ -25,17 +25,30 @@ const DEFAULT_NOZZLE_SET = IS_DESKTOP_BUILD ? [] : [
 ];
 
 const DEFAULT_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
-  { id: 1, name: '샘플러 1호기', yd: '0.991', dHAt: '47.6079' },
-  { id: 2, name: '샘플러 2호기', yd: '1.005', dHAt: '40.2' },
-  { id: 3, name: '샘플러 3호기', yd: '0.988', dHAt: '39.5' },
-  { id: 4, name: '샘플러 4호기', yd: '1.012', dHAt: '42.1' },
-  { id: 5, name: '샘플러 5호기', yd: '0.998', dHAt: '41.5' }
+  { id: 1, name: '샘플러 1호기 (1910162K)', yd: '0.991', dHAt: '47.6079' },
+  { id: 2, name: '샘플러 2호기 (1910163K)', yd: '0.994', dHAt: '47.4726' },
+  { id: 3, name: '샘플러 3호기 (1910164K)', yd: '1.0078', dHAt: '47.557' },
+  { id: 4, name: '샘플러 4호기 (1910165K)', yd: '0.9976', dHAt: '47.6512' },
+  { id: 5, name: '샘플러 5호기 (A2312850)', yd: '1', dHAt: '49.1' },
 ];
 
+// 피토관 교정 성적서 (기록부 양식의 '피토' 시트 기준, 교정일 2026-01): 유속(m/s)별 Cp
 const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
-  { id: 1, sn: '1910162K', factor: '0.84' },
-  { id: 2, sn: '1910163K', factor: '0.84' },
-  { id: 3, sn: '1910164K', factor: '0.84' },
+  { id: 1, sn: 'YNJ0412', usage: '입자', length: '65', calDate: '2026-01-20', factor: '0.822', cpByVelocity: [{ v: '4.95', cp: '0.816' }, { v: '6.92', cp: '0.821' }, { v: '8.91', cp: '0.822' }, { v: '11.92', cp: '0.822' }, { v: '14.93', cp: '0.823' }, { v: '19.95', cp: '0.824' }, { v: '29.94', cp: '0.823' }, { v: '37.39', cp: '0.824' }] },
+  { id: 2, sn: 'GNT-TECH 525', usage: '입자', length: '125', calDate: '2026-01-20', factor: '0.822', cpByVelocity: [{ v: '5.13', cp: '0.825' }, { v: '7.04', cp: '0.824' }, { v: '8.96', cp: '0.823' }, { v: '11.88', cp: '0.822' }, { v: '14.84', cp: '0.821' }, { v: '19.82', cp: '0.822' }, { v: '29.86', cp: '0.823' }, { v: '37.49', cp: '0.823' }] },
+  { id: 3, sn: 'GNT-TECH 528', usage: '입자', length: '125', calDate: '2026-01-20', factor: '0.824', cpByVelocity: [{ v: '5.13', cp: '0.827' }, { v: '7.04', cp: '0.827' }, { v: '8.96', cp: '0.826' }, { v: '11.88', cp: '0.824' }, { v: '14.84', cp: '0.824' }, { v: '19.82', cp: '0.823' }, { v: '29.86', cp: '0.822' }, { v: '37.49', cp: '0.821' }] },
+  { id: 4, sn: 'GNT-TECH 621', usage: '입자', length: '125', calDate: '2026-01-20', factor: '0.823', cpByVelocity: [{ v: '5.13', cp: '0.827' }, { v: '7.03', cp: '0.825' }, { v: '8.96', cp: '0.824' }, { v: '11.88', cp: '0.823' }, { v: '14.85', cp: '0.822' }, { v: '19.81', cp: '0.822' }, { v: '29.86', cp: '0.823' }, { v: '37.51', cp: '0.823' }] },
+  { id: 5, sn: 'YNJ0022', usage: '입자', length: '230', calDate: '2026-01-20', factor: '0.811', cpByVelocity: [{ v: '4.96', cp: '0.807' }, { v: '6.91', cp: '0.809' }, { v: '8.89', cp: '0.810' }, { v: '11.9', cp: '0.811' }, { v: '14.9', cp: '0.813' }, { v: '19.92', cp: '0.814' }, { v: '29.91', cp: '0.814' }, { v: '37.39', cp: '0.814' }] },
+  { id: 6, sn: 'YNJ0854', usage: '입자', length: '235', calDate: '2026-01-21', factor: '0.820', cpByVelocity: [{ v: '4.96', cp: '0.814' }, { v: '6.92', cp: '0.818' }, { v: '8.92', cp: '0.820' }, { v: '11.92', cp: '0.820' }, { v: '14.92', cp: '0.820' }, { v: '19.94', cp: '0.820' }, { v: '29.92', cp: '0.819' }, { v: '37.41', cp: '0.819' }] },
+  { id: 7, sn: 'YNJ0046', usage: '입자', length: '295', calDate: '2026-01-20', factor: '0.826', cpByVelocity: [{ v: '4.96', cp: '0.815' }, { v: '6.92', cp: '0.822' }, { v: '8.9', cp: '0.825' }, { v: '11.91', cp: '0.826' }, { v: '14.92', cp: '0.825' }, { v: '19.92', cp: '0.825' }, { v: '29.94', cp: '0.828' }, { v: '37.42', cp: '0.828' }] },
+  { id: 8, sn: 'ENK2404', usage: '수은', length: '55', calDate: '2026-01-20', factor: '0.826', cpByVelocity: [{ v: '5.13', cp: '0.826' }, { v: '7.03', cp: '0.826' }, { v: '8.96', cp: '0.826' }, { v: '11.88', cp: '0.826' }, { v: '14.85', cp: '0.825' }, { v: '19.82', cp: '0.825' }, { v: '29.87', cp: '0.824' }, { v: '37.51', cp: '0.823' }] },
+  { id: 9, sn: 'GNT-TECH 1440', usage: '수은', length: '115', calDate: '2026-01-20', factor: '0.819', cpByVelocity: [{ v: '5.14', cp: '0.826' }, { v: '7.04', cp: '0.824' }, { v: '8.96', cp: '0.822' }, { v: '11.89', cp: '0.819' }, { v: '14.86', cp: '0.818' }, { v: '19.84', cp: '0.818' }, { v: '29.9', cp: '0.818' }, { v: '37.53', cp: '0.817' }] },
+  { id: 10, sn: 'GNT-TECH 1444', usage: '수은', length: '115', calDate: '2026-01-20', factor: '0.822', cpByVelocity: [{ v: '5.14', cp: '0.825' }, { v: '7.03', cp: '0.824' }, { v: '8.96', cp: '0.823' }, { v: '11.88', cp: '0.822' }, { v: '14.85', cp: '0.822' }, { v: '19.83', cp: '0.821' }, { v: '29.87', cp: '0.820' }, { v: '37.52', cp: '0.820' }] },
+  { id: 11, sn: 'ENK2407', usage: '수은', length: '215', calDate: '2026-01-20', factor: '0.827', cpByVelocity: [{ v: '5.13', cp: '0.828' }, { v: '7.03', cp: '0.828' }, { v: '8.95', cp: '0.827' }, { v: '11.88', cp: '0.827' }, { v: '14.84', cp: '0.826' }, { v: '19.82', cp: '0.825' }, { v: '29.87', cp: '0.825' }, { v: '37.5', cp: '0.824' }] },
+  { id: 12, sn: 'YNJ0557', usage: '수은', length: '315', calDate: '2026-01-20', factor: '0.823', cpByVelocity: [{ v: '4.96', cp: '0.812' }, { v: '6.93', cp: '0.820' }, { v: '8.9', cp: '0.822' }, { v: '11.9', cp: '0.823' }, { v: '14.92', cp: '0.825' }, { v: '19.95', cp: '0.825' }, { v: '29.92', cp: '0.827' }, { v: '37.41', cp: '0.829' }] },
+  { id: 13, sn: 'YNJ1336', usage: 'PAHs', length: '120', calDate: '2026-01-21', factor: '0.817', cpByVelocity: [{ v: '4.96', cp: '0.810' }, { v: '6.93', cp: '0.815' }, { v: '8.92', cp: '0.817' }, { v: '11.92', cp: '0.817' }, { v: '14.91', cp: '0.816' }, { v: '19.94', cp: '0.817' }, { v: '29.92', cp: '0.816' }, { v: '37.43', cp: '0.817' }] },
+  { id: 14, sn: 'YNJ1319', usage: 'PAHs', length: '170', calDate: '2026-01-21', factor: '0.820', cpByVelocity: [{ v: '4.96', cp: '0.813' }, { v: '6.92', cp: '0.818' }, { v: '8.92', cp: '0.820' }, { v: '11.91', cp: '0.820' }, { v: '14.92', cp: '0.821' }, { v: '19.95', cp: '0.821' }, { v: '29.95', cp: '0.821' }, { v: '37.42', cp: '0.821' }] },
+  { id: 15, sn: 'YNJ1374', usage: 'PAHs', length: '315', calDate: '2026-01-21', factor: '0.818', cpByVelocity: [{ v: '4.96', cp: '0.808' }, { v: '6.91', cp: '0.814' }, { v: '8.91', cp: '0.817' }, { v: '11.9', cp: '0.818' }, { v: '14.92', cp: '0.818' }, { v: '19.93', cp: '0.818' }, { v: '29.89', cp: '0.817' }, { v: '37.41', cp: '0.819' }] },
 ];
 
 // 엑셀 양식(A00)별 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
@@ -742,9 +755,13 @@ const sanitizePitotPresets = (value) => {
             }))
             .filter(row => row.v !== '' || row.cp !== '')
         : [];
+      const text = (v) => (v === undefined || v === null ? '' : String(v).trim());
       return {
         id: Number.isFinite(parsedId) ? parsedId : idx + 1,
         sn: snRaw || legacyName || '',
+        usage: text(item.usage),
+        length: text(item.length),
+        calDate: text(item.calDate),
         factor: item.factor === undefined || item.factor === null ? '' : String(item.factor),
         cpByVelocity,
       };
@@ -1587,7 +1604,7 @@ export default function App() {
   const addPitotPreset = () => {
     setPitotPresets(prev => {
       const maxId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
-      return [...prev, { id: maxId + 1, sn: '', factor: '0.84', cpByVelocity: [] }];
+      return [...prev, { id: maxId + 1, sn: '', usage: '', length: '', calDate: '', factor: '0.84', cpByVelocity: [] }];
     });
   };
 
@@ -2731,6 +2748,15 @@ export default function App() {
   };
 
   // 선택된 피토관 프리셋에 유속별 Cp 표가 있으면, 예비조사 유속에 맞는 Cp를 자동 적용
+  // 현재 기록부에 맞는 피토관 용도 (먼지/금속=입자, 수은, PAHs) 를 목록 앞쪽에 표시
+  const isPitotUsageForSheet = (usage) => {
+    const u = String(usage || '').trim();
+    if (!u) return false;
+    const sheetId = activeSheet?.id;
+    if (sheetId === 'mercury') return u.includes('수은');
+    if (sheetId === 'pahs') return u.toUpperCase().includes('PAH');
+    return u.includes('입자') || u.includes('먼지') || u.includes('금속');
+  };
   const activePitotPreset = pitotPresets.find(item => String(item.id) === String(formData.pitotPresetId)) || null;
   const activePitotVelocityRows = activePitotPreset ? getPitotVelocityRows(activePitotPreset) : [];
   const isPitotCpAutoApplied = activePitotVelocityRows.length > 0;
@@ -6077,11 +6103,14 @@ export default function App() {
                       title="피토 프리셋 선택"
                     >
                       <option value="">피토 프리셋</option>
-                      {pitotPresets.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.sn ? `S/N ${preset.sn}` : `S/N 미입력 (${preset.id})`}
-                        </option>
-                      ))}
+                      {[...pitotPresets]
+                        .sort((a, b) => Number(isPitotUsageForSheet(b.usage)) - Number(isPitotUsageForSheet(a.usage)))
+                        .map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {(preset.sn ? `S/N ${preset.sn}` : `S/N 미입력 (${preset.id})`)
+                              + (preset.usage || preset.length ? ` · ${[preset.usage, preset.length ? `${preset.length}cm` : ''].filter(Boolean).join(' ')}` : '')}
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
@@ -6126,6 +6155,32 @@ export default function App() {
                               className="w-full p-1 border border-emerald-300 rounded text-center"
                               placeholder="피토관 S/N"
                             />
+                            <div className="mt-1 flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={preset.usage || ''}
+                                onChange={(e) => handlePitotPresetConfigChange(idx, 'usage', e.target.value)}
+                                className="w-14 p-1 border border-emerald-200 rounded text-center text-[10px]"
+                                placeholder="용도"
+                                title="용도 (입자 / 수은 / PAHs)"
+                              />
+                              <input
+                                type="number"
+                                step="1"
+                                value={preset.length || ''}
+                                onChange={(e) => handlePitotPresetConfigChange(idx, 'length', e.target.value)}
+                                className="w-14 p-1 border border-emerald-200 rounded text-center text-[10px]"
+                                placeholder="cm"
+                                title="유효 길이 (cm)"
+                              />
+                              <input
+                                type="date"
+                                value={preset.calDate || ''}
+                                onChange={(e) => handlePitotPresetConfigChange(idx, 'calDate', e.target.value)}
+                                className="p-1 border border-emerald-200 rounded text-center text-[10px]"
+                                title="검교정일"
+                              />
+                            </div>
                           </td>
                           <td className="border border-emerald-200 p-1">
                             <input
