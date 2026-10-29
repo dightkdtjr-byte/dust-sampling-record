@@ -57,7 +57,9 @@ const EXPORT_TEMPLATE_LAYOUTS = {
   metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속' },
   mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은' },
   pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs' },
+  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량' },
 };
+const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 
 const SHEET_MENU = [
   {
@@ -88,7 +90,164 @@ const SHEET_MENU = [
     toneClass: 'from-purple-200/70 to-violet-200/20',
     hoverTextClass: 'group-hover:text-purple-700',
   },
+  {
+    id: 'flow',
+    title: '유량측정기록부',
+    desc: '배출가스 유량 측정 및 등속흡인 기록',
+    toneClass: 'from-cyan-200/70 to-sky-200/20',
+    hoverTextClass: 'group-hover:text-cyan-700',
+  },
+  {
+    id: 'samplinglog',
+    title: '시료채취기록부(종합)',
+    desc: '사업장별 물질 채취 현황 (가스·입자·VOCs)',
+    toneClass: 'from-orange-200/70 to-amber-200/20',
+    hoverTextClass: 'group-hover:text-orange-700',
+  },
 ];
+
+// 시료채취기록부(종합): 가스 샘플러 목록 (양식 '시료채취 작성' S6:T10 기준)
+const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
+  { id: 1, sn: '1910122', yd: '0.9857' },
+  { id: 2, sn: '1910123', yd: '1.0036' },
+  { id: 3, sn: '1910124', yd: '0.9985' },
+  { id: 4, sn: '1910125', yd: '0.9892' },
+  { id: 5, sn: 'A2304264', yd: '1' },
+];
+
+// 시료채취기록부(종합) 물질 목록: 양식 '시료채취 작성' 13~57행 순서 그대로
+// kind: particle(입자 샘플러) / gas(가스 샘플러) / analyzer(가스분석기) / thc(총탄화수소측정기) / box(음압상자) / plain(시작·종료값 차이)
+const SAMPLING_LOG_SUBSTANCES = [
+  { row: 13, code: 'P', name: '먼지', kind: 'particle', targetVolume: '1000', testPeriod: '2' },
+  { row: 14, code: 'G', name: '황산화물', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
+  { row: 15, code: 'G', name: '질소산화물', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
+  { row: 16, code: 'G', name: '일산화탄소', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
+  { row: 17, code: 'NH3', name: '암모니아-1(BA)', kind: 'gas', suffix: 'BA-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
+  { row: 18, code: 'NH3', name: '암모니아-2(H2O2)', kind: 'gas', suffix: 'H2O2-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
+  { row: 19, code: 'F', name: '불소', kind: 'gas', suctionRate: '1', targetVolume: '40', duration: '40', testPeriod: '4' },
+  { row: 20, code: 'HCl', name: '염화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '3' },
+  { row: 21, code: 'H2S', name: '황화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '4' },
+  { row: 22, code: 'HCN', name: '시안화수소', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
+  { row: 23, code: 'HDZ', name: '하이드라진', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
+  { row: 24, code: 'CS2', name: '이황화탄소', kind: 'gas', testPeriod: '9' },
+  { row: 25, code: 'M', name: '구리', kind: 'particle', targetVolume: '1000', testPeriod: '6' },
+  { row: 26, code: 'M', name: '카드뮴', kind: 'particle', testPeriod: '6' },
+  { row: 27, code: 'M', name: '납', kind: 'particle', testPeriod: '6' },
+  { row: 28, code: 'M', name: '크롬', kind: 'particle', testPeriod: '6' },
+  { row: 29, code: 'M', name: '니켈', kind: 'particle', testPeriod: '6' },
+  { row: 30, code: 'M', name: '아연', kind: 'particle', testPeriod: '6' },
+  { row: 31, code: 'M', name: '베릴륨', kind: 'particle', testPeriod: '6' },
+  { row: 32, code: 'M', name: '비소(입자상)', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
+  { row: 33, code: 'As-G', name: '비소(가스상)', kind: 'particle', suctionRate: '1', duration: '입자상 동일' },
+  { row: 34, code: 'Hg', name: '수은', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
+  { row: 35, code: 'ALD-1', name: '알데히드-1', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
+  { row: 36, code: 'ALD-2', name: '알데히드-2', kind: 'gas', suctionRate: '1', targetVolume: '10' },
+  { row: 37, code: 'ALD-3', name: '알데히드-3', kind: 'gas', suctionRate: '1', targetVolume: '10' },
+  { row: 38, code: 'PN', name: '페놀', kind: 'gas', suctionRate: '1', targetVolume: '20', testPeriod: '4' },
+  { row: 39, code: 'Br', name: '브롬', kind: 'gas', suctionRate: '1', targetVolume: '40', testPeriod: '4' },
+  { row: 40, code: 'THC', name: '총탄화수소', kind: 'thc', duration: '30', testPeriod: '현장측정' },
+  { row: 41, code: 'BZ', name: '벤조(a)피렌', kind: 'plain', testPeriod: '9' },
+  { row: 42, code: 'VOCs', name: '염화비닐', kind: 'box', testPeriod: '9' },
+  { row: 43, code: 'VOCs', name: '벤젠', kind: 'box', duration: '15', testPeriod: '9' },
+  { row: 44, code: 'VOCs', name: '디클로로메탄', kind: 'box', testPeriod: '9' },
+  { row: 45, code: 'VOCs', name: '트리클로로에틸렌', kind: 'box', testPeriod: '9' },
+  { row: 46, code: 'VOCs', name: '1,3-부타디엔', kind: 'box', testPeriod: '9' },
+  { row: 47, code: 'VOCs', name: '테트라클로로에틸렌', kind: 'box', testPeriod: '9' },
+  { row: 48, code: 'VOCs', name: '1,2-디클로로에탄', kind: 'box', testPeriod: '9' },
+  { row: 49, code: 'VOCs', name: '클로로포름', kind: 'box', testPeriod: '9' },
+  { row: 50, code: 'VOCs', name: '아크릴로니트릴', kind: 'box', testPeriod: '9' },
+  { row: 51, code: 'VOCs', name: '스틸렌', kind: 'box', testPeriod: '9' },
+  { row: 52, code: 'VOCs', name: '에틸벤젠', kind: 'box', testPeriod: '9' },
+  { row: 53, code: 'VOCs', name: '사염화탄소', kind: 'box', testPeriod: '9' },
+  { row: 54, code: 'BEN', name: '벤지딘', kind: 'plain' },
+  { row: 55, code: 'AN', name: '아닐린', kind: 'plain' },
+  { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box' },
+  { row: 57, code: 'OX', name: '옥사이드', kind: 'box', testPeriod: '9' },
+];
+
+// 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
+const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([15, 18, 33, 36, 37]);
+
+const SAMPLING_LOG_KIND_LABEL = {
+  particle: '입자 샘플러', gas: '가스 샘플러', analyzer: '가스분석기', thc: '총탄화수소측정기', box: '음압상자', plain: '-',
+};
+
+const createEmptySamplingLogRow = (substance) => ({
+  requested: false,
+  dayIndex: 0,
+  start: '', end: '', meterStart: '', meterEnd: '', temp: '', pressureH2O: '',
+  suctionRate: substance.suctionRate || '',
+  targetVolume: substance.targetVolume || '',
+  duration: substance.duration || '',
+  testPeriod: substance.testPeriod || '',
+});
+
+const createEmptySamplingLog = () => ({
+  company: '', industry: '', facility: '', stackName: '', siteAbbr: '',
+  particleSamplerId: '', particleSamplerYd: '', gasSamplerId: '', gasSamplerYd: '',
+  days: Array.from({ length: 4 }, () => ({ date: '', weather: '', temp: '', humidity: '', pressure: '', windDir: '', windSpeed: '' })),
+  rows: Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => [String(item.row), createEmptySamplingLogRow(item)])),
+});
+
+const sanitizeSamplingLog = (value) => {
+  const base = createEmptySamplingLog();
+  if (!value || typeof value !== 'object') return base;
+  const text = (v) => (v === undefined || v === null ? '' : String(v));
+  const next = { ...base };
+  ['company', 'industry', 'facility', 'stackName', 'siteAbbr', 'particleSamplerId', 'particleSamplerYd', 'gasSamplerId', 'gasSamplerYd']
+    .forEach((key) => { next[key] = text(value[key]); });
+  next.days = base.days.map((day, idx) => {
+    const src = Array.isArray(value.days) ? value.days[idx] : null;
+    if (!src || typeof src !== 'object') return day;
+    return Object.fromEntries(Object.keys(day).map((key) => [key, text(src[key])]));
+  });
+  next.rows = Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => {
+    const key = String(item.row);
+    const src = value.rows && typeof value.rows === 'object' ? value.rows[key] : null;
+    const row = createEmptySamplingLogRow(item);
+    if (src && typeof src === 'object') {
+      row.requested = Boolean(src.requested);
+      const di = parseInt(src.dayIndex, 10);
+      row.dayIndex = Number.isFinite(di) && di >= 0 && di < 4 ? di : 0;
+      Object.keys(row).forEach((field) => {
+        if (field === 'requested' || field === 'dayIndex') return;
+        if (src[field] !== undefined) row[field] = text(src[field]);
+      });
+    }
+    return [key, row];
+  }));
+  return next;
+};
+
+// 시료번호: 날짜(mmdd)-시설약자-굴뚝명-물질코드-접미어 (양식 D열 수식과 동일)
+const buildSamplingLogSampleNo = (log, substance) => {
+  const row = log.rows[String(substance.row)];
+  if (!row || !row.requested) return '';
+  const date = log.days[row.dayIndex]?.date || '';
+  const dt = date ? new Date(date) : null;
+  const mmdd = dt && !Number.isNaN(dt.getTime())
+    ? `${String(dt.getMonth() + 1).padStart(2, '0')}${String(dt.getDate()).padStart(2, '0')}`
+    : '';
+  return [mmdd, log.siteAbbr, log.stackName, substance.code, substance.suffix || '1'].map((v) => String(v || '').trim()).join('-');
+};
+
+// 채취유량(L): 입자/가스 샘플러는 (종료값-시작값)×Yd, 음압상자 등은 종료값-시작값
+const calcSamplingLogVolume = (log, substance) => {
+  const row = log.rows[String(substance.row)];
+  if (!row) return NaN;
+  const a = parseFloat(row.meterStart), b = parseFloat(row.meterEnd);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
+  if (substance.kind === 'particle') {
+    const yd = parseFloat(log.particleSamplerYd);
+    return (b - a) * (Number.isFinite(yd) && yd > 0 ? yd : 1);
+  }
+  if (substance.kind === 'gas') {
+    const yd = parseFloat(log.gasSamplerYd);
+    return (b - a) * (Number.isFinite(yd) && yd > 0 ? yd : 1);
+  }
+  if (substance.kind === 'box' || substance.kind === 'plain') return b - a;
+  return NaN;
+};
 
 const getSkyPhaseByHour = (date = new Date()) => {
   const hour = date.getHours();
@@ -561,6 +720,28 @@ const SKYLINE_FLYER_CSS = `
 `;
 
 const SHEET_THEMES = {
+  flow: {
+    selection: 'selection:bg-cyan-100',
+    pageBg: 'bg-cyan-50',
+    pageTint: 'bg-cyan-100/40',
+    headerBorder: 'border-t-cyan-600',
+    headerIcon: 'text-cyan-600',
+    focusRing: 'focus:ring-cyan-500',
+    primaryButton: 'bg-cyan-600 hover:bg-cyan-700',
+    primaryButtonSoft: 'bg-cyan-600 hover:bg-cyan-500',
+    accentText: 'text-cyan-400',
+  },
+  samplinglog: {
+    selection: 'selection:bg-orange-100',
+    pageBg: 'bg-orange-50',
+    pageTint: 'bg-orange-100/40',
+    headerBorder: 'border-t-orange-600',
+    headerIcon: 'text-orange-600',
+    focusRing: 'focus:ring-orange-500',
+    primaryButton: 'bg-orange-600 hover:bg-orange-700',
+    primaryButtonSoft: 'bg-orange-600 hover:bg-orange-500',
+    accentText: 'text-orange-400',
+  },
   dust: {
     selection: 'selection:bg-emerald-100',
     pageBg: 'bg-emerald-50',
@@ -1166,6 +1347,7 @@ export default function App() {
   });
 
   const [secureUsers, setSecureUsers] = useState({});
+  const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
   const [activeUser, setActiveUser] = useState('');
   const [activeUserReports, setActiveUserReports] = useState([]);
   const [isUserUnlocked, setIsUserUnlocked] = useState(false);
@@ -2683,6 +2865,12 @@ export default function App() {
     }
 
     const targetSheet = resolveReportSheetId(report);
+    if (targetSheet === 'samplinglog') {
+      setSamplingLogData(sanitizeSamplingLog(report.samplingLog));
+      if (selectedSheet !== 'samplinglog') window.location.hash = 'sheet=samplinglog';
+      alert('시료채취기록부(종합) 리포트를 불러왔습니다.');
+      return;
+    }
     const targetImpingerCount = getImpingerStageCount(targetSheet);
 
     setFormData(prev => {
@@ -4576,8 +4764,215 @@ export default function App() {
     }
   };
 
+  // ===== 시료채취기록부(종합) =====
+  const updateSamplingLogField = (key, value) => setSamplingLogData(prev => ({ ...prev, [key]: value }));
+  const updateSamplingLogDay = (idx, key, value) => setSamplingLogData(prev => ({
+    ...prev,
+    days: prev.days.map((day, i) => (i === idx ? { ...day, [key]: value } : day)),
+  }));
+  const updateSamplingLogRow = (rowKey, key, value) => setSamplingLogData(prev => ({
+    ...prev,
+    rows: { ...prev.rows, [rowKey]: { ...prev.rows[rowKey], [key]: value } },
+  }));
+  const handleSamplingLogParticleSampler = (id) => {
+    const found = samplers.find((item) => String(item.id) === String(id));
+    setSamplingLogData(prev => ({ ...prev, particleSamplerId: id, particleSamplerYd: found ? String(found.yd) : prev.particleSamplerYd }));
+  };
+  const handleSamplingLogGasSampler = (id) => {
+    const found = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(id));
+    setSamplingLogData(prev => ({ ...prev, gasSamplerId: id, gasSamplerYd: found ? String(found.yd) : prev.gasSamplerYd }));
+  };
+  const resetSamplingLogForm = () => {
+    if (!window.confirm('입력 중인 시료채취기록부 내용을 모두 지울까요?')) return;
+    setSamplingLogData(createEmptySamplingLog());
+  };
+
+  // Yd 칸이 비어 있으면 선택한 샘플러 프리셋의 Yd를 사용
+  const resolveSamplingLogYds = (log) => {
+    const next = { ...log };
+    if (!String(next.particleSamplerYd || '').trim()) {
+      const found = samplers.find((item) => String(item.id) === String(next.particleSamplerId));
+      if (found) next.particleSamplerYd = String(found.yd);
+    }
+    if (!String(next.gasSamplerYd || '').trim()) {
+      const found = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(next.gasSamplerId));
+      if (found) next.gasSamplerYd = String(found.yd);
+    }
+    return next;
+  };
+
+  const buildSamplingLogReport = () => {
+    const log = resolveSamplingLogYds(sanitizeSamplingLog(samplingLogData));
+    const firstDay = log.days.find((day) => day.date)?.date || '';
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      savedAt: new Date().toISOString(),
+      user: activeUser,
+      sheetId: 'samplinglog',
+      sheetTitle: '시료채취기록부(종합)',
+      date: firstDay,
+      company: log.company,
+      location: log.stackName,
+      sampler: '',
+      isokineticStatus: '-',
+      actualConcentration: '-',
+      samplingLog: log,
+    };
+  };
+
+  const handleSaveSamplingLog = async () => {
+    if (!activeUser || !isUserUnlocked) {
+      alert('저장하려면 먼저 로그인해주세요.');
+      return;
+    }
+    const nextReports = [...activeUserReports, buildSamplingLogReport()];
+    try {
+      await persistReportsEncrypted(activeUser, nextReports);
+      setActiveUserReports(nextReports);
+      alert(`[${displayUserNameWithFallback}] 시료채취기록부가 저장되었습니다.`);
+    } catch (error) {
+      console.error(error);
+      alert('암호화 저장 중 오류가 발생했습니다.');
+    }
+  };
+
+  const extractSerialFromName = (name) => {
+    const text = String(name || '').trim();
+    const match = /\(([^)]+)\)\s*$/.exec(text);
+    return match ? match[1].trim() : text;
+  };
+
+  // '시료채취 작성' 시트를 채우면 날짜별 시트는 양식 수식으로 자동 완성됨
+  const exportSamplingLogExcel = async (sourceReport = null) => {
+    if (IS_DESKTOP_BUILD) {
+      alert('배포용 버전에서는 엑셀 추출 기능을 사용할 수 없습니다.');
+      return;
+    }
+    try {
+      const log = resolveSamplingLogYds(sanitizeSamplingLog(sourceReport && sourceReport.samplingLog ? sourceReport.samplingLog : samplingLogData));
+      const response = await fetch(`${import.meta.env.BASE_URL}templates/${SAMPLING_LOG_TEMPLATE_FILE}`);
+      if (!response.ok) throw new Error('템플릿 파일을 불러오지 못했습니다.');
+      const zip = await JSZip.loadAsync(await response.arrayBuffer());
+      const workbookFile = zip.file('xl/workbook.xml');
+      const relsFile = zip.file('xl/_rels/workbook.xml.rels');
+      if (!workbookFile || !relsFile) throw new Error('템플릿 workbook 구조를 찾지 못했습니다.');
+      let workbookXml = await workbookFile.async('string');
+      const sheetPathMap = buildSheetPathMap(workbookXml, await relsFile.async('string'));
+      const inputSheet = '시료채취 작성';
+      if (!sheetPathMap.has(inputSheet)) throw new Error(`템플릿 시트 누락: ${inputSheet}`);
+
+      const updates = [];
+      const add = (ref, value) => updates.push({ ref, value });
+      const textOrNull = (v) => { const t = String(v ?? '').trim(); return t ? t : null; };
+      const numOrText = (v) => {
+        const t = String(v ?? '').trim();
+        if (!t) return null;
+        return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : t;
+      };
+
+      const gasSampler = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(log.gasSamplerId));
+      add('P2', textOrNull(log.siteAbbr));
+      const particleIndex = samplers.findIndex((item) => String(item.id) === String(log.particleSamplerId));
+      add('P3', particleIndex >= 0 ? `입자샘플러${particleIndex + 1}` : null);
+      add('R3', gasSampler ? `가스샘플러${gasSampler.id}` : null);
+      add('C4', textOrNull(log.company));
+      add('F4', textOrNull(log.industry));
+      add('J4', textOrNull(log.facility));
+      add('M4', textOrNull(log.stackName));
+
+      log.days.forEach((day, idx) => {
+        const r = 6 + idx;
+        add(`C${r}`, toExcelDateSerial(day.date));
+        add(`D${r}`, textOrNull(day.weather));
+        add(`E${r}`, toNumber(day.temp));
+        add(`G${r}`, toNumber(day.humidity));
+        add(`I${r}`, toNumber(day.pressure));
+        add(`K${r}`, textOrNull(day.windDir));
+        add(`M${r}`, toNumber(day.windSpeed));
+      });
+      for (let i = 0; i < 5; i++) {
+        const r = 6 + i;
+        const ps = samplers[i];
+        add(`O${r}`, ps ? `#${i + 1}` : null);
+        add(`P${r}`, ps ? extractSerialFromName(ps.name) : null);
+        add(`Q${r}`, ps ? toNumber(ps.yd) : null);
+        const gs = DEFAULT_GAS_SAMPLERS[i];
+        add(`R${r}`, gs ? `#${i + 1}` : null);
+        add(`S${r}`, gs ? gs.sn : null);
+        add(`T${r}`, gs ? toNumber(gs.yd) : null);
+      }
+
+      SAMPLING_LOG_SUBSTANCES.forEach((sub) => {
+        const r = sub.row;
+        const row = log.rows[String(r)];
+        const on = Boolean(row && row.requested);
+        const day = on ? log.days[row.dayIndex] : null;
+        if (!SAMPLING_LOG_MERGED_CHECK_ROWS.has(r)) add(`C${r}`, on ? 'O' : null);
+        add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
+        add(`F${r}`, on ? toExcelDateSerial(day?.date) : null);
+        add(`G${r}`, on ? toExcelTimeFraction(row.start) : null);
+        add(`H${r}`, on ? toExcelTimeFraction(row.end) : null);
+        add(`I${r}`, on ? toNumber(row.meterStart) : null);
+        add(`J${r}`, on ? toNumber(row.meterEnd) : null);
+        const vol = on ? calcSamplingLogVolume(log, sub) : NaN;
+        add(`K${r}`, Number.isFinite(vol) ? Math.round(vol * 100) / 100 : null);
+        add(`L${r}`, on ? toNumber(row.temp) : null);
+        add(`M${r}`, on ? toNumber(row.pressureH2O) : null);
+        add(`O${r}`, numOrText(row.suctionRate));
+        add(`P${r}`, numOrText(row.targetVolume));
+        add(`Q${r}`, numOrText(row.duration));
+        add(`S${r}`, numOrText(row.testPeriod));
+      });
+
+      const inputPath = sheetPathMap.get(inputSheet);
+      const inputXml = await zip.file(inputPath).async('string');
+      zip.file(inputPath, patchWorksheetXml(inputXml, updates, {}));
+
+      // 날짜별 시트 이름을 실제 채취일(yyyymmdd)로 변경 (인쇄 영역 이름도 함께)
+      const sheetNames = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)).map((m) => m[1]);
+      const dayNames = log.days.map((day) => {
+        const dt = day.date ? new Date(day.date) : null;
+        return dt && !Number.isNaN(dt.getTime())
+          ? `${dt.getFullYear()}${String(dt.getMonth() + 1).padStart(2, '0')}${String(dt.getDate()).padStart(2, '0')}`
+          : '';
+      });
+      const used = new Set(sheetNames);
+      sheetNames.filter((name) => name !== inputSheet).forEach((oldName, idx) => {
+        const nextName = dayNames[idx];
+        if (!nextName || nextName === oldName || used.has(nextName)) return;
+        used.add(nextName);
+        workbookXml = workbookXml
+          .split(`name="${oldName}"`).join(`name="${nextName}"`)
+          .split(`'${oldName}'!`).join(`'${nextName}'!`);
+      });
+      if (/<calcPr\b[^>]*\/>/.test(workbookXml)) {
+        workbookXml = workbookXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
+      } else {
+        workbookXml = workbookXml.replace('</workbook>', '<calcPr fullCalcOnLoad="1"/></workbook>');
+      }
+      zip.file('xl/workbook.xml', workbookXml);
+
+      const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+      const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const firstDay = log.days.find((day) => day.date)?.date || new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `시료채취기록부_${(log.company || '사업장').replace(/[\\/:*?"<>|]/g, '')}_${firstDay}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert('시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 템플릿 파일 또는 입력값을 확인해주세요.');
+    }
+  };
+
   if (import.meta.env.VITE_E2E === '1' && typeof window !== 'undefined') {
     window.__stackpilotExportForTest = exportToTemplateExcel;
+    window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
+    window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));
   }
 
   const handleExportSelectedTemplateExcel = async () => {
@@ -4605,7 +5000,8 @@ export default function App() {
       // 선택된 리포트 내용을 기반으로 템플릿 파일을 순차 추출합니다.
       // 파일명은 각 리포트의 기록부명+측정일자로 생성됩니다.
       // eslint-disable-next-line no-await-in-loop
-      await exportToTemplateExcel(report);
+      if (resolveReportSheetId(report) === 'samplinglog') await exportSamplingLogExcel(report);
+      else await exportToTemplateExcel(report);
     }
   };
 
@@ -5407,7 +5803,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs)</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -5532,6 +5928,235 @@ export default function App() {
           )}
         </div>
         <SignatureBadge />
+      </div>
+    );
+  }
+
+  if (selectedSheet === 'samplinglog') {
+    const log = samplingLogData;
+    const logForCalc = resolveSamplingLogYds(log);
+    const savedLogs = savedData.filter((item) => resolveReportSheetId(item) === 'samplinglog');
+    const logInput = 'p-1.5 border border-slate-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-orange-500';
+    const cellInput = 'w-full p-1 border border-slate-200 rounded text-xs text-center outline-none focus:ring-2 focus:ring-orange-400 bg-white disabled:bg-slate-50 disabled:text-slate-400';
+    return (
+      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+        {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
+        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
+          <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
+            <h1 className="text-2xl font-black text-slate-900">
+              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
+            </h1>
+            <p className="text-slate-600 mt-2 text-sm font-medium">
+              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
+              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
+            </p>
+            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              기록부 선택
+            </button>
+          </div>
+
+          <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <p className="text-xs text-slate-600">
+              사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
+              {' '}| 상태: <span className={`font-black ${isUserUnlocked ? 'text-orange-600' : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={handleSaveSamplingLog} className={`px-4 py-2 text-white font-bold rounded-lg text-sm shadow-sm ${activeTheme.primaryButton}`}>
+                리포트 저장
+              </button>
+              {!IS_DESKTOP_BUILD && (
+                <button type="button" onClick={() => exportSamplingLogExcel(null)} className="px-4 py-2 font-bold rounded-lg text-sm border border-orange-300 text-orange-800 bg-orange-50 hover:bg-orange-100">
+                  현재 내용 엑셀로 추출
+                </button>
+              )}
+              <button type="button" onClick={resetSamplingLogForm} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+                새로 작성
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
+              사업장 및 장비
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <label className="text-xs font-bold text-slate-700 md:col-span-2">사업장명
+                <input type="text" name="log-company" value={log.company} onChange={(e) => updateSamplingLogField('company', e.target.value)} className={`${logInput} w-full mt-1`} />
+              </label>
+              <label className="text-xs font-bold text-slate-700">업종
+                <input type="text" name="log-industry" value={log.industry} onChange={(e) => updateSamplingLogField('industry', e.target.value)} className={`${logInput} w-full mt-1`} placeholder="예: 화력발전업(35113)" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">배출시설
+                <input type="text" name="log-facility" value={log.facility} onChange={(e) => updateSamplingLogField('facility', e.target.value)} className={`${logInput} w-full mt-1`} />
+              </label>
+              <label className="text-xs font-bold text-slate-700">굴뚝명
+                <input type="text" name="log-stack" value={log.stackName} onChange={(e) => updateSamplingLogField('stackName', e.target.value)} className={`${logInput} w-full mt-1`} placeholder="예: #A-1" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">시설약자 (시료번호용)
+                <input type="text" name="log-abbr" value={log.siteAbbr} onChange={(e) => updateSamplingLogField('siteAbbr', e.target.value)} className={`${logInput} w-full mt-1`} placeholder="예: GSP" />
+              </label>
+              <label className="text-xs font-bold text-slate-700 md:col-span-2">입자 샘플러
+                <div className="flex gap-2 mt-1">
+                  <select name="log-particle-sampler" value={log.particleSamplerId} onChange={(e) => handleSamplingLogParticleSampler(e.target.value)} className={`${logInput} flex-1`}>
+                    <option value="">선택</option>
+                    {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  </select>
+                  <input type="number" step="0.0001" value={log.particleSamplerYd} onChange={(e) => updateSamplingLogField('particleSamplerYd', e.target.value)} className={`${logInput} w-24`} placeholder="Yd" title="입자 샘플러 Yd" />
+                </div>
+              </label>
+              <label className="text-xs font-bold text-slate-700 md:col-span-2">가스 샘플러
+                <div className="flex gap-2 mt-1">
+                  <select name="log-gas-sampler" value={log.gasSamplerId} onChange={(e) => handleSamplingLogGasSampler(e.target.value)} className={`${logInput} flex-1`}>
+                    <option value="">선택</option>
+                    {DEFAULT_GAS_SAMPLERS.map((item) => <option key={item.id} value={item.id}>{`가스샘플러${item.id} (S/N ${item.sn})`}</option>)}
+                  </select>
+                  <input type="number" step="0.0001" value={log.gasSamplerYd} onChange={(e) => updateSamplingLogField('gasSamplerYd', e.target.value)} className={`${logInput} w-24`} placeholder="Yd" title="가스 샘플러 Yd" />
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
+              채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일, 양식의 날짜별 시트는 앞의 2일)</span>
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-center border-collapse">
+                <thead>
+                  <tr className="bg-orange-50 text-slate-700">
+                    <th className="p-2 border border-slate-200">일차</th><th className="p-2 border border-slate-200">채취일</th><th className="p-2 border border-slate-200">기상</th>
+                    <th className="p-2 border border-slate-200">기온(℃)</th><th className="p-2 border border-slate-200">습도(%)</th><th className="p-2 border border-slate-200">기압(mmHg)</th>
+                    <th className="p-2 border border-slate-200">풍향</th><th className="p-2 border border-slate-200">풍속(m/s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {log.days.map((day, idx) => (
+                    <tr key={`log-day-${idx}`}>
+                      <td className="p-1 border border-slate-200 font-bold">{idx + 1}일차</td>
+                      <td className="p-1 border border-slate-200"><input type="date" name={`log-day-${idx}-date`} value={day.date} onChange={(e) => updateSamplingLogDay(idx, 'date', e.target.value)} className={cellInput} /></td>
+                      <td className="p-1 border border-slate-200"><input type="text" value={day.weather} onChange={(e) => updateSamplingLogDay(idx, 'weather', e.target.value)} className={cellInput} placeholder="맑음" /></td>
+                      <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={day.temp} onChange={(e) => updateSamplingLogDay(idx, 'temp', e.target.value)} className={cellInput} /></td>
+                      <td className="p-1 border border-slate-200"><input type="number" step="1" value={day.humidity} onChange={(e) => updateSamplingLogDay(idx, 'humidity', e.target.value)} className={cellInput} /></td>
+                      <td className="p-1 border border-slate-200"><input type="number" step="1" value={day.pressure} onChange={(e) => updateSamplingLogDay(idx, 'pressure', e.target.value)} className={cellInput} /></td>
+                      <td className="p-1 border border-slate-200"><input type="text" value={day.windDir} onChange={(e) => updateSamplingLogDay(idx, 'windDir', e.target.value)} className={cellInput} placeholder="북서" /></td>
+                      <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={day.windSpeed} onChange={(e) => updateSamplingLogDay(idx, 'windSpeed', e.target.value)} className={cellInput} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
+              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
+              물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 체크한 물질만 양식에 기록됩니다)</span>
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] text-center border-collapse min-w-[1180px]">
+                <thead>
+                  <tr className="bg-orange-50 text-slate-700">
+                    <th className="p-2 border border-slate-200">의뢰</th>
+                    <th className="p-2 border border-slate-200 text-left">물질명</th>
+                    <th className="p-2 border border-slate-200">일차</th>
+                    <th className="p-2 border border-slate-200">시작</th>
+                    <th className="p-2 border border-slate-200">종료</th>
+                    <th className="p-2 border border-slate-200">시작값</th>
+                    <th className="p-2 border border-slate-200">종료값</th>
+                    <th className="p-2 border border-slate-200">채취유량(L)</th>
+                    <th className="p-2 border border-slate-200">온도(℃)</th>
+                    <th className="p-2 border border-slate-200">압력(mmH2O)</th>
+                    <th className="p-2 border border-slate-200">흡입속도</th>
+                    <th className="p-2 border border-slate-200">목표(L)</th>
+                    <th className="p-2 border border-slate-200">소요(min)</th>
+                    <th className="p-2 border border-slate-200">검사기간</th>
+                    <th className="p-2 border border-slate-200">시료번호</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SAMPLING_LOG_SUBSTANCES.map((sub) => {
+                    const row = log.rows[String(sub.row)];
+                    const on = row.requested;
+                    const volume = calcSamplingLogVolume(logForCalc, sub);
+                    const isMeter = sub.kind === 'particle' || sub.kind === 'gas' || sub.kind === 'box' || sub.kind === 'plain';
+                    return (
+                      <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/40' : ''}>
+                        <td className="p-1 border border-slate-200">
+                          <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4 accent-orange-600" />
+                        </td>
+                        <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
+                          <span className="font-bold text-slate-800">{sub.name}</span>
+                          <span className="ml-1 text-[10px] text-slate-500">{sub.code} · {SAMPLING_LOG_KIND_LABEL[sub.kind]}</span>
+                        </td>
+                        <td className="p-1 border border-slate-200">
+                          <select value={row.dayIndex} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'dayIndex', parseInt(e.target.value, 10))} className={cellInput}>
+                            {log.days.map((day, idx) => <option key={idx} value={idx}>{idx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</option>)}
+                          </select>
+                        </td>
+                        <td className="p-1 border border-slate-200"><input type="time" value={row.start} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'start', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="time" value={row.end} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'end', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterStart} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterStart', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterEnd} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterEnd', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200 font-bold text-orange-800">{on && Number.isFinite(volume) ? volume.toFixed(2) : '-'}</td>
+                        <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.temp} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'temp', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.pressureH2O} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'pressureH2O', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="text" value={row.suctionRate} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'suctionRate', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="text" value={row.targetVolume} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'targetVolume', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="text" value={row.duration} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'duration', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200"><input type="text" value={row.testPeriod} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'testPeriod', e.target.value)} className={cellInput} /></td>
+                        <td className="p-1 border border-slate-200 text-[10px] text-slate-600 whitespace-nowrap">{on ? buildSamplingLogSampleNo(log, sub) : ''}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">저장된 시료채취기록부 ({savedLogs.length}건)</h2>
+            {savedLogs.length === 0 ? (
+              <p className="text-sm text-slate-500">저장된 기록부가 없습니다.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-center border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-700">
+                      <th className="p-2 border border-slate-200">채취일</th><th className="p-2 border border-slate-200">사업장</th><th className="p-2 border border-slate-200">굴뚝</th>
+                      <th className="p-2 border border-slate-200">의뢰 물질</th><th className="p-2 border border-slate-200">저장 시각</th><th className="p-2 border border-slate-200">작업</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedLogs.map((item) => {
+                      const itemLog = sanitizeSamplingLog(item.samplingLog);
+                      const requestedCount = SAMPLING_LOG_SUBSTANCES.filter((sub) => itemLog.rows[String(sub.row)]?.requested).length;
+                      return (
+                        <tr key={buildReportKey(item.id, item.savedAt)}>
+                          <td className="p-2 border border-slate-200">{item.date || '-'}</td>
+                          <td className="p-2 border border-slate-200">{item.company || '-'}</td>
+                          <td className="p-2 border border-slate-200">{item.location || '-'}</td>
+                          <td className="p-2 border border-slate-200">{requestedCount}개</td>
+                          <td className="p-2 border border-slate-200">{item.savedAt ? new Date(item.savedAt).toLocaleString() : '-'}</td>
+                          <td className="p-2 border border-slate-200">
+                            <div className="flex flex-wrap justify-center gap-1">
+                              <button type="button" onClick={() => handleLoadSavedReport(item)} className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 font-bold">불러오기</button>
+                              {!IS_DESKTOP_BUILD && (
+                                <button type="button" onClick={() => exportSamplingLogExcel(item)} className="px-2 py-1 rounded border border-orange-300 text-orange-800 bg-orange-50 hover:bg-orange-100 font-bold">엑셀</button>
+                              )}
+                              <button type="button" onClick={() => { if (window.confirm('이 기록부를 삭제할까요?')) removeSavedReport(item.id, item.savedAt); }} className="px-2 py-1 rounded border border-red-300 text-red-700 bg-white hover:bg-red-50 font-bold">삭제</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
