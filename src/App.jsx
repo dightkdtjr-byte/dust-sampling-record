@@ -459,6 +459,7 @@ const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
 const DEFAULT_MEASURE_ROW_COUNT = 12;
 const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
 const TABLE_PLAN_TARGET_INTERVAL = 5; // 자동 탐색 시 선호하는 행 간격(분)
+const TABLE_PLAN_MIN_ROWS_PER_POINT = 3; // 지점당 최소 측정 행 수
 const TABLE_PLAN_MAX_ROWS_PER_POINT = 20;
 const TABLE_PLAN_MAX_ROWS = 80;
 
@@ -1396,6 +1397,7 @@ export default function App() {
   // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
   const [tableTotalMinutes, setTableTotalMinutes] = useState('');
   const [tableIntervalMinutes, setTableIntervalMinutes] = useState('');
+  const [tableMinRowsPerPoint, setTableMinRowsPerPoint] = useState(String(TABLE_PLAN_MIN_ROWS_PER_POINT));
   useEffect(() => {
     if (!isSamplingLogPanelOpen) return undefined;
     const onKeyDown = (event) => { if (event.key === 'Escape') setIsSamplingLogPanelOpen(false); };
@@ -3129,18 +3131,18 @@ export default function App() {
 
   // 표 생성 계획: 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
   // 행 간격을 비우면 요청 시간에 가장 가깝게 떨어지는 (지점당 행 수, 간격) 조합을 자동으로 찾습니다.
-  const findBestTablePlan = (pointCount, requestedTotal) => {
+  const findBestTablePlan = (pointCount, requestedTotal, minRowsPerPoint) => {
     const target = TABLE_PLAN_TARGET_INTERVAL;
-    const intervalWeight = 0.5;
     let best = null;
-    for (let rowsPerPoint = 1; rowsPerPoint <= TABLE_PLAN_MAX_ROWS_PER_POINT; rowsPerPoint += 1) {
-      if (pointCount * rowsPerPoint > TABLE_PLAN_MAX_ROWS) break;
+    const maxRowsPerPoint = Math.max(minRowsPerPoint, TABLE_PLAN_MAX_ROWS_PER_POINT);
+    for (let rowsPerPoint = minRowsPerPoint; rowsPerPoint <= maxRowsPerPoint; rowsPerPoint += 1) {
+      if (rowsPerPoint > minRowsPerPoint && pointCount * rowsPerPoint > TABLE_PLAN_MAX_ROWS) break;
       for (let half = 1; half <= 60; half += 1) {
         const interval = half / 2; // 0.5분 단위, 최대 30분
         const total = Math.round(pointCount * rowsPerPoint * interval * 100) / 100;
         const deviation = Math.abs(total - requestedTotal);
-        if (deviation > Math.max(2, requestedTotal * 0.25)) continue;
-        const score = deviation * 2 + Math.abs(interval - target) * intervalWeight + (rowsPerPoint === 1 ? 0.75 : 0);
+        // 총 시간 차이(분) + 5분에서 멀어질수록(비율 기준) 벌점 → 1분 간격 60행 같은 조합을 피함
+        const score = deviation + Math.abs(Math.log(interval / target)) * 3;
         if (!best || score < best.score - 1e-9
           || (Math.abs(score - best.score) <= 1e-9 && (deviation < best.deviation - 1e-9
             || (Math.abs(deviation - best.deviation) <= 1e-9 && rowsPerPoint > best.rowsPerPoint)))) {
@@ -3163,17 +3165,19 @@ export default function App() {
     const intervalRaw = parseFloat(tableIntervalMinutes);
     const preferredInterval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : null;
     const intervalAuto = preferredInterval === null;
+    const minRowsRaw = parseInt(tableMinRowsPerPoint, 10);
+    const minRowsPerPoint = Number.isFinite(minRowsRaw) && minRowsRaw > 0 ? minRowsRaw : TABLE_PLAN_MIN_ROWS_PER_POINT;
 
     let rowsPerPoint;
     let intervalMinutes;
-    const best = intervalAuto ? findBestTablePlan(pointCount, requestedTotal) : null;
+    const best = intervalAuto ? findBestTablePlan(pointCount, requestedTotal, minRowsPerPoint) : null;
     if (best) {
       rowsPerPoint = best.rowsPerPoint;
       intervalMinutes = best.intervalMinutes;
     } else {
-      // 간격을 직접 입력했거나 자동 탐색 범위를 벗어나면: 그 간격을 고정하고 지점당 행 수를 올림
+      // 간격을 직접 입력하면 그 간격을 고정하고 지점당 행 수를 올림 (최소 행 수 보장)
       intervalMinutes = preferredInterval ?? DEFAULT_SLOT_MINUTES;
-      rowsPerPoint = Math.max(1, Math.ceil(requestedTotal / pointCount / intervalMinutes - 1e-9));
+      rowsPerPoint = Math.max(minRowsPerPoint, Math.ceil(requestedTotal / pointCount / intervalMinutes - 1e-9));
     }
     const measureRows = pointCount * rowsPerPoint;
     const adjustedTotal = Math.round(measureRows * intervalMinutes * 100) / 100;
@@ -3182,6 +3186,7 @@ export default function App() {
       requestedTotal,
       intervalMinutes,
       intervalAuto,
+      minRowsPerPoint,
       rowsPerPoint,
       measureRows,
       adjustedTotal,
@@ -3197,14 +3202,16 @@ export default function App() {
     }
     const plan = getTableGenerationPlan();
     if (!plan) return;
-    const { pointCount, requestedTotal, intervalMinutes, rowsPerPoint, measureRows, adjustedTotal } = plan;
+    const { pointCount, requestedTotal, intervalMinutes, intervalAuto, minRowsPerPoint, rowsPerPoint, measureRows, adjustedTotal } = plan;
     setFormData(prev => {
       const newPoints = Array.from({ length: pointCount }, (_, i) => prev.points[i] || { id: i + 1, tp: '', sp: '', dp: '', ts: '' });
       const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, adjustedTotal);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
     const adjustedNote = adjustedTotal !== requestedTotal
-      ? `\n요청한 ${requestedTotal}분은 ${pointCount}지점에 똑같이 나눌 수 없어 가장 가까운 ${adjustedTotal}분(${intervalMinutes}분 간격)으로 맞췄습니다.`
+      ? (intervalAuto
+        ? `\n요청한 ${requestedTotal}분은 ${pointCount}지점 × 지점당 최소 ${minRowsPerPoint}행 조건으로 똑같이 나눌 수 없어 가장 가까운 ${adjustedTotal}분(${intervalMinutes}분 간격)으로 맞췄습니다.`
+        : `\n요청한 ${requestedTotal}분은 ${pointCount}지점 × 지점당 최소 ${minRowsPerPoint}행 × ${intervalMinutes}분 간격으로 맞출 수 없어 ${adjustedTotal}분으로 올렸습니다. (행 간격을 비우면 자동으로 맞춥니다)`)
       : '';
     alert(`측정점 ${pointCount}개 × 지점당 ${rowsPerPoint}행 × ${intervalMinutes}분 = 총 ${adjustedTotal}분 (시작행 포함 ${measureRows + 1}행)${adjustedNote}\n시간 열은 누적 분(${intervalMinutes}, ${Math.round(intervalMinutes * 200) / 100} … ${adjustedTotal})으로 표시됩니다.`);
   };
@@ -7579,6 +7586,19 @@ export default function App() {
                       />
                       분
                     </label>
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                      지점당 최소
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={tableMinRowsPerPoint}
+                        onChange={(e) => setTableMinRowsPerPoint(e.target.value)}
+                        className="w-12 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                        title="각 측정점에서 최소 몇 번(행) 측정할지 (기본 3행)"
+                      />
+                      행
+                    </label>
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
                       측정점/채취시간 표 자동 생성
                     </button>
@@ -7589,7 +7609,7 @@ export default function App() {
                       return (
                         <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
                           {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분{plan.intervalAuto ? '(자동)' : ''} = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분)
-                          {changed ? ` · ${plan.requestedTotal}분은 똑같이 나눌 수 없어 가장 가까운 ${plan.adjustedTotal}분으로 맞춤` : ''}
+                          {changed ? ` · ${plan.requestedTotal}분은 지점당 최소 ${plan.minRowsPerPoint}행으로 똑같이 나눌 수 없어 ${plan.adjustedTotal}분으로 맞춤` : ''}
                         </span>
                       );
                     })()}
