@@ -6239,84 +6239,8 @@ export default function App() {
     }));
   };
 
-  if (selectedSheet === 'samplinglog') {
-    return (
-      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
-        {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
-        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
-          <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
-            <h1 className="text-2xl font-black text-slate-900">
-              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
-            </h1>
-            <p className="text-slate-600 mt-2 text-sm font-medium">
-              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
-              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
-            </p>
-            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-              기록부 선택
-            </button>
-          </div>
-          {renderSamplingLogBody()}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
-      <style>{SKYLINE_FLYER_CSS}</style>
-      {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
-      {!isSamplingLogPanelOpen && (() => {
-        const stats = getSamplingLogStats(samplingLogData);
-        return (
-          <button
-            type="button"
-            onClick={() => setIsSamplingLogPanelOpen(true)}
-            className="fixed bottom-5 right-5 z-[60] pl-3 pr-4 py-2.5 rounded-full shadow-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-bold text-sm hover:from-orange-700 hover:to-amber-600 border border-orange-700/60 flex items-center gap-2 transition-transform hover:scale-105"
-            title="통합 시료채취기록부를 이 화면 위에 함께 엽니다"
-          >
-            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">≡</span>
-            <span className="flex flex-col items-start leading-tight">
-              <span>통합 시료채취기록부</span>
-              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '함께 열기'}</span>
-            </span>
-          </button>
-        );
-      })()}
-      {isSamplingLogPanelOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[70] flex">
-          <div className="hidden md:block flex-1 bg-black/30" onClick={() => setIsSamplingLogPanelOpen(false)} />
-          <div className="w-full md:w-[72vw] md:max-w-[1250px] h-full bg-orange-50/95 shadow-2xl overflow-y-auto border-l-4 border-orange-500 flex flex-col">
-            <div className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white px-4 py-3 shadow-md">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black">≡</span>
-                  <div>
-                    <h2 className="text-base font-black leading-tight">통합 시료채취기록부</h2>
-                    <p className="text-[11px] opacity-90">{activeSheet?.title || '기록부'} 위에 함께 열림 · 입력 내용은 서로 독립적으로 유지됩니다</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25" title="현재 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
-                    현재 기록부 정보 가져오기
-                  </button>
-                  <button type="button" onClick={() => { setIsSamplingLogPanelOpen(false); window.location.hash = 'sheet=samplinglog'; }} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25">
-                    전체 화면으로
-                  </button>
-                  <button type="button" onClick={() => setIsSamplingLogPanelOpen(false)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-900">
-                    닫기 (Esc)
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 space-y-4">
-              {renderSamplingLogBody()}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
+  // 기록부 화면 공통 배경(하늘·굴뚝 풍경): 화면에 고정되어 스크롤해도 끊기지 않음
+  const renderSheetSkyScene = () => (
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
         <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
@@ -6477,6 +6401,89 @@ export default function App() {
           </div>
         </div>
       </div>
+  );
+
+  if (selectedSheet === 'samplinglog') {
+    return (
+      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+        <style>{SKYLINE_FLYER_CSS}</style>
+        {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
+        {renderSheetSkyScene()}
+        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
+          <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
+            <h1 className="text-2xl font-black text-slate-900">
+              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
+            </h1>
+            <p className="text-slate-600 mt-2 text-sm font-medium">
+              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
+              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
+            </p>
+            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              기록부 선택
+            </button>
+          </div>
+          {renderSamplingLogBody()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+      <style>{SKYLINE_FLYER_CSS}</style>
+      {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
+      {!isSamplingLogPanelOpen && (() => {
+        const stats = getSamplingLogStats(samplingLogData);
+        return (
+          <button
+            type="button"
+            onClick={() => setIsSamplingLogPanelOpen(true)}
+            className="fixed bottom-5 right-5 z-[60] pl-3 pr-4 py-2.5 rounded-full shadow-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-bold text-sm hover:from-orange-700 hover:to-amber-600 border border-orange-700/60 flex items-center gap-2 transition-transform hover:scale-105"
+            title="통합 시료채취기록부를 이 화면 위에 함께 엽니다"
+          >
+            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">≡</span>
+            <span className="flex flex-col items-start leading-tight">
+              <span>통합 시료채취기록부</span>
+              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '함께 열기'}</span>
+            </span>
+          </button>
+        );
+      })()}
+      {isSamplingLogPanelOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[70] flex">
+          <div className="hidden md:block flex-1 bg-black/30" onClick={() => setIsSamplingLogPanelOpen(false)} />
+          <div className="w-full md:w-[72vw] md:max-w-[1250px] h-full bg-orange-50/95 shadow-2xl overflow-y-auto border-l-4 border-orange-500 flex flex-col">
+            <div className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white px-4 py-3 shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black">≡</span>
+                  <div>
+                    <h2 className="text-base font-black leading-tight">통합 시료채취기록부</h2>
+                    <p className="text-[11px] opacity-90">{activeSheet?.title || '기록부'} 위에 함께 열림 · 입력 내용은 서로 독립적으로 유지됩니다</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25" title="현재 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
+                    현재 기록부 정보 가져오기
+                  </button>
+                  <button type="button" onClick={() => { setIsSamplingLogPanelOpen(false); window.location.hash = 'sheet=samplinglog'; }} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25">
+                    전체 화면으로
+                  </button>
+                  <button type="button" onClick={() => setIsSamplingLogPanelOpen(false)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-900">
+                    닫기 (Esc)
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-4">
+              {renderSamplingLogBody()}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
+      {renderSheetSkyScene()}
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
         
         {/* 헤더 섹션 */}
