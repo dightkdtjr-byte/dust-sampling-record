@@ -1388,6 +1388,7 @@ export default function App() {
   const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
   // 기록부 화면 위에 통합 시료채취기록부를 패널로 함께 띄우기
   const [isSamplingLogPanelOpen, setIsSamplingLogPanelOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
   // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
   const [tableTotalMinutes, setTableTotalMinutes] = useState('');
@@ -3227,16 +3228,6 @@ export default function App() {
     return C * Math.pow((2 * 9.81 * dpAvg) / r, 0.5);
   };
 
-  // (유속 함수 정의 이후) 선택된 피토관 프리셋의 유속별 Cp 자동 적용
-  const appliedPitotVelocity = isPitotCpAutoApplied ? getRawGasVelocity() : NaN;
-  useEffect(() => {
-    if (!isPitotCpAutoApplied) return;
-    const nextCp = resolvePitotCpByVelocity(activePitotPreset, appliedPitotVelocity);
-    if (!Number.isFinite(nextCp)) return;
-    const current = parseFloat(formData.pitotFactor);
-    if (Number.isFinite(current) && Math.abs(current - nextCp) < 0.00005) return;
-    setFormData(prev => ({ ...prev, pitotFactor: formatPitotCp(nextCp) }));
-  }, [isPitotCpAutoApplied, activePitotPreset, appliedPitotVelocity, formData.pitotFactor]);
 
   const isActiveMeterRow = (row, idx) => (
     idx === 0 || String(row?.pointNum || '').trim() !== ''
@@ -3316,6 +3307,7 @@ export default function App() {
     const factors = getRawGasVelocityFactorsFromMeterRows();
     return factors ? factors.velocity : NaN;
   };
+
 
   const getRawGasMeterVolDiff = () => {
     const initial = parseFloat(formData.gasMeters[0]?.volume);
@@ -4600,6 +4592,10 @@ export default function App() {
         .filter((_, idx) => idx !== 0)
         .map((m) => toNumStrict(m?.pressure)));
 
+      const hasO2 = sourceGasAnalyzer.some((g) => Number.isFinite(parseFloat(g?.o2)));
+      if (!hasO2) {
+        alert('연소가스(가스분석기) O2 값이 없습니다. 양식의 노즐산정·기록지 계산은 O2/CO2 값이 있어야 하며, 없으면 Excel에서 #VALUE!/#DIV/0!로 표시됩니다. 추출은 계속 진행합니다.');
+      }
       const exportSheetId = (sourceReport && typeof sourceReport === 'object')
         ? resolveReportSheetId(sourceReport)
         : (activeSheet?.id || 'dust');
@@ -5091,6 +5087,22 @@ export default function App() {
     }
   };
 
+  // (모든 계산 함수 정의 이후) 선택된 피토관 프리셋의 유속별 Cp 자동 적용
+  // 적용 유속: 기록표(적산유량 행)의 유속이 있으면 그것을, 없으면 예비조사 유속을 사용
+  const meterBasedPitotVelocity = isPitotCpAutoApplied ? getRawGasVelocityFromMeterRows() : NaN;
+  const appliedPitotVelocitySource = Number.isFinite(meterBasedPitotVelocity) && meterBasedPitotVelocity > 0 ? '기록표' : '예비조사';
+  const appliedPitotVelocity = isPitotCpAutoApplied
+    ? (appliedPitotVelocitySource === '기록표' ? meterBasedPitotVelocity : getRawGasVelocity())
+    : NaN;
+  useEffect(() => {
+    if (!isPitotCpAutoApplied) return;
+    const nextCp = resolvePitotCpByVelocity(activePitotPreset, appliedPitotVelocity);
+    if (!Number.isFinite(nextCp)) return;
+    const current = parseFloat(formData.pitotFactor);
+    if (Number.isFinite(current) && Math.abs(current - nextCp) < 0.00005) return;
+    setFormData(prev => ({ ...prev, pitotFactor: formatPitotCp(nextCp) }));
+  }, [isPitotCpAutoApplied, activePitotPreset, appliedPitotVelocity, formData.pitotFactor]);
+
   const appGasComp = getGasComposition();
   const o2 = appGasComp.o2, co2 = appGasComp.co2, co = appGasComp.co, sox = appGasComp.sox, nox = appGasComp.nox, n2 = appGasComp.n2, Md = appGasComp.Md, Ms = appGasComp.Ms, r0 = appGasComp.r0;
   
@@ -5247,6 +5259,9 @@ export default function App() {
       ? 'bg-gradient-to-b from-[#a9b4cd]/72 to-[#7585ab]/68'
       : 'bg-gradient-to-b from-[#b7cde6]/70 to-[#86a8d1]/66');
   const isMobileLightMode = isMobileViewport;
+  // 넓은 창(최대화)에서는 풍경을 비례 확대하고, 바닥 띠는 창 전체 폭으로 깔아 배경이 끊기지 않게 함
+  const sceneScale = Math.min(1.75, Math.max(1, viewportWidth / 1280));
+  const sceneScaleStyle = { transform: `scale(${sceneScale})`, transformOrigin: 'bottom center' };
   const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
   const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
   // 산 라인은 모바일에서도 전체를 유지해 배경이 끊기거나 잘려 보이지 않게 한다.
@@ -5324,6 +5339,7 @@ export default function App() {
   useEffect(() => {
     const updateViewportState = () => {
       setIsMobileViewport(isMobileViewportWidth());
+      setViewportWidth(window.innerWidth);
     };
     updateViewportState();
     window.addEventListener('resize', updateViewportState);
@@ -5362,7 +5378,9 @@ export default function App() {
             </div>
           )}
           <div className="absolute bottom-0 left-0 right-0">
-            <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl">
+            <div className={`absolute bottom-0 left-0 right-0 ${menuGroundClass}`} style={{ height: `calc(${isMobileViewport ? 6 : 8}rem * ${sceneScale})` }} />
+            <div className={`absolute left-0 right-0 h-14 ${menuRidgeClass}`} style={{ bottom: `calc(4rem * ${sceneScale})`, height: `calc(3.5rem * ${sceneScale})` }} />
+            <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl" style={sceneScaleStyle}>
               <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${menuGroundClass}`} />
               <div className={`absolute bottom-16 left-0 right-0 h-14 ${menuRidgeClass}`} />
               {isMorningSky && <div className="skyline-sunrise-mountain" />}
@@ -6306,7 +6324,8 @@ export default function App() {
           />
         ))}
         <div className="absolute bottom-0 left-0 right-0">
-          <div className="relative mx-auto h-44 md:h-56 max-w-7xl">
+          <div className={`absolute bottom-0 left-0 right-0 ${sheetGroundClass}`} style={{ height: `calc(5rem * ${sceneScale})` }} />
+          <div className="relative mx-auto h-44 md:h-56 max-w-7xl" style={sceneScaleStyle}>
             <div className={`absolute bottom-0 left-0 right-0 h-20 ${sheetGroundClass}`} />
             {isMorningSky && <div className="skyline-sunrise-mountain-sheet" />}
             {sceneMountains.map((mountain) => (
@@ -6929,12 +6948,12 @@ export default function App() {
 
             {/* ✅ 4번 섹션 동정압 측정 시의 미터온도(Tm) 입력칸 추가 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
-              <div className="flex flex-col md:flex-row md:items-center mb-4 border-b border-slate-200 pb-3 gap-3">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 md:whitespace-nowrap shrink-0">
+              <div className="flex flex-col mb-4 border-b border-slate-200 pb-3 gap-2">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
                   <span className="bg-emerald-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black shrink-0">4</span>
                   측정점별 동압 및 온도
                 </h2>
-                <div className="flex flex-wrap items-center gap-2 md:gap-4 md:ml-auto md:justify-end">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800 whitespace-nowrap">피토계수</label>
                     <input
@@ -6950,7 +6969,7 @@ export default function App() {
                     {isPitotCpAutoApplied && (
                       <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
                         {Number.isFinite(appliedPitotVelocity) && appliedPitotVelocity > 0
-                          ? `유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동`
+                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동`
                           : '동압 입력 시 유속별 자동'}
                       </span>
                     )}
