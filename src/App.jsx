@@ -507,8 +507,16 @@ const buildPointSlotSequence = (pointCount, slotCount = DEFAULT_MEASURE_ROW_COUN
   return sequence.slice(0, safeSlotCount);
 };
 
-const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_COUNT) => {
+const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_COUNT, slotMinutes = DEFAULT_SLOT_MINUTES, totalMinutes = null) => {
   const sequence = buildPointSlotSequence(pointCount, slotCount);
+  const safeSlot = Number.isFinite(slotMinutes) && slotMinutes > 0 ? slotMinutes : DEFAULT_SLOT_MINUTES;
+  const safeTotal = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : safeSlot * sequence.length;
+  // 각 행은 구간 시간(분). 마지막 행은 총 채취시간에 맞춰 남은 시간으로 채움
+  const minutesForRow = (idx) => {
+    if (idx < sequence.length - 1) return safeSlot;
+    const remainder = safeTotal - safeSlot * (sequence.length - 1);
+    return remainder > 0 ? Math.round(remainder * 100) / 100 : safeSlot;
+  };
   const rows = [{
     id: 0,
     pointNum: '시작',
@@ -527,7 +535,7 @@ const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_
     rows.push({
       id: idx + 1,
       pointNum,
-      time: String(DEFAULT_SLOT_MINUTES),
+      time: String(minutesForRow(idx)),
       stackTemp: '',
       dp: '',
       pressure: '',
@@ -1381,6 +1389,9 @@ export default function App() {
   // 기록부 화면 위에 통합 시료채취기록부를 패널로 함께 띄우기
   const [isSamplingLogPanelOpen, setIsSamplingLogPanelOpen] = useState(false);
   const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
+  // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
+  const [tableTotalMinutes, setTableTotalMinutes] = useState('');
+  const [tableIntervalMinutes, setTableIntervalMinutes] = useState('5');
   useEffect(() => {
     if (!isSamplingLogPanelOpen) return undefined;
     const onKeyDown = (event) => { if (event.key === 'Escape') setIsSamplingLogPanelOpen(false); };
@@ -3116,14 +3127,21 @@ export default function App() {
     const spData = getSamplingPoints();
     if (!spData) return;
     const pointCount = spData.perRadius;
-    const measureRows = DEFAULT_MEASURE_ROW_COUNT;
+    const requestedTotal = parseFloat(tableTotalMinutes);
+    const planTotal = parseFloat(formData.planSamplingTime);
+    const totalMinutes = Number.isFinite(requestedTotal) && requestedTotal > 0
+      ? requestedTotal
+      : (Number.isFinite(planTotal) && planTotal > 0 ? planTotal : DEFAULT_MEASURE_TOTAL_MINUTES);
+    const intervalRaw = parseFloat(tableIntervalMinutes);
+    const intervalMinutes = Number.isFinite(intervalRaw) && intervalRaw > 0 ? Math.min(intervalRaw, totalMinutes) : DEFAULT_SLOT_MINUTES;
+    const measureRows = Math.max(pointCount, Math.ceil(totalMinutes / intervalMinutes - 1e-9));
     const totalMeterRows = measureRows + 1;
     setFormData(prev => {
       const newPoints = Array.from({ length: pointCount }, (_, i) => prev.points[i] || { id: i + 1, tp: '', sp: '', dp: '', ts: '' });
-      const newMeters = createGasMeterRowsByPoints(pointCount, measureRows);
+      const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, totalMinutes);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
-    alert(`측정점 ${pointCount}개 반영 완료: 60분 기준 측정칸 ${measureRows}개(시작행 포함 총 ${totalMeterRows}행)로 채취점이 자동 배분되었습니다.`);
+    alert(`측정점 ${pointCount}개 반영 완료: 총 ${totalMinutes}분을 ${intervalMinutes}분 간격 ${measureRows}칸(시작행 포함 ${totalMeterRows}행)으로 나누어 채취점을 배분했습니다.`);
   };
 
   const getGasComposition = () => {
@@ -4719,10 +4737,20 @@ export default function App() {
         const row = layout.meterStartRow + i;
         meterColumns.forEach((col) => addUpdate(recordSheet, `${col}${row}`, null));
       }
+      // 기록지 B열(시료채취 시간)은 누적 분. 앱 입력이 구간(5,5,5…)이면 누적으로 변환, 이미 누적(5,10,15…)이면 그대로
+      const meterTimeValues = gasMeters.slice(1).map((m) => parseFloat(m?.time)).filter((v) => Number.isFinite(v) && v > 0);
+      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v > meterTimeValues[i - 1]);
+      let runningMinutes = 0;
       gasMeters.forEach((meter, idx) => {
         const row = layout.meterStartRow + idx;
+        const rawMinutes = toNumber(meter.time);
+        let cellMinutes = rawMinutes;
+        if (idx > 0 && rawMinutes !== null && !isCumulativeMeterTime) {
+          runningMinutes = Math.round((runningMinutes + rawMinutes) * 100) / 100;
+          cellMinutes = runningMinutes;
+        }
         addUpdate(recordSheet, `A${row}`, meter.pointNum || (idx === 0 ? '시작' : ''));
-        addUpdate(recordSheet, `B${row}`, toNumber(meter.time));
+        addUpdate(recordSheet, `B${row}`, idx === 0 ? 0 : cellMinutes);
         addUpdate(recordSheet, `C${row}`, toNumber(meter.vacuum));
         addUpdate(recordSheet, `D${row}`, toNumber(meter.stackTemp));
         addUpdate(recordSheet, `E${row}`, toNumber(meter.dp));
@@ -6669,9 +6697,37 @@ export default function App() {
                   <div className="text-[10px] text-slate-500 text-left w-full space-y-1">
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
-                  <button type="button" onClick={applySamplingPointsToTable} className="w-full md:w-auto py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors shrink-0 border border-emerald-700">
-                    측정점/60분 표 자동 생성
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                      총 채취시간
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={tableTotalMinutes}
+                        onChange={(e) => setTableTotalMinutes(e.target.value)}
+                        placeholder={String(parseFloat(formData.planSamplingTime) > 0 ? formData.planSamplingTime : DEFAULT_MEASURE_TOTAL_MINUTES)}
+                        className="w-16 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                        title="비워 두면 1단계 예상 채취시간(없으면 60분)을 사용합니다"
+                      />
+                      분
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                      행 간격
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={tableIntervalMinutes}
+                        onChange={(e) => setTableIntervalMinutes(e.target.value)}
+                        className="w-14 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      />
+                      분
+                    </label>
+                    <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
+                      측정점/채취시간 표 자동 생성
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
