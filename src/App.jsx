@@ -168,6 +168,36 @@ const SAMPLING_LOG_SUBSTANCES = [
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
 const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([15, 18, 33, 36, 37]);
 
+// 물질 표 그룹 (표시용): 입자상 / 가스상 / 현장측정 / VOCs·기타
+const SAMPLING_LOG_GROUPS = [
+  { id: 'particle', title: '입자상 물질', note: '여과지 포집 · 입자 샘플러', kinds: ['particle'], color: 'emerald' },
+  { id: 'gas', title: '가스상 물질', note: '흡수액 포집 · 가스 샘플러', kinds: ['gas'], color: 'sky' },
+  { id: 'field', title: '현장측정', note: '가스분석기 · 총탄화수소측정기', kinds: ['analyzer', 'thc'], color: 'slate' },
+  { id: 'vocs', title: 'VOCs · 기타', note: '흡착관 · 음압상자', kinds: ['box', 'plain'], color: 'violet' },
+];
+const SAMPLING_LOG_KIND_BADGE = {
+  particle: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  gas: 'bg-sky-100 text-sky-800 border-sky-200',
+  analyzer: 'bg-slate-100 text-slate-700 border-slate-200',
+  thc: 'bg-slate-100 text-slate-700 border-slate-200',
+  box: 'bg-violet-100 text-violet-800 border-violet-200',
+  plain: 'bg-amber-100 text-amber-800 border-amber-200',
+};
+const SAMPLING_LOG_GROUP_HEADER = {
+  emerald: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+  sky: 'bg-sky-50 text-sky-900 border-sky-200',
+  slate: 'bg-slate-100 text-slate-800 border-slate-200',
+  violet: 'bg-violet-50 text-violet-900 border-violet-200',
+};
+const getSamplingLogStats = (log) => {
+  const requested = SAMPLING_LOG_SUBSTANCES.filter((sub) => log.rows[String(sub.row)]?.requested);
+  const filled = requested.filter((sub) => {
+    const row = log.rows[String(sub.row)];
+    return row && row.start && row.end;
+  });
+  return { requestedCount: requested.length, filledCount: filled.length };
+};
+
 const SAMPLING_LOG_KIND_LABEL = {
   particle: '입자 샘플러', gas: '가스 샘플러', analyzer: '가스분석기', thc: '총탄화수소측정기', box: '음압상자', plain: '-',
 };
@@ -1348,6 +1378,15 @@ export default function App() {
 
   const [secureUsers, setSecureUsers] = useState({});
   const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
+  // 기록부 화면 위에 통합 시료채취기록부를 패널로 함께 띄우기
+  const [isSamplingLogPanelOpen, setIsSamplingLogPanelOpen] = useState(false);
+  const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
+  useEffect(() => {
+    if (!isSamplingLogPanelOpen) return undefined;
+    const onKeyDown = (event) => { if (event.key === 'Escape') setIsSamplingLogPanelOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isSamplingLogPanelOpen]);
   const [activeUser, setActiveUser] = useState('');
   const [activeUserReports, setActiveUserReports] = useState([]);
   const [isUserUnlocked, setIsUserUnlocked] = useState(false);
@@ -5932,36 +5971,34 @@ export default function App() {
     );
   }
 
-  if (selectedSheet === 'samplinglog') {
+  // 통합 시료채취기록부 본문 (전체 화면과 기록부 위 패널에서 공용)
+  const renderSamplingLogBody = () => {
     const log = samplingLogData;
     const logForCalc = resolveSamplingLogYds(log);
+    const logStats = getSamplingLogStats(log);
     const savedLogs = savedData.filter((item) => resolveReportSheetId(item) === 'samplinglog');
+    const setGroupRequested = (group, requested) => setSamplingLogData(prev => ({
+      ...prev,
+      rows: Object.fromEntries(Object.entries(prev.rows).map(([key, row]) => {
+        const sub = SAMPLING_LOG_SUBSTANCES.find((item) => String(item.row) === key);
+        return [key, sub && group.kinds.includes(sub.kind) ? { ...row, requested } : row];
+      })),
+    }));
     const logInput = 'p-1.5 border border-slate-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-orange-500';
     const cellInput = 'w-full p-1 border border-slate-200 rounded text-xs text-center outline-none focus:ring-2 focus:ring-orange-400 bg-white disabled:bg-slate-50 disabled:text-slate-400';
     return (
-      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
-        {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
-        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
-          <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
-            <h1 className="text-2xl font-black text-slate-900">
-              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
-            </h1>
-            <p className="text-slate-600 mt-2 text-sm font-medium">
-              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
-              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
-            </p>
-            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-              기록부 선택
-            </button>
-          </div>
+      <>
 
-          <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-            <p className="text-xs text-slate-600">
-              사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
-              {' '}| 상태: <span className={`font-black ${isUserUnlocked ? 'text-orange-600' : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
-            </p>
+          <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>사용자 <span className="font-black text-slate-900">{displayUserNameWithFallback}</span></span>
+              <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${isUserUnlocked ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">의뢰 {logStats.requestedCount}건</span>
+              <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${logStats.requestedCount > 0 && logStats.filledCount === logStats.requestedCount ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>시각 입력 {logStats.filledCount}/{logStats.requestedCount}</span>
+              {log.company && <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">{log.company}{log.stackName ? ` · ${log.stackName}` : ''}</span>}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={handleSaveSamplingLog} className={`px-4 py-2 text-white font-bold rounded-lg text-sm shadow-sm ${activeTheme.primaryButton}`}>
+              <button type="button" onClick={handleSaveSamplingLog} className="px-4 py-2 text-white font-bold rounded-lg text-sm shadow-sm bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600">
                 리포트 저장
               </button>
               {!IS_DESKTOP_BUILD && (
@@ -5977,7 +6014,7 @@ export default function App() {
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
+              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">1</span>
               사업장 및 장비
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -6019,7 +6056,7 @@ export default function App() {
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">2</span>
+              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">2</span>
               채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일, 양식의 날짜별 시트는 앞의 2일)</span>
             </h2>
             <div className="overflow-x-auto">
@@ -6051,63 +6088,96 @@ export default function App() {
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-orange-600 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">3</span>
+              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">3</span>
               물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 체크한 물질만 양식에 기록됩니다)</span>
+              <span className="ml-auto flex items-center gap-1">
+                <button type="button" onClick={() => setSamplingLogRequestedOnly(false)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${!samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>전체</button>
+                <button type="button" onClick={() => setSamplingLogRequestedOnly(true)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>의뢰만 보기 ({logStats.requestedCount})</button>
+              </span>
             </h2>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
               <table className="w-full text-[11px] text-center border-collapse min-w-[1180px]">
-                <thead>
-                  <tr className="bg-orange-50 text-slate-700">
-                    <th className="p-2 border border-slate-200">의뢰</th>
-                    <th className="p-2 border border-slate-200 text-left">물질명</th>
-                    <th className="p-2 border border-slate-200">일차</th>
-                    <th className="p-2 border border-slate-200">시작</th>
-                    <th className="p-2 border border-slate-200">종료</th>
-                    <th className="p-2 border border-slate-200">시작값</th>
-                    <th className="p-2 border border-slate-200">종료값</th>
-                    <th className="p-2 border border-slate-200">채취유량(L)</th>
-                    <th className="p-2 border border-slate-200">온도(℃)</th>
-                    <th className="p-2 border border-slate-200">압력(mmH2O)</th>
-                    <th className="p-2 border border-slate-200">흡입속도</th>
-                    <th className="p-2 border border-slate-200">목표(L)</th>
-                    <th className="p-2 border border-slate-200">소요(min)</th>
-                    <th className="p-2 border border-slate-200">검사기간</th>
-                    <th className="p-2 border border-slate-200">시료번호</th>
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-800 text-white">
+                    <th className="p-2 border border-slate-700 w-10">의뢰</th>
+                    <th className="p-2 border border-slate-700 text-left min-w-[190px]">물질명</th>
+                    <th className="p-2 border border-slate-700">일차</th>
+                    <th className="p-2 border border-slate-700">시작</th>
+                    <th className="p-2 border border-slate-700">종료</th>
+                    <th className="p-2 border border-slate-700">시작값</th>
+                    <th className="p-2 border border-slate-700">종료값</th>
+                    <th className="p-2 border border-slate-700 bg-orange-700">채취유량(L)</th>
+                    <th className="p-2 border border-slate-700">온도(℃)</th>
+                    <th className="p-2 border border-slate-700">압력(mmH2O)</th>
+                    <th className="p-2 border border-slate-700">흡입속도</th>
+                    <th className="p-2 border border-slate-700">목표(L)</th>
+                    <th className="p-2 border border-slate-700">소요(min)</th>
+                    <th className="p-2 border border-slate-700">검사기간</th>
+                    <th className="p-2 border border-slate-700">시료번호</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {SAMPLING_LOG_SUBSTANCES.map((sub) => {
-                    const row = log.rows[String(sub.row)];
-                    const on = row.requested;
-                    const volume = calcSamplingLogVolume(logForCalc, sub);
-                    const isMeter = sub.kind === 'particle' || sub.kind === 'gas' || sub.kind === 'box' || sub.kind === 'plain';
+                  {SAMPLING_LOG_GROUPS.map((group) => {
+                    const members = SAMPLING_LOG_SUBSTANCES.filter((sub) => group.kinds.includes(sub.kind));
+                    const visible = samplingLogRequestedOnly ? members.filter((sub) => log.rows[String(sub.row)]?.requested) : members;
+                    const requestedInGroup = members.filter((sub) => log.rows[String(sub.row)]?.requested).length;
+                    if (samplingLogRequestedOnly && visible.length === 0) return null;
                     return (
-                      <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/40' : ''}>
-                        <td className="p-1 border border-slate-200">
-                          <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4 accent-orange-600" />
-                        </td>
-                        <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
-                          <span className="font-bold text-slate-800">{sub.name}</span>
-                          <span className="ml-1 text-[10px] text-slate-500">{sub.code} · {SAMPLING_LOG_KIND_LABEL[sub.kind]}</span>
-                        </td>
-                        <td className="p-1 border border-slate-200">
-                          <select value={row.dayIndex} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'dayIndex', parseInt(e.target.value, 10))} className={cellInput}>
-                            {log.days.map((day, idx) => <option key={idx} value={idx}>{idx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</option>)}
-                          </select>
-                        </td>
-                        <td className="p-1 border border-slate-200"><input type="time" value={row.start} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'start', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="time" value={row.end} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'end', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterStart} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterStart', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterEnd} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterEnd', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200 font-bold text-orange-800">{on && Number.isFinite(volume) ? volume.toFixed(2) : '-'}</td>
-                        <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.temp} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'temp', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.pressureH2O} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'pressureH2O', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="text" value={row.suctionRate} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'suctionRate', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="text" value={row.targetVolume} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'targetVolume', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="text" value={row.duration} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'duration', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200"><input type="text" value={row.testPeriod} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'testPeriod', e.target.value)} className={cellInput} /></td>
-                        <td className="p-1 border border-slate-200 text-[10px] text-slate-600 whitespace-nowrap">{on ? buildSamplingLogSampleNo(log, sub) : ''}</td>
-                      </tr>
+                      <React.Fragment key={`log-group-${group.id}`}>
+                        <tr className={`${SAMPLING_LOG_GROUP_HEADER[group.color]} border-y`}>
+                          <td colSpan={15} className="p-1.5 text-left">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-black text-xs">{group.title}</span>
+                              <span className="text-[10px] opacity-70">{group.note}</span>
+                              <span className="px-1.5 py-0.5 rounded-full bg-white/80 border border-current/20 text-[10px] font-bold">{requestedInGroup}/{members.length} 의뢰</span>
+                              <span className="flex gap-1">
+                                <button type="button" onClick={() => setGroupRequested(group, true)} className="px-2 py-0.5 rounded border border-current/30 bg-white/70 text-[10px] font-bold hover:bg-white">전체 의뢰</button>
+                                <button type="button" onClick={() => setGroupRequested(group, false)} className="px-2 py-0.5 rounded border border-current/30 bg-white/70 text-[10px] font-bold hover:bg-white">해제</button>
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {visible.map((sub) => {
+                          const row = log.rows[String(sub.row)];
+                          const on = row.requested;
+                          const volume = calcSamplingLogVolume(logForCalc, sub);
+                          const isMeter = sub.kind === 'particle' || sub.kind === 'gas' || sub.kind === 'box' || sub.kind === 'plain';
+                          const timeDone = on && row.start && row.end;
+                          return (
+                            <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/60 shadow-[inset_3px_0_0_0_#ea580c]' : 'text-slate-500'}>
+                              <td className="p-1 border border-slate-200">
+                                <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4 accent-orange-600" />
+                              </td>
+                              <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{sub.name}</span>
+                                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${SAMPLING_LOG_KIND_BADGE[sub.kind]}`}>{sub.code}</span>
+                                  {on && (
+                                    <span className={`w-2 h-2 rounded-full ${timeDone ? 'bg-emerald-500' : 'bg-amber-400'}`} title={timeDone ? '시각 입력 완료' : '시작/종료 시각 미입력'} />
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-1 border border-slate-200">
+                                <select value={row.dayIndex} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'dayIndex', parseInt(e.target.value, 10))} className={cellInput}>
+                                  {log.days.map((day, idx) => <option key={idx} value={idx}>{idx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</option>)}
+                                </select>
+                              </td>
+                              <td className="p-1 border border-slate-200"><input type="time" value={row.start} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'start', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="time" value={row.end} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'end', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterStart} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterStart', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterEnd} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterEnd', e.target.value)} className={cellInput} /></td>
+                              <td className={`p-1 border border-slate-200 font-black ${on && Number.isFinite(volume) ? 'text-orange-800 bg-orange-100/70' : ''}`}>{on && Number.isFinite(volume) ? volume.toFixed(2) : '-'}</td>
+                              <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.temp} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'temp', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="number" step="0.1" value={row.pressureH2O} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'pressureH2O', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="text" value={row.suctionRate} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'suctionRate', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="text" value={row.targetVolume} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'targetVolume', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="text" value={row.duration} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'duration', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200"><input type="text" value={row.testPeriod} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'testPeriod', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200 text-[10px] font-mono text-slate-600 whitespace-nowrap">{on ? buildSamplingLogSampleNo(log, sub) : ''}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -6156,6 +6226,37 @@ export default function App() {
               </div>
             )}
           </div>
+      </>
+    );
+  };
+
+  const importSheetInfoToSamplingLog = () => {
+    setSamplingLogData(prev => ({
+      ...prev,
+      company: prev.company || formData.company || '',
+      stackName: prev.stackName || formData.location || '',
+      days: prev.days.map((day, idx) => (idx === 0 && !day.date && formData.date ? { ...day, date: formData.date } : day)),
+    }));
+  };
+
+  if (selectedSheet === 'samplinglog') {
+    return (
+      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+        {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
+        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
+          <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
+            <h1 className="text-2xl font-black text-slate-900">
+              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
+            </h1>
+            <p className="text-slate-600 mt-2 text-sm font-medium">
+              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
+              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
+            </p>
+            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              기록부 선택
+            </button>
+          </div>
+          {renderSamplingLogBody()}
         </div>
       </div>
     );
@@ -6165,6 +6266,56 @@ export default function App() {
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
+      {!isSamplingLogPanelOpen && (() => {
+        const stats = getSamplingLogStats(samplingLogData);
+        return (
+          <button
+            type="button"
+            onClick={() => setIsSamplingLogPanelOpen(true)}
+            className="fixed bottom-5 right-5 z-[60] pl-3 pr-4 py-2.5 rounded-full shadow-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-bold text-sm hover:from-orange-700 hover:to-amber-600 border border-orange-700/60 flex items-center gap-2 transition-transform hover:scale-105"
+            title="통합 시료채취기록부를 이 화면 위에 함께 엽니다"
+          >
+            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">≡</span>
+            <span className="flex flex-col items-start leading-tight">
+              <span>통합 시료채취기록부</span>
+              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '함께 열기'}</span>
+            </span>
+          </button>
+        );
+      })()}
+      {isSamplingLogPanelOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[70] flex">
+          <div className="hidden md:block flex-1 bg-black/30" onClick={() => setIsSamplingLogPanelOpen(false)} />
+          <div className="w-full md:w-[72vw] md:max-w-[1250px] h-full bg-orange-50/95 shadow-2xl overflow-y-auto border-l-4 border-orange-500 flex flex-col">
+            <div className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white px-4 py-3 shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black">≡</span>
+                  <div>
+                    <h2 className="text-base font-black leading-tight">통합 시료채취기록부</h2>
+                    <p className="text-[11px] opacity-90">{activeSheet?.title || '기록부'} 위에 함께 열림 · 입력 내용은 서로 독립적으로 유지됩니다</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25" title="현재 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
+                    현재 기록부 정보 가져오기
+                  </button>
+                  <button type="button" onClick={() => { setIsSamplingLogPanelOpen(false); window.location.hash = 'sheet=samplinglog'; }} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25">
+                    전체 화면으로
+                  </button>
+                  <button type="button" onClick={() => setIsSamplingLogPanelOpen(false)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-900">
+                    닫기 (Esc)
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 space-y-4">
+              {renderSamplingLogBody()}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
         <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
