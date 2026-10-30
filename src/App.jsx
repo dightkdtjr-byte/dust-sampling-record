@@ -3124,28 +3124,43 @@ export default function App() {
     };
   };
 
+  // 표 생성 계획: 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
+  const getTableGenerationPlan = () => {
+    const spData = getSamplingPoints();
+    if (!spData) return null;
+    const pointCount = spData.perRadius;
+    const requestedRaw = parseFloat(tableTotalMinutes);
+    const planTotal = parseFloat(formData.planSamplingTime);
+    const requestedTotal = Number.isFinite(requestedRaw) && requestedRaw > 0
+      ? requestedRaw
+      : (Number.isFinite(planTotal) && planTotal > 0 ? planTotal : DEFAULT_MEASURE_TOTAL_MINUTES);
+    const intervalRaw = parseFloat(tableIntervalMinutes);
+    const intervalMinutes = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : DEFAULT_SLOT_MINUTES;
+    const perPointNeeded = requestedTotal / pointCount;
+    const rowsPerPoint = Math.max(1, Math.ceil(perPointNeeded / intervalMinutes - 1e-9));
+    const measureRows = pointCount * rowsPerPoint;
+    const adjustedTotal = Math.round(measureRows * intervalMinutes * 100) / 100;
+    return { pointCount, requestedTotal, intervalMinutes, rowsPerPoint, measureRows, adjustedTotal, perPointMinutes: Math.round(rowsPerPoint * intervalMinutes * 100) / 100 };
+  };
+
   const applySamplingPointsToTable = () => {
     const spData = getSamplingPoints();
     if (!spData) {
       alert('1번 섹션에서 총 측정 깊이와 플랜지 길이를 입력해 굴뚝 내경이 계산되어야 측정점 표를 만들 수 있습니다.');
       return;
     }
-    const pointCount = spData.perRadius;
-    const requestedTotal = parseFloat(tableTotalMinutes);
-    const planTotal = parseFloat(formData.planSamplingTime);
-    const totalMinutes = Number.isFinite(requestedTotal) && requestedTotal > 0
-      ? requestedTotal
-      : (Number.isFinite(planTotal) && planTotal > 0 ? planTotal : DEFAULT_MEASURE_TOTAL_MINUTES);
-    const intervalRaw = parseFloat(tableIntervalMinutes);
-    const intervalMinutes = Number.isFinite(intervalRaw) && intervalRaw > 0 ? Math.min(intervalRaw, totalMinutes) : DEFAULT_SLOT_MINUTES;
-    const measureRows = Math.max(pointCount, Math.ceil(totalMinutes / intervalMinutes - 1e-9));
-    const totalMeterRows = measureRows + 1;
+    const plan = getTableGenerationPlan();
+    if (!plan) return;
+    const { pointCount, requestedTotal, intervalMinutes, rowsPerPoint, measureRows, adjustedTotal } = plan;
     setFormData(prev => {
       const newPoints = Array.from({ length: pointCount }, (_, i) => prev.points[i] || { id: i + 1, tp: '', sp: '', dp: '', ts: '' });
-      const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, totalMinutes);
+      const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, adjustedTotal);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
-    alert(`측정점 ${pointCount}개 반영 완료: 총 ${totalMinutes}분을 ${intervalMinutes}분 간격 ${measureRows}칸(시작행 포함 ${totalMeterRows}행)으로 나누었습니다. 시간 열은 누적 분(${intervalMinutes}, ${intervalMinutes * 2} … ${totalMinutes})으로 표시됩니다.`);
+    const adjustedNote = adjustedTotal !== requestedTotal
+      ? `\n요청한 ${requestedTotal}분은 ${pointCount}지점에 ${intervalMinutes}분 간격으로 똑같이 나눌 수 없어 ${adjustedTotal}분으로 올렸습니다.`
+      : '';
+    alert(`측정점 ${pointCount}개 × 지점당 ${rowsPerPoint}행 × ${intervalMinutes}분 = 총 ${adjustedTotal}분 (시작행 포함 ${measureRows + 1}행)${adjustedNote}\n시간 열은 누적 분(${intervalMinutes}, ${intervalMinutes * 2} … ${adjustedTotal})으로 표시됩니다.`);
   };
 
   const getGasComposition = () => {
@@ -7519,6 +7534,17 @@ export default function App() {
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
                       측정점/채취시간 표 자동 생성
                     </button>
+                    {(() => {
+                      const plan = getTableGenerationPlan();
+                      if (!plan) return <span className="w-full text-right text-[11px] text-amber-700 font-bold">1번 섹션의 굴뚝 내경이 있어야 측정점 수가 정해집니다</span>;
+                      const changed = plan.adjustedTotal !== plan.requestedTotal;
+                      return (
+                        <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분 = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분)
+                          {changed ? ` · ${plan.requestedTotal}분은 똑같이 나눌 수 없어 ${plan.adjustedTotal}분으로 올림` : ''}
+                        </span>
+                      );
+                    })()}
                   </div>
               </div>
               
