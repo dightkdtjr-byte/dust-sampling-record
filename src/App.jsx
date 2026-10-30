@@ -3447,6 +3447,25 @@ export default function App() {
   const calcMoisture = () => getRawPreMoisture().toFixed(3);
   const calcPostMoisture = () => getRawPostMoisture().toFixed(3);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
+  // 유속이 0으로 나올 때 어떤 입력이 빠졌는지 안내
+  const getGasVelocityMissingInputs = () => {
+    const missing = [];
+    if (!Number.isFinite(parseFloat(formData.atmPressure))) missing.push('대기압(측정공 주변, mmHg)');
+    if (!(getRawAvgDp() > 0)) missing.push('측정점 동압(Δp)');
+    if (!Number.isFinite(getRawAvgTs())) missing.push('측정점 온도(Ts)');
+    const gasComp = getGasComposition();
+    if (!Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) missing.push('배출가스 조성(O2/CO2)');
+    return missing;
+  };
+  const getFinalGasVelocityMissingInputs = () => {
+    const missing = [];
+    const rowsWithVolume = getMeterRowsWithVolume();
+    if (rowsWithVolume.length === 0) missing.push('적산유량(Vm) 입력 행');
+    if (!rowsWithVolume.some((row) => parseFloat(row.dp) >= 0)) missing.push('기록표 동압(Δp)');
+    if (!rowsWithVolume.some((row) => Number.isFinite(parseFloat(row.stackTemp)))) missing.push('기록표 배출가스 온도(Ts)');
+    if (!Number.isFinite(parseFloat(formData.atmPressure))) missing.push('대기압(mmHg)');
+    return missing;
+  };
   const calcFinalGasVelocity = () => {
     const v = getRawGasVelocityFromMeterRows();
     if (!Number.isFinite(v) || v <= 0) return '-';
@@ -7061,7 +7080,12 @@ export default function App() {
                 <div className="text-slate-800">
                   <span className="font-bold">평균 유속 (Vs)</span>
                 </div>
-                <div className="text-2xl font-black text-emerald-700">{calcGasVelocity()} <span className="text-sm font-bold text-slate-700">m/s</span></div>
+                <div className="text-right">
+                  <div className="text-2xl font-black text-emerald-700">{calcGasVelocity()} <span className="text-sm font-bold text-slate-700">m/s</span></div>
+                  {getRawGasVelocity() === 0 && getGasVelocityMissingInputs().length > 0 && (
+                    <p className="text-[11px] text-amber-700 font-bold mt-1">입력 필요: {getGasVelocityMissingInputs().join(', ')}</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -7645,6 +7669,9 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
                       <span className="text-2xl font-bold text-amber-300">{calcFinalGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
+                      {calcFinalGasVelocity() === '-' && getFinalGasVelocityMissingInputs().length > 0 && (
+                        <span className="text-[10px] text-amber-200 mt-1 text-center">입력 필요: {getFinalGasVelocityMissingInputs().join(', ')}</span>
+                      )}
                   </div>
                   {isDustSheet && (
                     <div className="flex flex-col items-center justify-center p-2">
