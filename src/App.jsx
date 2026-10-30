@@ -6964,7 +6964,7 @@ export default function App() {
                       onChange={handleChange}
                       readOnly={isPitotCpAutoApplied}
                       title={isPitotCpAutoApplied ? '유속별 Cp 표에서 자동 적용 중 (직접 입력하려면 프리셋 선택을 해제)' : undefined}
-                      className={`w-16 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isPitotCpAutoApplied ? 'bg-emerald-100 font-black text-emerald-900' : ''}`}
+                      className={`w-20 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isPitotCpAutoApplied ? 'bg-emerald-100 font-black text-emerald-900' : ''}`}
                     />
                     {isPitotCpAutoApplied && (
                       <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
