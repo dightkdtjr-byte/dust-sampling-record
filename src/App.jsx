@@ -511,11 +511,11 @@ const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_
   const sequence = buildPointSlotSequence(pointCount, slotCount);
   const safeSlot = Number.isFinite(slotMinutes) && slotMinutes > 0 ? slotMinutes : DEFAULT_SLOT_MINUTES;
   const safeTotal = Number.isFinite(totalMinutes) && totalMinutes > 0 ? totalMinutes : safeSlot * sequence.length;
-  // 각 행은 구간 시간(분). 마지막 행은 총 채취시간에 맞춰 남은 시간으로 채움
+  // 시간 열은 누적 분(5, 10, 15 …). 마지막 행은 총 채취시간으로 맞춤
   const minutesForRow = (idx) => {
-    if (idx < sequence.length - 1) return safeSlot;
-    const remainder = safeTotal - safeSlot * (sequence.length - 1);
-    return remainder > 0 ? Math.round(remainder * 100) / 100 : safeSlot;
+    const cumulative = Math.round(safeSlot * (idx + 1) * 100) / 100;
+    if (idx >= sequence.length - 1) return Math.round(safeTotal * 100) / 100;
+    return Math.min(cumulative, safeTotal);
   };
   const rows = [{
     id: 0,
@@ -3126,7 +3126,10 @@ export default function App() {
 
   const applySamplingPointsToTable = () => {
     const spData = getSamplingPoints();
-    if (!spData) return;
+    if (!spData) {
+      alert('1번 섹션에서 총 측정 깊이와 플랜지 길이를 입력해 굴뚝 내경이 계산되어야 측정점 표를 만들 수 있습니다.');
+      return;
+    }
     const pointCount = spData.perRadius;
     const requestedTotal = parseFloat(tableTotalMinutes);
     const planTotal = parseFloat(formData.planSamplingTime);
@@ -3142,7 +3145,7 @@ export default function App() {
       const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, totalMinutes);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
-    alert(`측정점 ${pointCount}개 반영 완료: 총 ${totalMinutes}분을 ${intervalMinutes}분 간격 ${measureRows}칸(시작행 포함 ${totalMeterRows}행)으로 나누어 채취점을 배분했습니다.`);
+    alert(`측정점 ${pointCount}개 반영 완료: 총 ${totalMinutes}분을 ${intervalMinutes}분 간격 ${measureRows}칸(시작행 포함 ${totalMeterRows}행)으로 나누었습니다. 시간 열은 누적 분(${intervalMinutes}, ${intervalMinutes * 2} … ${totalMinutes})으로 표시됩니다.`);
   };
 
   const getGasComposition = () => {
@@ -6716,37 +6719,9 @@ export default function App() {
                   <div className="text-[10px] text-slate-500 text-left w-full space-y-1">
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0 w-full md:w-auto justify-end">
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                      총 채취시간
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={tableTotalMinutes}
-                        onChange={(e) => setTableTotalMinutes(e.target.value)}
-                        placeholder={String(parseFloat(formData.planSamplingTime) > 0 ? formData.planSamplingTime : DEFAULT_MEASURE_TOTAL_MINUTES)}
-                        className="w-16 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                        title="비워 두면 1단계 예상 채취시간(없으면 60분)을 사용합니다"
-                      />
-                      분
-                    </label>
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                      행 간격
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={tableIntervalMinutes}
-                        onChange={(e) => setTableIntervalMinutes(e.target.value)}
-                        className="w-14 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                      />
-                      분
-                    </label>
-                    <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
-                      측정점/채취시간 표 자동 생성
-                    </button>
-                  </div>
+                  <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 shrink-0">
+                    기록표는 5번 섹션에서 노즐·채취시간을 정한 뒤 "측정점/채취시간 표 자동 생성"으로 만듭니다.
+                  </p>
                 </div>
               </div>
             )}
@@ -7512,8 +7487,39 @@ export default function App() {
 
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
-              <div className="flex justify-between items-end mb-2">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
                 <h3 className="text-sm font-bold text-slate-800">2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)</h3>
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                      총 채취시간
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={tableTotalMinutes}
+                        onChange={(e) => setTableTotalMinutes(e.target.value)}
+                        placeholder={String(parseFloat(formData.planSamplingTime) > 0 ? formData.planSamplingTime : DEFAULT_MEASURE_TOTAL_MINUTES)}
+                        className="w-16 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                        title="비워 두면 1단계 예상 채취시간(없으면 60분)을 사용합니다"
+                      />
+                      분
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                      행 간격
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={tableIntervalMinutes}
+                        onChange={(e) => setTableIntervalMinutes(e.target.value)}
+                        className="w-14 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      />
+                      분
+                    </label>
+                    <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
+                      측정점/채취시간 표 자동 생성
+                    </button>
+                  </div>
               </div>
               
               <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
@@ -7522,7 +7528,7 @@ export default function App() {
                     <tr>
                       <th className="p-1 font-bold whitespace-nowrap">순번</th>
                       <th className="p-1 font-bold whitespace-nowrap">채취점</th>
-                      <th className="p-1 font-bold whitespace-nowrap">시간<br/>(분)</th>
+                      <th className="p-1 font-bold whitespace-nowrap">누적 시간<br/>(분)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>온도(T<sub>s</sub>, ℃)</th>
                       <th className="p-1 font-bold text-emerald-700 whitespace-nowrap">동압<br/>(Δp)</th>
                       <th className="p-1 font-bold text-teal-700 whitespace-nowrap">오리피스압<br/>(ΔH)</th>
