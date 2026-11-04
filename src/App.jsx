@@ -4872,6 +4872,9 @@ export default function App() {
         const extended = formulaText.replace(
           new RegExp(`(\\$?[A-Z]+\\$?(?:${meterStartRow}|${meterStartRow + 1}):\\$?[A-Z]+\\$?)(\\d+)`, 'g'),
           (full, head) => `${head}${meterEndRow}`
+        ).replace(
+          new RegExp(`(^|[^A-Z0-9_:$])([A-Z]{1,3})${meterTemplateEndRow}(?![0-9:])`, 'g'),
+          (full, prefix, col) => `${prefix}${col}${meterEndRow}`
         );
         fNode.textContent = extended;
       });
@@ -4899,6 +4902,137 @@ export default function App() {
         dimensionNode.setAttribute('ref', `${startRef}:${nextEndRef}`);
       }
     }
+  };
+
+  // 측정행이 양식보다 적으면 남는 양식 행을 지우고 아래 행(평균 등)을 끌어올림
+  const shrinkRecordSheetMeterRows = (worksheet, usedRowCount, layout = {}) => {
+    const sheetData = worksheet.getElementsByTagNameNS('*', 'sheetData')[0];
+    if (!sheetData) return;
+    const meterStartRow = Number.isFinite(layout.meterStartRow) ? layout.meterStartRow : 17;
+    const meterTemplateEndRow = Number.isFinite(layout.meterTemplateEndRow) ? layout.meterTemplateEndRow : 26;
+    const templateCapacity = meterTemplateEndRow - meterStartRow + 1;
+    if (!Number.isFinite(usedRowCount) || usedRowCount < 1 || usedRowCount >= templateCapacity) return;
+    const removeCount = templateCapacity - usedRowCount;
+    const firstRemove = meterStartRow + usedRowCount;
+
+    getChildElementsByLocalName(sheetData, 'row').forEach((rowEl) => {
+      const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+      if (Number.isFinite(rowNum) && rowNum >= firstRemove && rowNum <= meterTemplateEndRow) sheetData.removeChild(rowEl);
+    });
+    const mergeCellsNode = worksheet.getElementsByTagNameNS('*', 'mergeCells')[0];
+    if (mergeCellsNode) {
+      getChildElementsByLocalName(mergeCellsNode, 'mergeCell').forEach((mergeCell) => {
+        const m = /^[A-Z]+(\d+):[A-Z]+(\d+)$/.exec(mergeCell.getAttribute('ref') || '');
+        if (!m) return;
+        const r1 = parseInt(m[1], 10);
+        const r2 = parseInt(m[2], 10);
+        if (r1 >= firstRemove && r2 <= meterTemplateEndRow) mergeCellsNode.removeChild(mergeCell);
+      });
+      mergeCellsNode.setAttribute('count', String(getChildElementsByLocalName(mergeCellsNode, 'mergeCell').length));
+    }
+    shiftSheetRowsDown(sheetData, meterTemplateEndRow + 1, -removeCount);
+    shiftMergedCellsRowsDown(worksheet, meterTemplateEndRow + 1, -removeCount);
+
+    const meterEndRow = meterTemplateEndRow - removeCount;
+    const summaryRow = findExistingRow(sheetData, meterEndRow + 1);
+    if (summaryRow) {
+      getChildElementsByLocalName(summaryRow, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '').trim();
+        if (!formulaText) return;
+        fNode.textContent = formulaText.replace(
+          new RegExp(`(\\$?[A-Z]+\\$?(?:${meterStartRow}|${meterStartRow + 1}):\\$?[A-Z]+\\$?)(\\d+)`, 'g'),
+          (full, head, tail) => (parseInt(tail, 10) > meterEndRow ? `${head}${meterEndRow}` : full)
+        ).replace(
+          new RegExp(`(^|[^A-Z0-9_:$])([A-Z]{1,3})${meterTemplateEndRow}(?![0-9:])`, 'g'),
+          (full, prefix, col) => `${prefix}${col}${meterEndRow}`
+        );
+      });
+    }
+    getChildElementsByLocalName(sheetData, 'row').forEach((rowEl) => {
+      const rowNum = parseInt(rowEl.getAttribute('r'), 10);
+      if (!Number.isFinite(rowNum) || rowNum >= meterStartRow) return;
+      getChildElementsByLocalName(rowEl, 'c').forEach((cellEl) => {
+        const fNode = getChildElementsByLocalName(cellEl, 'f')[0];
+        if (!fNode) return;
+        const formulaText = String(fNode.textContent || '').trim();
+        if (!formulaText) return;
+        fNode.textContent = shiftFormulaRowRefsFromRow(formulaText, meterTemplateEndRow + 1, -removeCount);
+      });
+    });
+    const dimensionNode = worksheet.getElementsByTagNameNS('*', 'dimension')[0];
+    if (dimensionNode) {
+      const currentRef = dimensionNode.getAttribute('ref');
+      if (currentRef && currentRef.includes(':')) {
+        const [startRef, endRef] = currentRef.split(':');
+        dimensionNode.setAttribute('ref', `${startRef}:${shiftCellRefRowsFrom(endRef, meterTemplateEndRow + 1, -removeCount)}`);
+      }
+    }
+  };
+
+  // 측정점별 행 배경색: styles.xml에 채우기 + 셀 서식을 추가해 새 서식 번호를 돌려줌
+  const METER_ROW_POINT_COLORS = ['FFF2CC', 'DDEBF7', 'E2EFDA', 'FCE4D6', 'EDE7F6', 'FFE8F0'];
+  const createMeterRowStyler = (stylesXml) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(stylesXml, 'application/xml');
+    const root = doc.documentElement;
+    const ns = root.namespaceURI;
+    const fillsNode = root.getElementsByTagNameNS('*', 'fills')[0];
+    const cellXfsNode = root.getElementsByTagNameNS('*', 'cellXfs')[0];
+    if (!fillsNode || !cellXfsNode) return null;
+    const fillIdByColor = new Map();
+    const xfCache = new Map();
+    const getFillId = (color) => {
+      if (fillIdByColor.has(color)) return fillIdByColor.get(color);
+      const fill = doc.createElementNS(ns, 'fill');
+      const pattern = doc.createElementNS(ns, 'patternFill');
+      pattern.setAttribute('patternType', 'solid');
+      const fg = doc.createElementNS(ns, 'fgColor');
+      fg.setAttribute('rgb', `FF${color}`);
+      const bg = doc.createElementNS(ns, 'bgColor');
+      bg.setAttribute('indexed', '64');
+      pattern.appendChild(fg);
+      pattern.appendChild(bg);
+      fill.appendChild(pattern);
+      fillsNode.appendChild(fill);
+      const id = getChildElementsByLocalName(fillsNode, 'fill').length - 1;
+      fillsNode.setAttribute('count', String(id + 1));
+      fillIdByColor.set(color, id);
+      return id;
+    };
+    const styleFor = (originalIndex, colorIdx) => {
+      const color = METER_ROW_POINT_COLORS[colorIdx % METER_ROW_POINT_COLORS.length];
+      const key = `${originalIndex}|${color}`;
+      if (xfCache.has(key)) return xfCache.get(key);
+      const xfs = getChildElementsByLocalName(cellXfsNode, 'xf');
+      const source = xfs[originalIndex] || xfs[0];
+      if (!source) return originalIndex;
+      const clone = source.cloneNode(true);
+      clone.setAttribute('fillId', String(getFillId(color)));
+      clone.setAttribute('applyFill', '1');
+      cellXfsNode.appendChild(clone);
+      const newIndex = getChildElementsByLocalName(cellXfsNode, 'xf').length - 1;
+      cellXfsNode.setAttribute('count', String(newIndex + 1));
+      xfCache.set(key, newIndex);
+      return newIndex;
+    };
+    return { styleFor, serialize: () => new XMLSerializer().serializeToString(doc) };
+  };
+
+  const applyMeterRowColors = (worksheet, rowColorList, styler) => {
+    if (!styler || !Array.isArray(rowColorList)) return;
+    const sheetData = worksheet.getElementsByTagNameNS('*', 'sheetData')[0];
+    if (!sheetData) return;
+    const ns = worksheet.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    rowColorList.forEach(({ row, colorIdx }) => {
+      const rowEl = ensureRow(sheetData, row, ns);
+      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach((col) => {
+        const cell = ensureCell(rowEl, parseCellRef(`${col}${row}`), ns);
+        const original = parseInt(cell.getAttribute('s') || '0', 10);
+        cell.setAttribute('s', String(styler.styleFor(Number.isFinite(original) ? original : 0, colorIdx)));
+      });
+    });
   };
 
   const setXmlCellValue = (cell, value, ns) => {
@@ -4957,6 +5091,9 @@ export default function App() {
     if (Number.isFinite(options.expandMeterRowsTo)) {
       expandRecordSheetMeterRows(worksheet, options.expandMeterRowsTo, options.layout || {});
     }
+    if (Number.isFinite(options.shrinkMeterRowsTo)) {
+      shrinkRecordSheetMeterRows(worksheet, options.shrinkMeterRowsTo, options.layout || {});
+    }
 
     if (options.shiftRefsToSheet && Number.isFinite(options.shiftRefsFromRow) && options.shiftRefsDelta) {
       shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
@@ -4969,6 +5106,10 @@ export default function App() {
       const cell = ensureCell(row, parsed, ns);
       setXmlCellValue(cell, value, ns);
     });
+
+    if (options.meterRowColors && options.rowStyler) {
+      applyMeterRowColors(worksheet, options.meterRowColors, options.rowStyler);
+    }
 
     return new XMLSerializer().serializeToString(doc);
   };
@@ -5015,7 +5156,10 @@ export default function App() {
         fNode.textContent = formulaText.replace(refPattern, (full, sheetPart, col1, row1, col2, row2) => {
           const r1 = parseInt(row1, 10);
           const shift = (r) => (r >= fromRow ? r + delta : r);
-          if (row2 === undefined) return `${sheetPart}!${col1}${shift(r1)}`;
+          if (row2 === undefined) {
+            const single = (Number.isFinite(extendRangeEndFrom) && r1 === extendRangeEndFrom) ? r1 + delta : shift(r1);
+            return `${sheetPart}!${col1}${single}`;
+          }
           const r2 = parseInt(row2, 10);
           const nextEnd = (Number.isFinite(extendRangeEndFrom) && r2 === extendRangeEndFrom) ? r2 + delta : shift(r2);
           return `${sheetPart}!${col1}${shift(r1)}:${col2}${nextEnd}`;
@@ -5141,8 +5285,9 @@ export default function App() {
       }, 0);
       const gasMeters = sourceGasMeters.slice(0, Math.max(1, lastMeaningfulIdx + 1));
       const meterTemplateCapacity = layout.meterTemplateEndRow - layout.meterStartRow + 1;
-      const meterRowsForTemplate = Math.max(meterTemplateCapacity, gasMeters.length);
-      const meterExtraRows = meterRowsForTemplate - meterTemplateCapacity;
+      // 측정행 수는 입력한 행 수 그대로: 양식보다 많으면 행 추가, 적으면 남는 양식 행 삭제
+      const meterRowsForTemplate = Math.max(1, gasMeters.length);
+      const meterExtraRows = meterRowsForTemplate - meterTemplateCapacity; // 음수면 삭제된 행 수
       const firstVolume = gasMeters.find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
       const lastVolume = [...gasMeters].reverse().find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
 
@@ -5232,7 +5377,7 @@ export default function App() {
       // 기록지: 머리글 (계산 셀은 양식 수식을 그대로 두고 입력 셀만 기록)
       addUpdate(recordSheet, 'C5', sourceData.company);
       addUpdate(recordSheet, 'C6', sourceData.location);
-      addUpdate(recordSheet, 'C7', sourceData.sampler);
+      addUpdate(recordSheet, 'C7', String(sourceData.sampler || '').trim() ? `${String(sourceData.sampler).trim()} (인)` : null);
       addUpdate(recordSheet, 'C8', toExcelDateSerial(sourceData.date));
       addUpdate(recordSheet, 'C9', filterNumber);
       addUpdate(recordSheet, 'J13', filterNumber);
@@ -5270,6 +5415,20 @@ export default function App() {
         addUpdate(recordSheet, `K${row}`, toNumber(meter.impingerTemp));
         addUpdate(recordSheet, `P${row}`, Number.isFinite(avgSp) ? avgSp : null);
       });
+      // 측정점(채취점)이 바뀔 때마다 행 배경색을 바꿔 구분
+      const meterRowColors = [];
+      {
+        let colorIdx = -1;
+        let lastPoint = null;
+        gasMeters.forEach((meter, idx) => {
+          if (idx === 0) return;
+          const point = String(meter.pointNum || '').trim();
+          if (point !== lastPoint) { colorIdx += 1; lastPoint = point; }
+          meterRowColors.push({ row: layout.meterStartRow + idx, colorIdx: Math.max(0, colorIdx) });
+        });
+      }
+      const stylesFile = zip.file('xl/styles.xml');
+      const rowStyler = stylesFile ? createMeterRowStyler(await stylesFile.async('string')) : null;
 
       if (sheetPathMap.has('먼지측정결과보고서')) {
         addUpdate('먼지측정결과보고서', 'C5', sourceData.company);
@@ -5289,8 +5448,14 @@ export default function App() {
           xml,
           updates,
           sheetName === recordSheet
-            ? { expandMeterRowsTo: meterRowsForTemplate, layout }
-            : (meterExtraRows > 0
+            ? {
+                expandMeterRowsTo: meterExtraRows > 0 ? meterRowsForTemplate : undefined,
+                shrinkMeterRowsTo: meterExtraRows < 0 ? meterRowsForTemplate : undefined,
+                layout,
+                meterRowColors,
+                rowStyler,
+              }
+            : (meterExtraRows !== 0
               ? {
                   shiftRefsToSheet: recordSheet,
                   shiftRefsFromRow: layout.meterTemplateEndRow + 1,
@@ -5302,8 +5467,10 @@ export default function App() {
         zip.file(sheetPath, patched);
       }
 
-      // 기록지 행이 늘어난 경우, 갱신되지 않은 다른 시트(계산식 등)의 기록지 참조도 함께 보정
-      if (meterExtraRows > 0) {
+      if (rowStyler) zip.file('xl/styles.xml', rowStyler.serialize());
+
+      // 기록지 행 수가 바뀐 경우, 갱신되지 않은 다른 시트(계산식 등)의 기록지 참조도 함께 보정
+      if (meterExtraRows !== 0) {
         for (const [sheetName, sheetPath] of sheetPathMap.entries()) {
           if (updatesBySheet.has(sheetName) || sheetName === recordSheet) continue;
           const file = zip.file(sheetPath);
