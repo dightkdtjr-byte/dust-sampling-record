@@ -123,7 +123,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, te
   box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 input[readonly]:not([type="checkbox"]) { background-color: #f5f5f7 !important; color: #1d1d1f; font-weight: 600; }
-label, .text-\[11px\].font-bold, .text-xs.font-bold { color: #3a3a3c; }
+label:not([class*="text-"]) { color: #3a3a3c; }
 
 /* 결과·요약 박스: 왼쪽 색 띠 제거, 숫자 강조 */
 [class*="border-l-4"] { border-left-width: 1px !important; border-left-color: var(--mac-hairline) !important; }
@@ -194,3 +194,36 @@ input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), input
 button:disabled, select:disabled { cursor: not-allowed; }
 /* 저장 리포트 표: 머리글 줄바꿈 없이, 숫자 가운데 */
 .min-w-\[1900px\] th { white-space: nowrap; }
+
+/* ── 가시성 보정 ── */
+/* 흰 글자 버튼·배지는 어떤 규칙보다 흰 글자를 유지 */
+.text-white, button[class*="text-white"], span[class*="text-white"], p[class*="text-white"], div[class*="text-white"] { color: #fff !important; }
+button[class*="bg-slate-7"], button[class*="bg-slate-8"], button[class*="bg-slate-9"], button[class*="bg-emerald-6"], button[class*="bg-emerald-7"],
+button[class*="bg-orange-6"], button[class*="bg-red-6"], button[class*="bg-teal-6"], button[class*="bg-cyan-6"], button[class*="bg-blue-6"] { color: #fff !important; }
+/* 너무 옅은 회색 글자와 너무 작은 글자 */
+.text-slate-400 { color: #6e6e73 !important; }
+.text-slate-500 { color: #5f5f66 !important; }
+.text-\[10px\] { font-size: 11px !important; }
+input::placeholder, textarea::placeholder { color: #a1a1a6 !important; }
+td > input::placeholder, td > div > input::placeholder { color: #b0b0b5 !important; }
+/* 어두운 패널 위의 옅은 회색은 밝게 유지 */
+.bg-slate-800 .text-slate-400, .bg-slate-900 .text-slate-400, .bg-slate-700 .text-slate-400 { color: #a1a1aa !important; }
+.bg-slate-800 .text-slate-500, .bg-slate-900 .text-slate-500 { color: #b4b4bb !important; }
+/* 흰 바탕 위의 연한 강조색(-400)은 더 진하게, 어두운 패널 위에서는 밝게 유지 */
+.text-emerald-400 { color: #059669 !important; }
+.text-teal-400 { color: #0d9488 !important; }
+.text-cyan-400 { color: #0891b2 !important; }
+.text-blue-400 { color: #2563eb !important; }
+.text-purple-400, .text-violet-400 { color: #7e22ce !important; }
+.text-orange-400, .text-amber-400 { color: #ea580c !important; }
+.text-yellow-400 { color: #ca8a04 !important; }
+.bg-slate-800 .text-emerald-400, .bg-slate-900 .text-emerald-400 { color: #34d399 !important; }
+.bg-slate-800 .text-teal-400, .bg-slate-900 .text-teal-400 { color: #2dd4bf !important; }
+.bg-slate-800 .text-cyan-400, .bg-slate-900 .text-cyan-400 { color: #22d3ee !important; }
+.bg-slate-800 .text-blue-400, .bg-slate-900 .text-blue-400 { color: #60a5fa !important; }
+.bg-slate-800 .text-purple-400, .bg-slate-900 .text-purple-400 { color: #c084fc !important; }
+.bg-slate-800 .text-orange-400, .bg-slate-900 .text-orange-400, .bg-slate-800 .text-amber-400, .bg-slate-900 .text-amber-400 { color: #fbbf24 !important; }
+.bg-slate-800 .text-yellow-400, .bg-slate-900 .text-yellow-400 { color: #facc15 !important; }
+
+/* 표 안 버튼은 줄바꿈 없이 */
+td > button { white-space: nowrap; }
