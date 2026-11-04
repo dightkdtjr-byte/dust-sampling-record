@@ -3935,10 +3935,37 @@ export default function App() {
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
   // 유속이 0으로 나올 때 어떤 입력이 빠졌는지 안내
   const calcFinalGasVelocity = () => {
-    const v = getRawGasVelocityFromMeterRows();
+    // 유량측정기록부: 4번 섹션 측정점(동압·온도) 기준 유속
+    const v = isFlowRecordSheet ? getRawGasVelocity() : getRawGasVelocityFromMeterRows();
     if (!Number.isFinite(v) || v <= 0) return '-';
     return v.toFixed(2);
   };
+  // 측정점별 유속(m/s): v_i = Cp × √(2g·Δp_i / r_i), r_i = r0 × 273/(273+Ts_i) × (Pa + Ps_i/13.6)/760
+  const getRawPointGasVelocity = (point) => {
+    const dp = parseFloat(point?.dp);
+    const ts = parseFloat(point?.ts);
+    const Pa = parseFloat(formData.atmPressure);
+    const sp = parseFloat(point?.sp);
+    const C = parseFloat(formData.pitotFactor) || 0.84;
+    const gasComp = getGasComposition();
+    if (!Number.isFinite(dp) || dp <= 0 || !Number.isFinite(ts) || !Number.isFinite(Pa)) return NaN;
+    if (!Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
+    const absP = Pa + (Number.isFinite(sp) ? sp / 13.6 : 0);
+    const r = gasComp.r0 * (273 / (273 + ts)) * (absP / 760);
+    if (!Number.isFinite(r) || r <= 0) return NaN;
+    return C * Math.sqrt((2 * 9.81 * dp) / r);
+  };
+  const getStackAreaM2 = () => {
+    const D = parseFloat(formData.stackDiameter);
+    return Number.isFinite(D) && D > 0 ? Math.PI * Math.pow(D / 2, 2) : NaN;
+  };
+  // 측정점별 실측 유량(㎥/min) = v_i × A × 60
+  const getRawPointFlowRate = (point) => {
+    const v = getRawPointGasVelocity(point);
+    const A = getStackAreaM2();
+    return Number.isFinite(v) && Number.isFinite(A) ? v * A * 60 : NaN;
+  };
+  const fmtOrDash = (v, digits = 2) => (Number.isFinite(v) ? v.toFixed(digits) : '-');
   const calcGasMeterVolDiff = () => { const v = getRawGasMeterVolDiff(); return v > 0 ? v.toFixed(2) : 0; };
   const getRawGasMeterVolDiffYd = () => {
     const vm = getRawGasMeterVolDiff();
@@ -4003,8 +4030,8 @@ export default function App() {
     // 건조 유량의 수분량(Xw)은 사후 수분량(임핀저 무게법) 기준
     const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
     const flowRows = getMeterRowsUntilLastVolume();
-    const Ts = getRawAvgSamplingTs();
-    const Vs = getRawGasVelocityFromMeterRows();
+    const Ts = isFlowRecordSheet ? getRawAvgTs() : getRawAvgSamplingTs();
+    const Vs = isFlowRecordSheet ? getRawGasVelocity() : getRawGasVelocityFromMeterRows();
     const Pa = parseFloat(formData.atmPressure);
     const D = parseFloat(formData.stackDiameter);
 
@@ -6860,7 +6887,7 @@ export default function App() {
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
                   <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 shrink-0">
-                    기록표는 5번 섹션의 "측정점/채취시간 표 자동 생성"으로 만듭니다.
+                    {isFlowSheet ? '유량측정기록부는 4번 섹션의 측정점별 동압·온도로 지점별 유속·유량을 바로 계산합니다.' : '기록표는 5번 섹션의 "측정점/채취시간 표 자동 생성"으로 만듭니다.'}
                   </p>
                 </div>
               </div>
@@ -7277,6 +7304,8 @@ export default function App() {
                       <th className="pb-2 pt-2 text-xs font-bold">정압<br/>(mmH2O)</th>
                       <th className="pb-2 pt-2 text-xs font-bold">동압<br/>(mmH2O)</th>
                       <th className="pb-2 pt-2 text-xs font-bold">온도(℃)</th>
+                      {isFlowSheet && <th className="pb-2 pt-2 text-xs font-bold">유속<br/>(m/s)</th>}
+                      {isFlowSheet && <th className="pb-2 pt-2 text-xs font-bold">유량<br/>(㎥/min, 실측)</th>}
                       <th className="pb-2 pt-2 rounded-tr-lg"></th>
                     </tr>
                   </thead>
@@ -7288,6 +7317,8 @@ export default function App() {
                         <td className="py-1"><input type="number" step="0.1" value={point.sp !== undefined ? point.sp : ''} onChange={(e) => handlePointChange(idx, 'sp', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
                         <td className="py-1"><input type="number" step="0.1" value={point.dp} onChange={(e) => handlePointChange(idx, 'dp', e.target.value)} className="w-16 p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-black text-emerald-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
                         <td className="py-1"><input type="number" step="0.1" value={point.ts} onChange={(e) => handlePointChange(idx, 'ts', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
+                        {isFlowSheet && <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointGasVelocity(point))}</td>}
+                        {isFlowSheet && <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointFlowRate(point))}</td>}
                         <td className="py-1">
                           <button type="button" onClick={() => removePoint(idx)} className="text-red-500 hover:text-red-700 text-xs font-bold p-1 transition-colors">삭제</button>
                         </td>
@@ -7300,6 +7331,8 @@ export default function App() {
                         <td className="py-1.5">{calcAvgSp() !== 0 ? calcAvgSp().toFixed(2) : '-'}</td>
                         <td className="py-1.5 text-emerald-700">{calcAvgDp() !== 0 ? calcAvgDp().toFixed(2) : '-'}</td>
                         <td className="py-1.5">{calcAvgTs() !== 0 ? calcAvgTs().toFixed(2) : '-'}</td>
+                        {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 ? getRawGasVelocity().toFixed(2) : '-'}</td>}
+                        {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 && Number.isFinite(getStackAreaM2()) ? (getRawGasVelocity() * getStackAreaM2() * 60).toFixed(2) : '-'}</td>}
                         <td className="py-1.5"></td>
                     </tr>
                   </tbody>
@@ -7320,11 +7353,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* 섹션 5: 시료채취 및 등속흡인 */}
+          {/* 섹션 5: 시료채취 및 등속흡인 (유량측정기록부에서는 사용하지 않음) */}
+          {!isFlowSheet && (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
               <span className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">5</span>
-              {isFlowSheet ? '유속·유량 측정 기록' : '시료 채취 기록 (적산유량계 및 등속흡인)'}
+              시료 채취 기록 (적산유량계 및 등속흡인)
             </h2>
 
             {!isFlowSheet && (<>
@@ -7934,12 +7968,13 @@ export default function App() {
             </div>
             )}
           </div>
+          )}
 
           {/* 섹션 6: 시료 분석 및 비고 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">6</span>
-              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : '최종 결과 및 비고'}
+              <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">{isFlowSheet ? 5 : 6}</span>
+              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
             {isDustSheet && (
