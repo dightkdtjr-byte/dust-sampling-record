@@ -157,6 +157,55 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 57, code: 'OX', name: '옥사이드', kind: 'box', testPeriod: '9' },
 ];
 
+// 기록부(먼지·금속·수은·PAHs) 저장본을 통합기록부 행에 옮길 때의 대응표
+const SHEET_TO_LOG_ROWS = { dust: [13], metal: [25, 26, 27, 28, 29, 30, 31, 32], mercury: [34], pahs: [41] };
+const LOG_SOURCE_SHEETS = ['dust', 'metal', 'mercury', 'pahs'];
+
+const addMinutesToClock = (hhmm, minutes) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+  if (!m || !Number.isFinite(minutes)) return '';
+  const total = ((parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + Math.round(minutes)) % (24 * 60) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+
+// 저장된 기록부 한 건에서 통합기록부 행에 넣을 값(시각, 가스미터 시작·종료, 미터 온도, 오리피스압)을 뽑는다
+const buildSamplingLogValuesFromReport = (report) => {
+  const meters = Array.isArray(report?.gasMeters) ? report.gasMeters : [];
+  const volumes = meters.map((m) => parseFloat(m?.volume)).filter((v) => Number.isFinite(v));
+  const fmt = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
+  const clean = (v) => (v === undefined || v === null || v === '-' ? '' : String(v));
+  const totalMinutes = parseFloat(report?.totalSamplingMinutes);
+  const start = clean(report?.samplingStartTime);
+  const end = start && Number.isFinite(totalMinutes) && totalMinutes > 0 ? addMinutesToClock(start, totalMinutes) : '';
+  return {
+    start,
+    end,
+    meterStart: volumes.length > 0 ? fmt(volumes[0]) : '',
+    meterEnd: volumes.length > 1 ? fmt(volumes[volumes.length - 1]) : '',
+    temp: clean(report?.avgTm),
+    pressureH2O: clean(report?.avgOrifice),
+  };
+};
+
+// 같은 사업장·배출구·측정일자의 기록부를 한 묶음으로 (기록부 종류별 최신 저장본)
+const groupSheetReportsForLog = (reports, resolveSheetId) => {
+  const groups = new Map();
+  (reports || []).forEach((report) => {
+    const sheetId = resolveSheetId(report);
+    if (!LOG_SOURCE_SHEETS.includes(sheetId)) return;
+    const company = String(report?.company || '').trim();
+    const location = String(report?.location || '').trim();
+    const date = String(report?.date || '').trim();
+    if (!company && !location && !date) return;
+    const key = `${company}|${location}|${date}`;
+    if (!groups.has(key)) groups.set(key, { key, company, location, date, bySheet: {} });
+    const group = groups.get(key);
+    const current = group.bySheet[sheetId];
+    if (!current || String(report.savedAt || '') > String(current.savedAt || '')) group.bySheet[sheetId] = report;
+  });
+  return [...groups.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.company.localeCompare(b.company));
+};
+
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
 const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([15, 18, 33, 36, 37]);
 
@@ -319,12 +368,10 @@ const MOBILE_LIGHT_MAX_WIDTH = 768;
 const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
 const DEFAULT_MEASURE_ROW_COUNT = 12;
 const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
-const TABLE_PLAN_TARGET_INTERVAL = 5; // 자동 탐색 시 선호하는 행 간격(분)
 const PITOT_BASE_CP = 0.84; // 피토계수 자동 선정 시 유속 가계산에 쓰는 기준계수
 const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
-const TABLE_PLAN_MIN_ROWS_PER_POINT = 3; // 지점당 최소 측정 행 수
-const TABLE_PLAN_MAX_ROWS_PER_POINT = 20;
-const TABLE_PLAN_MAX_ROWS = 80;
+// 지점 수별 권장 지점당 행 수: 지점이 적으면 촘촘히(1점 12행), 많으면 지점당 3행
+const RECOMMENDED_ROWS_PER_POINT = { 1: 12, 2: 6, 3: 4, 4: 3, 5: 3 };
 
 const isMobileViewportWidth = () => {
   if (typeof window === 'undefined') return false;
@@ -1532,7 +1579,7 @@ export default function App() {
       { id: 3, tp: '', sp: '', dp: '', ts: '' }, { id: 4, tp: '', sp: '', dp: '', ts: '' },
       { id: 5, tp: '', sp: '', dp: '', ts: '' },
     ],
-    samplerId: '', targetVolume: '1000', planSamplingTime: '65',
+    samplerId: '', targetVolume: '1000', planSamplingTime: '65', samplingStartTime: '',
     gasMeterFactor: IS_DESKTOP_BUILD ? '' : '0.991', deltaHAt: IS_DESKTOP_BUILD ? '' : '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
     nozzleDiameter: '', kFactor: '',
@@ -1549,7 +1596,6 @@ export default function App() {
   const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
   // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
   const [tableTotalMinutes, setTableTotalMinutes] = useState('');
-  const [tableIntervalMinutes, setTableIntervalMinutes] = useState('');
   const [activeUser, setActiveUser] = useState('');
   const [activeUserReports, setActiveUserReports] = useState([]);
   const [isUserUnlocked, setIsUserUnlocked] = useState(false);
@@ -3520,64 +3566,25 @@ export default function App() {
     );
   };
 
-  // 표 생성 계획: 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
-  // 행 간격을 비우면 요청 시간에 가장 가깝게 떨어지는 (지점당 행 수, 간격) 조합을 자동으로 찾습니다.
-  const findBestTablePlan = (pointCount, requestedTotal, minRowsPerPoint) => {
-    const target = TABLE_PLAN_TARGET_INTERVAL;
-    let best = null;
-    const maxRowsPerPoint = Math.max(minRowsPerPoint, TABLE_PLAN_MAX_ROWS_PER_POINT);
-    for (let rowsPerPoint = minRowsPerPoint; rowsPerPoint <= maxRowsPerPoint; rowsPerPoint += 1) {
-      if (rowsPerPoint > minRowsPerPoint && pointCount * rowsPerPoint > TABLE_PLAN_MAX_ROWS) break;
-      for (let half = 1; half <= 60; half += 1) {
-        const interval = half / 2; // 0.5분 단위, 최대 30분
-        const total = Math.round(pointCount * rowsPerPoint * interval * 100) / 100;
-        const deviation = Math.abs(total - requestedTotal);
-        // 총 시간 차이(분) + 5분에서 멀어질수록(비율 기준) 벌점 → 1분 간격 60행 같은 조합을 피함
-        const score = deviation + Math.abs(Math.log(interval / target)) * 3;
-        if (!best || score < best.score - 1e-9
-          || (Math.abs(score - best.score) <= 1e-9 && (deviation < best.deviation - 1e-9
-            || (Math.abs(deviation - best.deviation) <= 1e-9 && rowsPerPoint > best.rowsPerPoint)))) {
-          best = { rowsPerPoint, intervalMinutes: interval, adjustedTotal: total, deviation, score };
-        }
-      }
-    }
-    return best;
-  };
-
+  // 표 생성 계획: 지점 수에 맞는 권장 행 수(지점당)를 정하고, 총 시간을 그 행 수로 나눠 0.5분 단위 간격을 정한다
+  // 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
   const getTableGenerationPlan = () => {
     const spData = getSamplingPoints();
     if (!spData) return null;
-    // 반경당 측정점은 공정시험기준상 최대 5개
     const pointCount = Math.min(TABLE_PLAN_MAX_POINTS, Math.max(1, spData.perRadius));
     const requestedRaw = parseFloat(tableTotalMinutes);
     const planTotal = parseFloat(formData.planSamplingTime);
     const requestedTotal = Number.isFinite(requestedRaw) && requestedRaw > 0
       ? requestedRaw
       : (Number.isFinite(planTotal) && planTotal > 0 ? planTotal : DEFAULT_MEASURE_TOTAL_MINUTES);
-    const intervalRaw = parseFloat(tableIntervalMinutes);
-    const preferredInterval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : null;
-    const intervalAuto = preferredInterval === null;
-    const minRowsPerPoint = TABLE_PLAN_MIN_ROWS_PER_POINT;
-
-    let rowsPerPoint;
-    let intervalMinutes;
-    const best = intervalAuto ? findBestTablePlan(pointCount, requestedTotal, minRowsPerPoint) : null;
-    if (best) {
-      rowsPerPoint = best.rowsPerPoint;
-      intervalMinutes = best.intervalMinutes;
-    } else {
-      // 간격을 직접 입력하면 그 간격을 고정하고 지점당 행 수를 올림 (최소 행 수 보장)
-      intervalMinutes = preferredInterval ?? DEFAULT_SLOT_MINUTES;
-      rowsPerPoint = Math.max(minRowsPerPoint, Math.ceil(requestedTotal / pointCount / intervalMinutes - 1e-9));
-    }
+    const rowsPerPoint = RECOMMENDED_ROWS_PER_POINT[pointCount] || 3;
     const measureRows = pointCount * rowsPerPoint;
+    const intervalMinutes = Math.max(0.5, Math.round((requestedTotal / measureRows) * 2) / 2);
     const adjustedTotal = Math.round(measureRows * intervalMinutes * 100) / 100;
     return {
       pointCount,
       requestedTotal,
       intervalMinutes,
-      intervalAuto,
-      minRowsPerPoint,
       rowsPerPoint,
       measureRows,
       adjustedTotal,
@@ -3585,26 +3592,25 @@ export default function App() {
     };
   };
 
-  const applySamplingPointsToTable = () => {
+  const applySamplingPointsToTable = ({ silent = false } = {}) => {
     const spData = getSamplingPoints();
     if (!spData) {
-      alert('1번 섹션에서 총 측정 깊이와 플랜지 길이를 입력해 굴뚝 내경이 계산되어야 측정점 표를 만들 수 있습니다.');
+      if (!silent) alert('1번 섹션에서 총 측정 깊이와 플랜지 길이를 입력해 굴뚝 내경이 계산되어야 측정점 표를 만들 수 있습니다.');
       return;
     }
     const plan = getTableGenerationPlan();
     if (!plan) return;
-    const { pointCount, requestedTotal, intervalMinutes, intervalAuto, minRowsPerPoint, rowsPerPoint, measureRows, adjustedTotal } = plan;
+    const { pointCount, requestedTotal, intervalMinutes, rowsPerPoint, measureRows, adjustedTotal } = plan;
     setFormData(prev => {
       const newPoints = Array.from({ length: pointCount }, (_, i) => prev.points[i] || { id: i + 1, tp: '', sp: '', dp: '', ts: '' });
       const newMeters = createGasMeterRowsByPoints(pointCount, measureRows, intervalMinutes, adjustedTotal);
       return { ...prev, points: newPoints, gasMeters: newMeters };
     });
+    if (silent) return;
     const adjustedNote = adjustedTotal !== requestedTotal
-      ? (intervalAuto
-        ? `\n요청한 ${requestedTotal}분은 ${pointCount}지점 × 지점당 최소 ${minRowsPerPoint}행 조건으로 똑같이 나눌 수 없어 가장 가까운 ${adjustedTotal}분(${intervalMinutes}분 간격)으로 맞췄습니다.`
-        : `\n요청한 ${requestedTotal}분은 ${pointCount}지점 × 지점당 최소 ${minRowsPerPoint}행 × ${intervalMinutes}분 간격으로 맞출 수 없어 ${adjustedTotal}분으로 올렸습니다. (행 간격을 비우면 자동으로 맞춥니다)`)
+      ? `\n${requestedTotal}분은 ${intervalMinutes}분 간격으로 나누어떨어지지 않아 ${adjustedTotal}분으로 조정했습니다.`
       : '';
-    alert(`측정점 ${pointCount}개 × 지점당 ${rowsPerPoint}행 × ${intervalMinutes}분 = 총 ${adjustedTotal}분 (시작행 포함 ${measureRows + 1}행)${adjustedNote}\n시간 열은 누적 분(${intervalMinutes}, ${Math.round(intervalMinutes * 200) / 100} … ${adjustedTotal})으로 표시됩니다.`);
+    alert(`측정점 ${pointCount}개 × 지점당 ${rowsPerPoint}행 × ${intervalMinutes}분 = 총 ${adjustedTotal}분 (시작행 포함 ${measureRows + 1}행)${adjustedNote}`);
   };
 
   const getGasComposition = () => {
@@ -4478,7 +4484,8 @@ export default function App() {
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.`);
+      const synced = syncSamplingLogFromSavedReport(result);
+      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부의 해당 물질 행에도 옮겨 적었습니다.' : ''}`);
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
@@ -5326,6 +5333,56 @@ export default function App() {
 
   // ===== 시료채취기록부(종합) =====
   const updateSamplingLogField = (key, value) => setSamplingLogData(prev => ({ ...prev, [key]: value }));
+
+  // 기록부 묶음(같은 사업장·배출구·날짜)을 통합기록부에 옮겨 적기: 사업장 정보, 입자 샘플러, 물질별 시각·가스미터 값
+  const applySheetGroupToSamplingLog = (group, { silent = false } = {}) => {
+    if (!group) return;
+    const reports = Object.entries(group.bySheet);
+    if (reports.length === 0) return;
+    setSamplingLogData(prev => {
+      const next = { ...prev, rows: { ...prev.rows }, days: prev.days.map((d) => ({ ...d })) };
+      if (group.company) next.company = group.company;
+      if (group.location) next.stackName = group.location;
+      if (group.date && !next.days[0].date) next.days[0].date = group.date;
+      const dayIndex = Math.max(0, next.days.findIndex((d) => d.date === group.date));
+      const samplerSource = reports.map(([, r]) => r).find((r) => String(r?.samplerId || '').trim() !== '');
+      if (samplerSource) {
+        const found = samplers.find((item) => String(item.id) === String(samplerSource.samplerId));
+        if (found) {
+          next.particleSamplerId = String(found.id);
+          next.particleSamplerYd = String(samplerSource.gasMeterFactor || found.yd || '');
+        } else if (samplerSource.gasMeterFactor) {
+          next.particleSamplerYd = String(samplerSource.gasMeterFactor);
+        }
+      }
+      reports.forEach(([sheetId, report]) => {
+        const values = buildSamplingLogValuesFromReport(report);
+        (SHEET_TO_LOG_ROWS[sheetId] || []).forEach((rowNum) => {
+          const key = String(rowNum);
+          next.rows[key] = { ...next.rows[key], requested: true, dayIndex, ...values };
+        });
+      });
+      return next;
+    });
+    if (!silent) {
+      const names = reports.map(([sheetId]) => SHEET_MENU.find((m) => m.id === sheetId)?.title || sheetId).join(', ');
+      alert(`${group.company || '사업장'} 기록(${names})을 통합기록부에 옮겨 적었습니다.`);
+    }
+  };
+
+  // 기록부 저장 시: 통합기록부가 비어 있거나 같은 사업장·배출구면 그 물질 행을 자동으로 채운다
+  const syncSamplingLogFromSavedReport = (report) => {
+    const sheetId = resolveReportSheetId(report);
+    if (!LOG_SOURCE_SHEETS.includes(sheetId)) return false;
+    const company = String(report?.company || '').trim();
+    const location = String(report?.location || '').trim();
+    const logCompany = String(samplingLogData.company || '').trim();
+    const logStack = String(samplingLogData.stackName || '').trim();
+    const sameSite = logCompany === company && (!logStack || !location || logStack === location);
+    if (logCompany && !sameSite) return false;
+    applySheetGroupToSamplingLog({ company, location, date: String(report?.date || '').trim(), bySheet: { [sheetId]: report } }, { silent: true });
+    return true;
+  };
   const updateSamplingLogDay = (idx, key, value) => setSamplingLogData(prev => ({
     ...prev,
     days: prev.days.map((day, i) => (i === idx ? { ...day, [key]: value } : day)),
@@ -5636,6 +5693,19 @@ export default function App() {
       return { ...prev, points: nextPoints };
     });
   }, [samplingPointCount]);
+  // 기록표에 아직 입력한 값이 없으면 측정점 수·채취시간에 맞춰 표를 자동으로 만들어 둔다
+  const meterTableHasEntries = formData.gasMeters.some((row, idx) => (
+    [row?.dp, row?.pressure, row?.volume, row?.stackTemp, row?.tmIn, row?.tmOut, row?.vacuum, row?.impingerTemp]
+      .some((v) => String(v ?? '').trim() !== '') && (idx > 0 || String(row?.volume ?? '').trim() !== '')
+  ));
+  const autoTablePlanKey = samplingPointCount
+    ? `${samplingPointCount}|${tableTotalMinutes}|${formData.planSamplingTime}`
+    : '';
+  useEffect(() => {
+    if (!autoTablePlanKey || meterTableHasEntries || isFlowSheet) return;
+    applySamplingPointsToTable({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTablePlanKey]);
   const configuredNozzles = getConfiguredNozzles();
   const gasFlowRates = calcGasFlowRates();
   
@@ -6467,6 +6537,51 @@ export default function App() {
               </details>
             </div>
           </div>
+
+          {(() => {
+            const groups = groupSheetReportsForLog(activeUserReports, resolveReportSheetId);
+            if (groups.length === 0) return null;
+            return (
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·배출구·측정일자끼리 묶음</span></h3>
+                  <span className="text-[11px] text-slate-500">가져오면 먼지·중금속·수은·PAHs 행의 시각, 가스미터 시작·종료값, 미터 온도, 오리피스압이 채워집니다</span>
+                </div>
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-100 text-slate-700">
+                      <tr>
+                        <th className="p-2">측정일자</th>
+                        <th className="p-2">사업장</th>
+                        <th className="p-2">배출구</th>
+                        <th className="p-2">저장된 기록부</th>
+                        <th className="p-2 w-28"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groups.slice(0, 12).map((group) => (
+                        <tr key={group.key}>
+                          <td className="p-2 whitespace-nowrap">{group.date || '-'}</td>
+                          <td className="p-2 font-bold text-slate-900">{group.company || '-'}</td>
+                          <td className="p-2">{group.location || '-'}</td>
+                          <td className="p-2">
+                            {LOG_SOURCE_SHEETS.map((sheetId) => (
+                              <span key={sheetId} className={`inline-block mr-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${group.bySheet[sheetId] ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-slate-200 text-slate-300'}`}>
+                                {{ dust: '먼지', metal: '중금속', mercury: '수은', pahs: 'PAHs' }[sheetId]}
+                              </span>
+                            ))}
+                          </td>
+                          <td className="p-2 text-right">
+                            <button type="button" onClick={() => applySheetGroupToSamplingLog(group)} className="px-2.5 py-1 text-[11px] font-bold rounded bg-orange-600 text-white border border-orange-700 hover:bg-orange-700">통합기록부에 옮기기</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
@@ -7704,6 +7819,19 @@ export default function App() {
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
                 <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합기록부의 시작·종료 시각에 쓰입니다 (종료 = 시작 + 총 시간)">
+                      채취 시작
+                      <input
+                        type="time"
+                        name="samplingStartTime"
+                        value={formData.samplingStartTime || ''}
+                        onChange={handleChange}
+                        className="p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      />
+                      {formData.samplingStartTime && getSamplingMinutes() > 0 && (
+                        <span className="text-slate-500 font-normal">~ {addMinutesToClock(formData.samplingStartTime, getSamplingMinutes())}</span>
+                      )}
+                    </label>
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                       {isFlowSheet ? '총 측정시간' : '총 채취시간'}
                       <input
@@ -7718,22 +7846,8 @@ export default function App() {
                       />
                       분
                     </label>
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                      행 간격
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0.5"
-                        value={tableIntervalMinutes}
-                        onChange={(e) => setTableIntervalMinutes(e.target.value)}
-                        placeholder="자동"
-                        className="w-14 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                        title="비워 두면 총 시간에 맞는 간격을 자동으로 고릅니다"
-                      />
-                      분
-                    </label>
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
-                      측정점/채취시간 표 자동 생성
+                      표 다시 만들기
                     </button>
                     {(() => {
                       const plan = getTableGenerationPlan();
@@ -7741,8 +7855,8 @@ export default function App() {
                       const changed = plan.adjustedTotal !== plan.requestedTotal;
                       return (
                         <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
-                          {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분{plan.intervalAuto ? '(자동)' : ''} = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분, 최소 {plan.minRowsPerPoint}행)
-                          {changed ? ` · ${plan.requestedTotal}분은 지점당 최소 ${plan.minRowsPerPoint}행으로 나누어떨어지지 않아 ${plan.adjustedTotal}분으로 조정` : ''}
+                          {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분 = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분)
+                          {changed ? ` · ${plan.requestedTotal}분은 ${plan.intervalMinutes}분 간격으로 나누어떨어지지 않아 ${plan.adjustedTotal}분으로 조정` : ''}
                         </span>
                       );
                     })()}
