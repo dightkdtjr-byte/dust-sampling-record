@@ -2093,6 +2093,105 @@ export default function App() {
   // 메뉴 목록: 사업장·스택명이 같은 리포트를 한 묶음으로 (날짜는 기간으로 표시)
   const profileReportGroups = groupSheetReportsForLog(profileCombinedReports, resolveReportSheetId, null);
   const toggleReportGroup = (key) => setExpandedReportGroups((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  // 저장 리포트 묶음 표 (메뉴와 기록부 창이 같은 양식 사용)
+  // 펼치면 기록부 종류별로 최신 저장본 한 줄씩, 그 아래에 이전 저장본은 회색 줄로
+  const renderReportGroupTable = ({ groups, checkedSet, toggleCheck, allChecked, toggleAll, allowCopy = false, emptyText = '저장된 리포트가 없습니다.' }) => {
+    if (!groups || groups.length === 0) {
+      return (
+        <div className="p-5 text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-lg">{emptyText}</div>
+      );
+    }
+    const summaryOf = (data) => {
+      const sheetId = resolveReportSheetId(data);
+      if (sheetId === 'samplinglog') return '시료채취기록부(종합)';
+      if (sheetId === 'flow') return `유속 ${data.avgVelocity || '-'} m/s · 건조유량 ${data.dryFlowRate || '-'} Sm³/hr`;
+      return `등속 ${data.isokineticRate || '-'}% · 실측 ${data.actualConcentration || '-'} · 보정 ${data.correctedConcentration || '-'}`;
+    };
+    const actionButtons = (data) => (
+      <span className="inline-flex items-center gap-1">
+        <button type="button" onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(data); }} className="px-2 py-1 rounded text-[11px] border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 font-bold whitespace-nowrap">불러오기</button>
+        {allowCopy && (
+          <button type="button" onClick={(e) => { e.stopPropagation(); handleCopySavedReportToCurrentSheet(data); }} className={`px-2 py-1 rounded text-[11px] text-white font-bold whitespace-nowrap ${activeTheme.primaryButton}`}>이 기록부로 복사</button>
+        )}
+        <button type="button" onClick={(e) => { e.stopPropagation(); removeSavedReport(data.id, data.savedAt); }} className="px-2 py-1 rounded text-[11px] border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold whitespace-nowrap">삭제</button>
+      </span>
+    );
+    return (
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full text-xs min-w-[1000px]">
+          <thead className="bg-slate-100 text-slate-700">
+            <tr>
+              <th className="p-2 font-bold text-center w-8">
+                <input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} title="전체 선택" />
+              </th>
+              <th className="p-2 font-bold text-left">사업장</th>
+              <th className="p-2 font-bold text-left">배출구(스택)</th>
+              <th className="p-2 font-bold text-left">측정일자</th>
+              <th className="p-2 font-bold text-left">저장된 기록부</th>
+              <th className="p-2 font-bold text-center">건수</th>
+              <th className="p-2 font-bold text-center w-24">상세</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {groups.map((group) => {
+              const expanded = expandedReportGroups.includes(group.key);
+              const groupKeys = group.reports.map(getReportKey).filter(Boolean);
+              const groupAllChecked = groupKeys.length > 0 && groupKeys.every((k) => checkedSet.has(k));
+              // 종류별 최신 저장본 + 이전 저장본
+              const bySheet = SHEET_MENU
+                .map((sheet) => ({ sheet, list: group.reports.filter((r) => resolveReportSheetId(r) === sheet.id) }))
+                .filter(({ list }) => list.length > 0);
+              return (
+                <Fragment key={group.key}>
+                  <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => toggleReportGroup(group.key)}>
+                    <td className="p-2 text-center">
+                      <input type="checkbox" checked={groupAllChecked} onClick={(e) => e.stopPropagation()} onChange={(e) => groupKeys.forEach((k) => toggleCheck(k, e.target.checked))} title="이 묶음 전체 선택" />
+                    </td>
+                    <td className="p-2 font-bold text-slate-900 whitespace-nowrap">{group.company || '-'}</td>
+                    <td className="p-2 whitespace-nowrap">{group.location || '-'}</td>
+                    <td className="p-2 whitespace-nowrap">{group.dateLabel}</td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap gap-1">
+                        {bySheet.map(({ sheet, list }) => (
+                          <button key={sheet.id} type="button" onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(list[0]); }} title={`${sheet.title} 최신 저장본 열기`} className="hover:opacity-80">
+                            <SheetBadge sheetId={sheet.id} title={sheet.title} />
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="p-2 text-center font-bold">{group.reports.length}</td>
+                    <td className="p-2 text-center"><span className="text-[11px] font-bold text-slate-600">{expanded ? '접기 ▴' : '펼치기 ▾'}</span></td>
+                  </tr>
+                  {expanded && bySheet.map(({ sheet, list }) => list.map((data, idx) => {
+                    const reportKey = getReportKey(data);
+                    const isLatest = idx === 0;
+                    return (
+                      <tr key={reportKey || data.savedAt} className={`${isLatest ? 'bg-slate-50/60' : 'bg-slate-50/30 text-slate-500'} hover:bg-slate-100 cursor-pointer`} onClick={() => handleLoadSavedReport(data)} title="클릭하면 불러옵니다">
+                        <td className="p-2 text-center">
+                          <input type="checkbox" checked={checkedSet.has(reportKey)} onClick={(e) => e.stopPropagation()} onChange={(e) => toggleCheck(reportKey, e.target.checked)} />
+                        </td>
+                        <td className="p-2 pl-6" colSpan="2">
+                          <span className="inline-flex items-center gap-2">
+                            {isLatest ? <SheetBadge sheetId={sheet.id} title={sheet.title} /> : <span className="inline-block min-w-[2.6rem] text-center text-[11px] text-slate-400">└ 이전</span>}
+                            <span className={isLatest ? 'text-slate-700' : 'text-slate-500'}>저장 {formatSavedDateTime(data.savedAt)}</span>
+                          </span>
+                        </td>
+                        <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
+                        <td className="p-2 text-slate-600 whitespace-nowrap">{summaryOf(data)}</td>
+                        <td className="p-2 text-center"></td>
+                        <td className="p-2 text-center">{actionButtons(data)}</td>
+                      </tr>
+                    );
+                  }))}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
   const menuSelectableReportKeys = profileCombinedReports.map(getReportKey).filter(Boolean);
   const menuSelectableReportKeySet = new Set(menuSelectableReportKeys);
   const menuCheckedReportKeysValid = menuCheckedReportKeys.filter((key) => menuSelectableReportKeySet.has(key));
@@ -6611,113 +6710,13 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-xs min-w-[1000px]">
-                    <thead className="bg-slate-100 text-slate-700">
-                      <tr>
-                        <th className="p-2 font-bold text-center w-8">
-                          <input
-                            type="checkbox"
-                            checked={isAllMenuReportsChecked}
-                            onChange={(e) => toggleMenuAllReportChecks(e.target.checked)}
-                          />
-                        </th>
-                        <th className="p-2 font-bold text-left">사업장</th>
-                        <th className="p-2 font-bold text-left">배출구(스택)</th>
-                        <th className="p-2 font-bold text-left">측정일자</th>
-                        <th className="p-2 font-bold text-left">저장된 기록부</th>
-                        <th className="p-2 font-bold text-center">건수</th>
-                        <th className="p-2 font-bold text-center w-20">상세</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {profileReportGroups.map((group) => {
-                        const expanded = expandedReportGroups.includes(group.key);
-                        const groupKeys = group.reports.map(getReportKey).filter(Boolean);
-                        const allChecked = groupKeys.length > 0 && groupKeys.every((k) => menuCheckedReportKeySet.has(k));
-                        return (
-                          <Fragment key={group.key}>
-                            <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => toggleReportGroup(group.key)}>
-                              <td className="p-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={allChecked}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => groupKeys.forEach((k) => toggleMenuReportCheck(k, e.target.checked))}
-                                  title="이 사업장 리포트 전체 선택"
-                                />
-                              </td>
-                              <td className="p-2 font-bold text-slate-900 whitespace-nowrap">{group.company || '-'}</td>
-                              <td className="p-2 whitespace-nowrap">{group.location || '-'}</td>
-                              <td className="p-2 whitespace-nowrap">{group.dateLabel}</td>
-                              <td className="p-2">
-                                <div className="flex flex-wrap gap-1">
-                                  {SHEET_MENU.map((sheet) => group.bySheet[sheet.id] && (
-                                    <button
-                                      key={sheet.id}
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(group.bySheet[sheet.id]); }}
-                                      title={`${sheet.title} 최신 저장본 열기`}
-                                      className="hover:opacity-80"
-                                    >
-                                      <SheetBadge sheetId={sheet.id} title={sheet.title} />
-                                    </button>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="p-2 text-center font-bold">{group.reports.length}</td>
-                              <td className="p-2 text-center">
-                                <span className="text-[11px] font-bold text-slate-600">{expanded ? '접기 ▴' : '펼치기 ▾'}</span>
-                              </td>
-                            </tr>
-                            {expanded && group.reports.map((data) => {
-                              const reportKey = getReportKey(data);
-                              return (
-                                <tr
-                                  key={reportKey || data.savedAt}
-                                  className="bg-slate-50/60 hover:bg-slate-100 cursor-pointer"
-                                  onClick={() => handleLoadSavedReport(data)}
-                                  title="클릭하면 불러옵니다"
-                                >
-                                  <td className="p-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={menuCheckedReportKeySet.has(reportKey)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
-                                    />
-                                  </td>
-                                  <td className="p-2 pl-6" colSpan="2">
-                                    <span className="inline-flex items-center gap-2">
-                                      <SheetBadge sheetId={resolveReportSheetId(data)} title={data._sheetTitle} />
-                                      <span className="text-slate-600">저장 {formatSavedDateTime(data.savedAt)}</span>
-                                    </span>
-                                  </td>
-                                  <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
-                                  <td className="p-2 text-slate-600">
-                                    {resolveReportSheetId(data) === 'samplinglog'
-                                      ? '시료채취기록부(종합)'
-                                      : `등속 ${data.isokineticRate || '-'}% · 실측 ${data.actualConcentration || '-'} · 보정 ${data.correctedConcentration || '-'}`}
-                                  </td>
-                                  <td className="p-2 text-center"></td>
-                                  <td className="p-2 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); removeSavedReport(data.id, data.savedAt); }}
-                                      className="px-2 py-1 rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-[11px]"
-                                    >
-                                      삭제
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                  {renderReportGroupTable({
+                    groups: profileReportGroups,
+                    checkedSet: menuCheckedReportKeySet,
+                    toggleCheck: toggleMenuReportCheck,
+                    allChecked: isAllMenuReportsChecked,
+                    toggleAll: toggleMenuAllReportChecks,
+                  })}
                 </div>
               )}
             </div>
@@ -8563,126 +8562,17 @@ export default function App() {
             </>)}
           </div>
 
-          {savedData.length === 0 ? (
-            <div className="p-8 text-center rounded-xl border border-dashed border-slate-300 text-slate-500">
-              {activeUser
-                ? (isUserUnlocked ? '현재 사용자의 저장 리포트가 없습니다.' : '로그인하면 저장 리포트가 표시됩니다.')
-                : '로그인하거나 새 계정을 만들어주세요.'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-xs text-center min-w-[1900px]">
-                <thead className="bg-slate-100 text-slate-700">
-                  <tr>
-                    <th className="p-2 font-bold">
-                      <input
-                        type="checkbox"
-                        checked={isAllSheetReportsChecked}
-                        onChange={(e) => toggleSheetAllReportChecks(e.target.checked)}
-                      />
-                    </th>
-                    <th className="p-2 font-bold">측정일자</th>
-                    <th className="p-2 font-bold">저장시간</th>
-                    <th className="p-2 font-bold">기록부</th>
-                    <th className="p-2 font-bold">사업장</th>
-                    <th className="p-2 font-bold">배출구</th>
-                    <th className="p-2 font-bold">측정자</th>
-                    <th className="p-2 font-bold">노즐(No./mm)</th>
-                    <th className="p-2 font-bold">K-Factor</th>
-                    <th className="p-2 font-bold">채취시간(분)</th>
-                    <th className="p-2 font-bold">채취량 Vm×Yd(L)</th>
-                    <th className="p-2 font-bold">Vm_std(Sm³)</th>
-                    <th className="p-2 font-bold">수분량(%)</th>
-                    <th className="p-2 font-bold">등속흡인율(%)</th>
-                    <th className="p-2 font-bold">먼지무게(mg)</th>
-                    <th className="p-2 font-bold">실측농도</th>
-                    <th className="p-2 font-bold">보정농도</th>
-                    <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
-                    <th className="p-2 font-bold">비고</th>
-                    <th className="p-2 font-bold" colSpan="3">작업</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {savedData.map((data) => {
-                    const reportSheetId = resolveReportSheetId(data);
-                    const reportSheetTitle = SHEET_MENU.find((item) => item.id === reportSheetId)?.title || data.sheetTitle || '-';
-                    return (
-                    <tr key={data.id || data.savedAt} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
-                      <td className="p-2">
-                        <input
-                          type="checkbox"
-                          checked={sheetCheckedReportKeySet.has(buildReportKey(data.id, data.savedAt))}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => toggleSheetReportCheck(buildReportKey(data.id, data.savedAt), e.target.checked)}
-                        />
-                      </td>
-                      <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
-                      <td className="p-2 whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
-                      <td className="p-2">
-                        <SheetBadge sheetId={reportSheetId} title={reportSheetTitle} />
-                      </td>
-                      <td className="p-2 whitespace-nowrap">{data.company || '-'}</td>
-                      <td className="p-2 whitespace-nowrap">{data.location || '-'}</td>
-                      <td className="p-2 whitespace-nowrap">{data.sampler || '-'}</td>
-                      <td className="p-2 font-bold text-slate-800 whitespace-nowrap">No.{data.nozzleUsed || '-'} / {data.nozzleDiameterUsed || '-'}mm</td>
-                      <td className="p-2">{formatKFactorDisplay(data.kFactorApplied)}</td>
-                      <td className="p-2">{data.totalSamplingMinutes || '-'}</td>
-                      <td className="p-2">{data.gasMeterVolume || '-'}</td>
-                      <td className="p-2">{data.vmStd || '-'}</td>
-                      <td className="p-2">{data.moisturePercent || '-'}</td>
-                      <td className="p-2">
-                        <span className={data.isokineticStatus === '적합' ? 'text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-md' : 'text-red-700 font-bold bg-red-100 px-2 py-0.5 rounded-md'}>
-                          {data.isokineticRate || '-'}
-                        </span>
-                      </td>
-                      <td className="p-2">{data.dustWeight || '-'}</td>
-                      <td className="p-2 font-bold text-slate-900">{data.actualConcentration || '-'}</td>
-                      <td className="p-2 font-bold text-slate-900">{data.correctedConcentration || '-'}</td>
-                      <td className="p-2">{data.dryFlowRate || '-'}</td>
-                      <td className="p-2 text-left max-w-[280px]">{data.remarks || '-'}</td>
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopySavedReportToCurrentSheet(data);
-                          }}
-                          className={`px-2 py-1 rounded text-[11px] text-white font-bold whitespace-nowrap ${activeTheme.primaryButton}`}
-                        >
-                          이 기록부로 복사
-                        </button>
-                      </td>
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleLoadSavedReport(data);
-                          }}
-                          className="px-2 py-1 rounded text-[11px] border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 font-bold whitespace-nowrap"
-                        >
-                          불러오기
-                        </button>
-                      </td>
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeSavedReport(data.id, data.savedAt);
-                          }}
-                          className="px-2 py-1 rounded text-[11px] border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold whitespace-nowrap"
-                        >
-                          삭제
-                        </button>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {renderReportGroupTable({
+            groups: groupSheetReportsForLog(savedData, resolveReportSheetId, null),
+            checkedSet: sheetCheckedReportKeySet,
+            toggleCheck: toggleSheetReportCheck,
+            allChecked: isAllSheetReportsChecked,
+            toggleAll: toggleSheetAllReportChecks,
+            allowCopy: true,
+            emptyText: activeUser
+              ? (isUserUnlocked ? '현재 사용자의 저장 리포트가 없습니다.' : '로그인하면 저장 리포트가 표시됩니다.')
+              : '로그인하거나 새 계정을 만들어주세요.',
+          })}
         </div>
 
       </div>
