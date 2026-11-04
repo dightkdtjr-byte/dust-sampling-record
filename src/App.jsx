@@ -2234,7 +2234,7 @@ export default function App() {
   // 설정 창의 "장비 프리셋 초기화": 이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지우고 기본 상태로 되돌림
   const resetAllEquipmentPresets = () => {
     const message = IS_DESKTOP_BUILD
-      ? '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지울까요?\n(지운 뒤에는 빈 상태에서 다시 입력합니다.)'
+      ? '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지울까요?\n(지운 뒤에는 처음부터 다시 입력합니다.)'
       : '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지우고 초기값으로 되돌릴까요?';
     if (!window.confirm(message)) return;
     const presetPrefixes = [
@@ -2492,7 +2492,7 @@ export default function App() {
       setAuthModal('');
     } catch (error) {
       console.error(error);
-      alert('베타 user 로그인 중 오류가 발생했습니다.');
+      alert('user 로그인 중 오류가 발생했습니다.');
     }
   };
 
@@ -2547,7 +2547,7 @@ export default function App() {
       setNewUserHintQuestion('');
       setNewUserHintAnswer('');
       setAuthModal('');
-      alert(`[${trimmed}] 사용자 생성 및 로그인 완료되었습니다.`);
+      alert(`[${trimmed}] 계정을 만들고 로그인했습니다.`);
     } catch (error) {
       console.error(error);
       alert('사용자 생성 중 오류가 발생했습니다.');
@@ -3193,7 +3193,7 @@ export default function App() {
     const file = event?.target?.files?.[0];
     if (!file) return;
     if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 CSV 임포트가 가능합니다.');
+      alert('로그인 후 CSV를 가져올 수 있습니다.');
       event.target.value = '';
       return;
     }
@@ -3203,7 +3203,7 @@ export default function App() {
       const normalized = rawText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const lines = normalized.split('\n').filter((line) => line.trim() !== '');
       if (lines.length < 2) {
-        alert('CSV 데이터가 비어있거나 형식이 올바르지 않습니다.');
+        alert('CSV 내용이 비어 있거나 형식이 올바르지 않습니다.');
         event.target.value = '';
         return;
       }
@@ -3245,7 +3245,7 @@ export default function App() {
       }).filter((item) => item.date || item.company || item.location);
 
       if (importedReports.length === 0) {
-        alert('임포트할 유효 리포트가 없습니다. CSV 헤더를 확인해주세요.');
+        alert('가져올 수 있는 리포트가 없습니다. CSV 머리글을 확인해주세요.');
         event.target.value = '';
         return;
       }
@@ -3253,10 +3253,10 @@ export default function App() {
       const nextReports = [...activeUserReports, ...importedReports];
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`${importedReports.length}건 CSV 리포트를 임포트했습니다.`);
+      alert(`CSV에서 리포트 ${importedReports.length}건을 가져왔습니다.`);
     } catch (error) {
       console.error(error);
-      alert('CSV 임포트 중 오류가 발생했습니다.');
+      alert('CSV를 가져오는 중 오류가 발생했습니다.');
     } finally {
       event.target.value = '';
     }
@@ -4161,9 +4161,9 @@ export default function App() {
     const configuredNozzles = getConfiguredNozzles();
     const traverseTm = getTraverseMeterTempAvg();
 
-    if (isNaN(Y) || Y <= 0 || isNaN(dHAt) || dHAt <= 0) { alert('장비 교정 성적서에 명시된 [보정계수(Yd)]와 [오리피스 계수(ΔH@)]를 먼저 정확히 입력해주세요.'); return; }
-    if (!Number.isFinite(traverseTm)) { alert('K-Factor 정확 계산을 위해 [미터온도(Tm) 입구/출구]를 입력해주세요.'); return; }
-    if (Vs === 0 || isNaN(Vs) || isNaN(Ts) || isNaN(Ps) || isNaN(dpAvg) || dpAvg === 0) { alert('오류: 4번 항목의 유속(동압 및 온도) 기초 데이터가 먼저 입력되어야 산정이 가능합니다.'); return; }
+    if (isNaN(Y) || Y <= 0 || isNaN(dHAt) || dHAt <= 0) { alert('교정 성적서의 보정계수(Yd)와 오리피스 계수(ΔH@)를 먼저 입력해주세요.'); return; }
+    if (!Number.isFinite(traverseTm)) { alert('K-Factor 계산에는 미터온도(Tm) 입구/출구 값이 필요합니다.'); return; }
+    if (Vs === 0 || isNaN(Vs) || isNaN(Ts) || isNaN(Ps) || isNaN(dpAvg) || dpAvg === 0) { alert('4번 섹션의 동압과 온도를 먼저 입력해야 산정할 수 있습니다.'); return; }
     if (configuredNozzles.length === 0) { alert('노즐 목록이 비어 있습니다. 노즐 설정에서 최소 1개 이상 입력해주세요.'); return; }
 
     const fast = generateRecommendation('fast');
@@ -4486,7 +4486,7 @@ export default function App() {
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`[${displayUserNameWithFallback}] 데이터로 임시 저장되었습니다.`);
+      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.`);
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
@@ -5591,7 +5591,7 @@ export default function App() {
     let converged = false;
     for (let i = 0; i < 6; i += 1) {
       velocity = cp * kFactor;
-      steps.push({ cp, velocity, note: i === 0 ? '유속 구간 Cp 선정' : '재계산' });
+      steps.push({ cp, velocity, note: i === 0 ? '표에서 선정한' : '재계산' });
       const nextCp = resolvePitotCpByVelocity(activePitotPreset, velocity);
       if (!Number.isFinite(nextCp) || Math.abs(nextCp - cp) < 0.00005) { converged = true; break; }
       cp = nextCp;
@@ -5801,7 +5801,7 @@ export default function App() {
   };
   const navigateToSheet = (sheetId) => {
     if (!activeUser || !isUserUnlocked) {
-      alert('초기 화면에서 user 로그인 후 이용해주세요.');
+      alert('첫 화면에서 로그인한 뒤 이용해주세요.');
       return;
     }
     if (selectedSheet === sheetId) return;
@@ -5918,8 +5918,8 @@ export default function App() {
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
-                <p className="text-sm font-black text-emerald-900">베타 접속</p>
-                <p className="text-xs text-emerald-800 mt-1">회원가입 없이 `user` 고정 계정으로 바로 사용합니다.</p>
+                <p className="text-sm font-black text-emerald-900">바로 시작</p>
+                <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
@@ -6090,7 +6090,7 @@ export default function App() {
                         </button>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">장비 프리셋</p>
-                          <p className="text-[11px] text-slate-600 mt-1">이 PC에 저장된 노즐 / 샘플러 / 피토관 프리셋을 모두 지웁니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">이 PC에 저장된 노즐·샘플러·피토관 프리셋을 모두 지웁니다.</p>
                           <button
                             type="button"
                             onClick={resetAllEquipmentPresets}
@@ -6166,7 +6166,7 @@ export default function App() {
                                 disabled={cloudSyncBusy}
                                 className="px-2 py-2 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] disabled:opacity-60"
                               >
-                                {cloudSyncBusy ? '진행중' : '클라우드 업로드'}
+                                {cloudSyncBusy ? '진행 중' : '클라우드 업로드'}
                               </button>
                               <button
                                 type="button"
@@ -6174,7 +6174,7 @@ export default function App() {
                                 disabled={cloudSyncBusy}
                                 className="px-2 py-2 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 font-bold text-[11px] disabled:opacity-60"
                               >
-                                {cloudSyncBusy ? '진행중' : '클라우드 복원'}
+                                {cloudSyncBusy ? '진행 중' : '클라우드 복원'}
                               </button>
                             </div>
                           </div>
@@ -6212,7 +6212,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트 모아보기</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -6279,7 +6279,7 @@ export default function App() {
                         </th>
                         <th className="p-2 font-bold text-center">구분</th>
                         <th className="p-2 font-bold text-center">측정일자</th>
-                        <th className="p-2 font-bold text-center">저장시간</th>
+                        <th className="p-2 font-bold text-center">저장 시각</th>
                         <th className="p-2 font-bold text-center">사업장</th>
                         <th className="p-2 font-bold text-center">배출구</th>
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
@@ -6296,7 +6296,7 @@ export default function App() {
                           key={reportKey || data.savedAt}
                           className="hover:bg-slate-50 cursor-pointer"
                           onClick={() => handleLoadSavedReport(data)}
-                          title="클릭하면 불러오기"
+                          title="클릭하면 불러옵니다"
                         >
                           <td className="p-2 text-center">
                             <input
@@ -6423,7 +6423,7 @@ export default function App() {
               </label>
               <details className="md:col-span-4 border border-slate-200 rounded-lg p-2 bg-slate-50/60">
                 <summary className="cursor-pointer text-[11px] font-bold text-slate-700">
-                  샘플러 프리셋 직접 편집 (입자: 기록부 5번 섹션 · 가스: 아래 표 / 번호·S/N·Yd)
+                  가스 샘플러 프리셋 편집 (번호 · S/N · Yd)
                 </summary>
                 <div className="mt-2 flex items-center gap-2">
                   <button type="button" onClick={saveGasSamplerPresets} className="px-2 py-1 text-[11px] font-bold bg-orange-600 text-white rounded border border-orange-700 inline-flex items-center gap-1">
@@ -6432,7 +6432,7 @@ export default function App() {
                   </button>
                   <button type="button" onClick={addGasSamplerPreset} className="px-2 py-1 text-[11px] font-bold bg-white text-slate-700 rounded border border-slate-300">행 추가</button>
                   <button type="button" onClick={resetGasSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
-                  <span className="text-[10px] text-slate-500">양식의 S6:T10(가스 샘플러 5대)에 순서대로 들어갑니다</span>
+                  <span className="text-[10px] text-slate-500">양식의 가스 샘플러 칸(최대 5대)에 순서대로 들어갑니다</span>
                 </div>
                 <div className="mt-2 overflow-x-auto border border-slate-200 rounded-lg bg-white">
                   <table className="w-full text-[11px] text-center">
@@ -6653,7 +6653,7 @@ export default function App() {
       }
     }
     if (!source.company && !source.location && !source.date) {
-      alert('가져올 기록부 정보가 없습니다. 메인 창에서 기록부(먼지·수은 등)를 열고 사업장명/배출구/측정일자를 입력해주세요.');
+      alert('가져올 기록부 정보가 없습니다. 다른 창에서 기록부를 열고 사업장명·배출구·측정일자를 먼저 입력해주세요.');
       return;
     }
     setSamplingLogData(prev => ({
@@ -6706,7 +6706,7 @@ export default function App() {
               {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
             </p>
             <div className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 flex flex-wrap justify-center gap-2">
-              <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-2 text-xs font-bold rounded-lg border border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100" title="메인 창에서 열어 둔 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
+              <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-2 text-xs font-bold rounded-lg border border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100" title="다른 창에서 열어 둔 기록부의 사업장명·배출구·측정일자를 비어 있는 칸에 채웁니다">
                 현재 기록부 정보 가져오기
               </button>
               <button type="button" onClick={navigateToMenu} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
@@ -6741,7 +6741,7 @@ export default function App() {
             </h1>
             <p className="text-slate-600 mt-2 text-sm font-medium">
               <span className="font-black text-slate-800">{activeSheet?.title || '먼지시료채취기록부'}</span>
-              {' '}| 대기오염공정시험기준에 맞춘 전 항목 종합 연산 및 자동 기록 시트
+              {' '}| 대기오염공정시험기준에 따라 전 항목을 자동 계산하는 기록부
             </p>
           </div>
           <button
@@ -6757,7 +6757,7 @@ export default function App() {
           <p className="text-xs text-slate-600">
             사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
             {' '}| 상태: <span className={`font-black ${isUserUnlocked ? activeTheme.accentText : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
-            {' '}| 계정 설정은 초기 화면에서 가능합니다.
+            {' '}| 계정 설정은 첫 화면에서 할 수 있습니다.
           </p>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="text-[11px] font-bold text-slate-500">장비 프리셋 (노즐/샘플러/피토관)</span>
@@ -6767,7 +6767,7 @@ export default function App() {
               className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg border border-emerald-700 hover:bg-emerald-700 inline-flex items-center gap-1"
             >
               <PresetSaveIcon />
-              프리셋 저장하기
+              프리셋 저장
             </button>
           </div>
         </div>
@@ -6846,7 +6846,7 @@ export default function App() {
                       <thead>
                         <tr className="bg-slate-50 text-slate-700">
                           <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치, cm)</th>
-                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
+                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정점 (1~5)</th>
                         </tr>
                         <tr className="bg-slate-50 text-slate-700">
                           {samplingPointsData.nearInsertion.map((_, i) => (
@@ -6868,7 +6868,7 @@ export default function App() {
                         {!samplingPointsData.isCenterOnly && (
                           <tr>
                             <td className="border-r border-slate-200 p-2 font-bold text-red-700 whitespace-nowrap bg-red-50">
-                              깊은 쪽 (역방향)<br/><span className="text-[9px] font-normal text-red-500">반대편 측정공 대체시</span>
+                              깊은 쪽 (역방향)<br/><span className="text-[9px] font-normal text-red-500">반대편 측정공 대신 쓸 때</span>
                             </td>
                             {samplingPointsData.farInsertion.map((d, i) => (
                               <td key={i} className="border-l border-slate-200 p-2 font-black text-red-600 bg-red-50/50">
@@ -6995,7 +6995,7 @@ export default function App() {
                        <span className="text-sm font-black text-teal-600">{r0.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-200/50">
-                       <span className="text-[11px] font-bold text-slate-600" title="온도 및 압력 보정된 실제 밀도">배출가스밀도 (r)</span>
+                       <span className="text-[11px] font-bold text-slate-600" title="온도·압력 보정 밀도">배출가스밀도 (r)</span>
                        <span className="text-sm font-black text-teal-600">{isNaN(r) ? '-' : r.toFixed(2)}</span>
                     </div>
                  </div>
@@ -7029,7 +7029,7 @@ export default function App() {
                 
                 <div className="bg-cyan-50 p-4 rounded-lg flex justify-between items-center border border-cyan-100 mt-4 shadow-sm">
                   <div className="text-slate-800">
-                    <span className="font-bold">사전 적용 수분량 (평균)</span>
+                    <span className="font-bold">사전 수분량 (평균)</span>
                   </div>
                   <div className="text-2xl font-black text-cyan-700">{calcMoisture()}%</div>
                 </div>
@@ -7099,13 +7099,13 @@ export default function App() {
                       value={formData.pitotFactor}
                       onChange={handleChange}
                       readOnly={isPitotCpAutoApplied}
-                      title={isPitotCpAutoApplied ? '유속별 Cp 표에서 자동 적용 중 (직접 입력하려면 프리셋 선택을 해제)' : undefined}
+                      title={isPitotCpAutoApplied ? '유속별 Cp 표에서 자동으로 정합니다. 직접 입력하려면 피토 프리셋을 해제하세요.' : undefined}
                       className={`w-20 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isPitotCpAutoApplied ? 'bg-emerald-100 font-black text-emerald-900' : ''}`}
                     />
                     {isPitotCpAutoApplied && (
                       <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
                         {Number.isFinite(appliedPitotVelocity) && appliedPitotVelocity > 0
-                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(2)} m/s 기준 자동 선정`
+                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(2)} m/s 기준으로 자동 선정`
                           : '동압 입력 시 자동 선정'}
                       </span>
                     )}
@@ -7153,14 +7153,14 @@ export default function App() {
                           <span key={idx}>
                             {idx > 0 && <span className="text-slate-400"> → </span>}
                             {idx === 0
-                              ? <>기준 C<sub>p</sub> {PITOT_BASE_CP} 가계산 유속 {fmtV(step.velocity)}</>
-                              : <>{step.note} C<sub>p</sub> <b className="text-slate-900">{formatPitotCp(step.cp)}</b> → {fmtV(step.velocity)}</>}
+                              ? <>기준계수 {PITOT_BASE_CP} → 유속 {fmtV(step.velocity)}</>
+                              : <>{step.note} C<sub>p</sub> <b className="text-slate-900">{formatPitotCp(step.cp)}</b> → 유속 {fmtV(step.velocity)}</>}
                           </span>
                         ))}
-                        <span className="font-black text-emerald-800"> · {sel.converged ? '수렴' : '반복 한도'} C<sub>p</sub> {formatPitotCp(sel.finalCp)} 적용</span>
+                        <span className="font-black text-emerald-800"> · {sel.converged ? '수렴' : '반복 한도 도달'}, C<sub>p</sub> {formatPitotCp(sel.finalCp)} 적용</span>
                       </div>
                     ) : (
-                      <div className="text-slate-600">동압·온도·대기압·가스 조성이 입력되면 기준 C<sub>p</sub> {PITOT_BASE_CP}로 유속을 가계산한 뒤 유속 구간에 맞는 C<sub>p</sub>를 선정합니다. 현재 공칭값 {formData.pitotFactor} 적용.</div>
+                      <div className="text-slate-600">동압·온도·대기압·가스 조성을 입력하면 기준계수 {PITOT_BASE_CP}로 유속을 먼저 구하고, 그 유속 구간의 C<sub>p</sub>를 고릅니다. 지금은 공칭값 {formData.pitotFactor}을 씁니다.</div>
                     )}
                     {sel?.ready && !sel.inRange && (
                       <div className="font-bold text-amber-800">
@@ -7358,7 +7358,7 @@ export default function App() {
             <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg mb-6 shadow-sm">
                <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-4 gap-2">
                  <h3 className="font-bold text-emerald-800">
-                    1단계: 채취조건 정밀 산출 (기기 고유 계수 연동)
+                    1단계: 채취 조건 산출 (장비 계수 반영)
                  </h3>
                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
@@ -7494,13 +7494,13 @@ export default function App() {
                  </div>
                )}
                
-               <p className="text-[11px] text-emerald-700 mb-4 font-bold">※ K-Factor 및 예상 오리피스압(ΔH) 산출 후, 해당 노즐의 유량(Q<sub>sl</sub>)을 바탕으로 <span className="text-emerald-900">목표 채취량({formData.targetVolume || 1000}SL)에 도달하기 위한 필요 채취시간</span>을 자동 역산합니다.</p>
+               <p className="text-[11px] text-emerald-700 mb-4 font-bold">K-Factor와 예상 오리피스압(ΔH)을 구한 뒤, 노즐 유량으로 <span className="text-emerald-900">목표 채취량({formData.targetVolume || 1000} SL)에 필요한 채취시간</span>을 계산합니다.</p>
 
                {/* 접기/펴기 엑셀 전체 리스트 */}
                <details className="mt-4 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                   <summary className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center justify-between gap-2">
                      <span>전체 노즐 예측표 열어보기</span>
-                     <span className="text-[10px] text-slate-500">표 안에서 번호/직경 직접 기입 가능</span>
+                     <span className="text-[10px] text-slate-500">표에서 노즐 번호나 직경을 직접 입력할 수 있습니다</span>
                   </summary>
                   <div className="mt-2 flex items-center gap-2">
                     <button type="button" onClick={saveNozzlePresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
@@ -7604,7 +7604,7 @@ export default function App() {
                           {nozzleSet.length === 0 && (
                             <tr>
                               <td className="border border-emerald-200 p-2 text-slate-500" colSpan={9}>
-                                노즐 행이 없습니다. "행 추가" 버튼으로 입력을 시작하세요.
+                                노즐이 없습니다. "행 추가"로 입력하세요.
                               </td>
                             </tr>
                           )}
@@ -7618,7 +7618,7 @@ export default function App() {
                   {formData.recommendedNozzleNum && (
                     <div className="mb-4 p-3 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className="font-black text-teal-900">시스템 추천 적정 노즐:</span>
+                        <span className="font-black text-teal-900">추천 노즐:</span>
                         <span className="text-lg font-black text-emerald-900 bg-emerald-200 px-3 py-1 border border-emerald-300 rounded-lg">
                           No.{formData.recommendedNozzleNum} ({formData.recommendedNozzleDia} mm)
                         </span>
@@ -7626,7 +7626,7 @@ export default function App() {
                     </div>
                   )}
                   
-                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 및 채취량 예측 정보</h4>
+                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 및 예상 채취량</h4>
                   <div className="flex flex-wrap justify-center gap-2 text-center">
                       <div className="bg-slate-50 py-2 px-1 rounded-lg border border-slate-200 flex-1 min-w-[90px]">
                           <div className="text-[10px] text-slate-500 font-bold">가스유속(V<sub>s</sub>)</div>
@@ -7697,7 +7697,7 @@ export default function App() {
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-800">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)'}</h3>
+                <h3 className="text-sm font-bold text-slate-800">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                       {isFlowSheet ? '총 측정시간' : '총 채취시간'}
@@ -7709,7 +7709,7 @@ export default function App() {
                         onChange={(e) => setTableTotalMinutes(e.target.value)}
                         placeholder={String(parseFloat(formData.planSamplingTime) > 0 ? formData.planSamplingTime : DEFAULT_MEASURE_TOTAL_MINUTES)}
                         className="w-16 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                        title="비워 두면 1단계 예상 채취시간(없으면 60분)을 사용합니다"
+                        title="비워 두면 1단계의 예상 채취시간을 쓰고, 없으면 60분으로 봅니다"
                       />
                       분
                     </label>
@@ -7723,21 +7723,21 @@ export default function App() {
                         onChange={(e) => setTableIntervalMinutes(e.target.value)}
                         placeholder="자동"
                         className="w-14 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                        title="비워 두면 총 시간에 가장 잘 맞는 간격을 자동으로 고릅니다"
+                        title="비워 두면 총 시간에 맞는 간격을 자동으로 고릅니다"
                       />
                       분
                     </label>
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
-                      측정점/채취시간 표 자동 생성
+                      측정점·채취시간 표 자동 생성
                     </button>
                     {(() => {
                       const plan = getTableGenerationPlan();
-                      if (!plan) return <span className="w-full text-right text-[11px] text-amber-700 font-bold">1번 섹션의 굴뚝 내경이 있어야 측정점 수가 정해집니다</span>;
+                      if (!plan) return <span className="w-full text-right text-[11px] text-amber-700 font-bold">1번 섹션에서 굴뚝 내경을 입력하면 측정점 수가 정해집니다</span>;
                       const changed = plan.adjustedTotal !== plan.requestedTotal;
                       return (
                         <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
                           {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분{plan.intervalAuto ? '(자동)' : ''} = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분, 최소 {plan.minRowsPerPoint}행)
-                          {changed ? ` · ${plan.requestedTotal}분은 지점당 최소 ${plan.minRowsPerPoint}행으로 똑같이 나눌 수 없어 ${plan.adjustedTotal}분으로 맞춤` : ''}
+                          {changed ? ` · ${plan.requestedTotal}분은 지점당 최소 ${plan.minRowsPerPoint}행으로 나누어떨어지지 않아 ${plan.adjustedTotal}분으로 조정` : ''}
                         </span>
                       );
                     })()}
@@ -7930,8 +7930,8 @@ export default function App() {
             <div className="bg-white p-5 rounded-2xl flex flex-col justify-between shadow-lg border-2 border-slate-300">
               <div className="mb-4">
                 <div>
-                  <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
-                  <p className="text-xs text-slate-600 mt-1">대기오염공정시험기준 유효범위 : 90% ~ 110% (수식 0.00346 적용됨)</p>
+                  <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율</h3>
+                  <p className="text-xs text-slate-600 mt-1">유효 범위 90~110% (대기오염공정시험기준)</p>
                 </div>
               </div>
               
@@ -7951,8 +7951,8 @@ export default function App() {
                 {calcIsokineticRate(true) !== '-' && (
                   <div>
                     {(parseFloat(calcIsokineticRate(true)) >= 90 && parseFloat(calcIsokineticRate(true)) <= 110) ? 
-                      <span className="flex items-center text-white text-sm font-bold bg-green-700 px-4 py-2 rounded-full shadow-sm">적합 (최종 유효 데이터)</span> : 
-                      <span className="flex items-center text-white text-sm font-bold bg-red-600 px-4 py-2 rounded-full shadow-sm">부적합 (재측정 요망)</span>
+                      <span className="flex items-center text-white text-sm font-bold bg-green-700 px-4 py-2 rounded-full shadow-sm">적합</span> : 
+                      <span className="flex items-center text-white text-sm font-bold bg-red-600 px-4 py-2 rounded-full shadow-sm">부적합 (재측정 필요)</span>
                     }
                   </div>
                 )}
@@ -7966,7 +7966,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
               <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">{isFlowSheet ? 5 : 6}</span>
-              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
+              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
             {isDustSheet && (
@@ -7989,7 +7989,7 @@ export default function App() {
             {/* 최종 농도 산출 결과 패널 */}
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md text-white mb-6 relative overflow-hidden">
                <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-600 pb-3">
-                 최종 산출 결과 요약
+                 최종 결과 요약
                </h3>
                <div className={`grid grid-cols-1 ${isDustSheet ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
                   <div className="flex flex-col items-center justify-center p-2">
@@ -8030,10 +8030,10 @@ export default function App() {
 
           <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-              새 기록지 작성
+              새로 작성
             </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
-              기록부 데이터 저장
+              기록부 저장
             </button>
           </div>
         </form>
@@ -8055,7 +8055,7 @@ export default function App() {
                 onClick={handleCopyCheckedReportsToCurrentSheet}
                 className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
               >
-                선택 항목 현재 시트로 복사
+                선택 항목을 이 기록부로 복사
               </button>
               {!IS_DESKTOP_BUILD && (
                 <button
@@ -8093,7 +8093,7 @@ export default function App() {
             <div className="p-8 text-center rounded-xl border border-dashed border-slate-600 text-slate-300">
               {activeUser
                 ? (isUserUnlocked ? '현재 사용자의 저장 리포트가 없습니다.' : '로그인하면 저장 리포트가 표시됩니다.')
-                : '로그인하거나 새로 계정을 생성해주세요.'}
+                : '로그인하거나 새 계정을 만들어주세요.'}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-700">
@@ -8108,7 +8108,7 @@ export default function App() {
                       />
                     </th>
                     <th className="p-2 font-bold">측정일자</th>
-                    <th className="p-2 font-bold">저장시간</th>
+                    <th className="p-2 font-bold">저장 시각</th>
                     <th className="p-2 font-bold">시트</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
@@ -8125,7 +8125,7 @@ export default function App() {
                     <th className="p-2 font-bold">보정농도</th>
                     <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
                     <th className="p-2 font-bold">비고</th>
-                    <th className="p-2 font-bold">현재 시트로 복사</th>
+                    <th className="p-2 font-bold">이 기록부로 복사</th>
                     <th className="p-2 font-bold">불러오기</th>
                     <th className="p-2 font-bold">삭제</th>
                   </tr>
@@ -8179,7 +8179,7 @@ export default function App() {
                           }}
                           className={`px-2 py-1 rounded text-white font-bold ${activeTheme.primaryButtonSoft}`}
                         >
-                          현재 시트로 복사
+                          이 기록부로 복사
                         </button>
                       </td>
                       <td className="p-2">

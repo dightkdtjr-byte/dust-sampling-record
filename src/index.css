@@ -183,3 +183,7 @@ button.w-full[class*="border-dashed"]:hover, button.w-full[class*="bg-emerald-50
 .bg-slate-800 [class*="text-red-"], .bg-slate-900 [class*="text-red-"] { color: #fca5a5; }
 .bg-slate-800 [class*="text-emerald-"], .bg-slate-800 [class*="text-cyan-"], .bg-slate-800 [class*="text-amber-"], .bg-slate-800 [class*="text-teal-"],
 .bg-slate-900 [class*="text-slate-200"], .bg-slate-800 [class*="text-slate-200"], .bg-slate-800 [class*="text-white"], .bg-slate-900 [class*="text-white"] { color: revert-layer; }
+
+/* 한글 단어가 줄 끝에서 글자 단위로 잘리지 않게 (단어 단위 줄바꿈) */
+body, input, select, textarea, button { word-break: keep-all; overflow-wrap: anywhere; }
+th, td { word-break: keep-all; }
