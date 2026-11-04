@@ -187,3 +187,10 @@ button.w-full[class*="border-dashed"]:hover, button.w-full[class*="bg-emerald-50
 /* 한글 단어가 줄 끝에서 글자 단위로 잘리지 않게 (단어 단위 줄바꿈) */
 body, input, select, textarea, button { word-break: keep-all; overflow-wrap: anywhere; }
 th, td { word-break: keep-all; }
+
+/* 누를 수 있는 요소는 손가락 커서 */
+button:not(:disabled), a[href], select:not(:disabled), summary, label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), input[type="file"], [role="button"], .cursor-pointer, tr[onclick] { cursor: pointer; }
+button:disabled, select:disabled { cursor: not-allowed; }
+/* 저장 리포트 표: 머리글 줄바꿈 없이, 숫자 가운데 */
+.min-w-\[1900px\] th { white-space: nowrap; }

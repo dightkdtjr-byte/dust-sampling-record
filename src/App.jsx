@@ -45,13 +45,29 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
 
 // 엑셀 양식(A00)별 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
 const EXPORT_TEMPLATE_LAYOUTS = {
-  dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지' },
-  metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속' },
-  mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은' },
-  pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs' },
-  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량' },
+  dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지', leak: { firstRow: 14, hasMeter: true } },
+  metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속', leak: { firstRow: 14, hasMeter: true } },
+  mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은', leak: { firstRow: 14, hasMeter: true } },
+  pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true } },
+  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: { firstRow: 13, hasMeter: false, noteCol: 'D' } },
+};
+// 누출시험 기록 (양식 '누출시험' 시트): 구분별 유량계 멈춤 여부(O/X)와 가스미터 전·후 지시값
+const LEAK_TEST_PARTS = [
+  { key: 'device', label: '시료채취장치' },
+  { key: 'impinger', label: '임핀저 트레인' },
+  { key: 'samplingPart', label: '시료채취부' },
+];
+const createEmptyLeakTest = () => ({ device: 'O', impinger: 'O', samplingPart: 'O', meterBefore: '', meterAfter: '', note: '' });
+const sanitizeLeakTest = (value) => {
+  const base = createEmptyLeakTest();
+  if (!value || typeof value !== 'object') return base;
+  const ox = (v) => (String(v || '').trim().toUpperCase() === 'X' ? 'X' : 'O');
+  const text = (v) => (v === undefined || v === null ? '' : String(v));
+  return { device: ox(value.device), impinger: ox(value.impinger), samplingPart: ox(value.samplingPart), meterBefore: text(value.meterBefore), meterAfter: text(value.meterAfter), note: text(value.note) };
+
 };
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
+const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
 
 const SHEET_MENU = [
   {
@@ -1580,6 +1596,7 @@ export default function App() {
       { id: 5, tp: '', sp: '', dp: '', ts: '' },
     ],
     samplerId: '', targetVolume: '1000', planSamplingTime: '65', samplingStartTime: '',
+    leakTest: createEmptyLeakTest(),
     gasMeterFactor: IS_DESKTOP_BUILD ? '' : '0.991', deltaHAt: IS_DESKTOP_BUILD ? '' : '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
     nozzleDiameter: '', kFactor: '',
@@ -5137,6 +5154,17 @@ export default function App() {
       addUpdate('표지', 'D19', sourceData.company);
       addUpdate('표지', 'D20', sourceData.location);
       addUpdate('표지', 'D21', toExcelDateSerial(sourceData.date));
+      // 누출시험 시트: 구분별 O/X, 가스미터 전·후(또는 비고)
+      if (layout.leak) {
+        const leak = sanitizeLeakTest(sourceData.leakTest);
+        LEAK_TEST_PARTS.forEach((part, idx) => addUpdate('누출시험', `C${layout.leak.firstRow + idx}`, leak[part.key]));
+        if (layout.leak.hasMeter) {
+          addUpdate('누출시험', `D${layout.leak.firstRow}`, toNumber(leak.meterBefore));
+          addUpdate('누출시험', `E${layout.leak.firstRow}`, toNumber(leak.meterAfter));
+        } else if (layout.leak.noteCol && leak.note) {
+          addUpdate('누출시험', `${layout.leak.noteCol}${layout.leak.firstRow}`, leak.note);
+        }
+      }
 
       // 연소가스자료 (가스분석기 3회)
       for (let i = 0; i < 3; i++) {
@@ -5588,6 +5616,7 @@ export default function App() {
 
   if (import.meta.env.VITE_E2E === '1' && typeof window !== 'undefined') {
     window.__stackpilotExportForTest = exportToTemplateExcel;
+    window.__stackpilotBuildReportForTest = () => buildReportSnapshot(selectedSheet || 'dust');
     window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
     window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));
   }
@@ -7004,6 +7033,44 @@ export default function App() {
                 
               </div>
             )}
+
+            {/* 누출시험 (양식 '누출시험' 시트) */}
+            {(() => {
+              const leak = sanitizeLeakTest(formData.leakTest);
+              const setLeak = (key, value) => setFormData(prev => ({ ...prev, leakTest: { ...sanitizeLeakTest(prev.leakTest), [key]: value } }));
+              const diff = parseFloat(leak.meterAfter) - parseFloat(leak.meterBefore);
+              return (
+                <div className="mt-4 border border-slate-200 rounded-lg p-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <span className="text-sm font-bold text-slate-800 shrink-0">누출시험</span>
+                    <span className="text-[11px] text-slate-500">진공 380 mmHg에서 5초간 유량계가 멈추면 O</span>
+                    {LEAK_TEST_PARTS.map((part) => (
+                      <label key={part.key} className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                        {part.label}
+                        <select value={leak[part.key]} onChange={(e) => setLeak(part.key, e.target.value)} className={`p-1 border rounded text-xs font-bold outline-none ${leak[part.key] === 'O' ? 'border-slate-300 text-emerald-700' : 'border-red-300 text-red-600'}`}>
+                          <option value="O">O</option>
+                          <option value="X">X</option>
+                        </select>
+                      </label>
+                    ))}
+                    {!isFlowSheet ? (
+                      <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                        가스미터(L) 전
+                        <input type="number" step="0.1" value={leak.meterBefore} onChange={(e) => setLeak('meterBefore', e.target.value)} className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none" />
+                        후
+                        <input type="number" step="0.1" value={leak.meterAfter} onChange={(e) => setLeak('meterAfter', e.target.value)} className="w-24 p-1 border border-slate-300 rounded text-center text-xs outline-none" />
+                        <span className="text-slate-500 font-normal">차 {Number.isFinite(diff) ? diff.toFixed(2) : '-'}</span>
+                      </label>
+                    ) : (
+                      <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 flex-1 min-w-[200px]">
+                        비고
+                        <input type="text" value={leak.note} onChange={(e) => setLeak('note', e.target.value)} className="flex-1 p-1 border border-slate-300 rounded text-xs outline-none" />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* 섹션 2: 배출가스 조성 및 분자량 (가스분석기 자료) */}
@@ -8157,29 +8224,29 @@ export default function App() {
           </div>
         </form>
 
-        <div className="bg-slate-800 p-6 rounded-2xl shadow-lg mt-8 text-white border border-slate-700">
-          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-slate-700 pb-4">
-            <h2 className={`text-xl font-bold ${activeTheme.accentText}`}>
+        <div className="bg-white p-6 rounded-2xl shadow-sm mt-8 text-slate-800 border border-slate-200">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-slate-200 pb-4">
+            <h2 className="text-lg font-bold text-slate-900">
               저장된 종합 리포트 ({displayUserNameWithFallback})
             </h2>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-300 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
+              <span className="text-[11px] text-slate-500 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
               <button
                 onClick={handleDeleteCheckedSheetReports}
-                className="px-5 py-2.5 border border-red-400 text-red-200 hover:bg-red-600/20 font-bold rounded-xl transition-colors shadow-md text-sm"
+                className="px-3 py-1.5 border border-red-300 text-red-600 bg-white hover:bg-red-50 font-bold rounded-lg text-xs"
               >
                 선택 삭제
               </button>
               <button
                 onClick={handleCopyCheckedReportsToCurrentSheet}
-                className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
+                className={`px-3 py-1.5 text-white font-bold rounded-lg text-xs ${activeTheme.primaryButton}`}
               >
                 선택 항목을 이 기록부로 복사
               </button>
               {!IS_DESKTOP_BUILD && (
                 <button
                   onClick={handleExportSelectedTemplateExcel}
-                  className={`px-5 py-2.5 text-white font-bold rounded-xl transition-colors shadow-md text-sm ${activeTheme.primaryButtonSoft}`}
+                  className={`px-3 py-1.5 text-white font-bold rounded-lg text-xs ${activeTheme.primaryButton}`}
                 >
                   선택 항목 엑셀로 추출
                 </button>
@@ -8188,36 +8255,36 @@ export default function App() {
           </div>
 
           <div className={`grid grid-cols-1 ${isFlowSheet ? 'md:grid-cols-1' : 'md:grid-cols-4'} gap-3 mb-4`}>
-            <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-3 text-center">
-              <p className="text-[11px] text-slate-300 font-bold">저장 건수</p>
-              <p className="text-2xl font-black text-white">{savedData.length}</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-bold">저장 건수</p>
+              <p className="text-2xl font-black text-slate-900">{savedData.length}</p>
             </div>
             {!isFlowSheet && (<>
-            <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-3 text-center">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
               <p className={`text-[11px] font-bold ${activeTheme.accentText}`}>등속 적합</p>
               <p className={`text-2xl font-black ${activeTheme.accentText}`}>{savedFitCount}</p>
             </div>
-            <div className="bg-red-700/30 border border-red-500/40 rounded-lg p-3 text-center">
-              <p className="text-[11px] text-red-200 font-bold">등속 부적합</p>
-              <p className="text-2xl font-black text-red-200">{savedFailCount}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+              <p className="text-[11px] text-red-600 font-bold">등속 부적합</p>
+              <p className="text-2xl font-black text-red-600">{savedFailCount}</p>
             </div>
-            <div className="bg-slate-700/80 border border-slate-500 rounded-lg p-3 text-center">
-              <p className="text-[11px] text-slate-200 font-bold">평균 실측농도</p>
-              <p className="text-2xl font-black text-white">{savedAvgActualC}</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-bold">평균 실측농도</p>
+              <p className="text-2xl font-black text-slate-900">{savedAvgActualC}</p>
             </div>
             </>)}
           </div>
 
           {savedData.length === 0 ? (
-            <div className="p-8 text-center rounded-xl border border-dashed border-slate-600 text-slate-300">
+            <div className="p-8 text-center rounded-xl border border-dashed border-slate-300 text-slate-500">
               {activeUser
                 ? (isUserUnlocked ? '현재 사용자의 저장 리포트가 없습니다.' : '로그인하면 저장 리포트가 표시됩니다.')
                 : '로그인하거나 새 계정을 만들어주세요.'}
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-700">
-              <table className="w-full text-xs text-center min-w-[2160px]">
-                <thead className="bg-slate-700 text-slate-200">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-xs text-center min-w-[1900px]">
+                <thead className="bg-slate-100 text-slate-700">
                   <tr>
                     <th className="p-2 font-bold">
                       <input
@@ -8228,7 +8295,7 @@ export default function App() {
                     </th>
                     <th className="p-2 font-bold">측정일자</th>
                     <th className="p-2 font-bold">저장시간</th>
-                    <th className="p-2 font-bold">시트</th>
+                    <th className="p-2 font-bold">기록부</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
                     <th className="p-2 font-bold">측정자</th>
@@ -8244,17 +8311,15 @@ export default function App() {
                     <th className="p-2 font-bold">보정농도</th>
                     <th className="p-2 font-bold">건조유량(Sm³/hr)</th>
                     <th className="p-2 font-bold">비고</th>
-                    <th className="p-2 font-bold">이 기록부로 복사</th>
-                    <th className="p-2 font-bold">불러오기</th>
-                    <th className="p-2 font-bold">삭제</th>
+                    <th className="p-2 font-bold" colSpan="3">작업</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-600 bg-slate-800">
+                <tbody className="divide-y divide-slate-200 bg-white">
                   {savedData.map((data) => {
                     const reportSheetId = resolveReportSheetId(data);
                     const reportSheetTitle = SHEET_MENU.find((item) => item.id === reportSheetId)?.title || data.sheetTitle || '-';
                     return (
-                    <tr key={data.id || data.savedAt} className="hover:bg-slate-700/30 transition-colors cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
+                    <tr key={data.id || data.savedAt} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => handleLoadSavedReport(data)}>
                       <td className="p-2">
                         <input
                           type="checkbox"
@@ -8266,27 +8331,25 @@ export default function App() {
                       <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
                       <td className="p-2 whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
                       <td className="p-2">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-700 border border-slate-500 text-slate-100 font-bold text-[11px]">
-                          {reportSheetTitle}
-                        </span>
+                        <span className="font-bold text-slate-800 whitespace-nowrap" title={reportSheetTitle}>({SHEET_SHORT_LABELS[reportSheetId] || reportSheetTitle})</span>
                       </td>
-                      <td className="p-2">{data.company || '-'}</td>
-                      <td className="p-2">{data.location || '-'}</td>
-                      <td className="p-2">{data.sampler || '-'}</td>
-                      <td className="p-2 font-bold text-emerald-300">No.{data.nozzleUsed || '-'} / {data.nozzleDiameterUsed || '-'}mm</td>
+                      <td className="p-2 whitespace-nowrap">{data.company || '-'}</td>
+                      <td className="p-2 whitespace-nowrap">{data.location || '-'}</td>
+                      <td className="p-2 whitespace-nowrap">{data.sampler || '-'}</td>
+                      <td className="p-2 font-bold text-slate-800 whitespace-nowrap">No.{data.nozzleUsed || '-'} / {data.nozzleDiameterUsed || '-'}mm</td>
                       <td className="p-2">{formatKFactorDisplay(data.kFactorApplied)}</td>
                       <td className="p-2">{data.totalSamplingMinutes || '-'}</td>
                       <td className="p-2">{data.gasMeterVolume || '-'}</td>
                       <td className="p-2">{data.vmStd || '-'}</td>
-                      <td className="p-2 text-cyan-300">{data.moisturePercent || '-'}</td>
+                      <td className="p-2">{data.moisturePercent || '-'}</td>
                       <td className="p-2">
-                        <span className={data.isokineticStatus === '적합' ? 'text-emerald-900 font-bold bg-emerald-400 px-2 py-0.5 rounded-md' : 'text-white font-bold bg-red-500 px-2 py-0.5 rounded-md'}>
+                        <span className={data.isokineticStatus === '적합' ? 'text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-md' : 'text-red-700 font-bold bg-red-100 px-2 py-0.5 rounded-md'}>
                           {data.isokineticRate || '-'}
                         </span>
                       </td>
-                      <td className="p-2 text-teal-300">{data.dustWeight || '-'}</td>
-                      <td className="p-2 font-bold text-white">{data.actualConcentration || '-'}</td>
-                      <td className="p-2 text-red-200 font-bold">{data.correctedConcentration || '-'}</td>
+                      <td className="p-2">{data.dustWeight || '-'}</td>
+                      <td className="p-2 font-bold text-slate-900">{data.actualConcentration || '-'}</td>
+                      <td className="p-2 font-bold text-slate-900">{data.correctedConcentration || '-'}</td>
                       <td className="p-2">{data.dryFlowRate || '-'}</td>
                       <td className="p-2 text-left max-w-[280px]">{data.remarks || '-'}</td>
                       <td className="p-2">
@@ -8296,7 +8359,7 @@ export default function App() {
                             e.stopPropagation();
                             handleCopySavedReportToCurrentSheet(data);
                           }}
-                          className={`px-2 py-1 rounded text-white font-bold ${activeTheme.primaryButtonSoft}`}
+                          className={`px-2 py-1 rounded text-[11px] text-white font-bold whitespace-nowrap ${activeTheme.primaryButton}`}
                         >
                           이 기록부로 복사
                         </button>
@@ -8308,7 +8371,7 @@ export default function App() {
                             e.stopPropagation();
                             handleLoadSavedReport(data);
                           }}
-                          className="px-2 py-1 rounded border border-emerald-400 text-emerald-200 hover:bg-emerald-600/20 font-bold"
+                          className="px-2 py-1 rounded text-[11px] border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 font-bold whitespace-nowrap"
                         >
                           불러오기
                         </button>
@@ -8320,7 +8383,7 @@ export default function App() {
                             e.stopPropagation();
                             removeSavedReport(data.id, data.savedAt);
                           }}
-                          className="px-2 py-1 rounded border border-red-400 text-red-200 hover:bg-red-600/20 font-bold"
+                          className="px-2 py-1 rounded text-[11px] border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold whitespace-nowrap"
                         >
                           삭제
                         </button>
