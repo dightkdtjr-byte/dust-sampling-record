@@ -5224,7 +5224,8 @@ export default function App() {
     const ns = worksheet.namespaceURI || 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
     rowColorList.forEach(({ row, colorIdx }) => {
       const rowEl = ensureRow(sheetData, row, ns);
-      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach((col) => {
+      // 양식에서 원래 색이 칠해진 칸만 (F·J·L~O 수식·여백 칸은 제외)
+      ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'K', 'P'].forEach((col) => {
         const cell = ensureCell(rowEl, parseCellRef(`${col}${row}`), ns);
         const original = parseInt(cell.getAttribute('s') || '0', 10);
         cell.setAttribute('s', String(styler.styleFor(Number.isFinite(original) ? original : 0, colorIdx)));
