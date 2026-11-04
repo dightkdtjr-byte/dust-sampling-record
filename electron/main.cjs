@@ -71,11 +71,11 @@ function attachWindowBehaviors(win) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
-          width: 1180,
-          height: 920,
+          width: 1280,
+          height: 900,
           minWidth: 800,
           minHeight: 500,
-          title: 'StackPilot - 통합 시료채취기록부',
+          title: 'StackPilot',
           icon: path.join(__dirname, '..', 'build', 'icon.png'),
           autoHideMenuBar: true,
           webPreferences: WEB_PREFERENCES,

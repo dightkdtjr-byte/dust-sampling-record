@@ -294,17 +294,18 @@ const seededNoise = (seed) => {
 const buildSmokeParticleStyle = (stackId, smokeIdx) => {
   const stackNum = parseInt(String(stackId).replace(/\D/g, ''), 10) || 1;
   const seedBase = stackNum * 97 + smokeIdx * 31;
-  const riseDuration = 16.5 + seededNoise(seedBase + 4) * 8.5;
-  const driftDir = seededNoise(seedBase + 2) > 0.5 ? 1 : -1;
+  const riseDuration = 14 + seededNoise(seedBase + 4) * 9;
+  // 바람은 대체로 오른쪽으로 분다 (가끔 왼쪽으로 흩어지는 퍼프)
+  const driftDir = seededNoise(seedBase + 2) > 0.22 ? 1 : -1;
 
   return {
-    '--size': `${44 + seededNoise(seedBase + 1) * 58}px`,
-    '--drift': `${driftDir * (22 + seededNoise(seedBase + 3) * 76)}px`,
+    '--size': `${22 + seededNoise(seedBase + 1) * 34}px`,
+    '--drift': `${driftDir * (60 + seededNoise(seedBase + 3) * 150)}px`,
     '--rise-duration': `${riseDuration}s`,
-    '--rise-distance': `${132 + seededNoise(seedBase + 5) * 84}vh`,
-    '--max-opacity': `${0.26 + seededNoise(seedBase + 6) * 0.2}`,
-    '--start-scale': `${0.56 + seededNoise(seedBase + 7) * 0.18}`,
-    '--end-scale': `${1.54 + seededNoise(seedBase + 8) * 0.54}`,
+    '--rise-distance': `${55 + seededNoise(seedBase + 5) * 60}vh`,
+    '--max-opacity': `${0.2 + seededNoise(seedBase + 6) * 0.18}`,
+    '--start-scale': `${0.5 + seededNoise(seedBase + 7) * 0.2}`,
+    '--end-scale': `${2 + seededNoise(seedBase + 8) * 0.9}`,
     '--tilt-start': `${-8 + seededNoise(seedBase + 9) * 6}deg`,
     '--tilt-end': `${4 + seededNoise(seedBase + 10) * 8}deg`,
     animationDelay: `-${seededNoise(seedBase + 11) * riseDuration}s`,
@@ -319,6 +320,17 @@ const SKYLINE_STARS = Array.from({ length: 46 }, (_, idx) => ({
   duration: 2.4 + (idx % 5) * 0.65,
   delay: (idx % 7) * 0.35,
 }));
+
+// 느리게 흘러가는 구름 (top: 화면 상단 기준 %, scale: 크기, duration: 한 번 가로지르는 시간)
+const SKYLINE_CLOUDS = [
+  { id: 'cl-1', top: '6%', scale: 1.25, duration: 170, delay: -20, opacity: 0.95 },
+  { id: 'cl-2', top: '14%', scale: 0.8, duration: 130, delay: -75, opacity: 0.8 },
+  { id: 'cl-3', top: '22%', scale: 1.05, duration: 200, delay: -140, opacity: 0.9 },
+  { id: 'cl-4', top: '10%', scale: 0.6, duration: 115, delay: -40, opacity: 0.7 },
+  { id: 'cl-5', top: '30%', scale: 0.9, duration: 185, delay: -110, opacity: 0.75 },
+  { id: 'cl-6', top: '18%', scale: 1.4, duration: 230, delay: -180, opacity: 0.85 },
+  { id: 'cl-7', top: '26%', scale: 0.7, duration: 150, delay: -10, opacity: 0.65 },
+];
 
 const SKYLINE_MOUNTAINS = [
   { id: 'mt-1', left: '-8%', width: '38%', height: 182 },
@@ -717,49 +729,124 @@ const SKYLINE_FLYER_CSS = `
   background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 0.98), rgba(253, 224, 71, 0.92) 44%, rgba(251, 146, 60, 0.86));
   box-shadow: 0 0 0 8px rgba(254, 240, 138, 0.18), 0 0 28px rgba(251, 191, 36, 0.28), 0 0 48px rgba(251, 146, 60, 0.18);
 }
-@keyframes stackHeartRise {
+@keyframes stackSmokeRise {
   0% {
     transform: translate(-50%, 0) scale(var(--start-scale, 0.58)) rotate(var(--tilt-start, -7deg));
     opacity: 0;
   }
-  12% {
+  10% {
     opacity: var(--max-opacity, 0.24);
   }
   100% {
-    transform: translate(calc(-50% + var(--drift, 0px)), calc(-1 * var(--rise-distance, 150vh))) scale(var(--end-scale, 1.86)) rotate(var(--tilt-end, 7deg));
+    transform: translate(calc(-50% + var(--drift, 0px)), calc(-1 * var(--rise-distance, 80vh))) scale(var(--end-scale, 2.2)) rotate(var(--tilt-end, 7deg));
     opacity: 0;
   }
 }
-.stack-heart-smoke {
-  position: absolute;
-  left: 50%;
-  top: -38px;
-  width: var(--size, 16px);
-  height: var(--size, 16px);
-  clip-path: polygon(50% 100%, 0 52%, 0 30%, 16% 12%, 34% 12%, 50% 27%, 66% 12%, 84% 12%, 100% 30%, 100% 52%);
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.64), rgba(221, 214, 254, 0.48));
-  border: 1px solid rgba(199, 210, 254, 0.48);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 1;
-  mix-blend-mode: normal;
-  filter: blur(0.45px) drop-shadow(0 0 14px rgba(167, 139, 250, 0.28));
-  animation: stackHeartRise var(--rise-duration, 18s) ease-out infinite;
-}
-/* 배포용: 하트 대신 매연/수증기처럼 뭉게뭉게 올라가는 연기 */
+/* 굴뚝에서 뭉게뭉게 올라가 바람에 흩어지는 연기 */
 .stack-puff-smoke {
   position: absolute;
   left: 50%;
-  top: -30px;
+  top: -22px;
   width: var(--size, 16px);
   height: var(--size, 16px);
   border-radius: 46% 54% 50% 50% / 52% 48% 52% 48%;
-  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.78), rgba(226, 232, 240, 0.52) 48%, rgba(148, 163, 184, 0.18) 78%, rgba(148, 163, 184, 0) 100%);
+  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.8), rgba(226, 232, 240, 0.55) 46%, rgba(148, 163, 184, 0.2) 76%, rgba(148, 163, 184, 0) 100%);
   opacity: 0;
   pointer-events: none;
   z-index: 1;
-  filter: blur(2.2px);
-  animation: stackHeartRise var(--rise-duration, 18s) ease-out infinite;
+  filter: blur(2.4px);
+  animation: stackSmokeRise var(--rise-duration, 18s) ease-out infinite;
+}
+@keyframes skylineCloudDrift {
+  from { transform: translateX(-30vw) scale(var(--cloud-scale, 1)); }
+  to { transform: translateX(125vw) scale(var(--cloud-scale, 1)); }
+}
+.skyline-cloud, .skyline-cloud::before, .skyline-cloud::after {
+  background: var(--cloud-color, rgba(255, 255, 255, 0.92));
+  border-radius: 9999px;
+}
+.skyline-cloud {
+  position: absolute;
+  left: 0;
+  width: 190px;
+  height: 54px;
+  transform-origin: left center;
+  filter: blur(0.6px) drop-shadow(0 6px 10px var(--cloud-shadow, rgba(120, 140, 170, 0.18)));
+  animation: skylineCloudDrift var(--cloud-duration, 160s) linear infinite;
+  animation-delay: var(--cloud-delay, 0s);
+  will-change: transform;
+}
+.skyline-cloud::before {
+  content: '';
+  position: absolute;
+  left: 18%;
+  bottom: 30%;
+  width: 56%;
+  height: 140%;
+}
+.skyline-cloud::after {
+  content: '';
+  position: absolute;
+  left: 52%;
+  bottom: 24%;
+  width: 40%;
+  height: 120%;
+}
+@keyframes skylineSunRays {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.skyline-sun::after {
+  content: '';
+  position: absolute;
+  inset: -90%;
+  border-radius: 9999px;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 236, 170, 0.22) 0deg 7deg, rgba(255, 236, 170, 0) 7deg 24deg);
+  -webkit-mask: radial-gradient(circle, rgba(0, 0, 0, 0.9) 20%, rgba(0, 0, 0, 0) 68%);
+  mask: radial-gradient(circle, rgba(0, 0, 0, 0.9) 20%, rgba(0, 0, 0, 0) 68%);
+  animation: skylineSunRays 90s linear infinite;
+}
+.skyline-moon-halo {
+  position: absolute;
+  left: calc(8% - 40px);
+  top: calc(8% - 40px);
+  width: clamp(152px, 17vw, 190px);
+  height: clamp(152px, 17vw, 190px);
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(250, 240, 200, 0.22), rgba(199, 210, 254, 0.1) 45%, rgba(199, 210, 254, 0) 72%);
+}
+@keyframes skylineShootingStar {
+  0% { opacity: 0; transform: translate(0, 0) rotate(-28deg); }
+  3% { opacity: 1; }
+  10% { opacity: 0; transform: translate(-300px, 160px) rotate(-28deg); }
+  100% { opacity: 0; transform: translate(-300px, 160px) rotate(-28deg); }
+}
+.skyline-shooting-star {
+  position: absolute;
+  width: 150px;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  opacity: 0;
+  animation: skylineShootingStar var(--shoot-duration, 13s) ease-out infinite;
+  animation-delay: var(--shoot-delay, 0s);
+}
+@keyframes skylineWindowGlow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.skyline-window-night {
+  animation: skylineWindowGlow var(--glow-duration, 5s) ease-in-out infinite;
+  animation-delay: var(--glow-delay, 0s);
+}
+.skyline-ground-texture {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 2px, rgba(0, 0, 0, 0) 2px 10px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 3px, rgba(0, 0, 0, 0) 3px 41px);
+  opacity: 0.8;
 }
 `;
 
@@ -876,6 +963,7 @@ const STORAGE_KEYS = {
   cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
   samplingLogDraftPrefix: 'dust-sampling.samplinglog-draft.v1.',
   sheetContext: 'dust-sampling.sheet-context.v1',
+  pendingReport: 'dust-sampling.pending-report.v1',
 };
 
 // 통합 시료채취기록부를 별도 창(window.open)으로 띄웠을 때 true (#sheet=samplinglog&popup=1)
@@ -1402,8 +1490,8 @@ export default function App() {
 
   const [secureUsers, setSecureUsers] = useState({});
   const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
-  // 통합 시료채취기록부 별도 창 핸들 (이미 열려 있으면 다시 띄우지 않고 앞으로 가져옴)
-  const samplingLogWindowRef = useRef(null);
+  // 기록부별 별도 창 핸들 (이미 열려 있으면 다시 띄우지 않고 앞으로 가져옴)
+  const sheetWindowsRef = useRef({});
   // 통합 기록부 임시 저장본이 어느 사용자 키로 로드됐는지 (로드 전에 빈 내용으로 덮어쓰지 않도록)
   const [samplingLogDraftReadyKey, setSamplingLogDraftReadyKey] = useState('');
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
@@ -1679,6 +1767,18 @@ export default function App() {
         }
         return;
       }
+      if (activeUser && event.newValue && (event.key === getUserNozzlesStorageKey(activeUser) || event.key === STORAGE_KEYS.nozzles)) {
+        try { const parsed = sanitizeNozzleSet(JSON.parse(event.newValue)); if (parsed) setNozzleSet(parsed); } catch (error) { console.error(error); }
+        return;
+      }
+      if (activeUser && event.newValue && (event.key === getUserSamplersStorageKey(activeUser) || event.key === STORAGE_KEYS.samplers)) {
+        try { const parsed = sanitizeSamplers(JSON.parse(event.newValue)); if (parsed) setSamplers(parsed); } catch (error) { console.error(error); }
+        return;
+      }
+      if (activeUser && event.newValue && (event.key === getUserPitotStorageKey(activeUser) || event.key === STORAGE_KEYS.pitotPresets)) {
+        try { const parsed = sanitizePitotPresets(JSON.parse(event.newValue)); if (parsed) setPitotPresets(parsed); } catch (error) { console.error(error); }
+        return;
+      }
       if (event.key === STORAGE_KEYS.secureUsers && event.newValue) {
         // 다른 창에서 리포트를 저장하면 이 창의 저장 목록도 갱신 (덮어쓰기 방지)
         try {
@@ -1702,7 +1802,7 @@ export default function App() {
 
   // 메인 창의 현재 기록부 정보(사업장·배출구·측정일)를 별도 창에서 가져갈 수 있도록 기록
   useEffect(() => {
-    if (IS_POPUP_WINDOW || !selectedSheet || selectedSheet === 'samplinglog') return;
+    if (!selectedSheet || selectedSheet === 'samplinglog') return;
     try {
       localStorage.setItem(STORAGE_KEYS.sheetContext, JSON.stringify({
         company: formData.company || '',
@@ -1716,23 +1816,83 @@ export default function App() {
   }, [formData.company, formData.location, formData.date, selectedSheet]);
 
   useEffect(() => {
-    if (IS_POPUP_WINDOW) document.title = 'StackPilot - 통합 시료채취기록부';
-  }, []);
+    if (!IS_POPUP_WINDOW) return;
+    const title = SHEET_MENU.find((item) => item.id === selectedSheet)?.title;
+    document.title = title ? `StackPilot - ${title}` : 'StackPilot';
+  }, [selectedSheet]);
 
-  const openSamplingLogWindow = () => {
-    const existing = samplingLogWindowRef.current;
+  // 기록부를 별도 창으로 연다. report가 있으면 그 창이 열리자마자 불러오도록 임시 저장소로 넘긴다.
+  const openSheetWindow = (sheetId, report = null) => {
+    const existing = sheetWindowsRef.current[sheetId];
+    let loadToken = '';
+    if (report) {
+      loadToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      try {
+        localStorage.setItem(STORAGE_KEYS.pendingReport, JSON.stringify({ token: loadToken, sheetId, report }));
+      } catch (error) {
+        console.error('리포트 전달 실패:', error);
+      }
+    }
     if (existing && !existing.closed) {
-      try { existing.focus(); } catch (error) { console.error(error); }
+      try {
+        existing.location.hash = `sheet=${sheetId}&popup=1${loadToken ? `&load=${loadToken}` : ''}`;
+        existing.focus();
+      } catch (error) {
+        console.error(error);
+      }
       return;
     }
-    const url = `${window.location.pathname}${window.location.search}#sheet=samplinglog&popup=1`;
-    const popup = window.open(url, 'stackpilot-samplinglog', 'popup=yes,width=1180,height=920');
+    const url = `${window.location.pathname}${window.location.search}#sheet=${sheetId}&popup=1${loadToken ? `&load=${loadToken}` : ''}`;
+    const popup = window.open(url, `stackpilot-${sheetId}`, 'popup=yes,width=1280,height=900');
     if (!popup) {
       alert('새 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제한 뒤 다시 시도해주세요.');
       return;
     }
-    samplingLogWindowRef.current = popup;
+    sheetWindowsRef.current[sheetId] = popup;
   };
+  const openSamplingLogWindow = () => {
+    // 기록부 창에서 누르면 메뉴(메인) 창에 부탁해 창이 하나만 유지되게 함
+    if (IS_POPUP_WINDOW && window.opener && !window.opener.closed) {
+      try {
+        window.opener.postMessage({ type: 'stackpilot:open-sheet', sheetId: 'samplinglog' }, '*');
+        return;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    openSheetWindow('samplinglog');
+  };
+  useEffect(() => {
+    if (IS_POPUP_WINDOW) return undefined;
+    const onMessage = (event) => {
+      const data = event?.data;
+      if (!data || data.type !== 'stackpilot:open-sheet') return;
+      if (!SHEET_MENU.some((item) => item.id === data.sheetId)) return;
+      openSheetWindow(data.sheetId);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  });
+  // 별도 창: 주소의 load 토큰과 맞는 리포트가 전달돼 있으면 열리자마자 불러오기
+  useEffect(() => {
+    if (!IS_POPUP_WINDOW || !activeUser || !isUserUnlocked) return;
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = params.get('load');
+    if (!token) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.pendingReport);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && parsed.token === token && parsed.report) {
+        localStorage.removeItem(STORAGE_KEYS.pendingReport);
+        handleLoadSavedReport(parsed.report, true);
+      }
+    } catch (error) {
+      console.error('전달된 리포트 불러오기 실패:', error);
+    }
+    params.delete('load');
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${params.toString()}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUser, isUserUnlocked, selectedSheet]);
 
   const buildReportKey = (id, savedAt) => String(id || savedAt || '');
   const getReportKey = (report) => buildReportKey(report?.id, report?.savedAt);
@@ -3013,7 +3173,7 @@ export default function App() {
     }
   };
 
-  const handleLoadSavedReport = (report) => {
+  const handleLoadSavedReport = (report, silent = false) => {
     if (!report || typeof report !== 'object') return;
     if (!activeUser || !isUserUnlocked) {
       alert('로그인 후 불러올 수 있습니다.');
@@ -3021,10 +3181,15 @@ export default function App() {
     }
 
     const targetSheet = resolveReportSheetId(report);
+    // 메뉴(메인) 창에서는 해당 기록부 창을 열어 거기서 불러온다
+    if (!IS_POPUP_WINDOW && !selectedSheet) {
+      openSheetWindow(targetSheet, report);
+      return;
+    }
     if (targetSheet === 'samplinglog') {
       setSamplingLogData(sanitizeSamplingLog(report.samplingLog));
-      if (selectedSheet !== 'samplinglog') window.location.hash = 'sheet=samplinglog';
-      alert('시료채취기록부(종합) 리포트를 불러왔습니다.');
+      if (selectedSheet !== 'samplinglog') window.location.hash = 'sheet=samplinglog&popup=1';
+      if (!silent) alert('시료채취기록부(종합) 리포트를 불러왔습니다.');
       return;
     }
     const targetImpingerCount = getImpingerStageCount(targetSheet);
@@ -3049,11 +3214,11 @@ export default function App() {
 
     setRecommendations(null);
     if (selectedSheet !== targetSheet) {
-      window.location.hash = `sheet=${targetSheet}`;
+      window.location.hash = `sheet=${targetSheet}${IS_POPUP_WINDOW ? '&popup=1' : ''}`;
     }
 
     const targetTitle = SHEET_MENU.find(item => item.id === targetSheet)?.title || report.sheetTitle || '기록부';
-    alert(`${targetTitle} 리포트를 불러왔습니다.`);
+    if (!silent) alert(`${targetTitle} 리포트를 불러왔습니다.`);
   };
 
   const handleChange = (e) => {
@@ -3627,8 +3792,8 @@ export default function App() {
   const calcAvgDp = () => getRawAvgDp(); 
   const calcAvgTs = () => getRawAvgTs();
   const calcStackPressure = () => getRawStackPressure();
-  const calcMoisture = () => getRawPreMoisture().toFixed(3);
-  const calcPostMoisture = () => getRawPostMoisture().toFixed(3);
+  const calcMoisture = () => getRawPreMoisture().toFixed(2);
+  const calcPostMoisture = () => getRawPostMoisture().toFixed(2);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
   // 유속이 0으로 나올 때 어떤 입력이 빠졌는지 안내
   const getGasVelocityMissingInputs = () => {
@@ -3670,8 +3835,8 @@ export default function App() {
     const v = getRawGasMeterVolDiffYd();
     return v > 0 ? (v / 1000).toFixed(3) : '-';
   };
-  const calcAvgTm = () => { const v = getRawAvgTm(); return isNaN(v) ? '-' : v.toFixed(1); };
-  const calcAvgOrifice = () => { const v = getRawAvgOrifice(); return isNaN(v) ? '-' : v.toFixed(1); };
+  const calcAvgTm = () => { const v = getRawAvgTm(); return isNaN(v) ? '-' : v.toFixed(2); };
+  const calcAvgOrifice = () => { const v = getRawAvgOrifice(); return isNaN(v) ? '-' : v.toFixed(2); };
   const calcTotalMoistureWeight = () => getRawTotalMoistureWeight();
   const getVmStd = () => {
     const v = getRawVmStd();
@@ -3679,7 +3844,7 @@ export default function App() {
   };
   const calcVmStdSL = () => {
     const v = getRawVmStd();
-    return v > 0 ? v.toFixed(1) : '-';
+    return v > 0 ? v.toFixed(2) : '-';
   };
   const calcVmStdSm3 = () => {
     const v = getRawVmStd();
@@ -3961,7 +4126,7 @@ export default function App() {
       * 16670;
 
     if (!Number.isFinite(rate) || rate <= 0) return '-';
-    return rate.toFixed(1);
+    return rate.toFixed(2);
   };
 
   const getRowCorrectedGasDensityRaw = (idx) => {
@@ -4075,7 +4240,7 @@ export default function App() {
         const part1 = 0.00346 * Vic;
         const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
-        return I.toFixed(1);
+        return I.toFixed(2);
       } else {
         const gasComp = getGasComposition();
         const Xw = gasComp.Xw;
@@ -4089,7 +4254,7 @@ export default function App() {
         const part1 = 0.00346 * VicPre;
         const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
-        return I.toFixed(1);
+        return I.toFixed(2);
       }
     }
     return '-';
@@ -5344,9 +5509,9 @@ export default function App() {
         if (isFinite(calcTime) && calcTime > 0) {
             reqTime = calcTime;
             const Vm_val = Q_m * reqTime;
-            L = Vm_val.toFixed(1);
+            L = Vm_val.toFixed(2);
             const Vsl_val = Q_sl * reqTime;
-            SL = Vsl_val.toFixed(1);
+            SL = Vsl_val.toFixed(2);
             Sm3 = (Vsl_val / 1000).toFixed(3);
         }
     }
@@ -5466,6 +5631,51 @@ export default function App() {
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#a9b4cd]/72 to-[#7585ab]/68'
       : 'bg-gradient-to-b from-[#b7cde6]/70 to-[#86a8d1]/66');
+  const sceneCloudColor = isNightSky ? 'rgba(190, 200, 235, 0.09)' : (isMorningSky ? 'rgba(255, 243, 230, 0.9)' : 'rgba(255, 255, 255, 0.93)');
+  const sceneCloudShadow = isNightSky ? 'rgba(0, 0, 0, 0)' : (isMorningSky ? 'rgba(240, 150, 120, 0.2)' : 'rgba(120, 140, 170, 0.2)');
+  const sceneHazeColor = isNightSky ? 'rgba(20, 30, 60, 0.55)' : (isMorningSky ? 'rgba(255, 220, 180, 0.55)' : 'rgba(235, 245, 255, 0.6)');
+  const sceneMountainFill = getPixelMountainFill(isNightSky);
+  const sceneHillFill = getPixelHillFill(isNightSky);
+  const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 4) : SKYLINE_CLOUDS;
+  // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
+  const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
+    <>
+      {isNightSky && <div className="skyline-moon-halo" />}
+      {sceneClouds.slice(0, cloudCount).map((cloud) => (
+        <div
+          key={`${scope}-${cloud.id}`}
+          className="skyline-cloud"
+          style={{
+            top: cloud.top,
+            opacity: cloud.opacity,
+            '--cloud-scale': cloud.scale,
+            '--cloud-duration': `${cloud.duration}s`,
+            '--cloud-delay': `${cloud.delay}s`,
+            '--cloud-color': sceneCloudColor,
+            '--cloud-shadow': sceneCloudShadow,
+          }}
+        />
+      ))}
+      {isNightSky && (
+        <>
+          <div className="skyline-shooting-star" style={{ top: '9%', left: '72%', '--shoot-duration': '14s', '--shoot-delay': '-3s' }} />
+          <div className="skyline-shooting-star" style={{ top: '18%', left: '38%', '--shoot-duration': '23s', '--shoot-delay': '-15s' }} />
+        </>
+      )}
+    </>
+  );
+  // 원경: 픽셀 산 두 겹 + 언덕 + 지평선 안개 (mountainScale: 기록부 화면은 작게)
+  const renderFarLandscape = (scope, mountainScale = 1, bottomClass = 'bottom-[6.4rem]') => (
+    <>
+      <div className={`absolute ${bottomClass} opacity-80`} style={{ left: '-6%', width: '58%', height: `${Math.round(230 * mountainScale)}px`, clipPath: PIXEL_MOUNTAIN_CLIP_PATH, background: sceneMountainFill }} />
+      <div className={`absolute ${bottomClass} opacity-80`} style={{ left: '44%', width: '62%', height: `${Math.round(196 * mountainScale)}px`, clipPath: PIXEL_MOUNTAIN_CLIP_PATH, background: sceneMountainFill }} />
+      <div className={`absolute ${bottomClass} h-24`} style={{ left: 0, right: 0, background: `linear-gradient(to top, ${sceneHazeColor}, rgba(0,0,0,0))` }} />
+      <div className={`absolute ${bottomClass} opacity-90`} style={{ left: '-4%', width: '108%', height: `${Math.round(96 * mountainScale)}px`, clipPath: PIXEL_HILL_CLIP_PATH, background: sceneHillFill }} />
+      {isNightSky && (
+        <div className={`absolute ${bottomClass} h-36`} style={{ left: 0, right: 0, background: 'radial-gradient(55% 100% at 50% 100%, rgba(255, 190, 110, 0.2), rgba(255, 190, 110, 0) 70%)' }} />
+      )}
+    </>
+  );
   const isMobileLightMode = isMobileViewport;
   // 넓은 창(최대화)에서는 풍경을 비례 확대하고, 바닥 띠는 창 전체 폭으로 깔아 배경이 끊기지 않게 함
   const sceneScale = Math.min(1.75, Math.max(1, viewportWidth / 1280));
@@ -5500,6 +5710,10 @@ export default function App() {
       return;
     }
     if (selectedSheet === sheetId) return;
+    if (!IS_POPUP_WINDOW) {
+      openSheetWindow(sheetId);
+      return;
+    }
     window.location.hash = `sheet=${sheetId}`;
   };
 
@@ -5516,8 +5730,7 @@ export default function App() {
         setSelectedSheet('');
         return;
       }
-      // 별도 창은 통합 시료채취기록부 전용
-      setSelectedSheet(IS_POPUP_WINDOW ? 'samplinglog' : hashSheet);
+      setSelectedSheet(hashSheet);
     };
 
     applyHashRoute();
@@ -5572,6 +5785,7 @@ export default function App() {
         <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
         <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
+        {renderSkyDecor('menu')}
           {isNightSky && (
             <div className="absolute inset-0">
               {sceneStarsMenu.map((star) => (
@@ -5591,12 +5805,13 @@ export default function App() {
             </div>
           )}
           <div className="absolute bottom-0 left-0 right-0">
-            <div className={`absolute bottom-0 left-0 right-0 ${menuGroundClass}`} style={{ height: `calc(${isMobileViewport ? 6 : 8}rem * ${sceneScale})` }} />
+            <div className={`absolute bottom-0 left-0 right-0 ${menuGroundClass}`} style={{ height: `calc(${isMobileViewport ? 6 : 8}rem * ${sceneScale})` }}><div className="skyline-ground-texture" /></div>
             <div className={`absolute left-0 right-0 h-14 ${menuRidgeClass}`} style={{ bottom: `calc(4rem * ${sceneScale})`, height: `calc(3.5rem * ${sceneScale})` }} />
             <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl" style={sceneScaleStyle}>
-              <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${menuGroundClass}`} />
+              <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${menuGroundClass}`}><div className="skyline-ground-texture" /></div>
               <div className={`absolute bottom-16 left-0 right-0 h-14 ${menuRidgeClass}`} />
               {isMorningSky && <div className="skyline-sunrise-mountain" />}
+              {renderFarLandscape('menu', 1, 'bottom-[6.4rem]')}
               {sceneMountains.map((mountain) => (
                 <div
                   key={mountain.id}
@@ -5684,11 +5899,13 @@ export default function App() {
                   {Array.from({ length: block.windows }).map((_, windowIdx) => (
                     <div
                       key={`${block.id}-window-${windowIdx}`}
-                      className="absolute h-[4px] w-[4px] bg-[#fff2bf]/82"
+                      className={`absolute h-[4px] w-[4px] ${isNightSky ? 'bg-[#fff2bf]/90 skyline-window-night' : 'bg-[#2b3a52]/45'}`}
                       style={{
                         left: `${16 + windowIdx * 14}%`,
                         top: '60%',
-                        boxShadow: '0 12px 0 rgba(255, 242, 191, 0.8)',
+                        boxShadow: isNightSky ? '0 12px 0 rgba(255, 242, 191, 0.85)' : '0 12px 0 rgba(43, 58, 82, 0.4)',
+                        '--glow-duration': `${4 + ((windowIdx * 7 + block.height) % 5)}s`,
+                        '--glow-delay': `-${(windowIdx * 3 + block.roof) % 6}s`,
                       }}
                     />
                   ))}
@@ -5744,7 +5961,7 @@ export default function App() {
                       {Array.from({ length: getSmokeParticleTotal(stack) }).map((_, smokeIdx) => (
                         <span
                           key={`${stack.id}-smoke-${smokeIdx}`}
-                          className={IS_DESKTOP_BUILD ? 'stack-puff-smoke' : 'stack-heart-smoke'}
+                          className="stack-puff-smoke"
                           style={buildSmokeParticleStyle(stack.id, smokeIdx)}
                         />
                       ))}
@@ -6109,7 +6326,7 @@ export default function App() {
                     <h2 className="text-base font-black text-slate-900">{sheet.title}</h2>
                     <p className="text-xs text-slate-600 mt-1">{sheet.desc}</p>
                     <div className={`mt-4 flex items-center text-[11px] font-bold text-slate-500 transition-colors ${sheet.hoverTextClass}`}>
-                      열기
+                      새 창으로 열기
                     </div>
                   </button>
                 );
@@ -6538,6 +6755,7 @@ export default function App() {
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
         <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
+        {renderSkyDecor('sheet', 5)}
         {isNightSky && sceneStarsSheet.map((star) => (
           <span
             key={`sheet-${star.id}`}
@@ -6553,10 +6771,11 @@ export default function App() {
           />
         ))}
         <div className="absolute bottom-0 left-0 right-0">
-          <div className={`absolute bottom-0 left-0 right-0 ${sheetGroundClass}`} style={{ height: `calc(5rem * ${sceneScale})` }} />
+          <div className={`absolute bottom-0 left-0 right-0 ${sheetGroundClass}`} style={{ height: `calc(5rem * ${sceneScale})` }}><div className="skyline-ground-texture" /></div>
           <div className="relative mx-auto h-44 md:h-56 max-w-7xl" style={sceneScaleStyle}>
-            <div className={`absolute bottom-0 left-0 right-0 h-20 ${sheetGroundClass}`} />
+            <div className={`absolute bottom-0 left-0 right-0 h-20 ${sheetGroundClass}`}><div className="skyline-ground-texture" /></div>
             {isMorningSky && <div className="skyline-sunrise-mountain-sheet" />}
+            {renderFarLandscape('sheet', 0.42, 'bottom-16')}
             {sceneMountains.map((mountain) => (
               <div
                 key={`sheet-${mountain.id}`}
@@ -6637,7 +6856,11 @@ export default function App() {
                 key={`sheet-${stack.id}`}
                 className={`absolute bottom-12 rounded-t-[3px] border ${isNightSky ? 'border-[#2a3148]/80 bg-gradient-to-b from-[#a4afc0] via-[#7f8ba0] to-[#4d596e]' : 'border-[#51667a]/65 bg-gradient-to-b from-[#bfd0e0] via-[#98adc4] to-[#6f89a3]'}`}
                 style={{ left: stack.left, width: `${Math.round(stack.width * 0.82)}px`, height: `${Math.round(stack.height * 0.52)}px` }}
-              />
+              >
+                {Array.from({ length: Math.max(3, Math.round(getSmokeParticleTotal(stack) * 0.5)) }).map((_, smokeIdx) => (
+                  <span key={`sheet-${stack.id}-smoke-${smokeIdx}`} className="stack-puff-smoke" style={buildSmokeParticleStyle(stack.id, smokeIdx + 50)} />
+                ))}
+              </div>
             ))}
             {sceneFrontTreeBelt.map((tree, treeIdx) => (
               <div
@@ -6722,7 +6945,7 @@ export default function App() {
               </button>
             </div>
             {IS_POPUP_WINDOW && (
-              <p className="mt-2 text-[11px] font-bold text-orange-700">별도 창으로 열림 · 입력 내용은 메인 창과 실시간으로 공유되고 자동 보관됩니다</p>
+              <p className="mt-2 text-[11px] font-bold text-orange-700">별도 창으로 열림 · 입력 내용은 다른 창과 실시간으로 공유되고 자동 보관됩니다</p>
             )}
           </div>
           {renderSamplingLogBody()}
@@ -6735,7 +6958,7 @@ export default function App() {
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
-      {!IS_POPUP_WINDOW && (() => {
+      {(() => {
         const stats = getSamplingLogStats(samplingLogData);
         return (
           <button
@@ -6777,7 +7000,7 @@ export default function App() {
             onClick={navigateToMenu}
             className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
           >
-            기록부 선택
+            {IS_POPUP_WINDOW ? '창 닫기' : '기록부 선택'}
           </button>
         </div>
 
@@ -7145,7 +7368,7 @@ export default function App() {
                     {isPitotCpAutoApplied && (
                       <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
                         {Number.isFinite(appliedPitotVelocity) && appliedPitotVelocity > 0
-                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동 선정`
+                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(2)} m/s 기준 자동 선정`
                           : '동압 입력 시 자동 선정'}
                       </span>
                     )}
@@ -7358,7 +7581,7 @@ export default function App() {
                         <td className="py-1.5">{calcAvgTp() !== 0 ? calcAvgTp().toFixed(2) : '-'}</td>
                         <td className="py-1.5">{calcAvgSp() !== 0 ? calcAvgSp().toFixed(2) : '-'}</td>
                         <td className="py-1.5 text-emerald-700">{calcAvgDp() !== 0 ? calcAvgDp().toFixed(2) : '-'}</td>
-                        <td className="py-1.5">{calcAvgTs() !== 0 ? calcAvgTs().toFixed(1) : '-'}</td>
+                        <td className="py-1.5">{calcAvgTs() !== 0 ? calcAvgTs().toFixed(2) : '-'}</td>
                         <td className="py-1.5"></td>
                     </tr>
                   </tbody>
@@ -7590,8 +7813,8 @@ export default function App() {
                                 reqTime = time;
                                 
                                 const v_val = q_m * time;
-                                vl = v_val.toFixed(1);
-                                vsl = (q_sl * time).toFixed(1);
+                                vl = v_val.toFixed(2);
+                                vsl = (q_sl * time).toFixed(2);
                                 vsm = ((q_sl * time) / 1000).toFixed(3);
                              }
                              const isSelected = !isNaN(nozzleNum) && formData.usedNozzleNum === String(nozzleNum);

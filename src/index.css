@@ -20,3 +20,52 @@ input.date-input-fixed[type="date"] {
 input.date-input-fixed[type="date"]::-webkit-date-and-time-value {
   text-align: left;
 }
+
+/* ── macOS 스타일 스킨: 작은 모서리, 머리카락 굵기 테두리, 은은한 그림자, 반투명 패널 ── */
+:root {
+  --mac-radius: 7px;
+  --mac-radius-sm: 5px;
+  --mac-hairline: rgba(0, 0, 0, 0.1);
+  --mac-hairline-strong: rgba(0, 0, 0, 0.17);
+  --mac-accent: #0a84ff;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro KR", "Apple SD Gothic Neo", "Pretendard", "Segoe UI", "Malgun Gothic", "Helvetica Neue", sans-serif;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+.rounded-3xl, .rounded-2xl, .rounded-xl { border-radius: var(--mac-radius) !important; }
+.rounded-lg { border-radius: 6px !important; }
+.rounded, .rounded-md { border-radius: var(--mac-radius-sm) !important; }
+/* 알약 모양 버튼·배지는 각진 mac 버튼 형태로 (작은 점 표시, 해·달·별은 그대로) */
+button.rounded-full, .rounded-full[class*="px-"] { border-radius: var(--mac-radius-sm) !important; }
+/* 카드 상단의 두꺼운 색 띠 → 머리카락 굵기 선 */
+.border-t-4 { border-top-width: 1px !important; border-top-color: var(--mac-hairline) !important; }
+.border-slate-200 { border-color: var(--mac-hairline) !important; }
+.border-slate-300 { border-color: var(--mac-hairline-strong) !important; }
+.shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm, .shadow {
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 30px -14px rgba(0, 0, 0, 0.16) !important;
+}
+/* 흰 패널은 뒤 배경이 살짝 비치는 반투명 유리 */
+div.bg-white.shadow-sm, div.bg-white.shadow-md, div.bg-white.shadow-lg, div.bg-white.shadow-xl {
+  background-color: rgba(255, 255, 255, 0.86) !important;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+  border-radius: var(--mac-radius-sm) !important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: var(--mac-accent) !important;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28) !important;
+}
+button { border-radius: 6px; }
+button[class*="text-white"] {
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.28), 0 0.5px 1.5px rgba(0, 0, 0, 0.2) !important;
+}
+button.bg-white, button[class*="bg-slate-50"], button[class*="bg-slate-100"] {
+  background-image: linear-gradient(#ffffff, #f4f4f5);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 0.5px 1px rgba(0, 0, 0, 0.08) !important;
+}
+thead.bg-slate-100, thead .bg-slate-100 { background-color: rgba(0, 0, 0, 0.035) !important; }
