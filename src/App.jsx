@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.png';
 import JSZip from 'jszip';
@@ -186,7 +186,7 @@ const SAMPLING_LOG_SUBSTANCES = [
 
 // 기록부(먼지·금속·수은·PAHs) 저장본을 통합기록부 행에 옮길 때의 대응표
 const SHEET_TO_LOG_ROWS = { dust: [13], metal: [25, 26, 27, 28, 29, 30, 31, 32], mercury: [34], pahs: [41] };
-const LOG_SOURCE_SHEETS = ['dust', 'metal', 'mercury', 'pahs'];
+const LOG_SOURCE_SHEETS = ['dust', 'metal', 'mercury', 'pahs', 'flow'];
 
 const addMinutesToClock = (hhmm, minutes) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
@@ -214,23 +214,38 @@ const buildSamplingLogValuesFromReport = (report) => {
   };
 };
 
-// 같은 사업장·배출구·측정일자의 기록부를 한 묶음으로 (기록부 종류별 최신 저장본)
-const groupSheetReportsForLog = (reports, resolveSheetId) => {
+// 같은 사업장·배출구(스택)의 기록부를 한 묶음으로. 측정이 며칠에 걸쳐도 같은 묶음이며 날짜 목록을 함께 둔다
+// (기록부 종류별로는 최신 저장본 하나를 대표로 사용)
+const formatDateRange = (dates) => {
+  const list = (dates || []).filter(Boolean);
+  if (list.length === 0) return '-';
+  if (list.length === 1) return list[0];
+  return `${list[0]} ~ ${list[list.length - 1]} (${list.length}일)`;
+};
+const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS) => {
   const groups = new Map();
   (reports || []).forEach((report) => {
     const sheetId = resolveSheetId(report);
-    if (!LOG_SOURCE_SHEETS.includes(sheetId)) return;
+    if (sheetFilter && !sheetFilter.includes(sheetId)) return;
     const company = String(report?.company || '').trim();
-    const location = String(report?.location || '').trim();
+    const location = String(report?.location || report?.stackName || '').trim();
     const date = String(report?.date || '').trim();
     if (!company && !location && !date) return;
-    const key = `${company}|${location}|${date}`;
-    if (!groups.has(key)) groups.set(key, { key, company, location, date, bySheet: {} });
+    const key = `${company}|${location}`;
+    if (!groups.has(key)) groups.set(key, { key, company, location, dates: [], bySheet: {}, reports: [] });
     const group = groups.get(key);
+    group.reports.push(report);
+    if (date && !group.dates.includes(date)) group.dates.push(date);
     const current = group.bySheet[sheetId];
     if (!current || String(report.savedAt || '') > String(current.savedAt || '')) group.bySheet[sheetId] = report;
   });
-  return [...groups.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.company.localeCompare(b.company));
+  groups.forEach((group) => {
+    group.dates.sort();
+    group.date = group.dates[group.dates.length - 1] || '';
+    group.dateLabel = formatDateRange(group.dates);
+    group.reports.sort((x, y) => String(y.savedAt || '').localeCompare(String(x.savedAt || '')));
+  });
+  return [...groups.values()].sort((x, y) => (y.date || '').localeCompare(x.date || '') || x.company.localeCompare(y.company));
 };
 
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
@@ -464,6 +479,7 @@ const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_
     time: '0',
     stackTemp: '',
     dp: '',
+    sp: '',
     pressure: '',
     volume: '',
     tmIn: '',
@@ -479,6 +495,7 @@ const createGasMeterRowsByPoints = (pointCount, slotCount = DEFAULT_MEASURE_ROW_
       time: String(minutesForRow(idx)),
       stackTemp: '',
       dp: '',
+      sp: '',
       pressure: '',
       volume: '',
       tmIn: '',
@@ -510,6 +527,7 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
       : (row.time === undefined || row.time === null ? '' : String(row.time)),
     stackTemp: row.stackTemp === undefined || row.stackTemp === null ? '' : String(row.stackTemp),
     dp: row.dp === undefined || row.dp === null ? '' : String(row.dp),
+    sp: row.sp === undefined || row.sp === null ? '' : String(row.sp),
     pressure: row.pressure === undefined || row.pressure === null ? '' : String(row.pressure),
     volume: row.volume === undefined || row.volume === null ? '' : String(row.volume),
     tmIn: row.tmIn === undefined || row.tmIn === null ? '' : String(row.tmIn),
@@ -525,6 +543,7 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
       time: String(DEFAULT_SLOT_MINUTES),
       stackTemp: '',
       dp: '',
+      sp: '',
       pressure: '',
       volume: '',
       tmIn: '',
@@ -1654,6 +1673,7 @@ export default function App() {
   const lastAutoCloudUploadSignatureRef = useRef('');
   const csvImportInputRef = useRef(null);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
+  const [expandedReportGroups, setExpandedReportGroups] = useState([]);
   const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
@@ -2043,6 +2063,9 @@ export default function App() {
       _sheetTitle: sheetMeta ? sheetMeta.title : (report.sheetTitle || '먼지시료채취기록부'),
     };
   });
+  // 메뉴 목록: 사업장·스택명이 같은 리포트를 한 묶음으로 (날짜는 기간으로 표시)
+  const profileReportGroups = groupSheetReportsForLog(profileCombinedReports, resolveReportSheetId, null);
+  const toggleReportGroup = (key) => setExpandedReportGroups((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   const menuSelectableReportKeys = profileCombinedReports.map(getReportKey).filter(Boolean);
   const menuSelectableReportKeySet = new Set(menuSelectableReportKeys);
   const menuCheckedReportKeysValid = menuCheckedReportKeys.filter((key) => menuSelectableReportKeySet.has(key));
@@ -3508,7 +3531,7 @@ export default function App() {
       });
   };
 
-  const addGasMeter = () => setFormData(prev => ({ ...prev, gasMeters: [...prev.gasMeters, { id: prev.gasMeters.length, pointNum: '', time: '', stackTemp: '', dp: '', pressure: '', volume: '', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' }] }));
+  const addGasMeter = () => setFormData(prev => ({ ...prev, gasMeters: [...prev.gasMeters, { id: prev.gasMeters.length, pointNum: '', time: '', stackTemp: '', dp: '', sp: '', pressure: '', volume: '', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' }] }));
   const removeGasMeter = (index) => {
     if (index === 0) return;
     setFormData(prev => {
@@ -5286,7 +5309,7 @@ export default function App() {
         updatesBySheet.get(sheetName).push({ ref, value });
       };
       const lastMeaningfulIdx = sourceGasMeters.reduce((lastIdx, meter, idx) => {
-        const fields = ['pointNum', 'time', 'stackTemp', 'dp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
+        const fields = ['pointNum', 'time', 'stackTemp', 'dp', 'sp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
         const hasValue = fields.some((field) => {
           const raw = meter?.[field];
           return raw !== null && raw !== undefined && String(raw).trim() !== '';
@@ -5424,7 +5447,8 @@ export default function App() {
         addUpdate(recordSheet, `H${row}`, toNumber(meter.tmIn));
         addUpdate(recordSheet, `I${row}`, toNumber(meter.tmOut));
         addUpdate(recordSheet, `K${row}`, toNumber(meter.impingerTemp));
-        addUpdate(recordSheet, `P${row}`, Number.isFinite(avgSp) ? avgSp : null);
+        const rowSp = toNumber(meter.sp);
+        addUpdate(recordSheet, `P${row}`, rowSp !== null ? rowSp : (Number.isFinite(avgSp) ? avgSp : null));
       });
       // 측정점(채취점)이 바뀔 때마다 행 배경색을 바꿔 구분
       const meterRowColors = [];
@@ -5549,8 +5573,16 @@ export default function App() {
       const next = { ...prev, rows: { ...prev.rows }, days: prev.days.map((d) => ({ ...d })) };
       if (group.company) next.company = group.company;
       if (group.location) next.stackName = group.location;
-      if (group.date && !next.days[0].date) next.days[0].date = group.date;
-      const dayIndex = Math.max(0, next.days.findIndex((d) => d.date === group.date));
+      // 측정일자별 일차 배정: 이미 같은 날짜의 일차가 있으면 그 칸, 없으면 빈 일차에 날짜를 채움 (최대 4일)
+      const dayIndexFor = (date) => {
+        if (!date) return 0;
+        const found = next.days.findIndex((d) => d.date === date);
+        if (found >= 0) return found;
+        const empty = next.days.findIndex((d) => !d.date);
+        if (empty >= 0) { next.days[empty] = { ...next.days[empty], date }; return empty; }
+        return 0;
+      };
+      (group.dates || [group.date]).filter(Boolean).forEach((d) => dayIndexFor(d));
       const samplerSource = reports.map(([, r]) => r).find((r) => String(r?.samplerId || '').trim() !== '');
       if (samplerSource) {
         const found = samplers.find((item) => String(item.id) === String(samplerSource.samplerId));
@@ -5563,6 +5595,7 @@ export default function App() {
       }
       reports.forEach(([sheetId, report]) => {
         const values = buildSamplingLogValuesFromReport(report);
+        const dayIndex = dayIndexFor(String(report?.date || '').trim());
         (SHEET_TO_LOG_ROWS[sheetId] || []).forEach((rowNum) => {
           const key = String(rowNum);
           next.rows[key] = { ...next.rows[key], requested: true, dayIndex, ...values };
@@ -5586,7 +5619,8 @@ export default function App() {
     const logStack = String(samplingLogData.stackName || '').trim();
     const sameSite = logCompany === company && (!logStack || !location || logStack === location);
     if (logCompany && !sameSite) return false;
-    applySheetGroupToSamplingLog({ company, location, date: String(report?.date || '').trim(), bySheet: { [sheetId]: report } }, { silent: true });
+    const date = String(report?.date || '').trim();
+    applySheetGroupToSamplingLog({ company, location, date, dates: date ? [date] : [], bySheet: { [sheetId]: report } }, { silent: true });
     return true;
   };
   const updateSamplingLogDay = (idx, key, value) => setSamplingLogData(prev => ({
@@ -5902,7 +5936,7 @@ export default function App() {
   }, [samplingPointCount]);
   // 기록표에 아직 입력한 값이 없으면 측정점 수·채취시간에 맞춰 표를 자동으로 만들어 둔다
   const meterTableHasEntries = formData.gasMeters.some((row, idx) => (
-    [row?.dp, row?.pressure, row?.volume, row?.stackTemp, row?.tmIn, row?.tmOut, row?.vacuum, row?.impingerTemp]
+    [row?.dp, row?.sp, row?.pressure, row?.volume, row?.stackTemp, row?.tmIn, row?.tmOut, row?.vacuum, row?.impingerTemp]
       .some((v) => String(v ?? '').trim() !== '') && (idx > 0 || String(row?.volume ?? '').trim() !== '')
   ));
   const autoTablePlanKey = samplingPointCount
@@ -5964,6 +5998,7 @@ export default function App() {
 
     const tsAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.stackTemp)));
     const dpAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.dp)));
+    const spAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.sp)));
     const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => getRawOrificePressureFromRow(row)));
     const tmInAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmIn)));
     const tmOutAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmOut)));
@@ -5987,6 +6022,7 @@ export default function App() {
       time: fmt(totalTime, 1),
       stackTemp: fmt(tsAvg, 1),
       dp: fmt(dpAvg, 2),
+      sp: fmt(spAvg, 2),
       pressure: fmt(pressureAvg, 2),
       volume: fmt(totalVolume, 2),
       tmPair,
@@ -6549,67 +6585,109 @@ export default function App() {
                     </div>
                   </div>
                   <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-xs min-w-[1200px]">
+                  <table className="w-full text-xs min-w-[1000px]">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
-                        <th className="p-2 font-bold text-center">
+                        <th className="p-2 font-bold text-center w-8">
                           <input
                             type="checkbox"
                             checked={isAllMenuReportsChecked}
                             onChange={(e) => toggleMenuAllReportChecks(e.target.checked)}
                           />
                         </th>
-                        <th className="p-2 font-bold text-center">구분</th>
-                        <th className="p-2 font-bold text-center">측정일자</th>
-                        <th className="p-2 font-bold text-center">저장시간</th>
-                        <th className="p-2 font-bold text-center">사업장</th>
-                        <th className="p-2 font-bold text-center">배출구</th>
-                        <th className="p-2 font-bold text-center">등속흡인율(%)</th>
-                        <th className="p-2 font-bold text-center">실측농도</th>
-                        <th className="p-2 font-bold text-center">보정농도</th>
-                        <th className="p-2 font-bold text-center">삭제</th>
+                        <th className="p-2 font-bold text-left">사업장</th>
+                        <th className="p-2 font-bold text-left">배출구(스택)</th>
+                        <th className="p-2 font-bold text-left">측정일자</th>
+                        <th className="p-2 font-bold text-left">저장된 기록부</th>
+                        <th className="p-2 font-bold text-center">건수</th>
+                        <th className="p-2 font-bold text-center w-20">상세</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {profileCombinedReports.map((data) => {
-                        const reportKey = getReportKey(data);
+                      {profileReportGroups.map((group) => {
+                        const expanded = expandedReportGroups.includes(group.key);
+                        const groupKeys = group.reports.map(getReportKey).filter(Boolean);
+                        const allChecked = groupKeys.length > 0 && groupKeys.every((k) => menuCheckedReportKeySet.has(k));
                         return (
-                        <tr
-                          key={reportKey || data.savedAt}
-                          className="hover:bg-slate-50 cursor-pointer"
-                          onClick={() => handleLoadSavedReport(data)}
-                          title="클릭하면 불러옵니다"
-                        >
-                          <td className="p-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={menuCheckedReportKeySet.has(reportKey)}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
-                            />
-                          </td>
-                          <td className="p-2 text-center"><SheetBadge sheetId={resolveReportSheetId(data)} title={data._sheetTitle} /></td>
-                          <td className="p-2 text-center whitespace-nowrap">{data.date || '-'}</td>
-                          <td className="p-2 text-center whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
-                          <td className="p-2 text-center">{data.company || '-'}</td>
-                          <td className="p-2 text-center">{data.location || '-'}</td>
-                          <td className="p-2 text-center">{data.isokineticRate || '-'}</td>
-                          <td className="p-2 text-center">{data.actualConcentration || '-'}</td>
-                          <td className="p-2 text-center">{data.correctedConcentration || '-'}</td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeSavedReport(data.id, data.savedAt);
-                              }}
-                              className="px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50 font-bold"
-                            >
-                              삭제
-                            </button>
-                          </td>
-                        </tr>
-                      )})}
+                          <Fragment key={group.key}>
+                            <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => toggleReportGroup(group.key)}>
+                              <td className="p-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={allChecked}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => groupKeys.forEach((k) => toggleMenuReportCheck(k, e.target.checked))}
+                                  title="이 사업장 리포트 전체 선택"
+                                />
+                              </td>
+                              <td className="p-2 font-bold text-slate-900 whitespace-nowrap">{group.company || '-'}</td>
+                              <td className="p-2 whitespace-nowrap">{group.location || '-'}</td>
+                              <td className="p-2 whitespace-nowrap">{group.dateLabel}</td>
+                              <td className="p-2">
+                                <div className="flex flex-wrap gap-1">
+                                  {SHEET_MENU.map((sheet) => group.bySheet[sheet.id] && (
+                                    <button
+                                      key={sheet.id}
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(group.bySheet[sheet.id]); }}
+                                      title={`${sheet.title} 최신 저장본 열기`}
+                                      className="hover:opacity-80"
+                                    >
+                                      <SheetBadge sheetId={sheet.id} title={sheet.title} />
+                                    </button>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="p-2 text-center font-bold">{group.reports.length}</td>
+                              <td className="p-2 text-center">
+                                <span className="text-[11px] font-bold text-slate-600">{expanded ? '접기 ▴' : '펼치기 ▾'}</span>
+                              </td>
+                            </tr>
+                            {expanded && group.reports.map((data) => {
+                              const reportKey = getReportKey(data);
+                              return (
+                                <tr
+                                  key={reportKey || data.savedAt}
+                                  className="bg-slate-50/60 hover:bg-slate-100 cursor-pointer"
+                                  onClick={() => handleLoadSavedReport(data)}
+                                  title="클릭하면 불러옵니다"
+                                >
+                                  <td className="p-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={menuCheckedReportKeySet.has(reportKey)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
+                                    />
+                                  </td>
+                                  <td className="p-2 pl-6" colSpan="2">
+                                    <span className="inline-flex items-center gap-2">
+                                      <SheetBadge sheetId={resolveReportSheetId(data)} title={data._sheetTitle} />
+                                      <span className="text-slate-600">저장 {formatSavedDateTime(data.savedAt)}</span>
+                                    </span>
+                                  </td>
+                                  <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
+                                  <td className="p-2 text-slate-600">
+                                    {resolveReportSheetId(data) === 'samplinglog'
+                                      ? '시료채취기록부(종합)'
+                                      : `등속 ${data.isokineticRate || '-'}% · 실측 ${data.actualConcentration || '-'} · 보정 ${data.correctedConcentration || '-'}`}
+                                  </td>
+                                  <td className="p-2 text-center"></td>
+                                  <td className="p-2 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); removeSavedReport(data.id, data.savedAt); }}
+                                      className="px-2 py-1 rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-[11px]"
+                                    >
+                                      삭제
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -6751,7 +6829,7 @@ export default function App() {
             return (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·배출구·측정일자끼리 묶음</span></h3>
+                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택명끼리 묶음 (여러 날이면 날짜별 일차로 배정)</span></h3>
                   <span className="text-[11px] text-slate-500">가져오면 먼지·중금속·수은·PAHs 행의 시각, 가스미터 시작·종료값, 미터 온도, 오리피스압이 채워집니다</span>
                 </div>
                 <div className="overflow-x-auto border border-slate-200 rounded-lg">
@@ -6760,7 +6838,7 @@ export default function App() {
                       <tr>
                         <th className="p-2">측정일자</th>
                         <th className="p-2">사업장</th>
-                        <th className="p-2">배출구</th>
+                        <th className="p-2">배출구(스택)</th>
                         <th className="p-2">저장된 기록부</th>
                         <th className="p-2 w-28"></th>
                       </tr>
@@ -6768,13 +6846,13 @@ export default function App() {
                     <tbody>
                       {groups.slice(0, 12).map((group) => (
                         <tr key={group.key}>
-                          <td className="p-2 whitespace-nowrap">{group.date || '-'}</td>
+                          <td className="p-2 whitespace-nowrap">{group.dateLabel}</td>
                           <td className="p-2 font-bold text-slate-900">{group.company || '-'}</td>
                           <td className="p-2">{group.location || '-'}</td>
                           <td className="p-2">
                             {LOG_SOURCE_SHEETS.map((sheetId) => (
                               <span key={sheetId} className={`inline-block mr-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${group.bySheet[sheetId] ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-slate-200 text-slate-300'}`}>
-                                {{ dust: '먼지', metal: '중금속', mercury: '수은', pahs: 'PAHs' }[sheetId]}
+                                {{ dust: '먼지', metal: '중금속', mercury: '수은', pahs: 'PAHs', flow: '유량' }[sheetId]}
                               </span>
                             ))}
                           </td>
@@ -8117,6 +8195,7 @@ export default function App() {
                       <th className="p-1 font-bold whitespace-nowrap">누적 시간<br/>(분)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>온도(T<sub>s</sub>, ℃)</th>
                       <th className="p-1 font-bold text-emerald-700 whitespace-nowrap">동압<br/>(Δp)</th>
+                      <th className="p-1 font-bold whitespace-nowrap">정압<br/>(mmH₂O)</th>
                       {!isFlowSheet && <th className="p-1 font-bold text-teal-700 whitespace-nowrap">오리피스압<br/>(ΔH)</th>}
                       {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">적산유량<br/>(V<sub>m</sub>, L)</th>}
                       {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-500">입구 | 출구</span></th>}
@@ -8161,6 +8240,9 @@ export default function App() {
                           
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                          </td>
+                          <td className="p-1 w-14">
+                            <input type="number" step="0.1" value={meter.sp || ''} onChange={(e) => handleGasMeterChange(idx, 'sp', e.target.value)} placeholder="정압" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
                           </td>
                           {!isFlowSheet && (
                           <td className="p-1 w-14">
@@ -8229,6 +8311,7 @@ export default function App() {
                       <td className="p-1">{meterTableAverages.time}</td>
                       <td className="p-1">{meterTableAverages.stackTemp}</td>
                       <td className="p-1">{meterTableAverages.dp}</td>
+                      <td className="p-1">{meterTableAverages.sp}</td>
                       {!isFlowSheet && <td className="p-1">{meterTableAverages.pressure}</td>}
                       {!isFlowSheet && <td className="p-1">{meterTableAverages.volume}</td>}
                       {!isFlowSheet && <td className="p-1">{meterTableAverages.tmPair}</td>}
