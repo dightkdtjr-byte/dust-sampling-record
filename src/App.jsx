@@ -68,6 +68,17 @@ const sanitizeLeakTest = (value) => {
 };
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
+const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
+// 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
+const SheetBadge = ({ sheetId, title }) => (
+  <span
+    className="inline-flex items-center justify-center min-w-[2.6rem] px-1.5 py-0.5 rounded-md text-[11px] font-bold text-white whitespace-nowrap shadow-sm"
+    style={{ backgroundColor: SHEET_BADGE_COLORS[sheetId] || '#475569', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25)' }}
+    title={title || ''}
+  >
+    {SHEET_SHORT_LABELS[sheetId] || title || '-'}
+  </span>
+);
 
 const SHEET_MENU = [
   {
@@ -6577,7 +6588,7 @@ export default function App() {
                               onChange={(e) => toggleMenuReportCheck(reportKey, e.target.checked)}
                             />
                           </td>
-                          <td className="p-2 text-center font-bold text-slate-800">{data._sheetTitle}</td>
+                          <td className="p-2 text-center"><SheetBadge sheetId={resolveReportSheetId(data)} title={data._sheetTitle} /></td>
                           <td className="p-2 text-center whitespace-nowrap">{data.date || '-'}</td>
                           <td className="p-2 text-center whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
                           <td className="p-2 text-center">{data.company || '-'}</td>
@@ -8498,7 +8509,7 @@ export default function App() {
                       <td className="p-2 whitespace-nowrap">{data.date || '-'}</td>
                       <td className="p-2 whitespace-nowrap">{formatSavedDateTime(data.savedAt)}</td>
                       <td className="p-2">
-                        <span className="font-bold text-slate-800 whitespace-nowrap" title={reportSheetTitle}>({SHEET_SHORT_LABELS[reportSheetId] || reportSheetTitle})</span>
+                        <SheetBadge sheetId={reportSheetId} title={reportSheetTitle} />
                       </td>
                       <td className="p-2 whitespace-nowrap">{data.company || '-'}</td>
                       <td className="p-2 whitespace-nowrap">{data.location || '-'}</td>
