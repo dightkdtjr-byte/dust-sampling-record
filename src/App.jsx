@@ -214,16 +214,23 @@ const buildSamplingLogValuesFromReport = (report) => {
   };
 };
 
-// 같은 사업장·배출구(스택)의 기록부를 한 묶음으로. 측정이 며칠에 걸쳐도 같은 묶음이며 날짜 목록을 함께 둔다
-// (기록부 종류별로는 최신 저장본 하나를 대표로 사용)
+// 같은 사업장·배출구(스택)의 기록부를 한 묶음으로 묶되, 날짜가 이어지는 것(1·2·3일차처럼 사이가 3일 이내)만 같은 측정 건으로 본다.
+// 날짜가 그보다 떨어져 있으면 같은 스택이라도 별도 묶음. (기록부 종류별로는 최신 저장본 하나를 대표로 사용)
+const CAMPAIGN_MAX_GAP_DAYS = 3;
 const formatDateRange = (dates) => {
   const list = (dates || []).filter(Boolean);
   if (list.length === 0) return '-';
   if (list.length === 1) return list[0];
   return `${list[0]} ~ ${list[list.length - 1]} (${list.length}일)`;
 };
+const daysBetween = (a, b) => {
+  const t1 = Date.parse(a);
+  const t2 = Date.parse(b);
+  if (!Number.isFinite(t1) || !Number.isFinite(t2)) return Infinity;
+  return Math.abs(t2 - t1) / 86400000;
+};
 const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS) => {
-  const groups = new Map();
+  const sites = new Map();
   (reports || []).forEach((report) => {
     const sheetId = resolveSheetId(report);
     if (sheetFilter && !sheetFilter.includes(sheetId)) return;
@@ -232,20 +239,40 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
     const date = String(report?.date || '').trim();
     if (!company && !location && !date) return;
     const key = `${company}|${location}`;
-    if (!groups.has(key)) groups.set(key, { key, company, location, dates: [], bySheet: {}, reports: [] });
-    const group = groups.get(key);
-    group.reports.push(report);
-    if (date && !group.dates.includes(date)) group.dates.push(date);
-    const current = group.bySheet[sheetId];
-    if (!current || String(report.savedAt || '') > String(current.savedAt || '')) group.bySheet[sheetId] = report;
+    if (!sites.has(key)) sites.set(key, { company, location, items: [] });
+    sites.get(key).items.push({ report, sheetId, date });
   });
-  groups.forEach((group) => {
-    group.dates.sort();
-    group.date = group.dates[group.dates.length - 1] || '';
-    group.dateLabel = formatDateRange(group.dates);
-    group.reports.sort((x, y) => String(y.savedAt || '').localeCompare(String(x.savedAt || '')));
+
+  const groups = [];
+  sites.forEach(({ company, location, items }) => {
+    // 날짜순으로 늘어놓고, 사이가 CAMPAIGN_MAX_GAP_DAYS보다 벌어지면 새 묶음
+    const dated = items.filter((it) => it.date).sort((x, y) => x.date.localeCompare(y.date));
+    const undated = items.filter((it) => !it.date);
+    const clusters = [];
+    dated.forEach((it) => {
+      const last = clusters[clusters.length - 1];
+      if (last && daysBetween(last.dates[last.dates.length - 1], it.date) <= CAMPAIGN_MAX_GAP_DAYS) {
+        last.items.push(it);
+        if (!last.dates.includes(it.date)) last.dates.push(it.date);
+      } else {
+        clusters.push({ items: [it], dates: [it.date] });
+      }
+    });
+    if (undated.length > 0) clusters.push({ items: undated, dates: [] });
+    clusters.forEach((cluster) => {
+      const group = { key: `${company}|${location}|${cluster.dates[0] || 'nodate'}`, company, location, dates: cluster.dates, bySheet: {}, reports: [] };
+      cluster.items.forEach(({ report, sheetId }) => {
+        group.reports.push(report);
+        const current = group.bySheet[sheetId];
+        if (!current || String(report.savedAt || '') > String(current.savedAt || '')) group.bySheet[sheetId] = report;
+      });
+      group.date = group.dates[group.dates.length - 1] || '';
+      group.dateLabel = formatDateRange(group.dates);
+      group.reports.sort((x, y) => String(y.savedAt || '').localeCompare(String(x.savedAt || '')));
+      groups.push(group);
+    });
   });
-  return [...groups.values()].sort((x, y) => (y.date || '').localeCompare(x.date || '') || x.company.localeCompare(y.company));
+  return groups.sort((x, y) => (y.date || '').localeCompare(x.date || '') || x.company.localeCompare(y.company));
 };
 
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
@@ -6829,7 +6856,7 @@ export default function App() {
             return (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택명끼리 묶음 (여러 날이면 날짜별 일차로 배정)</span></h3>
+                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택의 이어지는 날짜(1·2·3일차)끼리 묶음 · 날짜가 떨어지면 따로</span></h3>
                   <span className="text-[11px] text-slate-500">가져오면 먼지·중금속·수은·PAHs 행의 시각, 가스미터 시작·종료값, 미터 온도, 오리피스압이 채워집니다</span>
                 </div>
                 <div className="overflow-x-auto border border-slate-200 rounded-lg">
