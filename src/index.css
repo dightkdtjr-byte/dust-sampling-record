@@ -72,3 +72,65 @@ thead.bg-slate-100, thead .bg-slate-100 { background-color: rgba(0, 0, 0, 0.035)
 /* 섹션 번호 배지: 둥근 초록 원 대신 각진 진회색 사각 배지 */
 h2 > span.w-6.h-6.rounded-full { border-radius: 6px !important; background-color: #1f2937 !important; background-image: none !important; }
 h2 { letter-spacing: -0.02em; }
+
+/* ── 기록부 내부: 표·입력칸·결과 박스를 mac 앱(Numbers/시스템 설정) 느낌으로 ── */
+/* 연한 색 배경 박스는 거의 무채색으로 (강조색은 글자·테두리·버튼에만) */
+[class*="bg-emerald-50"], [class*="bg-teal-50"], [class*="bg-cyan-50"] { background-color: #f7f9f8 !important; }
+[class*="bg-emerald-100"], [class*="bg-teal-100"], [class*="bg-cyan-100"] { background-color: #eef3f0 !important; }
+.bg-slate-50, [class*="bg-slate-50/"] { background-color: #f5f5f7 !important; }
+.bg-slate-100 { background-color: #f0f0f3 !important; }
+
+table { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+thead th {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6e6e73;
+  letter-spacing: -0.005em;
+  background-color: #f5f5f7 !important;
+  border-bottom: 1px solid var(--mac-hairline) !important;
+  text-transform: none;
+}
+thead th[class*="text-emerald"], thead th[class*="text-teal"], thead th[class*="text-cyan"],
+thead th[class*="text-sky"], thead th[class*="text-amber"], thead th[class*="text-red"] { color: inherit; }
+tbody td { border-color: var(--mac-hairline) !important; }
+tbody tr:nth-child(even) > td:not([class*="bg-"]) { background-color: rgba(0, 0, 0, 0.018); }
+tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(10, 132, 255, 0.045); }
+tfoot td, tr.bg-slate-100 > td, tr[class*="bg-slate-50"] > td { font-weight: 600; }
+/* 표를 감싸는 상자 */
+.overflow-x-auto.border, .overflow-x-auto[class*="border-"] { border: 1px solid var(--mac-hairline) !important; border-radius: 8px !important; }
+.overflow-x-auto > table { min-width: 100%; }
+
+/* 표 안의 입력칸: 테두리 없이 깔끔하게, 포커스 시에만 파란 테두리 */
+td > input, td > select, td > div > input {
+  border-color: transparent !important;
+  background-color: rgba(255, 255, 255, 0.75) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+  font-variant-numeric: tabular-nums;
+  transition: box-shadow 0.12s ease, background-color 0.12s ease;
+}
+td > input:hover, td > div > input:hover { background-color: #fff !important; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important; }
+td > input:focus, td > select:focus, td > div > input:focus {
+  background-color: #fff !important;
+  box-shadow: inset 0 0 0 1.5px var(--mac-accent), 0 0 0 3px rgba(10, 132, 255, 0.22) !important;
+}
+td > input[readonly], td > input:disabled { background-color: transparent !important; box-shadow: none !important; font-weight: 600; }
+td > input[class*="bg-emerald-50"], td > input[class*="bg-teal-50"] { background-color: rgba(52, 199, 89, 0.08) !important; }
+
+/* 일반 입력칸 */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+  background-color: #fff;
+  border-color: rgba(0, 0, 0, 0.14) !important;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+input[readonly]:not([type="checkbox"]) { background-color: #f5f5f7 !important; color: #1d1d1f; font-weight: 600; }
+label, .text-\[11px\].font-bold, .text-xs.font-bold { color: #3a3a3c; }
+
+/* 결과·요약 박스: 왼쪽 색 띠 제거, 숫자 강조 */
+[class*="border-l-4"] { border-left-width: 1px !important; border-left-color: var(--mac-hairline) !important; }
+.font-black { font-weight: 700; }
+.text-lg.font-black, .text-xl.font-black, .text-2xl.font-black, .text-3xl.font-black, .text-4xl.font-black { letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+/* 섹션 제목 */
+h2.text-lg.font-bold { font-size: 15px; font-weight: 700; color: #1d1d1f; }
+h2.text-lg.font-bold + div, h2 ~ .border-b { border-color: var(--mac-hairline) !important; }
+h3.text-sm.font-bold { font-size: 13px; font-weight: 600; color: #1d1d1f; }
