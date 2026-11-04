@@ -101,19 +101,19 @@ tfoot td, tr.bg-slate-100 > td, tr[class*="bg-slate-50"] > td { font-weight: 600
 .overflow-x-auto > table { min-width: 100%; }
 
 /* 표 안의 입력칸: 테두리 없이 깔끔하게, 포커스 시에만 파란 테두리 */
-td > input, td > select, td > div > input {
+td > input:not([type="checkbox"]), td > select, td > div > input:not([type="checkbox"]) {
   border-color: transparent !important;
   background-color: rgba(255, 255, 255, 0.75) !important;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
   font-variant-numeric: tabular-nums;
   transition: box-shadow 0.12s ease, background-color 0.12s ease;
 }
-td > input:hover, td > div > input:hover { background-color: #fff !important; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important; }
-td > input:focus, td > select:focus, td > div > input:focus {
+td > input:not([type="checkbox"]):hover, td > div > input:not([type="checkbox"]):hover { background-color: #fff !important; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important; }
+td > input:not([type="checkbox"]):focus, td > select:focus, td > div > input:not([type="checkbox"]):focus {
   background-color: #fff !important;
   box-shadow: inset 0 0 0 1.5px var(--mac-accent), 0 0 0 3px rgba(10, 132, 255, 0.22) !important;
 }
-td > input[readonly], td > input:disabled { background-color: transparent !important; box-shadow: none !important; font-weight: 600; }
+td > input[readonly]:not([type="checkbox"]), td > input:disabled:not([type="checkbox"]) { background-color: transparent !important; box-shadow: none !important; font-weight: 600; }
 td > input[class*="bg-emerald-50"], td > input[class*="bg-teal-50"] { background-color: rgba(52, 199, 89, 0.08) !important; }
 
 /* 일반 입력칸 */
@@ -152,7 +152,7 @@ tbody tr.bg-slate-100 > td, tbody tr[class*="bg-slate-50"] > td, tbody tr.font-b
   color: #1d1d1f;
 }
 /* 계산된 칸(읽기 전용/비활성)은 살짝 들어간 회색 패널처럼 */
-td > input[readonly], td > input:disabled, td > div > input[readonly] {
+td > input[readonly]:not([type="checkbox"]), td > input:disabled:not([type="checkbox"]), td > div > input[readonly] {
   background-color: #f2f2f4 !important;
   color: #3a3a3c;
   box-shadow: none !important;
@@ -160,7 +160,7 @@ td > input[readonly], td > input:disabled, td > div > input[readonly] {
 }
 td > input::placeholder, td > div > input::placeholder { color: #c7c7cc; font-weight: 400; }
 /* 입력 칸 높이 통일 */
-td > input, td > select, td > div > input { min-height: 28px; padding-top: 3px !important; padding-bottom: 3px !important; }
+td > input:not([type="checkbox"]), td > select, td > div > input:not([type="checkbox"]) { min-height: 28px; padding-top: 3px !important; padding-bottom: 3px !important; }
 /* 삭제 버튼: 작고 옅게, 올리면 빨강 */
 td > button[class*="text-red"] { color: #aeaeb2 !important; font-weight: 500; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
 td > button[class*="text-red"]:hover { color: #ff3b30 !important; background-color: rgba(255, 59, 48, 0.08); }
@@ -227,3 +227,27 @@ td > input::placeholder, td > div > input::placeholder { color: #b0b0b5 !importa
 
 /* 표 안 버튼은 줄바꿈 없이 */
 td > button { white-space: nowrap; }
+
+/* 체크박스: mac 스타일(파란 강조, 둥근 모서리, 글자와 세로 정렬) */
+input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--mac-accent);
+  border-radius: 4px;
+  vertical-align: middle;
+  margin: 0;
+  cursor: pointer;
+}
+input[type="checkbox"]:disabled { opacity: 0.45; cursor: not-allowed; }
+input[type="checkbox"].w-3\.5 { width: 13px; height: 13px; }
+
+/* 체크박스 뒤에 입력칸 상자가 보이지 않게 */
+input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbox"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  appearance: auto;
+  -webkit-appearance: auto;
+}

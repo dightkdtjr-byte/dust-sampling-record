@@ -2138,9 +2138,16 @@ export default function App() {
       if (sheetId === 'flow') return `유속 ${data.avgVelocity || '-'} m/s · 건조유량 ${data.dryFlowRate || '-'} Sm³/hr`;
       return `등속 ${data.isokineticRate || '-'}% · 실측 ${data.actualConcentration || '-'} · 보정 ${data.correctedConcentration || '-'}`;
     };
+    const exportOne = async (data) => {
+      if (resolveReportSheetId(data) === 'samplinglog') await exportSamplingLogExcel(data);
+      else await exportToTemplateExcel(data);
+    };
     const actionButtons = (data) => (
       <span className="inline-flex items-center gap-1">
         <button type="button" onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(data); }} className="px-2 py-1 rounded text-[11px] border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 font-bold whitespace-nowrap">불러오기</button>
+        {!IS_DESKTOP_BUILD && (
+          <button type="button" onClick={(e) => { e.stopPropagation(); exportOne(data); }} className="px-2 py-1 rounded text-[11px] border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold whitespace-nowrap">엑셀</button>
+        )}
         {allowCopy && (
           <button type="button" onClick={(e) => { e.stopPropagation(); handleCopySavedReportToCurrentSheet(data); }} className={`px-2 py-1 rounded text-[11px] text-white font-bold whitespace-nowrap ${activeTheme.primaryButton}`}>이 기록부로 복사</button>
         )}
@@ -6804,19 +6811,6 @@ export default function App() {
               <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${logStats.requestedRows > 0 && logStats.filledCount === logStats.requestedRows ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>시각 입력 {logStats.filledCount}/{logStats.requestedRows}</span>
               {log.company && <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">{log.company}{log.stackName ? ` · ${log.stackName}` : ''}</span>}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={handleSaveSamplingLog} className="px-4 py-2 text-white font-bold rounded-lg text-sm shadow-sm bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-700 hover:to-amber-600">
-                리포트 저장
-              </button>
-              {!IS_DESKTOP_BUILD && (
-                <button type="button" onClick={() => exportSamplingLogExcel(null)} className="px-4 py-2 font-bold rounded-lg text-sm border border-orange-300 text-orange-800 bg-orange-50 hover:bg-orange-100">
-                  현재 내용 엑셀로 추출
-                </button>
-              )}
-              <button type="button" onClick={resetSamplingLogForm} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                새로 작성
-              </button>
-            </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -7035,9 +7029,9 @@ export default function App() {
                           const isMeter = sub.kind === 'particle' || sub.kind === 'gas' || sub.kind === 'box' || sub.kind === 'plain';
                           const timeDone = on && row.start && row.end;
                           return (
-                            <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/60 shadow-[inset_3px_0_0_0_#ea580c]' : 'text-slate-500'}>
+                            <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/60' : 'text-slate-500'}>
                               <td className="p-1 border border-slate-200">
-                                <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4 accent-orange-600" />
+                                <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4" />
                               </td>
                               <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -7058,7 +7052,7 @@ export default function App() {
                                                 const next = e.target.checked ? sub.options.filter((o) => o === opt || current.includes(o)) : current.filter((o) => o !== opt);
                                                 updateSamplingLogRow(String(sub.row), 'speciesSel', next.length > 0 ? next : [opt]);
                                               }}
-                                              className="w-3 h-3 accent-orange-600"
+                                              className="w-3.5 h-3.5"
                                             />
                                             {opt}
                                           </label>
@@ -7100,46 +7094,39 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">저장된 시료채취기록부 ({savedLogs.length}건)</h2>
-            {savedLogs.length === 0 ? (
-              <p className="text-sm text-slate-500">저장된 기록부가 없습니다.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-center border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-700">
-                      <th className="p-2 border border-slate-200">채취일</th><th className="p-2 border border-slate-200">사업장</th><th className="p-2 border border-slate-200">굴뚝</th>
-                      <th className="p-2 border border-slate-200">의뢰 물질</th><th className="p-2 border border-slate-200">저장시간</th><th className="p-2 border border-slate-200">작업</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {savedLogs.map((item) => {
-                      const itemLog = sanitizeSamplingLog(item.samplingLog);
-                      const requestedCount = countSpecies(SAMPLING_LOG_SUBSTANCES.filter((sub) => itemLog.rows[String(sub.row)]?.requested), itemLog);
-                      return (
-                        <tr key={buildReportKey(item.id, item.savedAt)}>
-                          <td className="p-2 border border-slate-200">{item.date || '-'}</td>
-                          <td className="p-2 border border-slate-200">{item.company || '-'}</td>
-                          <td className="p-2 border border-slate-200">{item.location || '-'}</td>
-                          <td className="p-2 border border-slate-200">{requestedCount}종</td>
-                          <td className="p-2 border border-slate-200">{item.savedAt ? new Date(item.savedAt).toLocaleString() : '-'}</td>
-                          <td className="p-2 border border-slate-200">
-                            <div className="flex flex-wrap justify-center gap-1">
-                              <button type="button" onClick={() => handleLoadSavedReport(item)} className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-100 font-bold">불러오기</button>
-                              {!IS_DESKTOP_BUILD && (
-                                <button type="button" onClick={() => exportSamplingLogExcel(item)} className="px-2 py-1 rounded border border-orange-300 text-orange-800 bg-orange-50 hover:bg-orange-100 font-bold">엑셀</button>
-                              )}
-                              <button type="button" onClick={() => { if (window.confirm('이 기록부를 삭제할까요?')) removeSavedReport(item.id, item.savedAt); }} className="px-2 py-1 rounded border border-red-300 text-red-700 bg-white hover:bg-red-50 font-bold">삭제</button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
+            <button type="button" onClick={resetSamplingLogForm} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+              새 기록지 작성
+            </button>
+            {!IS_DESKTOP_BUILD && (
+              <button type="button" onClick={() => exportSamplingLogExcel(null)} className="px-8 py-3.5 bg-white border border-orange-300 text-orange-800 font-bold rounded-xl hover:bg-orange-50 transition-colors shadow-sm">
+                현재 내용 엑셀로 추출
+              </button>
             )}
+            <button type="button" onClick={handleSaveSamplingLog} className="px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md bg-orange-600 hover:bg-orange-700">
+              기록부 데이터 저장
+            </button>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm mt-8 text-slate-800 border border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b border-slate-200 pb-4">
+              <h2 className="text-lg font-bold text-slate-900">저장된 종합 리포트 ({displayUserNameWithFallback})</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
+                <button onClick={handleDeleteCheckedSheetReports} className="px-3 py-1.5 border border-red-300 text-red-600 bg-white hover:bg-red-50 font-bold rounded-lg text-xs">선택 삭제</button>
+                {!IS_DESKTOP_BUILD && (
+                  <button onClick={handleExportSelectedTemplateExcel} className="px-3 py-1.5 text-white font-bold rounded-lg text-xs bg-orange-600 hover:bg-orange-700">선택 항목 엑셀로 추출</button>
+                )}
+              </div>
+            </div>
+            {renderReportGroupTable({
+              groups: groupSheetReportsForLog(savedLogs, resolveReportSheetId, null),
+              checkedSet: sheetCheckedReportKeySet,
+              toggleCheck: toggleSheetReportCheck,
+              allChecked: savedLogs.length > 0 && savedLogs.every((item) => sheetCheckedReportKeySet.has(getReportKey(item))),
+              toggleAll: (checked) => savedLogs.forEach((item) => toggleSheetReportCheck(getReportKey(item), checked)),
+              emptyText: '저장된 시료채취기록부가 없습니다.',
+            })}
           </div>
       </>
     );

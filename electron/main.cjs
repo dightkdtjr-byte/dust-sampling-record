@@ -138,6 +138,16 @@ app.whenReady().then(() => {
         title: '파일 저장',
         defaultPath: path.join(app.getPath('downloads'), fileName),
       });
+      // 저장이 끝나면 저장된 파일이 있는 폴더를 열어 파일을 선택해 보여줌
+      item.once('done', (_event, state) => {
+        if (state !== 'completed') return;
+        try {
+          const savedPath = item.getSavePath();
+          if (savedPath) shell.showItemInFolder(savedPath);
+        } catch (error) {
+          console.error('open folder failed', error);
+        }
+      });
     } catch (error) {
       console.error('download dialog setup failed', error);
     }
