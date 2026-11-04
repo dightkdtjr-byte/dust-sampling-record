@@ -7697,7 +7697,7 @@ export default function App() {
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-800">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표'}</h3>
+                <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                       {isFlowSheet ? '총 측정시간' : '총 채취시간'}
