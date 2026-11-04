@@ -3193,7 +3193,7 @@ export default function App() {
     const file = event?.target?.files?.[0];
     if (!file) return;
     if (!activeUser || !isUserUnlocked) {
-      alert('로그인 후 CSV를 가져올 수 있습니다.');
+      alert('로그인 후 CSV 임포트가 가능합니다.');
       event.target.value = '';
       return;
     }
@@ -3245,7 +3245,7 @@ export default function App() {
       }).filter((item) => item.date || item.company || item.location);
 
       if (importedReports.length === 0) {
-        alert('가져올 수 있는 리포트가 없습니다. CSV 머리글을 확인해주세요.');
+        alert('임포트할 유효 리포트가 없습니다. CSV 헤더를 확인해주세요.');
         event.target.value = '';
         return;
       }
@@ -3253,10 +3253,10 @@ export default function App() {
       const nextReports = [...activeUserReports, ...importedReports];
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`CSV에서 리포트 ${importedReports.length}건을 가져왔습니다.`);
+      alert(`${importedReports.length}건 CSV 리포트를 임포트했습니다.`);
     } catch (error) {
       console.error(error);
-      alert('CSV를 가져오는 중 오류가 발생했습니다.');
+      alert('CSV 임포트 중 오류가 발생했습니다.');
     } finally {
       event.target.value = '';
     }
@@ -5918,7 +5918,7 @@ export default function App() {
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
                 <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
-                <p className="text-sm font-black text-emerald-900">바로 시작</p>
+                <p className="text-sm font-black text-emerald-900">베타 접속</p>
                 <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   <button
@@ -6212,7 +6212,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 모아보기</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -6279,7 +6279,7 @@ export default function App() {
                         </th>
                         <th className="p-2 font-bold text-center">구분</th>
                         <th className="p-2 font-bold text-center">측정일자</th>
-                        <th className="p-2 font-bold text-center">저장 시각</th>
+                        <th className="p-2 font-bold text-center">저장시간</th>
                         <th className="p-2 font-bold text-center">사업장</th>
                         <th className="p-2 font-bold text-center">배출구</th>
                         <th className="p-2 font-bold text-center">등속흡인율(%)</th>
@@ -6604,7 +6604,7 @@ export default function App() {
                   <thead>
                     <tr className="bg-slate-50 text-slate-700">
                       <th className="p-2 border border-slate-200">채취일</th><th className="p-2 border border-slate-200">사업장</th><th className="p-2 border border-slate-200">굴뚝</th>
-                      <th className="p-2 border border-slate-200">의뢰 물질</th><th className="p-2 border border-slate-200">저장 시각</th><th className="p-2 border border-slate-200">작업</th>
+                      <th className="p-2 border border-slate-200">의뢰 물질</th><th className="p-2 border border-slate-200">저장시간</th><th className="p-2 border border-slate-200">작업</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6767,7 +6767,7 @@ export default function App() {
               className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg border border-emerald-700 hover:bg-emerald-700 inline-flex items-center gap-1"
             >
               <PresetSaveIcon />
-              프리셋 저장
+              프리셋 저장하기
             </button>
           </div>
         </div>
@@ -6846,7 +6846,7 @@ export default function App() {
                       <thead>
                         <tr className="bg-slate-50 text-slate-700">
                           <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치, cm)</th>
-                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정점 (1~5)</th>
+                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
                         </tr>
                         <tr className="bg-slate-50 text-slate-700">
                           {samplingPointsData.nearInsertion.map((_, i) => (
@@ -7029,7 +7029,7 @@ export default function App() {
                 
                 <div className="bg-cyan-50 p-4 rounded-lg flex justify-between items-center border border-cyan-100 mt-4 shadow-sm">
                   <div className="text-slate-800">
-                    <span className="font-bold">사전 수분량 (평균)</span>
+                    <span className="font-bold">사전 적용 수분량 (평균)</span>
                   </div>
                   <div className="text-2xl font-black text-cyan-700">{calcMoisture()}%</div>
                 </div>
@@ -7358,7 +7358,7 @@ export default function App() {
             <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg mb-6 shadow-sm">
                <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-4 gap-2">
                  <h3 className="font-bold text-emerald-800">
-                    1단계: 채취 조건 산출 (장비 계수 반영)
+                    1단계: 채취조건 정밀 산출 (기기 고유 계수 연동)
                  </h3>
                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
@@ -7626,7 +7626,7 @@ export default function App() {
                     </div>
                   )}
                   
-                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 및 예상 채취량</h4>
+                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 및 채취량 예측 정보</h4>
                   <div className="flex flex-wrap justify-center gap-2 text-center">
                       <div className="bg-slate-50 py-2 px-1 rounded-lg border border-slate-200 flex-1 min-w-[90px]">
                           <div className="text-[10px] text-slate-500 font-bold">가스유속(V<sub>s</sub>)</div>
@@ -7697,7 +7697,7 @@ export default function App() {
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표'}</h3>
+                <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                       {isFlowSheet ? '총 측정시간' : '총 채취시간'}
@@ -7728,7 +7728,7 @@ export default function App() {
                       분
                     </label>
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
-                      측정점·채취시간 표 자동 생성
+                      측정점/채취시간 표 자동 생성
                     </button>
                     {(() => {
                       const plan = getTableGenerationPlan();
@@ -7930,7 +7930,7 @@ export default function App() {
             <div className="bg-white p-5 rounded-2xl flex flex-col justify-between shadow-lg border-2 border-slate-300">
               <div className="mb-4">
                 <div>
-                  <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율</h3>
+                  <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
                   <p className="text-xs text-slate-600 mt-1">유효 범위 90~110% (대기오염공정시험기준)</p>
                 </div>
               </div>
@@ -7966,7 +7966,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
               <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">{isFlowSheet ? 5 : 6}</span>
-              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 결과 및 비고' : '최종 결과 및 비고')}
+              {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
             {isDustSheet && (
@@ -7989,7 +7989,7 @@ export default function App() {
             {/* 최종 농도 산출 결과 패널 */}
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md text-white mb-6 relative overflow-hidden">
                <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-600 pb-3">
-                 최종 결과 요약
+                 최종 산출 결과 요약
                </h3>
                <div className={`grid grid-cols-1 ${isDustSheet ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
                   <div className="flex flex-col items-center justify-center p-2">
@@ -8030,10 +8030,10 @@ export default function App() {
 
           <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-              새로 작성
+              새 기록지 작성
             </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
-              기록부 저장
+              기록부 데이터 저장
             </button>
           </div>
         </form>
@@ -8108,7 +8108,7 @@ export default function App() {
                       />
                     </th>
                     <th className="p-2 font-bold">측정일자</th>
-                    <th className="p-2 font-bold">저장 시각</th>
+                    <th className="p-2 font-bold">저장시간</th>
                     <th className="p-2 font-bold">시트</th>
                     <th className="p-2 font-bold">사업장</th>
                     <th className="p-2 font-bold">배출구</th>
