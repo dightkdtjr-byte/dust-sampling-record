@@ -291,27 +291,6 @@ const seededNoise = (seed) => {
   return x - Math.floor(x);
 };
 
-const buildSmokeParticleStyle = (stackId, smokeIdx) => {
-  const stackNum = parseInt(String(stackId).replace(/\D/g, ''), 10) || 1;
-  const seedBase = stackNum * 97 + smokeIdx * 31;
-  const riseDuration = 14 + seededNoise(seedBase + 4) * 9;
-  // 바람은 대체로 오른쪽으로 분다 (가끔 왼쪽으로 흩어지는 퍼프)
-  const driftDir = seededNoise(seedBase + 2) > 0.22 ? 1 : -1;
-
-  return {
-    '--size': `${22 + seededNoise(seedBase + 1) * 34}px`,
-    '--drift': `${driftDir * (60 + seededNoise(seedBase + 3) * 150)}px`,
-    '--rise-duration': `${riseDuration}s`,
-    '--rise-distance': `${55 + seededNoise(seedBase + 5) * 60}vh`,
-    '--max-opacity': `${0.2 + seededNoise(seedBase + 6) * 0.18}`,
-    '--start-scale': `${0.5 + seededNoise(seedBase + 7) * 0.2}`,
-    '--end-scale': `${2 + seededNoise(seedBase + 8) * 0.9}`,
-    '--tilt-start': `${-8 + seededNoise(seedBase + 9) * 6}deg`,
-    '--tilt-end': `${4 + seededNoise(seedBase + 10) * 8}deg`,
-    animationDelay: `-${seededNoise(seedBase + 11) * riseDuration}s`,
-  };
-};
-
 const SKYLINE_STARS = Array.from({ length: 46 }, (_, idx) => ({
   id: `star-${idx}`,
   left: `${2 + ((idx * 17) % 96)}%`,
@@ -331,128 +310,6 @@ const SKYLINE_CLOUDS = [
   { id: 'cl-6', top: '18%', scale: 1.4, duration: 230, delay: -180, opacity: 0.85 },
   { id: 'cl-7', top: '26%', scale: 0.7, duration: 150, delay: -10, opacity: 0.65 },
 ];
-
-const SKYLINE_MOUNTAINS = [
-  { id: 'mt-1', left: '-8%', width: '38%', height: 182 },
-  { id: 'mt-2', left: '20%', width: '34%', height: 154 },
-  { id: 'mt-3', left: '42%', width: '36%', height: 196 },
-  { id: 'mt-4', left: '68%', width: '34%', height: 166 },
-];
-
-const SKYLINE_TREE_BELT = Array.from({ length: 40 }, (_, idx) => ({
-  id: `tree-${idx}`,
-  left: `${(idx * 2.6) % 100}%`,
-  width: 14 + ((idx * 7) % 10),
-  height: 24 + ((idx * 11) % 26),
-}));
-
-const SKYLINE_FRONT_TREE_BELT = Array.from({ length: 32 }, (_, idx) => ({
-  id: `front-tree-${idx}`,
-  left: `${(idx * 3.05 + 1.2) % 100}%`,
-  width: 18 + ((idx * 5) % 12),
-  height: 28 + ((idx * 9) % 24),
-}));
-
-const PIXEL_TREE_VARIANTS = [
-  {
-    cells: [
-      [2, 6], [3, 6],
-      [1, 5], [2, 5], [3, 5], [4, 5],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
-      [1, 3], [2, 3], [3, 3], [4, 3],
-      [2, 2], [3, 2],
-    ],
-    trunk: { x: 3, h: 2, baseX: 2, baseW: 3 },
-  },
-  {
-    cells: [
-      [3, 7],
-      [2, 6], [3, 6], [4, 6],
-      [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4],
-      [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
-      [2, 2], [3, 2], [4, 2],
-    ],
-    trunk: { x: 3, h: 2, baseX: 2, baseW: 3 },
-  },
-  {
-    cells: [
-      [3, 8],
-      [2, 7], [3, 7], [4, 7],
-      [2, 6], [3, 6], [4, 6],
-      [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],
-      [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
-      [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3],
-      [2, 2], [3, 2], [4, 2],
-    ],
-    trunk: { x: 3, h: 3, baseX: 2, baseW: 3 },
-  },
-  {
-    cells: [
-      [3, 9],
-      [3, 8],
-      [2, 7], [3, 7], [4, 7],
-      [2, 6], [3, 6], [4, 6],
-      [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],
-      [2, 4], [3, 4], [4, 4],
-      [3, 3],
-    ],
-    trunk: { x: 3, h: 3, baseX: 2, baseW: 3 },
-  },
-  {
-    cells: [
-      [2, 7], [3, 7], [4, 7],
-      [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],
-      [0, 5], [1, 5], [2, 5], [3, 5], [4, 5], [5, 5], [6, 5],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4],
-      [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
-      [2, 2], [3, 2], [4, 2],
-    ],
-    trunk: { x: 3, h: 2, baseX: 2, baseW: 3 },
-  },
-  {
-    cells: [
-      [2, 8], [3, 8],
-      [2, 7], [3, 7], [4, 7],
-      [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],
-      [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4],
-      [1, 3], [2, 3], [3, 3],
-    ],
-    trunk: { x: 2, h: 3, baseX: 1, baseW: 3 },
-  },
-  {
-    cells: [
-      [2, 5], [3, 5],
-      [1, 4], [2, 4], [3, 4], [4, 4],
-      [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
-      [1, 2], [2, 2], [3, 2], [4, 2],
-    ],
-    trunk: { x: 3, h: 2, baseX: 2, baseW: 2 },
-  },
-];
-
-const PIXEL_TREE_PALETTES = {
-  night: [
-    { main: '#1f4d3b', alt: '#2a6b52', trunk: '#4f3c2a' },
-    { main: '#2d4d73', alt: '#4672a4', trunk: '#4a3a2a' },
-    { main: '#435226', alt: '#62763a', trunk: '#4b3a29' },
-    { main: '#4c3f69', alt: '#6d58a0', trunk: '#4a3728' },
-    { main: '#2f5f55', alt: '#43927e', trunk: '#5a402b' },
-  ],
-  day: [
-    { main: '#4f8b6b', alt: '#79b58e', trunk: '#6f5339' },
-    { main: '#5b88b1', alt: '#86b5dc', trunk: '#6c4f38' },
-    { main: '#7c9a46', alt: '#a8c86a', trunk: '#755338' },
-    { main: '#8c75b5', alt: '#b49ad9', trunk: '#6c4c36' },
-    { main: '#5ea78a', alt: '#84d1b0', trunk: '#7a593d' },
-  ],
-};
-
-const getPixelTreePalette = (isNightSky, seedIndex) => {
-  const palettes = isNightSky ? PIXEL_TREE_PALETTES.night : PIXEL_TREE_PALETTES.day;
-  return palettes[seedIndex % palettes.length];
-};
 
 const SKY_PREVIEW_OPTIONS = [
   { id: 'auto', label: '자동' },
@@ -614,58 +471,6 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
   return normalizedRows;
 };
 
-const PIXEL_MOUNTAIN_CLIP_PATH = 'polygon(0 100%, 0 78%, 8% 78%, 8% 66%, 16% 66%, 16% 54%, 24% 54%, 24% 42%, 32% 42%, 32% 30%, 40% 30%, 40% 18%, 48% 18%, 48% 8%, 56% 8%, 56% 18%, 64% 18%, 64% 30%, 72% 30%, 72% 42%, 80% 42%, 80% 54%, 88% 54%, 88% 66%, 96% 66%, 96% 78%, 100% 78%, 100% 100%)';
-const PIXEL_HILL_CLIP_PATH = 'polygon(0 100%, 0 72%, 6% 72%, 6% 64%, 14% 64%, 14% 56%, 22% 56%, 22% 62%, 30% 62%, 30% 52%, 38% 52%, 38% 44%, 46% 44%, 46% 50%, 54% 50%, 54% 42%, 62% 42%, 62% 50%, 70% 50%, 70% 60%, 78% 60%, 78% 54%, 86% 54%, 86% 66%, 94% 66%, 94% 74%, 100% 74%, 100% 100%)';
-
-const getPixelMountainFill = (isNightSky) => (
-  isNightSky
-    ? 'linear-gradient(180deg, #5f79a9 0 12%, #4d6693 12% 24%, #3f557f 24% 36%, #34466a 36% 48%, #293958 48% 62%, #1f2c48 62% 100%)'
-    : 'linear-gradient(180deg, #c9daf0 0 12%, #b4cbe8 12% 24%, #9fbce0 24% 36%, #8bacd3 36% 48%, #789ac4 48% 62%, #6789b4 62% 100%)'
-);
-
-const getPixelHillFill = (isNightSky) => (
-  isNightSky
-    ? 'linear-gradient(180deg, #36564a 0 18%, #2b4a3f 18% 36%, #233f36 36% 54%, #1a322b 54% 100%)'
-    : 'linear-gradient(180deg, #6f9c7d 0 18%, #5f8b6f 18% 36%, #507c62 36% 54%, #446b55 54% 100%)'
-);
-
-const SKYLINE_BACK_TOWERS = [
-  { id: 'bt-1', left: '3%', width: '5.4%', height: 86 },
-  { id: 'bt-2', left: '9.2%', width: '5.9%', height: 98 },
-  { id: 'bt-3', left: '16%', width: '6.8%', height: 112 },
-  { id: 'bt-4', left: '24.1%', width: '7.4%', height: 128 },
-  { id: 'bt-5', left: '32.7%', width: '6.6%', height: 96 },
-  { id: 'bt-6', left: '40%', width: '8.2%', height: 138 },
-  { id: 'bt-7', left: '49.5%', width: '6.8%', height: 122 },
-  { id: 'bt-8', left: '57.4%', width: '7.6%', height: 104 },
-  { id: 'bt-9', left: '66%', width: '7%', height: 114 },
-  { id: 'bt-10', left: '74.2%', width: '8%', height: 132 },
-  { id: 'bt-11', left: '83.4%', width: '7.2%', height: 102 },
-];
-
-const SKYLINE_FACTORY_BLOCKS = [
-  { id: 'fb-1', left: '12%', width: '12%', height: 106, roof: 12, windows: 4 },
-  { id: 'fb-2', left: '24%', width: '11%', height: 126, roof: 11, windows: 5 },
-  { id: 'fb-3', left: '34.5%', width: '13%', height: 112, roof: 10, windows: 4 },
-  { id: 'fb-4', left: '47%', width: '12.5%', height: 134, roof: 13, windows: 5 },
-  { id: 'fb-5', left: '58.7%', width: '11%', height: 118, roof: 10, windows: 4 },
-  { id: 'fb-6', left: '69%', width: '13%', height: 128, roof: 12, windows: 5 },
-];
-
-const SKYLINE_COOLING_TOWERS = [
-  { id: 'ct-1', left: '79.5%', width: 92, height: 156 },
-  { id: 'ct-2', left: '89%', width: 78, height: 140 },
-];
-
-const SKYLINE_STACKS = [
-  { id: 'st-1', left: '18.5%', width: 36, height: 220, smokeCount: 10, variant: 'slate' },
-  { id: 'st-2', left: '29.5%', width: 54, height: 286, smokeCount: 13, variant: 'brick' },
-  { id: 'st-3', left: '43%', width: 48, height: 258, smokeCount: 12, variant: 'brick' },
-  { id: 'st-4', left: '55.5%', width: 34, height: 206, smokeCount: 9, variant: 'slate' },
-  { id: 'st-5', left: '64.8%', width: 50, height: 274, smokeCount: 12, variant: 'concrete' },
-  { id: 'st-6', left: '73.8%', width: 30, height: 188, smokeCount: 9, variant: 'slate' },
-];
-
 const SKYLINE_FLYER_CSS = `
 @keyframes skylineTwinkle {
   0%, 100% { opacity: 0.26; transform: scale(0.9); }
@@ -728,34 +533,6 @@ const SKYLINE_FLYER_CSS = `
   border-radius: 9999px;
   background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 0.98), rgba(253, 224, 71, 0.92) 44%, rgba(251, 146, 60, 0.86));
   box-shadow: 0 0 0 8px rgba(254, 240, 138, 0.18), 0 0 28px rgba(251, 191, 36, 0.28), 0 0 48px rgba(251, 146, 60, 0.18);
-}
-@keyframes stackSmokeRise {
-  0% {
-    transform: translate(-50%, 0) scale(var(--start-scale, 0.58)) rotate(var(--tilt-start, -7deg));
-    opacity: 0;
-  }
-  10% {
-    opacity: var(--max-opacity, 0.24);
-  }
-  100% {
-    transform: translate(calc(-50% + var(--drift, 0px)), calc(-1 * var(--rise-distance, 80vh))) scale(var(--end-scale, 2.2)) rotate(var(--tilt-end, 7deg));
-    opacity: 0;
-  }
-}
-/* 굴뚝에서 뭉게뭉게 올라가 바람에 흩어지는 연기 */
-.stack-puff-smoke {
-  position: absolute;
-  left: 50%;
-  top: -22px;
-  width: var(--size, 16px);
-  height: var(--size, 16px);
-  border-radius: 46% 54% 50% 50% / 52% 48% 52% 48%;
-  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.8), rgba(226, 232, 240, 0.55) 46%, rgba(148, 163, 184, 0.2) 76%, rgba(148, 163, 184, 0) 100%);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 1;
-  filter: blur(2.4px);
-  animation: stackSmokeRise var(--rise-duration, 18s) ease-out infinite;
 }
 @keyframes skylineCloudDrift {
   from { transform: translateX(-30vw) scale(var(--cloud-scale, 1)); }
@@ -840,15 +617,262 @@ const SKYLINE_FLYER_CSS = `
   animation: skylineWindowGlow var(--glow-duration, 5s) ease-in-out infinite;
   animation-delay: var(--glow-delay, 0s);
 }
-.skyline-ground-texture {
+@keyframes skylineSvgSmoke {
+  0% { transform: translate(0px, 0px) scale(0.45); opacity: 0; }
+  12% { opacity: var(--max-opacity, 0.5); }
+  100% { transform: translate(var(--drift, 80px), calc(-1 * var(--rise, 260px))) scale(var(--end-scale, 3)); opacity: 0; }
+}
+.skyline-svg-smoke {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: skylineSvgSmoke var(--rise-duration, 16s) ease-out infinite;
+  animation-delay: var(--rise-delay, 0s);
+}
+@keyframes skylineBeacon {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 1; }
+}
+.skyline-beacon {
+  animation: skylineBeacon 2.4s ease-in-out infinite;
+  animation-delay: var(--beacon-delay, 0s);
+}
+.skyline-svg {
   position: absolute;
-  inset: 0;
-  background-image:
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 2px, rgba(0, 0, 0, 0) 2px 10px),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 3px, rgba(0, 0, 0, 0) 3px 41px);
-  opacity: 0.8;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 `;
+
+// ── 매끈한 벡터 풍경 (애플 배경화면 느낌): 겹겹의 언덕, 유리 타워, 공장, 냉각탑, 굴뚝과 연기 ──
+const SKYLINE_PALETTES = {
+  day: {
+    hillFar: ['#dbe8f6', '#adc6e4'], hillMid: ['#b3cdbf', '#73a08c'], hillNear: ['#86b88f', '#4b8762'],
+    ground: ['#5f9f71', '#2b5740'], road: 'rgba(255,255,255,0.35)', haze: 'rgba(236, 246, 255, 0.75)',
+    tower: ['#f5f9fd', '#bdd0e4', '#7e97b6'], towerEdge: 'rgba(40, 60, 90, 0.18)',
+    factory: ['#e9e2da', '#bcb0a6', '#7f746b'], roof: '#8c7f76',
+    cooling: ['#f7f9fb', '#d2dbe5', '#9aa7b7'], stack: ['#f3f6fa', '#c2cedd', '#8495ad'], stackCap: '#7b8ca4', band: '#d9534f',
+    window: 'rgba(40, 60, 95, 0.25)', windowLit: null, smoke: ['rgba(255,255,255,0.95)', 'rgba(205,215,228,0)'],
+    tree: ['#93cb84', '#3d7f4e'], trunk: '#7a5a44', beacon: null, cityGlow: null,
+  },
+  morning: {
+    hillFar: ['#ebdff0', '#c6b4db'], hillMid: ['#d3c1b2', '#95818a'], hillNear: ['#a9a97c', '#64704f'],
+    ground: ['#84976a', '#3f4c39'], road: 'rgba(255, 240, 220, 0.35)', haze: 'rgba(255, 226, 190, 0.7)',
+    tower: ['#fff4ea', '#dcc0b8', '#957f8b'], towerEdge: 'rgba(90, 60, 70, 0.18)',
+    factory: ['#f3e1d2', '#c9aa9b', '#826d69'], roof: '#8f7570',
+    cooling: ['#fff7ee', '#e4cfc3', '#a8918d'], stack: ['#fff5ea', '#dcc3b7', '#968085'], stackCap: '#9a848a', band: '#d9534f',
+    window: 'rgba(90, 60, 70, 0.22)', windowLit: null, smoke: ['rgba(255,245,235,0.95)', 'rgba(230,205,200,0)'],
+    tree: ['#c2c080', '#737f4f'], trunk: '#6f5143', beacon: null, cityGlow: null,
+  },
+  night: {
+    hillFar: ['#2c3d6c', '#1a274a'], hillMid: ['#20304f', '#121c35'], hillNear: ['#172a34', '#0b151c'],
+    ground: ['#13232b', '#04090f'], road: 'rgba(120, 150, 170, 0.25)', haze: 'rgba(16, 26, 56, 0.6)',
+    tower: ['#3f4f75', '#263455', '#141c33'], towerEdge: 'rgba(150, 170, 220, 0.22)',
+    factory: ['#4a4546', '#312d31', '#1b191e'], roof: '#2a2628',
+    cooling: ['#5c687f', '#3c465b', '#232b3b'], stack: ['#51607c', '#363f58', '#1f2638'], stackCap: '#2b3448', band: '#a33f3b',
+    window: 'rgba(255, 232, 170, 0.12)', windowLit: 'rgba(255, 224, 150, 0.95)', smoke: ['rgba(205,214,235,0.6)', 'rgba(205,214,235,0)'],
+    tree: ['#1f4b3d', '#0e2a22'], trunk: '#2a1f19', beacon: '#ff5a4a', cityGlow: 'rgba(255, 190, 110, 0.18)',
+  },
+};
+
+const SKYLINE_SVG_TOWERS = [
+  { x: 40, w: 70, h: 190 }, { x: 125, w: 56, h: 150 }, { x: 196, w: 84, h: 250 }, { x: 296, w: 62, h: 170 },
+  { x: 560, w: 76, h: 230 }, { x: 650, w: 58, h: 180 }, { x: 760, w: 92, h: 290 }, { x: 870, w: 60, h: 200 },
+  { x: 1130, w: 72, h: 210 }, { x: 1215, w: 56, h: 160 }, { x: 1490, w: 66, h: 180 },
+];
+const SKYLINE_SVG_FACTORIES = [
+  { x: 360, w: 150, h: 120, teeth: 4 }, { x: 930, w: 170, h: 140, teeth: 5 }, { x: 1300, w: 150, h: 110, teeth: 4 },
+];
+const SKYLINE_SVG_COOLING = [
+  { x: 1180, w: 130, h: 200 }, { x: 1380, w: 110, h: 170 },
+];
+const SKYLINE_SVG_STACKS = [
+  { x: 330, w: 36, h: 310, smoke: 7 }, { x: 515, w: 52, h: 400, smoke: 9 }, { x: 700, w: 46, h: 360, smoke: 8 },
+  { x: 905, w: 32, h: 290, smoke: 6 }, { x: 1060, w: 50, h: 380, smoke: 9 }, { x: 1250, w: 30, h: 250, smoke: 6 },
+];
+const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
+  x: 20 + ((idx * 73) % 1560), rx: 11 + ((idx * 7) % 9), ry: 16 + ((idx * 11) % 14), dy: (idx * 5) % 12,
+}));
+
+const renderSkylineSvg = ({ mode, scope, compact = false }) => {
+  const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
+  const id = (name) => `${scope}-sky-${name}`;
+  const GROUND_Y = 440;
+  const stackScale = compact ? 0.62 : 1;
+  const towers = compact ? SKYLINE_SVG_TOWERS.filter((_, i) => i % 2 === 0) : SKYLINE_SVG_TOWERS;
+  const trees = compact ? SKYLINE_SVG_TREES.filter((_, i) => i % 2 === 0) : SKYLINE_SVG_TREES;
+  const windowsFor = (tower, tIdx) => {
+    const cols = Math.max(2, Math.floor(tower.w / 16));
+    const rows = Math.max(2, Math.floor((tower.h - 24) / (compact ? 30 : 20)));
+    const items = [];
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        const seed = tIdx * 131 + r * 17 + c * 7;
+        const lit = pal.windowLit && seededNoise(seed) > 0.42;
+        items.push(
+          <rect
+            key={`${tIdx}-${r}-${c}`}
+            x={tower.x + 8 + c * ((tower.w - 16) / cols) + 1}
+            y={GROUND_Y - tower.h + 16 + r * ((tower.h - 24) / rows)}
+            width={Math.max(3, (tower.w - 16) / cols - 5)}
+            height={compact ? 7 : 8}
+            rx={1}
+            fill={lit ? pal.windowLit : pal.window}
+            className={lit ? 'skyline-window-night' : undefined}
+            style={lit ? { '--glow-duration': `${4 + (seed % 5)}s`, '--glow-delay': `-${seed % 7}s` } : undefined}
+          />
+        );
+      }
+    }
+    return items;
+  };
+  const coolingPath = (t) => {
+    const top = GROUND_Y - t.h;
+    const x0 = t.x, x1 = t.x + t.w;
+    const inset = t.w * 0.17;
+    const waist = GROUND_Y - t.h * 0.42;
+    return `M${x0},${GROUND_Y} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset},${top + 18} L${x1 - inset},${top + 18} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${GROUND_Y} Z`;
+  };
+  return (
+    <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+      <defs>
+        {[['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].map(([name, colors]) => (
+          <linearGradient key={name} id={id(name)} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={colors[0]} />
+            <stop offset="1" stopColor={colors[1]} />
+          </linearGradient>
+        ))}
+        {[['tower', pal.tower], ['factory', pal.factory], ['cooling', pal.cooling], ['stack', pal.stack]].map(([name, colors]) => (
+          <linearGradient key={name} id={id(name)} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor={colors[0]} />
+            <stop offset="0.45" stopColor={colors[1]} />
+            <stop offset="1" stopColor={colors[2]} />
+          </linearGradient>
+        ))}
+        <linearGradient id={id('haze')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.haze} stopOpacity="0" />
+          <stop offset="1" stopColor={pal.haze} />
+        </linearGradient>
+        <radialGradient id={id('smoke')} cx="0.45" cy="0.4" r="0.55">
+          <stop offset="0" stopColor={pal.smoke[0]} />
+          <stop offset="1" stopColor={pal.smoke[1]} />
+        </radialGradient>
+        {pal.cityGlow && (
+          <radialGradient id={id('cityglow')} cx="0.5" cy="1" r="0.6">
+            <stop offset="0" stopColor={pal.cityGlow} />
+            <stop offset="1" stopColor={pal.cityGlow} stopOpacity="0" />
+          </radialGradient>
+        )}
+        <filter id={id('blur')} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
+        <filter id={id('soft')} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.2" />
+        </filter>
+      </defs>
+
+      {/* 원경 언덕 두 겹 + 안개 */}
+      <path d="M0,330 C140,286 260,300 400,268 C560,232 680,282 840,262 C1000,240 1120,290 1280,258 C1400,232 1500,262 1600,238 L1600,520 L0,520 Z" fill={`url(#${id('hillFar')})`} />
+      <path d="M0,372 C120,340 260,352 420,330 C600,306 720,352 900,338 C1080,322 1180,362 1360,340 C1460,328 1540,350 1600,338 L1600,520 L0,520 Z" fill={`url(#${id('hillMid')})`} />
+      <rect x="0" y="330" width="1600" height="120" fill={`url(#${id('haze')})`} />
+      {pal.cityGlow && <rect x="0" y="260" width="1600" height="190" fill={`url(#${id('cityglow')})`} />}
+
+      {/* 뒤쪽 유리 타워 */}
+      {towers.map((tower, tIdx) => (
+        <g key={`tower-${tIdx}`}>
+          <rect x={tower.x} y={GROUND_Y - tower.h} width={tower.w} height={tower.h} rx="6" fill={`url(#${id('tower')})`} stroke={pal.towerEdge} strokeWidth="1" />
+          <rect x={tower.x + 4} y={GROUND_Y - tower.h + 4} width={Math.max(4, tower.w * 0.22)} height={tower.h - 8} rx="3" fill="rgba(255,255,255,0.22)" />
+          {tIdx % 3 === 0 && <rect x={tower.x + tower.w / 2 - 1.5} y={GROUND_Y - tower.h - 26} width="3" height="26" rx="1.5" fill={pal.stackCap} />}
+          {pal.beacon && tIdx % 3 === 0 && <circle className="skyline-beacon" cx={tower.x + tower.w / 2} cy={GROUND_Y - tower.h - 27} r="3" fill={pal.beacon} style={{ '--beacon-delay': `-${tIdx * 0.7}s` }} />}
+          {windowsFor(tower, tIdx)}
+        </g>
+      ))}
+
+      {/* 공장 (톱니 지붕) */}
+      {SKYLINE_SVG_FACTORIES.map((f, fIdx) => {
+        const toothW = f.w / f.teeth;
+        const roof = Array.from({ length: f.teeth }).map((_, i) => `L${f.x + i * toothW},${GROUND_Y - f.h} L${f.x + i * toothW + toothW * 0.62},${GROUND_Y - f.h - 22} L${f.x + (i + 1) * toothW},${GROUND_Y - f.h}`).join(' ');
+        return (
+          <g key={`factory-${fIdx}`}>
+            <rect x={f.x} y={GROUND_Y - f.h} width={f.w} height={f.h} rx="4" fill={`url(#${id('factory')})`} />
+            <path d={`M${f.x},${GROUND_Y - f.h} ${roof} Z`} fill={pal.roof} />
+            {[0.3, 0.58].map((t, i) => (
+              <rect key={i} x={f.x + 12} y={GROUND_Y - f.h + f.h * t} width={f.w - 24} height={compact ? 5 : 7} rx="2" fill={pal.windowLit || pal.window} opacity={pal.windowLit ? 0.8 : 1} className={pal.windowLit ? 'skyline-window-night' : undefined} style={pal.windowLit ? { '--glow-duration': `${5 + i + fIdx}s`, '--glow-delay': `-${fIdx * 2 + i}s` } : undefined} />
+            ))}
+          </g>
+        );
+      })}
+
+      {/* 냉각탑 */}
+      {SKYLINE_SVG_COOLING.map((t, cIdx) => (
+        <g key={`cooling-${cIdx}`}>
+          <path d={coolingPath(t)} fill={`url(#${id('cooling')})`} stroke={pal.towerEdge} strokeWidth="1" />
+          <ellipse cx={t.x + t.w / 2} cy={GROUND_Y - t.h + 18} rx={t.w * 0.33} ry="5" fill={pal.stackCap} opacity="0.55" />
+          {Array.from({ length: compact ? 3 : 5 }).map((_, i) => (
+            <circle key={i} className="skyline-svg-smoke" cx={t.x + t.w / 2} cy={GROUND_Y - t.h + 14} r={16 + (i % 3) * 5} fill={`url(#${id('smoke')})`} filter={`url(#${id('blur')})`} style={{ '--drift': `${50 + seededNoise(cIdx * 31 + i) * 120}px`, '--rise': `${140 + seededNoise(cIdx * 17 + i * 3) * 110}px`, '--end-scale': `${2.4 + seededNoise(cIdx + i * 5) * 1.2}`, '--max-opacity': `${0.3 + seededNoise(cIdx * 7 + i) * 0.25}`, '--rise-duration': `${15 + seededNoise(cIdx * 3 + i * 11) * 9}s`, '--rise-delay': `-${seededNoise(cIdx * 13 + i * 2) * 20}s` }} />
+          ))}
+        </g>
+      ))}
+
+      {/* 굴뚝 + 연기 */}
+      {SKYLINE_SVG_STACKS.map((st, sIdx) => {
+        const h = Math.round(st.h * stackScale);
+        const top = GROUND_Y - h;
+        return (
+          <g key={`stack-${sIdx}`}>
+            <rect x={st.x} y={top} width={st.w} height={h} rx={st.w * 0.16} fill={`url(#${id('stack')})`} stroke={pal.towerEdge} strokeWidth="1" />
+            <rect x={st.x + 3} y={top + 6} width={Math.max(3, st.w * 0.2)} height={h - 12} rx="2" fill="rgba(255,255,255,0.25)" />
+            <rect x={st.x - 3} y={top} width={st.w + 6} height="8" rx="3" fill={pal.stackCap} />
+            <rect x={st.x} y={top + 26} width={st.w} height="9" fill={pal.band} opacity="0.85" />
+            <rect x={st.x} y={top + 52} width={st.w} height="9" fill={pal.band} opacity="0.85" />
+            {pal.beacon && <circle className="skyline-beacon" cx={st.x + st.w / 2} cy={top - 4} r="3.2" fill={pal.beacon} style={{ '--beacon-delay': `-${sIdx * 0.9}s` }} />}
+            {Array.from({ length: compact ? Math.ceil(st.smoke * 0.5) : st.smoke }).map((_, i) => {
+              const seed = sIdx * 97 + i * 31;
+              return (
+                <circle
+                  key={i}
+                  className="skyline-svg-smoke"
+                  cx={st.x + st.w / 2}
+                  cy={top - 2}
+                  r={st.w * 0.32 + (i % 3) * 3}
+                  fill={`url(#${id('smoke')})`}
+                  filter={`url(#${id('blur')})`}
+                  style={{
+                    '--drift': `${(seededNoise(seed + 2) > 0.2 ? 1 : -1) * (60 + seededNoise(seed + 3) * 150)}px`,
+                    '--rise': `${170 + seededNoise(seed + 5) * 170}px`,
+                    '--end-scale': `${2.6 + seededNoise(seed + 8) * 1.6}`,
+                    '--max-opacity': `${0.35 + seededNoise(seed + 6) * 0.3}`,
+                    '--rise-duration': `${14 + seededNoise(seed + 4) * 9}s`,
+                    '--rise-delay': `-${seededNoise(seed + 11) * 23}s`,
+                  }}
+                />
+              );
+            })}
+          </g>
+        );
+      })}
+
+      {/* 앞쪽 언덕, 나무, 땅과 길 */}
+      <path d="M0,418 C180,392 300,428 480,404 C660,380 820,420 1000,398 C1180,376 1320,418 1600,392 L1600,520 L0,520 Z" fill={`url(#${id('hillNear')})`} />
+      {trees.map((tree, i) => {
+        const baseY = 436 + tree.dy;
+        return (
+          <g key={`tree-${i}`}>
+            <rect x={tree.x - 1.5} y={baseY - tree.ry - 2} width="3" height={tree.ry + 4} rx="1.5" fill={pal.trunk} />
+            <ellipse cx={tree.x} cy={baseY - tree.ry - 6} rx={tree.rx} ry={tree.ry} fill={`url(#${id('tree')})`} />
+            <ellipse cx={tree.x - tree.rx * 0.3} cy={baseY - tree.ry - 10} rx={tree.rx * 0.45} ry={tree.ry * 0.5} fill="rgba(255,255,255,0.14)" />
+          </g>
+        );
+      })}
+      <rect x="0" y={GROUND_Y + 8} width="1600" height="80" fill={`url(#${id('ground')})`} />
+      <path d="M0,470 C300,462 600,478 900,468 C1200,458 1400,474 1600,466" fill="none" stroke={pal.road} strokeWidth="3" strokeLinecap="round" filter={`url(#${id('soft')})`} />
+    </svg>
+  );
+};
 
 const SHEET_THEMES = {
   flow: {
@@ -1494,7 +1518,6 @@ export default function App() {
   const sheetWindowsRef = useRef({});
   // 통합 기록부 임시 저장본이 어느 사용자 키로 로드됐는지 (로드 전에 빈 내용으로 덮어쓰지 않도록)
   const [samplingLogDraftReadyKey, setSamplingLogDraftReadyKey] = useState('');
-  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
   // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
   const [tableTotalMinutes, setTableTotalMinutes] = useState('');
@@ -1850,29 +1873,6 @@ export default function App() {
     }
     sheetWindowsRef.current[sheetId] = popup;
   };
-  const openSamplingLogWindow = () => {
-    // 기록부 창에서 누르면 메뉴(메인) 창에 부탁해 창이 하나만 유지되게 함
-    if (IS_POPUP_WINDOW && window.opener && !window.opener.closed) {
-      try {
-        window.opener.postMessage({ type: 'stackpilot:open-sheet', sheetId: 'samplinglog' }, '*');
-        return;
-      } catch (error) {
-        console.error(error);
-      }
-    }
-    openSheetWindow('samplinglog');
-  };
-  useEffect(() => {
-    if (IS_POPUP_WINDOW) return undefined;
-    const onMessage = (event) => {
-      const data = event?.data;
-      if (!data || data.type !== 'stackpilot:open-sheet') return;
-      if (!SHEET_MENU.some((item) => item.id === data.sheetId)) return;
-      openSheetWindow(data.sheetId);
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  });
   // 별도 창: 주소의 load 토큰과 맞는 리포트가 전달돼 있으면 열리자마자 불러오기
   useEffect(() => {
     if (!IS_POPUP_WINDOW || !activeUser || !isUserUnlocked) return;
@@ -5596,21 +5596,6 @@ export default function App() {
   const menuSkyGlowRightClass = isNightSky
     ? 'bg-violet-400/15'
     : (isMorningSky ? 'bg-orange-200/45' : 'bg-sky-200/70');
-  const menuGroundClass = isNightSky
-    ? 'bg-gradient-to-b from-[#233a33] via-[#16282c] to-[#080f15]'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#6a8d73] via-[#54795f] to-[#2f493d]'
-      : 'bg-gradient-to-b from-[#79a584] via-[#658d72] to-[#3f5f4d]');
-  const menuRidgeClass = isNightSky
-    ? 'bg-gradient-to-t from-[#0c1424]/60 to-transparent'
-    : (isMorningSky
-      ? 'bg-gradient-to-t from-[#f8dca2]/35 to-transparent'
-      : 'bg-gradient-to-t from-[#d8ecff]/30 to-transparent');
-  const menuMountainClass = isNightSky
-    ? 'bg-gradient-to-b from-[#35446c]/80 to-[#1a243f]/75'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#9ca8c7]/80 to-[#6f7ea7]/74'
-      : 'bg-gradient-to-b from-[#abc4e0]/78 to-[#7f9ec7]/72');
   const sheetSkyBgClass = isNightSky
     ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
     : (isMorningSky
@@ -5621,26 +5606,14 @@ export default function App() {
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#fff3d6]/34 via-[#ffe4b8]/16 to-transparent'
       : 'bg-gradient-to-b from-white/34 via-sky-100/10 to-transparent');
-  const sheetGroundClass = isNightSky
-    ? 'bg-gradient-to-b from-[#223733] to-[#070d14]'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#6f9675] to-[#3f5f4d]'
-      : 'bg-gradient-to-b from-[#82ad8a] to-[#4d725b]');
-  const sheetMountainClass = isNightSky
-    ? 'bg-gradient-to-b from-[#35446c]/72 to-[#1a243f]/68'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#a9b4cd]/72 to-[#7585ab]/68'
-      : 'bg-gradient-to-b from-[#b7cde6]/70 to-[#86a8d1]/66');
   const sceneCloudColor = isNightSky ? 'rgba(190, 200, 235, 0.09)' : (isMorningSky ? 'rgba(255, 243, 230, 0.9)' : 'rgba(255, 255, 255, 0.93)');
   const sceneCloudShadow = isNightSky ? 'rgba(0, 0, 0, 0)' : (isMorningSky ? 'rgba(240, 150, 120, 0.2)' : 'rgba(120, 140, 170, 0.2)');
-  const sceneHazeColor = isNightSky ? 'rgba(20, 30, 60, 0.55)' : (isMorningSky ? 'rgba(255, 220, 180, 0.55)' : 'rgba(235, 245, 255, 0.6)');
-  const sceneMountainFill = getPixelMountainFill(isNightSky);
-  const sceneHillFill = getPixelHillFill(isNightSky);
   const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 4) : SKYLINE_CLOUDS;
   // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
   const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
     <>
       {isNightSky && <div className="skyline-moon-halo" />}
+      {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} />}
       {sceneClouds.slice(0, cloudCount).map((cloud) => (
         <div
           key={`${scope}-${cloud.id}`}
@@ -5664,36 +5637,9 @@ export default function App() {
       )}
     </>
   );
-  // 원경: 픽셀 산 두 겹 + 언덕 + 지평선 안개 (mountainScale: 기록부 화면은 작게)
-  const renderFarLandscape = (scope, mountainScale = 1, bottomClass = 'bottom-[6.4rem]') => (
-    <>
-      <div className={`absolute ${bottomClass} opacity-80`} style={{ left: '-6%', width: '58%', height: `${Math.round(230 * mountainScale)}px`, clipPath: PIXEL_MOUNTAIN_CLIP_PATH, background: sceneMountainFill }} />
-      <div className={`absolute ${bottomClass} opacity-80`} style={{ left: '44%', width: '62%', height: `${Math.round(196 * mountainScale)}px`, clipPath: PIXEL_MOUNTAIN_CLIP_PATH, background: sceneMountainFill }} />
-      <div className={`absolute ${bottomClass} h-24`} style={{ left: 0, right: 0, background: `linear-gradient(to top, ${sceneHazeColor}, rgba(0,0,0,0))` }} />
-      <div className={`absolute ${bottomClass} opacity-90`} style={{ left: '-4%', width: '108%', height: `${Math.round(96 * mountainScale)}px`, clipPath: PIXEL_HILL_CLIP_PATH, background: sceneHillFill }} />
-      {isNightSky && (
-        <div className={`absolute ${bottomClass} h-36`} style={{ left: 0, right: 0, background: 'radial-gradient(55% 100% at 50% 100%, rgba(255, 190, 110, 0.2), rgba(255, 190, 110, 0) 70%)' }} />
-      )}
-    </>
-  );
   const isMobileLightMode = isMobileViewport;
-  // 넓은 창(최대화)에서는 풍경을 비례 확대하고, 바닥 띠는 창 전체 폭으로 깔아 배경이 끊기지 않게 함
-  const sceneScale = Math.min(1.75, Math.max(1, viewportWidth / 1280));
-  const sceneScaleStyle = { transform: `scale(${sceneScale})`, transformOrigin: 'bottom center' };
   const sceneStarsMenu = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS, 3) : SKYLINE_STARS;
   const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
-  // 산 라인은 모바일에서도 전체를 유지해 배경이 끊기거나 잘려 보이지 않게 한다.
-  const sceneMountains = SKYLINE_MOUNTAINS;
-  const sceneTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_TREE_BELT, 3) : SKYLINE_TREE_BELT;
-  const sceneFrontTreeBelt = isMobileLightMode ? makeSparseLayout(SKYLINE_FRONT_TREE_BELT, 3) : SKYLINE_FRONT_TREE_BELT;
-  const sceneBackTowers = isMobileLightMode ? makeSparseLayout(SKYLINE_BACK_TOWERS, 2) : SKYLINE_BACK_TOWERS;
-  const sceneFactoryBlocks = isMobileLightMode ? makeSparseLayout(SKYLINE_FACTORY_BLOCKS, 2) : SKYLINE_FACTORY_BLOCKS;
-  const sceneCoolingTowers = isMobileLightMode ? makeSparseLayout(SKYLINE_COOLING_TOWERS, 2) : SKYLINE_COOLING_TOWERS;
-  const sceneStacks = isMobileLightMode ? makeSparseLayout(SKYLINE_STACKS, 2) : SKYLINE_STACKS;
-  const getSmokeParticleTotal = (stack) => {
-    const baseCount = stack.smokeCount + 4;
-    return isMobileLightMode ? Math.max(3, Math.round(baseCount * 0.4)) : baseCount;
-  };
   const navigateToMenu = () => {
     if (IS_POPUP_WINDOW) {
       window.close();
@@ -5765,7 +5711,6 @@ export default function App() {
   useEffect(() => {
     const updateViewportState = () => {
       setIsMobileViewport(isMobileViewportWidth());
-      setViewportWidth(window.innerWidth);
     };
     updateViewportState();
     window.addEventListener('resize', updateViewportState);
@@ -5804,227 +5749,8 @@ export default function App() {
               ))}
             </div>
           )}
-          <div className="absolute bottom-0 left-0 right-0">
-            <div className={`absolute bottom-0 left-0 right-0 ${menuGroundClass}`} style={{ height: `calc(${isMobileViewport ? 6 : 8}rem * ${sceneScale})` }}><div className="skyline-ground-texture" /></div>
-            <div className={`absolute left-0 right-0 h-14 ${menuRidgeClass}`} style={{ bottom: `calc(4rem * ${sceneScale})`, height: `calc(3.5rem * ${sceneScale})` }} />
-            <div className="relative mx-auto h-[25rem] md:h-[34rem] max-w-7xl" style={sceneScaleStyle}>
-              <div className={`absolute bottom-0 left-0 right-0 h-24 md:h-32 ${menuGroundClass}`}><div className="skyline-ground-texture" /></div>
-              <div className={`absolute bottom-16 left-0 right-0 h-14 ${menuRidgeClass}`} />
-              {isMorningSky && <div className="skyline-sunrise-mountain" />}
-              {renderFarLandscape('menu', 1, 'bottom-[6.4rem]')}
-              {sceneMountains.map((mountain) => (
-                <div
-                  key={mountain.id}
-                  className={`absolute bottom-[6.4rem] rounded-t-[45%] ${menuMountainClass}`}
-                  style={{ left: mountain.left, width: mountain.width, height: `${mountain.height}px` }}
-                />
-              ))}
-              {sceneTreeBelt.map((tree, treeIdx) => (
-                <div
-                  key={tree.id}
-                  className="absolute bottom-[5.7rem]"
-                  style={{
-                    left: tree.left,
-                    width: `${Math.max(12, Math.round(tree.width * 1.18))}px`,
-                    height: `${Math.max(18, Math.round(tree.height * 1.18))}px`,
-                  }}
-                >
-                  {(() => {
-                    const pixel = Math.max(2, Math.round(tree.width / 6));
-                    const variant = PIXEL_TREE_VARIANTS[(treeIdx * 3 + tree.width) % PIXEL_TREE_VARIANTS.length];
-                    const palette = getPixelTreePalette(isNightSky, treeIdx + (tree.height % 5));
-                    return (
-                      <>
-                        {variant.cells.map((cell, idx) => (
-                          <span
-                            key={`${tree.id}-cell-${idx}`}
-                            className="absolute"
-                            style={{
-                              left: `${cell[0] * pixel}px`,
-                              bottom: `${(cell[1] + 2) * pixel}px`,
-                              width: `${pixel}px`,
-                              height: `${pixel}px`,
-                              background: idx % 4 === 0 ? palette.alt : palette.main,
-                            }}
-                          />
-                        ))}
-                        <span
-                          className="absolute"
-                          style={{
-                            left: `${variant.trunk.x * pixel}px`,
-                            bottom: `${pixel}px`,
-                            width: `${pixel}px`,
-                            height: `${variant.trunk.h * pixel}px`,
-                            background: palette.trunk,
-                          }}
-                        />
-                        <span
-                          className="absolute"
-                          style={{
-                            left: `${variant.trunk.baseX * pixel}px`,
-                            bottom: '0px',
-                            width: `${variant.trunk.baseW * pixel}px`,
-                            height: `${pixel}px`,
-                            background: palette.trunk,
-                          }}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-              ))}
-
-              {sceneBackTowers.map((tower) => (
-                <div
-                  key={tower.id}
-                  className="absolute bottom-[5.4rem] rounded-t-[2px] border-2 border-[#2b3558]/80 bg-gradient-to-b from-[#6c7cab] via-[#495a8a] to-[#243052] shadow-[inset_-6px_-8px_0_rgba(15,23,42,0.36)]"
-                  style={{ left: tower.left, width: tower.width, height: `${tower.height}px` }}
-                >
-                  <div className="absolute inset-x-[10%] top-[22%] h-[2px] bg-[#9bb0df]/45" />
-                  <div className="absolute inset-x-[10%] top-[45%] h-[2px] bg-[#9bb0df]/34" />
-                  <div className="absolute inset-x-[10%] top-[68%] h-[2px] bg-[#9bb0df]/26" />
-                </div>
-              ))}
-
-              {sceneFactoryBlocks.map((block) => (
-                <div
-                  key={block.id}
-                  className="absolute bottom-[4.6rem] rounded-t-[3px] border-2 border-[#2f2d45] bg-gradient-to-b from-[#8f7668] via-[#6e5850] to-[#3d3033] shadow-[inset_-8px_-8px_0_rgba(15,23,42,0.3)]"
-                  style={{ left: block.left, width: block.width, height: `${block.height}px` }}
-                >
-                  <div className="absolute -top-[10px] inset-x-[4%] h-[10px] border-2 border-[#2f2d45] bg-[#6c5a58]" style={{ clipPath: `polygon(0 100%, ${block.roof}% 0, ${100 - block.roof}% 0, 100% 100%)` }} />
-                  <div className="absolute inset-x-[8%] top-[20%] h-[2px] bg-[#e2d1be]/22" />
-                  <div className="absolute inset-x-[8%] top-[44%] h-[2px] bg-[#e2d1be]/18" />
-                  <div className="absolute inset-x-[8%] top-[68%] h-[2px] bg-[#e2d1be]/14" />
-                  {Array.from({ length: block.windows }).map((_, windowIdx) => (
-                    <div
-                      key={`${block.id}-window-${windowIdx}`}
-                      className={`absolute h-[4px] w-[4px] ${isNightSky ? 'bg-[#fff2bf]/90 skyline-window-night' : 'bg-[#2b3a52]/45'}`}
-                      style={{
-                        left: `${16 + windowIdx * 14}%`,
-                        top: '60%',
-                        boxShadow: isNightSky ? '0 12px 0 rgba(255, 242, 191, 0.85)' : '0 12px 0 rgba(43, 58, 82, 0.4)',
-                        '--glow-duration': `${4 + ((windowIdx * 7 + block.height) % 5)}s`,
-                        '--glow-delay': `-${(windowIdx * 3 + block.roof) % 6}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {sceneCoolingTowers.map((tower) => (
-                <div
-                  key={tower.id}
-                  className="absolute bottom-[4.6rem] rounded-t-[42%] border-2 border-[#4c5a71] bg-gradient-to-b from-[#dde3ee] via-[#b7bfcd] to-[#70798d] shadow-[inset_-10px_-8px_0_rgba(15,23,42,0.22)]"
-                  style={{ left: tower.left, width: `${tower.width}px`, height: `${tower.height}px` }}
-                >
-                  <div className="absolute inset-x-[13%] top-[14%] h-[5px] bg-[#6c7f97]/60 rounded-full" />
-                </div>
-              ))}
-
-              {sceneStacks.map((stack) => (
-                (() => {
-                  const palette = stack.variant === 'brick'
-                    ? {
-                        body: 'from-[#cdbfb1] via-[#a3948a] to-[#655c63]',
-                        cap: 'bg-[#5b5563]',
-                        lineA: '#e8ddd4',
-                        lineB: '#c9bbb0',
-                      }
-                    : stack.variant === 'concrete'
-                      ? {
-                          body: 'from-[#c9d7f2] via-[#9db5dc] to-[#647ea9]',
-                          cap: 'bg-[#556d95]',
-                          lineA: '#ebf2ff',
-                          lineB: '#cddcf8',
-                        }
-                      : {
-                          body: 'from-[#b9cce6] via-[#8ea9cf] to-[#5d769b]',
-                          cap: 'bg-[#4f6489]',
-                          lineA: '#e1ebff',
-                          lineB: '#bed2ef',
-                        };
-                  return (
-                    <div
-                      key={stack.id}
-                      className="absolute bottom-[4.6rem]"
-                      style={{ left: stack.left, width: `${stack.width}px`, height: `${stack.height}px` }}
-                    >
-                      <div className={`absolute inset-0 border-2 border-[#2c3147] bg-gradient-to-b ${palette.body} shadow-[inset_-4px_-6px_0_rgba(15,23,42,0.26)]`} />
-                      <div className={`absolute -top-[6px] left-1/2 h-[6px] w-[78%] -translate-x-1/2 border-2 border-[#2c3147] ${palette.cap}`} />
-                      <div className="absolute left-[22%] top-[10%] w-[2px] h-[74%] bg-white/20" />
-                      <div className="absolute left-[58%] top-[18%] w-[2px] h-[64%] bg-black/18" />
-                      <div className="absolute inset-x-[14%] top-[16%] h-[4px]" style={{ background: palette.lineA }} />
-                      <div className="absolute inset-x-[14%] top-[30%] h-[3px]" style={{ background: palette.lineB }} />
-                      <div className="absolute inset-x-[14%] top-[44%] h-[4px]" style={{ background: palette.lineA }} />
-                      <div className="absolute inset-x-[14%] top-[58%] h-[3px]" style={{ background: palette.lineB }} />
-                      {Array.from({ length: getSmokeParticleTotal(stack) }).map((_, smokeIdx) => (
-                        <span
-                          key={`${stack.id}-smoke-${smokeIdx}`}
-                          className="stack-puff-smoke"
-                          style={buildSmokeParticleStyle(stack.id, smokeIdx)}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()
-              ))}
-              {sceneFrontTreeBelt.map((tree, treeIdx) => (
-                <div
-                  key={tree.id}
-                  className="absolute bottom-[3.9rem]"
-                  style={{
-                    left: tree.left,
-                    width: `${Math.max(14, Math.round(tree.width * 1.16))}px`,
-                    height: `${Math.max(22, Math.round(tree.height * 1.12))}px`,
-                  }}
-                >
-                  {(() => {
-                    const pixel = Math.max(2, Math.round(tree.width / 6));
-                    const variant = PIXEL_TREE_VARIANTS[(treeIdx * 5 + tree.height) % PIXEL_TREE_VARIANTS.length];
-                    const palette = getPixelTreePalette(isNightSky, treeIdx + 2 + (tree.width % 5));
-                    return (
-                      <>
-                        {variant.cells.map((cell, idx) => (
-                          <span
-                            key={`${tree.id}-cell-${idx}`}
-                            className="absolute"
-                            style={{
-                              left: `${cell[0] * pixel}px`,
-                              bottom: `${(cell[1] + 2) * pixel}px`,
-                              width: `${pixel}px`,
-                              height: `${pixel}px`,
-                              background: idx % 4 === 0 ? palette.alt : palette.main,
-                            }}
-                          />
-                        ))}
-                        <span
-                          className="absolute"
-                          style={{
-                            left: `${variant.trunk.x * pixel}px`,
-                            bottom: `${pixel}px`,
-                            width: `${pixel}px`,
-                            height: `${variant.trunk.h * pixel}px`,
-                            background: palette.trunk,
-                          }}
-                        />
-                        <span
-                          className="absolute"
-                          style={{
-                            left: `${variant.trunk.baseX * pixel}px`,
-                            bottom: '0px',
-                            width: `${variant.trunk.baseW * pixel}px`,
-                            height: `${pixel}px`,
-                            background: palette.trunk,
-                          }}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
-              ))}
-              <div className={`absolute bottom-0 left-0 right-0 h-[34px] ${isNightSky ? 'bg-gradient-to-b from-[#10222f] to-[#04080f]' : 'bg-gradient-to-b from-[#4f7058] to-[#27372e]'}`} />
-            </div>
+          <div className="absolute bottom-0 left-0 right-0 h-[22rem] md:h-[32rem]">
+            {renderSkylineSvg({ mode: resolvedSkyMode, scope: 'menu' })}
           </div>
         </div>
 
@@ -6752,7 +6478,7 @@ export default function App() {
 
   // 기록부 화면 공통 배경(하늘·굴뚝 풍경): 화면에 고정되어 스크롤해도 끊기지 않음
   const renderSheetSkyScene = () => (
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.4]">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.45]">
         <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
         {renderSkyDecor('sheet', 5)}
@@ -6770,153 +6496,8 @@ export default function App() {
             }}
           />
         ))}
-        <div className="absolute bottom-0 left-0 right-0">
-          <div className={`absolute bottom-0 left-0 right-0 ${sheetGroundClass}`} style={{ height: `calc(5rem * ${sceneScale})` }}><div className="skyline-ground-texture" /></div>
-          <div className="relative mx-auto h-44 md:h-56 max-w-7xl" style={sceneScaleStyle}>
-            <div className={`absolute bottom-0 left-0 right-0 h-20 ${sheetGroundClass}`}><div className="skyline-ground-texture" /></div>
-            {isMorningSky && <div className="skyline-sunrise-mountain-sheet" />}
-            {renderFarLandscape('sheet', 0.42, 'bottom-16')}
-            {sceneMountains.map((mountain) => (
-              <div
-                key={`sheet-${mountain.id}`}
-                className={`absolute bottom-16 rounded-t-[45%] ${sheetMountainClass}`}
-                style={{ left: mountain.left, width: mountain.width, height: `${Math.round(mountain.height * 0.38)}px` }}
-              />
-            ))}
-            {sceneTreeBelt.map((tree, treeIdx) => (
-              <div
-                key={`sheet-tree-${tree.id}`}
-                className="absolute bottom-[3.9rem]"
-                style={{
-                  left: tree.left,
-                  width: `${Math.max(9, Math.round(tree.width * 0.86))}px`,
-                  height: `${Math.max(12, Math.round(tree.height * 0.86))}px`,
-                }}
-              >
-                {(() => {
-                  const pixel = Math.max(2, Math.round(tree.width / 7));
-                  const variant = PIXEL_TREE_VARIANTS[(treeIdx * 3 + tree.width) % PIXEL_TREE_VARIANTS.length];
-                  const palette = getPixelTreePalette(isNightSky, treeIdx + (tree.height % 5));
-                  return (
-                    <>
-                      {variant.cells.map((cell, idx) => (
-                        <span
-                          key={`sheet-${tree.id}-cell-${idx}`}
-                          className="absolute"
-                          style={{
-                            left: `${cell[0] * pixel}px`,
-                            bottom: `${(cell[1] + 2) * pixel}px`,
-                            width: `${pixel}px`,
-                            height: `${pixel}px`,
-                            background: idx % 4 === 0 ? palette.alt : palette.main,
-                          }}
-                        />
-                      ))}
-                      <span
-                        className="absolute"
-                        style={{
-                          left: `${variant.trunk.x * pixel}px`,
-                          bottom: `${pixel}px`,
-                          width: `${pixel}px`,
-                          height: `${variant.trunk.h * pixel}px`,
-                          background: palette.trunk,
-                        }}
-                      />
-                      <span
-                        className="absolute"
-                        style={{
-                          left: `${variant.trunk.baseX * pixel}px`,
-                          bottom: '0px',
-                          width: `${variant.trunk.baseW * pixel}px`,
-                          height: `${pixel}px`,
-                          background: palette.trunk,
-                        }}
-                      />
-                    </>
-                  );
-                })()}
-              </div>
-            ))}
-            {sceneBackTowers.map((tower) => (
-              <div
-                key={`sheet-${tower.id}`}
-                className={`absolute bottom-14 rounded-t-[2px] border ${isNightSky ? 'border-[#2b3558]/70 bg-gradient-to-b from-[#6c7cab] via-[#495a8a] to-[#243052]' : 'border-[#51667e]/55 bg-gradient-to-b from-[#9cb4d1] via-[#7f9cbf] to-[#5f7d9f]'}`}
-                style={{ left: tower.left, width: tower.width, height: `${Math.round(tower.height * 0.48)}px` }}
-              />
-            ))}
-            {sceneFactoryBlocks.map((block) => (
-              <div
-                key={`sheet-${block.id}`}
-                className={`absolute bottom-12 rounded-t-[3px] border ${isNightSky ? 'border-[#2f2d45]/80 bg-gradient-to-b from-[#8f7668] via-[#6e5850] to-[#3d3033]' : 'border-[#5a5b72]/65 bg-gradient-to-b from-[#b89c89] via-[#967b6f] to-[#6c5550]'}`}
-                style={{ left: block.left, width: block.width, height: `${Math.round(block.height * 0.52)}px` }}
-              />
-            ))}
-            {sceneStacks.map((stack) => (
-              <div
-                key={`sheet-${stack.id}`}
-                className={`absolute bottom-12 rounded-t-[3px] border ${isNightSky ? 'border-[#2a3148]/80 bg-gradient-to-b from-[#a4afc0] via-[#7f8ba0] to-[#4d596e]' : 'border-[#51667a]/65 bg-gradient-to-b from-[#bfd0e0] via-[#98adc4] to-[#6f89a3]'}`}
-                style={{ left: stack.left, width: `${Math.round(stack.width * 0.82)}px`, height: `${Math.round(stack.height * 0.52)}px` }}
-              >
-                {Array.from({ length: Math.max(3, Math.round(getSmokeParticleTotal(stack) * 0.5)) }).map((_, smokeIdx) => (
-                  <span key={`sheet-${stack.id}-smoke-${smokeIdx}`} className="stack-puff-smoke" style={buildSmokeParticleStyle(stack.id, smokeIdx + 50)} />
-                ))}
-              </div>
-            ))}
-            {sceneFrontTreeBelt.map((tree, treeIdx) => (
-              <div
-                key={`sheet-front-${tree.id}`}
-                className="absolute bottom-[3rem]"
-                style={{
-                  left: tree.left,
-                  width: `${Math.max(10, Math.round(tree.width * 0.92))}px`,
-                  height: `${Math.max(14, Math.round(tree.height * 0.88))}px`,
-                }}
-              >
-                {(() => {
-                  const pixel = Math.max(2, Math.round(tree.width / 8));
-                  const variant = PIXEL_TREE_VARIANTS[(treeIdx * 5 + tree.height) % PIXEL_TREE_VARIANTS.length];
-                  const palette = getPixelTreePalette(isNightSky, treeIdx + 2 + (tree.width % 5));
-                  return (
-                    <>
-                      {variant.cells.map((cell, idx) => (
-                        <span
-                          key={`sheet-front-${tree.id}-cell-${idx}`}
-                          className="absolute"
-                          style={{
-                            left: `${cell[0] * pixel}px`,
-                            bottom: `${(cell[1] + 2) * pixel}px`,
-                            width: `${pixel}px`,
-                            height: `${pixel}px`,
-                            background: idx % 4 === 0 ? palette.alt : palette.main,
-                          }}
-                        />
-                      ))}
-                      <span
-                        className="absolute"
-                        style={{
-                          left: `${variant.trunk.x * pixel}px`,
-                          bottom: `${pixel}px`,
-                          width: `${pixel}px`,
-                          height: `${variant.trunk.h * pixel}px`,
-                          background: palette.trunk,
-                        }}
-                      />
-                      <span
-                        className="absolute"
-                        style={{
-                          left: `${variant.trunk.baseX * pixel}px`,
-                          bottom: '0px',
-                          width: `${variant.trunk.baseW * pixel}px`,
-                          height: `${pixel}px`,
-                          background: palette.trunk,
-                        }}
-                      />
-                    </>
-                  );
-                })()}
-              </div>
-            ))}
-          </div>
+        <div className="absolute bottom-0 left-0 right-0 h-[16rem] md:h-[19rem]">
+          {renderSkylineSvg({ mode: resolvedSkyMode, scope: 'sheet', compact: true })}
         </div>
       </div>
   );
@@ -6944,9 +6525,6 @@ export default function App() {
                 {IS_POPUP_WINDOW ? '창 닫기' : '기록부 선택'}
               </button>
             </div>
-            {IS_POPUP_WINDOW && (
-              <p className="mt-2 text-[11px] font-bold text-orange-700">별도 창으로 열림 · 입력 내용은 다른 창과 실시간으로 공유되고 자동 보관됩니다</p>
-            )}
           </div>
           {renderSamplingLogBody()}
         </div>
@@ -6958,23 +6536,6 @@ export default function App() {
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
-      {(() => {
-        const stats = getSamplingLogStats(samplingLogData);
-        return (
-          <button
-            type="button"
-            onClick={openSamplingLogWindow}
-            className="fixed bottom-5 right-5 z-[60] pl-3 pr-4 py-2.5 rounded-full shadow-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-bold text-sm hover:from-orange-700 hover:to-amber-600 border border-orange-700/60 flex items-center gap-2 transition-transform hover:scale-105"
-            title="통합 시료채취기록부를 별도 창으로 엽니다 (내용은 두 창에서 실시간 공유)"
-          >
-            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">⧉</span>
-            <span className="flex flex-col items-start leading-tight">
-              <span>통합 시료채취기록부</span>
-              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '새 창으로 열기'}</span>
-            </span>
-          </button>
-        );
-      })()}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       {renderSheetSkyScene()}
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
