@@ -174,3 +174,12 @@ button.w-full[class*="border-dashed"], button.w-full[class*="bg-emerald-50"], bu
 button.w-full[class*="border-dashed"]:hover, button.w-full[class*="bg-emerald-50"]:hover, button.w-full[class*="bg-slate-50"]:hover { background: rgba(10, 132, 255, 0.06) !important; border-color: var(--mac-accent) !important; }
 /* 값 요약 타일 (총 채취 시간 등) */
 .grid > div.text-center.border, .grid > div[class*="text-center"][class*="border"] { background: #fff; }
+
+/* 어두운 패널(결과 요약, 저장 리포트) 안의 글자색은 밝게 유지 */
+.bg-slate-800 h3.text-sm.font-bold, .bg-slate-900 h3.text-sm.font-bold, .bg-slate-700 h3.text-sm.font-bold { color: #cbd5e1; }
+.bg-slate-800 .text-xs.font-bold, .bg-slate-900 .text-xs.font-bold, .bg-slate-700 .text-xs.font-bold,
+.bg-slate-800 label, .bg-slate-900 label, .bg-slate-700 label { color: #94a3b8; }
+.bg-slate-800 .text-\[11px\].font-bold, .bg-slate-900 .text-\[11px\].font-bold, .bg-slate-700 .text-\[11px\].font-bold { color: #cbd5e1; }
+.bg-slate-800 [class*="text-red-"], .bg-slate-900 [class*="text-red-"] { color: #fca5a5; }
+.bg-slate-800 [class*="text-emerald-"], .bg-slate-800 [class*="text-cyan-"], .bg-slate-800 [class*="text-amber-"], .bg-slate-800 [class*="text-teal-"],
+.bg-slate-900 [class*="text-slate-200"], .bg-slate-800 [class*="text-slate-200"], .bg-slate-800 [class*="text-white"], .bg-slate-900 [class*="text-white"] { color: revert-layer; }
