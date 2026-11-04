@@ -3488,11 +3488,11 @@ export default function App() {
 
   // 굴뚝 단면 측정점 그림 (논문 삽화식 흑백 선화): 등면적 원환, 지름선, 정방향 ●, 역방향 ○
   const renderSamplingPointDiagram = (sp) => {
-    const width = 264;
-    const height = 250;
-    const cx = 146;
-    const cy = 118;
-    const R = 76;
+    const width = 240;
+    const height = 232;
+    const cx = 134;
+    const cy = 108;
+    const R = 70;
     const ink = '#1d1d1f';
     const coeffs = sp.isCenterOnly ? [] : [...sp.coeffs].sort((a, b) => b - a); // 벽에 가까운 점부터 1번
     const nearPts = sp.isCenterOnly ? [{ x: cx, y: cy, n: 1 }] : coeffs.map((c, i) => ({ x: cx - c * R, y: cy, n: i + 1 }));
@@ -6833,8 +6833,8 @@ export default function App() {
                   )}
                 </div>
                 
-                <div className="flex flex-col xl:flex-row gap-4 items-start">
-                  <figure className="shrink-0 flex flex-col items-center gap-1 m-0 px-2 xl:w-64">
+                <div className="flex flex-col md:flex-row gap-4 items-start">
+                  <figure className="shrink-0 flex flex-col items-center gap-1 m-0 px-1 md:w-60">
                     {renderSamplingPointDiagram(samplingPointsData)}
                     <figcaption className="mt-1 text-[11px] text-slate-700 text-center leading-snug">
                       그림. 측정공 1개당 측정점 위치 (반경당 {samplingPointsData.perRadius}점)<br />
@@ -6882,14 +6882,6 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-3 border-t border-slate-100 pt-4">
-                  <div className="text-[10px] text-slate-500 text-left w-full space-y-1">
-                    <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
-                  </div>
-                  <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 shrink-0">
-                    {isFlowSheet ? '유량측정기록부는 4번 섹션의 측정점별 동압·온도로 지점별 유속·유량을 바로 계산합니다.' : '기록표는 5번 섹션의 "측정점/채취시간 표 자동 생성"으로 만듭니다.'}
-                  </p>
-                </div>
               </div>
             )}
           </div>
