@@ -141,8 +141,8 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 14, code: 'G', name: '황산화물', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
   { row: 15, code: 'G', name: '질소산화물', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
   { row: 16, code: 'G', name: '일산화탄소', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
-  { row: 17, code: 'NH3', name: '암모니아-1(BA)', kind: 'gas', suffix: 'BA-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
-  { row: 18, code: 'NH3', name: '암모니아-2(H2O2)', kind: 'gas', suffix: 'H2O2-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
+  { row: 17, code: 'NH3', name: '암모니아-1(BA)', species: '암모니아', part: 'BA 흡수액', kind: 'gas', suffix: 'BA-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
+  { row: 18, code: 'NH3', name: '암모니아-2(H2O2)', species: '암모니아', part: 'H₂O₂ 흡수액', kind: 'gas', suffix: 'H2O2-1', suctionRate: '1~2', targetVolume: '20', duration: '20', testPeriod: '3' },
   { row: 19, code: 'F', name: '불소', kind: 'gas', suctionRate: '1', targetVolume: '40', duration: '40', testPeriod: '4' },
   { row: 20, code: 'HCl', name: '염화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '3' },
   { row: 21, code: 'H2S', name: '황화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '4' },
@@ -156,12 +156,12 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 29, code: 'M', name: '니켈', kind: 'particle', testPeriod: '6' },
   { row: 30, code: 'M', name: '아연', kind: 'particle', testPeriod: '6' },
   { row: 31, code: 'M', name: '베릴륨', kind: 'particle', testPeriod: '6' },
-  { row: 32, code: 'M', name: '비소(입자상)', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
-  { row: 33, code: 'As-G', name: '비소(가스상)', kind: 'particle', suctionRate: '1', duration: '입자상 동일' },
+  { row: 32, code: 'M', name: '비소(입자상)', species: '비소', part: '입자상', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
+  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일' },
   { row: 34, code: 'Hg', name: '수은', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
-  { row: 35, code: 'ALD-1', name: '알데히드-1', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
-  { row: 36, code: 'ALD-2', name: '알데히드-2', kind: 'gas', suctionRate: '1', targetVolume: '10' },
-  { row: 37, code: 'ALD-3', name: '알데히드-3', kind: 'gas', suctionRate: '1', targetVolume: '10' },
+  { row: 35, code: 'ALD-1', name: '알데히드-1', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '1회차', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
+  { row: 36, code: 'ALD-2', name: '알데히드-2', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '2회차', kind: 'gas', suctionRate: '1', targetVolume: '10' },
+  { row: 37, code: 'ALD-3', name: '알데히드-3', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '3회차', kind: 'gas', suctionRate: '1', targetVolume: '10' },
   { row: 38, code: 'PN', name: '페놀', kind: 'gas', suctionRate: '1', targetVolume: '20', testPeriod: '4' },
   { row: 39, code: 'Br', name: '브롬', kind: 'gas', suctionRate: '1', targetVolume: '40', testPeriod: '4' },
   { row: 40, code: 'THC', name: '총탄화수소', kind: 'thc', duration: '30', testPeriod: '현장측정' },
@@ -181,7 +181,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 54, code: 'BEN', name: '벤지딘', kind: 'plain' },
   { row: 55, code: 'AN', name: '아닐린', kind: 'plain' },
   { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box' },
-  { row: 57, code: 'OX', name: '옥사이드', kind: 'box', testPeriod: '9' },
+  { row: 57, code: 'OX', name: '옥사이드', species: '에틸렌옥사이드 · 프로필렌옥사이드', options: ['에틸렌옥사이드', '프로필렌옥사이드'], kind: 'box', testPeriod: '9' },
 ];
 
 // 기록부(먼지·금속·수은·PAHs) 저장본을 통합기록부 행에 옮길 때의 대응표
@@ -276,7 +276,9 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
 };
 
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
-const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([15, 18, 33, 36, 37]);
+// 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 18(암모니아), 33(비소), 36·37(알데히드). 황산화물·질소산화물(14·15)은 별개 종이라 추출 시 병합을 풀고 각각 O 표시
+const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([18, 33, 36, 37]);
+const SAMPLING_LOG_UNMERGE_ON_EXPORT = ['C14:C15'];
 
 // 물질 표 그룹 (표시용): 입자상 / 가스상 / 현장측정 / VOCs·기타
 const SAMPLING_LOG_GROUPS = [
@@ -299,13 +301,35 @@ const SAMPLING_LOG_GROUP_HEADER = {
   slate: 'bg-slate-100 text-slate-800 border-slate-200',
   violet: 'bg-violet-50 text-violet-900 border-violet-200',
 };
+// 종(種) 단위: 같은 측정 건을 여러 행으로 적는 것(암모니아 흡수액 2종, 비소 입자상·가스상, 알데히드 3회차)은 한 종으로 센다.
+// 옥사이드 한 행은 에틸렌옥사이드·프로필렌옥사이드 2종, 알데히드는 포름·아세트 2종 → 전체 43종
+const getSubstanceSpeciesKey = (sub) => sub.species || sub.name;
+const getSubstanceSpeciesCount = (sub, row = null) => {
+  if (!Array.isArray(sub.options)) return 1;
+  if (row && Array.isArray(row.speciesSel)) return Math.max(1, row.speciesSel.length);
+  return sub.options.length;
+};
+const countSpecies = (subs, log = null) => {
+  const seen = new Set();
+  let total = 0;
+  subs.forEach((sub) => {
+    const key = getSubstanceSpeciesKey(sub);
+    if (seen.has(key)) return;
+    seen.add(key);
+    total += getSubstanceSpeciesCount(sub, log ? log.rows[String(sub.row)] : null);
+  });
+  return total;
+};
+const SAMPLING_LOG_SPECIES_TOTAL = countSpecies(SAMPLING_LOG_SUBSTANCES);
+const getSamplingLogRowsOfSpecies = (sub) => SAMPLING_LOG_SUBSTANCES.filter((item) => getSubstanceSpeciesKey(item) === getSubstanceSpeciesKey(sub));
+
 const getSamplingLogStats = (log) => {
   const requested = SAMPLING_LOG_SUBSTANCES.filter((sub) => log.rows[String(sub.row)]?.requested);
   const filled = requested.filter((sub) => {
     const row = log.rows[String(sub.row)];
     return row && row.start && row.end;
   });
-  return { requestedCount: requested.length, filledCount: filled.length };
+  return { requestedCount: countSpecies(requested, log), requestedRows: requested.length, filledCount: filled.length, speciesTotal: SAMPLING_LOG_SPECIES_TOTAL };
 };
 
 const SAMPLING_LOG_KIND_LABEL = {
@@ -320,6 +344,8 @@ const createEmptySamplingLogRow = (substance) => ({
   targetVolume: substance.targetVolume || '',
   duration: substance.duration || '',
   testPeriod: substance.testPeriod || '',
+  // 한 행에 두 종이 묶인 경우(알데히드, 옥사이드) 어느 종을 의뢰하는지
+  speciesSel: Array.isArray(substance.options) ? [...substance.options] : undefined,
 });
 
 const createEmptySamplingLog = () => ({
@@ -350,9 +376,13 @@ const sanitizeSamplingLog = (value) => {
       const di = parseInt(src.dayIndex, 10);
       row.dayIndex = Number.isFinite(di) && di >= 0 && di < 4 ? di : 0;
       Object.keys(row).forEach((field) => {
-        if (field === 'requested' || field === 'dayIndex') return;
+        if (field === 'requested' || field === 'dayIndex' || field === 'speciesSel') return;
         if (src[field] !== undefined) row[field] = text(src[field]);
       });
+      if (Array.isArray(item.options) && Array.isArray(src.speciesSel)) {
+        const picked = item.options.filter((opt) => src.speciesSel.includes(opt));
+        row.speciesSel = picked.length > 0 ? picked : [...item.options];
+      }
     }
     return [key, row];
   }));
@@ -5254,6 +5284,15 @@ export default function App() {
     if (Number.isFinite(options.shrinkMeterRowsTo)) {
       shrinkRecordSheetMeterRows(worksheet, options.shrinkMeterRowsTo, options.layout || {});
     }
+    if (Array.isArray(options.removeMerges) && options.removeMerges.length > 0) {
+      const mergeCellsNode = worksheet.getElementsByTagNameNS('*', 'mergeCells')[0];
+      if (mergeCellsNode) {
+        getChildElementsByLocalName(mergeCellsNode, 'mergeCell').forEach((mergeCell) => {
+          if (options.removeMerges.includes(mergeCell.getAttribute('ref'))) mergeCellsNode.removeChild(mergeCell);
+        });
+        mergeCellsNode.setAttribute('count', String(getChildElementsByLocalName(mergeCellsNode, 'mergeCell').length));
+      }
+    }
 
     if (options.shiftRefsToSheet && Number.isFinite(options.shiftRefsFromRow) && options.shiftRefsDelta) {
       shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
@@ -5753,10 +5792,17 @@ export default function App() {
     ...prev,
     days: prev.days.map((day, i) => (i === idx ? { ...day, [key]: value } : day)),
   }));
-  const updateSamplingLogRow = (rowKey, key, value) => setSamplingLogData(prev => ({
-    ...prev,
-    rows: { ...prev.rows, [rowKey]: { ...prev.rows[rowKey], [key]: value } },
-  }));
+  const updateSamplingLogRow = (rowKey, key, value) => setSamplingLogData(prev => {
+    if (key === 'requested' || key === 'speciesSel') {
+      // 같은 종의 행(암모니아 흡수액 2종, 비소 입자·가스상, 알데히드 3회차)은 의뢰 여부·종 선택을 함께 바꾼다
+      const sub = SAMPLING_LOG_SUBSTANCES.find((item) => String(item.row) === String(rowKey));
+      const keys = sub ? getSamplingLogRowsOfSpecies(sub).map((item) => String(item.row)) : [String(rowKey)];
+      const rows = { ...prev.rows };
+      keys.forEach((k) => { rows[k] = { ...rows[k], [key]: value }; });
+      return { ...prev, rows };
+    }
+    return { ...prev, rows: { ...prev.rows, [rowKey]: { ...prev.rows[rowKey], [key]: value } } };
+  });
   const handleSamplingLogParticleSampler = (id) => {
     const found = samplers.find((item) => String(item.id) === String(id));
     setSamplingLogData(prev => ({ ...prev, particleSamplerId: id, particleSamplerYd: found ? String(found.yd) : prev.particleSamplerYd }));
@@ -5891,6 +5937,11 @@ export default function App() {
         const on = Boolean(row && row.requested);
         const day = on ? log.days[row.dayIndex] : null;
         if (!SAMPLING_LOG_MERGED_CHECK_ROWS.has(r)) add(`C${r}`, on ? 'O' : null);
+        if (Array.isArray(sub.options)) {
+          // 알데히드·옥사이드: 의뢰한 종을 물질명 칸에 함께 적음 (예: 옥사이드 (에틸렌옥사이드))
+          const picked = on && Array.isArray(row.speciesSel) && row.speciesSel.length > 0 ? row.speciesSel : sub.options;
+          add(`B${r}`, on ? `${sub.name} (${picked.join('·')})` : sub.name);
+        }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
         add(`F${r}`, on ? toExcelDateSerial(day?.date) : null);
         add(`G${r}`, on ? toExcelTimeFraction(row.start) : null);
@@ -5909,7 +5960,7 @@ export default function App() {
 
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
-      zip.file(inputPath, patchWorksheetXml(inputXml, updates, {}));
+      zip.file(inputPath, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }));
 
       // 날짜별 시트 이름을 실제 채취일(yyyymmdd)로 변경 (인쇄 영역 이름도 함께)
       const sheetNames = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)).map((m) => m[1]);
@@ -6749,8 +6800,8 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span>사용자 <span className="font-black text-slate-900">{displayUserNameWithFallback}</span></span>
               <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${isUserUnlocked ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
-              <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">의뢰 {logStats.requestedCount}건</span>
-              <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${logStats.requestedCount > 0 && logStats.filledCount === logStats.requestedCount ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>시각 입력 {logStats.filledCount}/{logStats.requestedCount}</span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">의뢰 {logStats.requestedCount}종 / {logStats.speciesTotal}종</span>
+              <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold ${logStats.requestedRows > 0 && logStats.filledCount === logStats.requestedRows ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>시각 입력 {logStats.filledCount}/{logStats.requestedRows}</span>
               {log.company && <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">{log.company}{log.stackName ? ` · ${log.stackName}` : ''}</span>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -6990,7 +7041,31 @@ export default function App() {
                               </td>
                               <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{sub.name}</span>
+                                  <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{sub.species || sub.name}</span>
+                                  {sub.part && <span className="text-[10px] text-slate-500">{sub.part}</span>}
+                                  {Array.isArray(sub.options) && getSamplingLogRowsOfSpecies(sub)[0].row === sub.row && (
+                                    <span className="inline-flex items-center gap-2 ml-1">
+                                      {sub.options.map((opt) => {
+                                        const picked = Array.isArray(row.speciesSel) ? row.speciesSel.includes(opt) : true;
+                                        return (
+                                          <label key={opt} className={`inline-flex items-center gap-1 text-[10px] font-semibold ${on ? 'text-slate-700' : 'text-slate-400'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={picked}
+                                              disabled={!on}
+                                              onChange={(e) => {
+                                                const current = Array.isArray(row.speciesSel) ? row.speciesSel : [...sub.options];
+                                                const next = e.target.checked ? sub.options.filter((o) => o === opt || current.includes(o)) : current.filter((o) => o !== opt);
+                                                updateSamplingLogRow(String(sub.row), 'speciesSel', next.length > 0 ? next : [opt]);
+                                              }}
+                                              className="w-3 h-3 accent-orange-600"
+                                            />
+                                            {opt}
+                                          </label>
+                                        );
+                                      })}
+                                    </span>
+                                  )}
                                   <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${SAMPLING_LOG_KIND_BADGE[sub.kind]}`}>{sub.code}</span>
                                   {on && (
                                     <span className={`w-2 h-2 rounded-full ${timeDone ? 'bg-emerald-500' : 'bg-amber-400'}`} title={timeDone ? '시각 입력 완료' : '시작/종료 시각 미입력'} />
@@ -7041,13 +7116,13 @@ export default function App() {
                   <tbody>
                     {savedLogs.map((item) => {
                       const itemLog = sanitizeSamplingLog(item.samplingLog);
-                      const requestedCount = SAMPLING_LOG_SUBSTANCES.filter((sub) => itemLog.rows[String(sub.row)]?.requested).length;
+                      const requestedCount = countSpecies(SAMPLING_LOG_SUBSTANCES.filter((sub) => itemLog.rows[String(sub.row)]?.requested), itemLog);
                       return (
                         <tr key={buildReportKey(item.id, item.savedAt)}>
                           <td className="p-2 border border-slate-200">{item.date || '-'}</td>
                           <td className="p-2 border border-slate-200">{item.company || '-'}</td>
                           <td className="p-2 border border-slate-200">{item.location || '-'}</td>
-                          <td className="p-2 border border-slate-200">{requestedCount}개</td>
+                          <td className="p-2 border border-slate-200">{requestedCount}종</td>
                           <td className="p-2 border border-slate-200">{item.savedAt ? new Date(item.savedAt).toLocaleString() : '-'}</td>
                           <td className="p-2 border border-slate-200">
                             <div className="flex flex-wrap justify-center gap-1">
