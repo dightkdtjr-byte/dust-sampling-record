@@ -1,19 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import JSZip from 'jszip';
-import mainLogoImage from './assets/mainlogo.png';
-import samplingPoint1 from './assets/sampling-points/point-1.png';
-import samplingPoint2 from './assets/sampling-points/point-2.png';
-import samplingPoint3 from './assets/sampling-points/point-3.png';
-import samplingPoint4 from './assets/sampling-points/point-4.png';
-import samplingPoint5 from './assets/sampling-points/point-5.png';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
 // 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
 const IS_DESKTOP_BUILD = import.meta.env.VITE_DESKTOP_BUILD === '1';
-
-// 측정점 수(반경당 1~5점)에 따른 측정점 위치 그림
-const SAMPLING_POINT_IMAGES = [samplingPoint1, samplingPoint2, samplingPoint3, samplingPoint4, samplingPoint5];
 
 const DEFAULT_NOZZLE_SET = IS_DESKTOP_BUILD ? [] : [
   { num: 4, d: 3.21 }, { num: 5, d: 3.97 }, { num: 6, d: 4.79 },
@@ -60,6 +51,53 @@ const EXPORT_TEMPLATE_LAYOUTS = {
   flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량' },
 };
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
+
+// 브랜드 워드마크: 굴뚝 아이콘 + StackPilot (픽셀 로고 대신 벡터)
+const BrandWordmark = ({ size = 'lg', accent = '#0a84ff' }) => {
+  const dims = size === 'lg' ? { icon: 46, text: 'text-[2rem] md:text-[2.6rem]' } : { icon: 30, text: 'text-xl md:text-2xl' };
+  return (
+    <span className="inline-flex items-center gap-3 select-none">
+      <svg width={dims.icon} height={dims.icon} viewBox="0 0 48 48" aria-hidden="true">
+        <defs>
+          <linearGradient id="brand-bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#1f2a44" />
+            <stop offset="1" stopColor="#0b1220" />
+          </linearGradient>
+          <linearGradient id="brand-stack" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#f4f7fb" />
+            <stop offset="1" stopColor="#aebccf" />
+          </linearGradient>
+        </defs>
+        <rect x="1" y="1" width="46" height="46" rx="12" fill="url(#brand-bg)" />
+        <rect x="19" y="16" width="10" height="26" rx="2.5" fill="url(#brand-stack)" />
+        <rect x="19" y="20" width="10" height="2.5" fill="#e0534a" />
+        <rect x="19" y="25" width="10" height="2.5" fill="#e0534a" />
+        <path d="M10,42 H38" stroke="#5b6b85" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="26" cy="12" r="3.2" fill="rgba(255,255,255,0.55)" />
+        <circle cx="31" cy="8.5" r="2.4" fill="rgba(255,255,255,0.38)" />
+        <circle cx="35" cy="5.6" r="1.6" fill="rgba(255,255,255,0.25)" />
+        <circle cx="12" cy="12" r="2.2" fill={accent} />
+      </svg>
+      <span className={`${dims.text} font-extrabold tracking-[-0.04em] text-slate-900 leading-none`}>
+        Stack<span className="font-semibold text-slate-500">Pilot</span>
+      </span>
+    </span>
+  );
+};
+
+// 기록부별 아이콘 (메뉴 타일) — 단순한 라인 아이콘
+const SHEET_ICONS = {
+  dust: (c) => (<g fill={c}><circle cx="9" cy="10" r="2.6" /><circle cx="15.5" cy="7" r="1.8" /><circle cx="16" cy="14.5" r="2.2" /><circle cx="8" cy="17" r="1.5" /></g>),
+  metal: (c) => (<path d="M12 3.5l7 4v9l-7 4-7-4v-9z" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round" />),
+  mercury: (c) => (<g><path d="M10 4h4v9.3a4 4 0 1 1-4 0z" fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round" /><circle cx="12" cy="16.5" r="2" fill={c} /></g>),
+  pahs: (c) => (<g fill="none" stroke={c} strokeWidth="2" strokeLinejoin="round"><path d="M12 3.5l6 3.5v7l-6 3.5-6-3.5v-7z" /><path d="M12 7.5l3 1.75v3.5L12 14.5l-3-1.75v-3.5z" /></g>),
+  flow: (c) => (<g fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><path d="M3 8h10a2.5 2.5 0 1 0-2.5-2.5" /><path d="M3 12h14a2.5 2.5 0 1 1-2.5 2.5" /><path d="M3 16h8" /></g>),
+  samplinglog: (c) => (<g fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><path d="M6 4.5h12v15H6z" strokeLinejoin="round" /><path d="M9 9h6M9 12.5h6M9 16h4" /></g>),
+};
+const SHEET_TILE_COLORS = {
+  dust: ['#34c759', '#1f8f3f'], metal: ['#ffcc00', '#c48f00'], mercury: ['#5ac8fa', '#1e7fd6'],
+  pahs: ['#bf5af2', '#7c3aed'], flow: ['#32ade6', '#1a7bb9'], samplinglog: ['#ff9f0a', '#d9741a'],
+};
 
 const SHEET_MENU = [
   {
@@ -1465,15 +1503,6 @@ const SignatureBadge = () => (
 );
 
 export default function App() {
-  const logoCandidates = [
-    mainLogoImage,
-    `${import.meta.env.BASE_URL}mainlogo.png`,
-    `${import.meta.env.BASE_URL}app-logo.png`,
-    `${import.meta.env.BASE_URL}mainlogo.jpg`,
-    `${import.meta.env.BASE_URL}app-logo.jpg`,
-  ];
-  const [logoIndex, setLogoIndex] = useState(0);
-  const mainLogoSrc = logoCandidates[Math.min(logoIndex, logoCandidates.length - 1)];
   // 기록부 종류별 엑셀 양식 (먼지와 금속은 같은 양식 사용)
   const getTemplateUrlForSheet = (sheetId) => {
     const layout = EXPORT_TEMPLATE_LAYOUTS[sheetId] || EXPORT_TEMPLATE_LAYOUTS.dust;
@@ -3389,10 +3418,55 @@ export default function App() {
     return {
       perRadius: isCenterOnly ? 1 : rnCoeffs.length,
       isCenterOnly,
+      coeffs: rnCoeffs,
+      diameterLabel: `${D} m`,
       area: area.toFixed(2),
       nearInsertion: nearDistances.map(d => ((d + flange) * 100).toFixed(2)),
       farInsertion: farDistances.map(d => ((d + flange) * 100).toFixed(2)),
     };
+  };
+
+  // 굴뚝 단면 측정점 다이어그램: 등면적 원환과 지름선 위의 측정점 (정방향 파랑, 역방향 빨강)
+  const renderSamplingPointDiagram = (sp) => {
+    const size = 232;
+    const cx = size / 2;
+    const cy = size / 2 + 4;
+    const R = 84;
+    const coeffs = sp.isCenterOnly ? [] : [...sp.coeffs].sort((a, b) => b - a); // 벽에 가까운 점부터 1번
+    const nearPts = sp.isCenterOnly ? [{ x: cx, y: cy, n: 1 }] : coeffs.map((c, i) => ({ x: cx - c * R, y: cy, n: i + 1 }));
+    const farPts = sp.isCenterOnly ? [] : coeffs.map((c, i) => ({ x: cx + c * R, y: cy, n: i + 1 }));
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="max-w-full h-auto" aria-label={`반경당 ${sp.perRadius}점 측정점 위치`}>
+        <defs>
+          <radialGradient id="sp-duct" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="1" stopColor="#eef2f7" />
+          </radialGradient>
+        </defs>
+        <circle cx={cx} cy={cy} r={R + 9} fill="#cfd6e0" />
+        <circle cx={cx} cy={cy} r={R} fill="url(#sp-duct)" stroke="#8d99ab" strokeWidth="1.5" />
+        {coeffs.map((c, i) => (
+          <circle key={i} cx={cx} cy={cy} r={c * R} fill="none" stroke="#9fb3c8" strokeWidth="1" strokeDasharray="3 3" />
+        ))}
+        <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="#64748b" strokeWidth="1.2" />
+        <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="2 4" />
+        <rect x={cx - R - 26} y={cy - 5} width="14" height="10" rx="2" fill="#64748b" />
+        <text x={cx - R - 19} y={cy + 20} fontSize="9" fill="#64748b" textAnchor="middle" fontWeight="600">Port</text>
+        {farPts.map((pt) => (
+          <g key={`far-${pt.n}`}>
+            <circle cx={pt.x} cy={pt.y} r="5.5" fill="#fff" stroke="#ff453a" strokeWidth="2" />
+            <text x={pt.x} y={pt.y + 17} fontSize="9" fill="#ff453a" textAnchor="middle" fontWeight="700">{pt.n}</text>
+          </g>
+        ))}
+        {nearPts.map((pt) => (
+          <g key={`near-${pt.n}`}>
+            <circle cx={pt.x} cy={pt.y} r="6" fill="#0a84ff" stroke="#fff" strokeWidth="1.5" />
+            <text x={pt.x} y={pt.y - 11} fontSize="9.5" fill="#0a84ff" textAnchor="middle" fontWeight="700">{pt.n}</text>
+          </g>
+        ))}
+        <text x={cx} y={cy + R + 6 + 12} fontSize="9" fill="#64748b" textAnchor="middle">내경 {sp.diameterLabel || ''}</text>
+      </svg>
+    );
   };
 
   // 표 생성 계획: 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
@@ -5757,12 +5831,7 @@ export default function App() {
         <div className="relative z-30 max-w-6xl mx-auto">
           <div className="mb-6 p-2 text-center">
             <h1 className="text-slate-900 tracking-tight flex justify-center">
-              <img
-                src={mainLogoSrc}
-                alt="STACKPILOT"
-                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
-                className="h-[2.6rem] md:h-[4rem] w-auto select-none"
-              />
+              <BrandWordmark size="lg" />
             </h1>
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
@@ -6046,14 +6115,18 @@ export default function App() {
                     key={sheet.id}
                     type="button"
                     onClick={() => navigateToSheet(sheet.id)}
-                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5"
+                    className="group text-left bg-white border border-slate-200 rounded-2xl p-4 shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-start gap-3"
                   >
-                    <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br ${sheet.toneClass} blur-sm group-hover:scale-110 transition-transform`} />
-                    <h2 className="text-base font-black text-slate-900">{sheet.title}</h2>
-                    <p className="text-xs text-slate-600 mt-1">{sheet.desc}</p>
-                    <div className={`mt-4 flex items-center text-[11px] font-bold text-slate-500 transition-colors ${sheet.hoverTextClass}`}>
-                      새 창으로 열기
-                    </div>
+                    <span className="shrink-0 w-11 h-11 rounded-[12px] flex items-center justify-center shadow-sm" style={{ background: `linear-gradient(145deg, ${SHEET_TILE_COLORS[sheet.id][0]}, ${SHEET_TILE_COLORS[sheet.id][1]})`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 2px rgba(0,0,0,0.15)' }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">{SHEET_ICONS[sheet.id]('#fff')}</svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <h2 className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">{sheet.title}</h2>
+                      <p className="text-xs text-slate-500 mt-1 leading-snug">{sheet.desc}</p>
+                      <span className={`mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition-colors ${sheet.hoverTextClass}`}>
+                        새 창으로 열기 <span aria-hidden="true">›</span>
+                      </span>
+                    </span>
                   </button>
                 );
               })}
@@ -6511,7 +6584,7 @@ export default function App() {
         <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
           <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
             <h1 className="text-2xl font-black text-slate-900">
-              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
+              <BrandWordmark size="sm" />
             </h1>
             <p className="text-slate-600 mt-2 text-sm font-medium">
               <span className="font-black text-slate-800">시료채취기록부(종합)</span>
@@ -6544,12 +6617,7 @@ export default function App() {
         <div className={`bg-white p-6 rounded-xl shadow-md border-t-4 relative ${activeTheme.headerBorder}`}>
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl font-black text-slate-900">
-              <img
-                src={mainLogoSrc}
-                alt="STACKPILOT"
-                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
-                className="h-[2.2rem] md:h-[3.2rem] w-auto select-none"
-              />
+              <BrandWordmark size="sm" />
             </h1>
             <p className="text-slate-600 mt-2 text-sm font-medium">
               <span className="font-black text-slate-800">{activeSheet?.title || '먼지시료채취기록부'}</span>
@@ -6646,17 +6714,17 @@ export default function App() {
                 </div>
                 
                 <div className="flex flex-col xl:flex-row gap-4 items-start">
-                  <div className="flex flex-col gap-2 shrink-0 items-center">
-                    <div className="bg-slate-100 px-3 py-2 rounded border border-slate-200 text-center shadow-sm w-full">
-                      <span className="block text-[10px] text-slate-600 font-bold">1개 측정공(Port) 기준</span>
-                      <span className="font-black text-emerald-700 text-lg">총 {samplingPointsData.perRadius}개</span>
+                  <div className="shrink-0 flex flex-col items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 xl:w-64">
+                    <div className="text-center leading-tight">
+                      <span className="block text-[10px] text-slate-500 font-semibold">측정공(Port) 1개당 측정점</span>
+                      <span className="font-extrabold text-slate-900 text-2xl tracking-tight">{samplingPointsData.perRadius}<span className="text-sm font-semibold text-slate-500 ml-0.5">점</span></span>
                     </div>
-                    <img
-                      src={SAMPLING_POINT_IMAGES[Math.min(Math.max(samplingPointsData.perRadius, 1), 5) - 1]}
-                      alt={`반경당 ${samplingPointsData.perRadius}점 측정점 위치`}
-                      className="w-56 max-w-full h-auto rounded border border-slate-200 bg-white"
-                    />
-                    <span className="text-[10px] text-slate-500">측정점 위치 (반경당 {samplingPointsData.perRadius}점)</span>
+                    {renderSamplingPointDiagram(samplingPointsData)}
+                    <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#0a84ff] inline-block" />정방향</span>
+                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border-2 border-[#ff453a] inline-block" />역방향</span>
+                      <span className="inline-flex items-center gap-1"><span className="w-3 h-1.5 bg-slate-500 inline-block" />측정공</span>
+                    </div>
                   </div>
                   
                   <div className="flex-1 w-full overflow-x-auto bg-white rounded border border-slate-200">
@@ -6798,7 +6866,7 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-teal-100">
                        <span className="text-xs font-bold text-teal-700" title="(21 - 표준O2) / (21 - 실측O2)">산소 보정 계수 (K)</span>
-                       <span className="font-black text-lg text-teal-600">{calcO2CorrectionFactor().toFixed(3)}</span>
+                       <span className="font-black text-lg text-teal-600">{calcO2CorrectionFactor().toFixed(2)}</span>
                     </div>
                  </div>
 
@@ -6810,19 +6878,19 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-center mb-1">
                        <span className="text-[11px] font-bold text-slate-600" title="Σ(M_i * x_i) / 100">건조가스분자량 (M<sub>d</sub>)</span>
-                       <span className="text-xs font-black text-slate-700">{Md.toFixed(3)}</span>
+                       <span className="text-xs font-black text-slate-700">{Md.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center mb-1 pt-1 border-t border-slate-200/50">
                        <span className="text-[11px] font-bold text-slate-600" title="사전 수분량 반영됨">습가스분자량 (M<sub>s</sub>)</span>
-                       <span className="text-sm font-black text-slate-700">{Ms.toFixed(3)}</span>
+                       <span className="text-sm font-black text-slate-700">{Ms.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-200/50">
                        <span className="text-[11px] font-bold text-slate-600" title="1 / (22.4 * 100) * [ Σ(M_i*x_i) * (100 - Xw)/100 + 18 * Xw ]">배출가스밀도 (γ<sub>a</sub>)</span>
-                       <span className="text-sm font-black text-teal-600">{r0.toFixed(3)}</span>
+                       <span className="text-sm font-black text-teal-600">{r0.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-1 mt-1 border-t border-slate-200/50">
                        <span className="text-[11px] font-bold text-slate-600" title="온도 및 압력 보정된 실제 밀도">배출가스밀도 (r)</span>
-                       <span className="text-sm font-black text-teal-600">{isNaN(r) ? '-' : r.toFixed(3)}</span>
+                       <span className="text-sm font-black text-teal-600">{isNaN(r) ? '-' : r.toFixed(2)}</span>
                     </div>
                  </div>
                </div>

@@ -69,3 +69,6 @@ button.bg-white, button[class*="bg-slate-50"], button[class*="bg-slate-100"] {
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 0.5px 1px rgba(0, 0, 0, 0.08) !important;
 }
 thead.bg-slate-100, thead .bg-slate-100 { background-color: rgba(0, 0, 0, 0.035) !important; }
+/* 섹션 번호 배지: 둥근 초록 원 대신 각진 진회색 사각 배지 */
+h2 > span.w-6.h-6.rounded-full { border-radius: 6px !important; background-color: #1f2937 !important; background-image: none !important; }
+h2 { letter-spacing: -0.02em; }
