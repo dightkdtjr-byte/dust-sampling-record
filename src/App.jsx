@@ -1150,7 +1150,8 @@ const sanitizePitotPresets = (value) => {
     });
 };
 
-// 유속별 피토계수 표에서 현재 유속에 맞는 Cp를 구함 (표 사이는 직선 보간, 범위 밖은 끝값)
+// 유속별 피토계수 표: 각 행의 유속은 그 구간의 상한 (예: 4.95 m/s → 0~4.95 m/s 구간에 0.816 적용)
+// 표의 마지막 유속을 넘으면 마지막 행의 Cp를 적용
 const getPitotVelocityRows = (preset) => (
   Array.isArray(preset?.cpByVelocity)
     ? preset.cpByVelocity
@@ -1165,17 +1166,8 @@ const resolvePitotCpByVelocity = (preset, velocity) => {
   const rows = getPitotVelocityRows(preset);
   if (rows.length === 0) return Number.isFinite(nominal) ? nominal : NaN;
   if (!Number.isFinite(velocity) || velocity <= 0) return Number.isFinite(nominal) ? nominal : rows[0].cp;
-  if (velocity <= rows[0].v) return rows[0].cp;
-  const last = rows[rows.length - 1];
-  if (velocity >= last.v) return last.cp;
-  for (let i = 0; i < rows.length - 1; i++) {
-    const a = rows[i], b = rows[i + 1];
-    if (velocity >= a.v && velocity <= b.v) {
-      if (b.v === a.v) return a.cp;
-      return a.cp + ((velocity - a.v) / (b.v - a.v)) * (b.cp - a.cp);
-    }
-  }
-  return last.cp;
+  const band = rows.find((row) => velocity <= row.v + 1e-9);
+  return band ? band.cp : rows[rows.length - 1].cp;
 };
 
 const formatPitotCp = (value) => (Number.isFinite(value) ? String(Math.round(value * 10000) / 10000) : '');
@@ -5574,7 +5566,7 @@ export default function App() {
   };
 
   // ── 피토계수 AI 자동 선정 (모든 계산 함수 정의 이후) ──
-  // ① 기준계수 0.84로 유속을 가계산 → ② 피토관의 유속별 Cp 표에서 그 유속 구간의 Cp를 선정(직선 보간)
+  // ① 기준계수 0.84로 유속을 가계산 → ② 피토관의 유속별 Cp 표에서 그 유속이 속한 구간(행의 유속 = 구간 상한)의 Cp를 선정
   // → ③ 선정한 Cp로 유속을 다시 계산하고, Cp가 더 이상 바뀌지 않을 때까지 반복(수렴)
   // 유속 출처: 기록표(적산유량 행)에 동압이 있으면 기록표, 없으면 예비조사(4번 섹션)
   const buildPitotAutoSelection = () => {
@@ -5597,12 +5589,12 @@ export default function App() {
       cp = nextCp;
     }
     const rows = activePitotVelocityRows;
-    const minV = rows[0].v;
+    const minV = 0;
     const maxV = rows[rows.length - 1].v;
-    const inRange = velocity >= minV && velocity <= maxV;
+    const inRange = velocity <= maxV;
     const coversVelocity = (preset) => {
       const presetRows = getPitotVelocityRows(preset);
-      return presetRows.length > 0 && velocity >= presetRows[0].v && velocity <= presetRows[presetRows.length - 1].v;
+      return presetRows.length > 0 && velocity <= presetRows[presetRows.length - 1].v;
     };
     const alternative = inRange
       ? null
@@ -5631,6 +5623,19 @@ export default function App() {
   const currentPs = getRawStackPressure();
   const r = (!isNaN(r0) && !isNaN(currentTs) && !isNaN(currentPs)) ? r0 * (273 / (273 + currentTs)) * (currentPs / 760) : NaN;
   const samplingPointsData = getSamplingPoints();
+  // 4번 섹션 측정점 행 수를 굴뚝 내경으로 정해진 측정점 수(반경당 1~5점)에 맞춤
+  const samplingPointCount = samplingPointsData ? samplingPointsData.perRadius : 0;
+  useEffect(() => {
+    if (!samplingPointCount) return;
+    setFormData(prev => {
+      if (prev.points.length === samplingPointCount) return prev;
+      const nextPoints = Array.from({ length: samplingPointCount }, (_, i) => ({
+        ...(prev.points[i] || { tp: '', sp: '', dp: '', ts: '' }),
+        id: i + 1,
+      }));
+      return { ...prev, points: nextPoints };
+    });
+  }, [samplingPointCount]);
   const configuredNozzles = getConfiguredNozzles();
   const gasFlowRates = calcGasFlowRates();
   
@@ -7164,7 +7169,7 @@ export default function App() {
                     )}
                     {sel?.ready && !sel.inRange && (
                       <div className="font-bold text-amber-800">
-                        유속 {fmtV(sel.finalVelocity)}는 이 피토관 표 범위({sel.minV}~{sel.maxV} m/s) 밖이라 가장 가까운 끝값을 적용했습니다.
+                        유속 {fmtV(sel.finalVelocity)}는 이 피토관 표의 최대 유속({sel.maxV} m/s)을 넘어 마지막 구간의 값을 적용했습니다.
                         {sel.alternative ? (
                           <>
                             {' '}범위에 맞는 피토관: S/N {sel.alternative.sn || sel.alternative.id}{sel.alternative.usage ? ` (${sel.alternative.usage})` : ''}
@@ -7272,7 +7277,7 @@ export default function App() {
                               <button type="button" onClick={() => addPitotCpRow(idx)} className="self-start px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-300 font-bold">
                                 + 유속 구간 추가
                               </button>
-                              <span className="text-[10px] text-slate-500">표가 비어 있으면 기본 Cp를 사용합니다. 유속 사이 값은 직선 보간, 범위 밖은 끝값을 적용합니다.</span>
+                              <span className="text-[10px] text-slate-500">각 행의 유속은 그 구간의 상한입니다 (예: 4.95 → 0~4.95 m/s). 표의 최대 유속을 넘으면 마지막 값을 적용하고, 표가 비어 있으면 기본 Cp를 씁니다.</span>
                             </div>
                           </td>
                           <td className="border border-emerald-200 p-1">
