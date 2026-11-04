@@ -85,7 +85,7 @@ const SHEET_MENU = [
   {
     id: 'flow',
     title: '유량측정기록부',
-    desc: '배출가스 유량 측정 및 등속흡인 기록',
+    desc: '배출가스 유속·유량 측정 기록',
     toneClass: 'from-cyan-200/70 to-sky-200/20',
     hoverTextClass: 'group-hover:text-cyan-700',
   },
@@ -970,6 +970,8 @@ const STORAGE_KEYS = {
   pitotPresets: 'dust-sampling.pitot-presets.v1',
   nozzlesUserPrefix: 'dust-sampling.nozzles.user.v1.',
   samplersUserPrefix: 'dust-sampling.samplers.user.v1.',
+  gasSamplers: 'dust-sampling.gas-samplers.v1',
+  gasSamplersUserPrefix: 'dust-sampling.gas-samplers.user.v1.',
   pitotUserPrefix: 'dust-sampling.pitot-presets.user.v1.',
   secureUsers: 'dust-sampling.secure-users.v2',
   activeUser: 'dust-sampling.secure-active-user.v2',
@@ -996,6 +998,10 @@ const getUserNozzlesStorageKey = (userId) => (
 
 const getUserSamplersStorageKey = (userId) => (
   `${STORAGE_KEYS.samplersUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
+
+const getUserGasSamplersStorageKey = (userId) => (
+  `${STORAGE_KEYS.gasSamplersUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
 );
 
 const getUserPitotStorageKey = (userId) => (
@@ -1050,6 +1056,43 @@ const clearSessionAuth = () => {
 
 const cloneDefaultNozzles = () => DEFAULT_NOZZLE_SET.map(item => ({ ...item }));
 const cloneDefaultSamplers = () => DEFAULT_SAMPLERS.map(item => ({ ...item }));
+const cloneDefaultGasSamplers = () => DEFAULT_GAS_SAMPLERS.map(item => ({ ...item }));
+
+// 통합 시료채취기록부의 가스 샘플러 프리셋 (번호, S/N, Yd)
+const sanitizeGasSamplers = (value) => {
+  if (!Array.isArray(value)) return null;
+  return value
+    .filter(item => item && typeof item === 'object')
+    .map((item, idx) => {
+      const parsedId = parseInt(item.id, 10);
+      return {
+        id: Number.isFinite(parsedId) ? parsedId : idx + 1,
+        sn: item.sn === undefined || item.sn === null ? '' : String(item.sn),
+        yd: item.yd === undefined || item.yd === null ? '' : String(item.yd),
+      };
+    });
+};
+
+const getStoredGasSamplersForUser = (userId) => {
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  const canUseScoped = normalizedId && normalizedId !== 'user' && normalizedId !== 'user1';
+  const tryKey = (key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = sanitizeGasSamplers(JSON.parse(raw));
+      return parsed && parsed.length > 0 ? parsed : null;
+    } catch (error) {
+      console.error('가스 샘플러 프리셋 로딩 실패:', error);
+      return null;
+    }
+  };
+  if (canUseScoped) {
+    const scoped = tryKey(getUserGasSamplersStorageKey(userId));
+    if (scoped) return scoped;
+  }
+  return tryKey(STORAGE_KEYS.gasSamplers) || cloneDefaultGasSamplers();
+};
 const cloneDefaultPitotPresets = () => DEFAULT_PITOT_PRESETS.map(item => ({ ...item }));
 
 const sanitizeNozzleSet = (value) => {
@@ -1474,6 +1517,7 @@ export default function App() {
   const [selectedSheet, setSelectedSheet] = useState('');
   const [nozzleSet, setNozzleSet] = useState(cloneDefaultNozzles);
   const [samplers, setSamplers] = useState(cloneDefaultSamplers);
+  const [gasSamplers, setGasSamplers] = useState(cloneDefaultGasSamplers);
   const [pitotPresets, setPitotPresets] = useState(cloneDefaultPitotPresets);
 
   const [formData, setFormData] = useState({
@@ -1718,6 +1762,18 @@ export default function App() {
     if (!isStorageHydrated || isPresetHydratingRef.current) return;
     try {
       const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserGasSamplersStorageKey(activeUser)
+        : STORAGE_KEYS.gasSamplers;
+      localStorage.setItem(targetKey, JSON.stringify(gasSamplers));
+    } catch (error) {
+      console.error('가스 샘플러 설정 저장 실패:', error);
+    }
+  }, [gasSamplers, isStorageHydrated, activeUser]);
+
+  useEffect(() => {
+    if (!isStorageHydrated || isPresetHydratingRef.current) return;
+    try {
+      const targetKey = canUseUserScopedPresets(activeUser)
         ? getUserPitotStorageKey(activeUser)
         : STORAGE_KEYS.pitotPresets;
       localStorage.setItem(targetKey, JSON.stringify(pitotPresets));
@@ -1788,6 +1844,10 @@ export default function App() {
       }
       if (activeUser && event.newValue && (event.key === getUserSamplersStorageKey(activeUser) || event.key === STORAGE_KEYS.samplers)) {
         try { const parsed = sanitizeSamplers(JSON.parse(event.newValue)); if (parsed) setSamplers(parsed); } catch (error) { console.error(error); }
+        return;
+      }
+      if (activeUser && event.newValue && (event.key === getUserGasSamplersStorageKey(activeUser) || event.key === STORAGE_KEYS.gasSamplers)) {
+        try { const parsed = sanitizeGasSamplers(JSON.parse(event.newValue)); if (parsed) setGasSamplers(parsed); } catch (error) { console.error(error); }
         return;
       }
       if (activeUser && event.newValue && (event.key === getUserPitotStorageKey(activeUser) || event.key === STORAGE_KEYS.pitotPresets)) {
@@ -2013,6 +2073,36 @@ export default function App() {
     }
   };
 
+  const saveGasSamplerPresets = () => {
+    const sanitized = sanitizeGasSamplers(gasSamplers) || [];
+    try {
+      const targetKey = canUseUserScopedPresets(activeUser)
+        ? getUserGasSamplersStorageKey(activeUser)
+        : STORAGE_KEYS.gasSamplers;
+      localStorage.setItem(targetKey, JSON.stringify(sanitized));
+      setGasSamplers(sanitized);
+      alert('가스 샘플러 프리셋을 저장했습니다.');
+    } catch (error) {
+      console.error('가스 샘플러 프리셋 저장 실패:', error);
+      alert('가스 샘플러 프리셋 저장에 실패했습니다.');
+    }
+  };
+  const addGasSamplerPreset = () => {
+    setGasSamplers(prev => {
+      const nextId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+      return [...prev, { id: nextId, sn: '', yd: '' }];
+    });
+  };
+  const removeGasSamplerPreset = (index) => {
+    setGasSamplers(prev => prev.filter((_, idx) => idx !== index));
+  };
+  const handleGasSamplerPresetChange = (index, field, value) => {
+    setGasSamplers(prev => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
+  };
+  const resetGasSamplerDefaults = () => {
+    setGasSamplers(cloneDefaultGasSamplers());
+  };
+
   const addSamplerPreset = () => {
     setSamplers(prev => {
       const maxId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
@@ -2115,23 +2205,26 @@ export default function App() {
   };
 
   // 노즐/샘플러/피토 프리셋을 한 번에 저장
-  const persistAllEquipmentPresets = (nozzles, samplerList, pitotList) => {
+  const persistAllEquipmentPresets = (nozzles, samplerList, pitotList, gasSamplerList = null) => {
     const scoped = canUseUserScopedPresets(activeUser);
     localStorage.setItem(scoped ? getUserNozzlesStorageKey(activeUser) : STORAGE_KEYS.nozzles, JSON.stringify(nozzles));
     localStorage.setItem(scoped ? getUserSamplersStorageKey(activeUser) : STORAGE_KEYS.samplers, JSON.stringify(samplerList));
     localStorage.setItem(scoped ? getUserPitotStorageKey(activeUser) : STORAGE_KEYS.pitotPresets, JSON.stringify(pitotList));
+    localStorage.setItem(scoped ? getUserGasSamplersStorageKey(activeUser) : STORAGE_KEYS.gasSamplers, JSON.stringify(gasSamplerList || sanitizeGasSamplers(gasSamplers) || []));
   };
 
   const saveAllEquipmentPresets = () => {
     const nozzles = sanitizeNozzleSet(nozzleSet) || [];
     const samplerList = sanitizeSamplers(samplers) || [];
     const pitotList = sanitizePitotPresets(pitotPresets) || [];
+    const gasList = sanitizeGasSamplers(gasSamplers) || [];
     try {
-      persistAllEquipmentPresets(nozzles, samplerList, pitotList);
+      persistAllEquipmentPresets(nozzles, samplerList, pitotList, gasList);
       setNozzleSet(nozzles);
       setSamplers(samplerList);
       setPitotPresets(pitotList);
-      alert(`장비 프리셋을 저장했습니다.\n노즐 ${nozzles.length}개 / 샘플러 ${samplerList.length}개 / 피토관 ${pitotList.length}개`);
+      setGasSamplers(gasList);
+      alert(`장비 프리셋을 저장했습니다.\n노즐 ${nozzles.length}개 / 샘플러 ${samplerList.length}개 / 가스 샘플러 ${gasList.length}개 / 피토관 ${pitotList.length}개`);
     } catch (error) {
       console.error('장비 프리셋 전체 저장 실패:', error);
       alert('장비 프리셋 저장에 실패했습니다.');
@@ -2145,8 +2238,8 @@ export default function App() {
       : '이 PC에 저장된 노즐/샘플러/피토관 프리셋을 모두 지우고 초기값으로 되돌릴까요?';
     if (!window.confirm(message)) return;
     const presetPrefixes = [
-      STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets,
-      STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix,
+      STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets, STORAGE_KEYS.gasSamplers,
+      STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix, STORAGE_KEYS.gasSamplersUserPrefix,
     ];
     try {
       const staleKeys = [];
@@ -2161,14 +2254,16 @@ export default function App() {
     const nozzles = cloneDefaultNozzles();
     const samplerList = cloneDefaultSamplers();
     const pitotList = cloneDefaultPitotPresets();
+    const gasList = cloneDefaultGasSamplers();
     try {
-      persistAllEquipmentPresets(nozzles, samplerList, pitotList);
+      persistAllEquipmentPresets(nozzles, samplerList, pitotList, gasList);
     } catch (error) {
       console.error('장비 프리셋 초기화 저장 실패:', error);
     }
     setNozzleSet(nozzles);
     setSamplers(samplerList);
     setPitotPresets(pitotList);
+    setGasSamplers(gasList);
     setFormData(prev => ({ ...prev, samplerId: '', pitotPresetId: '' }));
     alert('장비 프리셋을 초기화했습니다.');
   };
@@ -2242,6 +2337,7 @@ export default function App() {
     const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
     const userNozzles = getStoredNozzlesForUser(userId);
     const userSamplers = getStoredSamplersForUser(userId);
+    const userGasSamplers = getStoredGasSamplersForUser(userId);
     const userPitotPresets = getStoredPitotPresetsForUser(userId);
 
     isPresetHydratingRef.current = true;
@@ -2251,6 +2347,7 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.lastLoginId, userId);
     setNozzleSet(userNozzles);
     setSamplers(userSamplers);
+    setGasSamplers(userGasSamplers);
     setPitotPresets(userPitotPresets);
     setActiveUserReports(Array.isArray(reports) ? reports : []);
     setIsUserUnlocked(true);
@@ -3738,18 +3835,23 @@ export default function App() {
     return total;
   };
 
+  // 유량측정기록부는 적산유량계가 없으므로 동압(Δp)이 입력된 행을 "측정 행"으로 본다
+  const isFlowRecordSheet = selectedSheet === 'flow';
+  const isMeterRowValid = (row) => (isFlowRecordSheet
+    ? Number.isFinite(parseFloat(row?.dp))
+    : Number.isFinite(parseFloat(row?.volume)));
+
   const getMeterRowsUntilLastVolume = () => {
-    let lastVolumeIdx = -1;
+    let lastValidIdx = -1;
     formData.gasMeters.forEach((row, idx) => {
-      const volume = parseFloat(row?.volume);
-      if (Number.isFinite(volume)) lastVolumeIdx = idx;
+      if (isMeterRowValid(row)) lastValidIdx = idx;
     });
-    if (lastVolumeIdx < 0) return [];
-    return formData.gasMeters.slice(0, lastVolumeIdx + 1);
+    if (lastValidIdx < 0) return [];
+    return formData.gasMeters.slice(0, lastValidIdx + 1);
   };
 
   const getMeterRowsWithVolume = () => (
-    getMeterRowsUntilLastVolume().filter((row) => Number.isFinite(parseFloat(row?.volume)))
+    getMeterRowsUntilLastVolume().filter((row) => isMeterRowValid(row))
   );
 
   const getRawPostMoistureFactors = () => {
@@ -3832,24 +3934,6 @@ export default function App() {
   const calcPostMoisture = () => getRawPostMoisture().toFixed(2);
   const calcGasVelocity = () => { const v = getRawGasVelocity(); return v === 0 ? '0.00' : v.toFixed(2); };
   // 유속이 0으로 나올 때 어떤 입력이 빠졌는지 안내
-  const getGasVelocityMissingInputs = () => {
-    const missing = [];
-    if (!Number.isFinite(parseFloat(formData.atmPressure))) missing.push('대기압(측정공 주변, mmHg)');
-    if (!(getRawAvgDp() > 0)) missing.push('측정점 동압(Δp)');
-    if (!Number.isFinite(getRawAvgTs())) missing.push('측정점 온도(Ts)');
-    const gasComp = getGasComposition();
-    if (!Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) missing.push('배출가스 조성(O2/CO2)');
-    return missing;
-  };
-  const getFinalGasVelocityMissingInputs = () => {
-    const missing = [];
-    const rowsWithVolume = getMeterRowsWithVolume();
-    if (rowsWithVolume.length === 0) missing.push('적산유량(Vm) 입력 행');
-    if (!rowsWithVolume.some((row) => parseFloat(row.dp) >= 0)) missing.push('기록표 동압(Δp)');
-    if (!rowsWithVolume.some((row) => Number.isFinite(parseFloat(row.stackTemp)))) missing.push('기록표 배출가스 온도(Ts)');
-    if (!Number.isFinite(parseFloat(formData.atmPressure))) missing.push('대기압(mmHg)');
-    return missing;
-  };
   const calcFinalGasVelocity = () => {
     const v = getRawGasVelocityFromMeterRows();
     if (!Number.isFinite(v) || v <= 0) return '-';
@@ -3936,7 +4020,8 @@ export default function App() {
 
     // 중간 계산은 반올림 없이 원시값 사용 (엑셀과 동일한 계산 경로)
     const A = Math.PI * Math.pow(D / 2, 2);
-    const postMoisture = getRawPostMoisture();
+    // 유량측정기록부는 임핀저 무게법이 없으므로 자동측정기 수분량(사전)을 사용
+    const postMoisture = isFlowRecordSheet ? getRawPreMoisture() : getRawPostMoisture();
     const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
     const tempTerm = 273 / (273 + Ts);
     const pressureTerm = absPressure / 760;
@@ -5235,7 +5320,7 @@ export default function App() {
     setSamplingLogData(prev => ({ ...prev, particleSamplerId: id, particleSamplerYd: found ? String(found.yd) : prev.particleSamplerYd }));
   };
   const handleSamplingLogGasSampler = (id) => {
-    const found = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(id));
+    const found = gasSamplers.find((item) => String(item.id) === String(id));
     setSamplingLogData(prev => ({ ...prev, gasSamplerId: id, gasSamplerYd: found ? String(found.yd) : prev.gasSamplerYd }));
   };
   const resetSamplingLogForm = () => {
@@ -5251,7 +5336,7 @@ export default function App() {
       if (found) next.particleSamplerYd = String(found.yd);
     }
     if (!String(next.gasSamplerYd || '').trim()) {
-      const found = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(next.gasSamplerId));
+      const found = gasSamplers.find((item) => String(item.id) === String(next.gasSamplerId));
       if (found) next.gasSamplerYd = String(found.yd);
     }
     return next;
@@ -5326,7 +5411,7 @@ export default function App() {
         return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : t;
       };
 
-      const gasSampler = DEFAULT_GAS_SAMPLERS.find((item) => String(item.id) === String(log.gasSamplerId));
+      const gasSampler = gasSamplers.find((item) => String(item.id) === String(log.gasSamplerId));
       add('P2', textOrNull(log.siteAbbr));
       const particleIndex = samplers.findIndex((item) => String(item.id) === String(log.particleSamplerId));
       add('P3', particleIndex >= 0 ? `입자샘플러${particleIndex + 1}` : null);
@@ -5352,7 +5437,7 @@ export default function App() {
         add(`O${r}`, ps ? `#${i + 1}` : null);
         add(`P${r}`, ps ? extractSerialFromName(ps.name) : null);
         add(`Q${r}`, ps ? toNumber(ps.yd) : null);
-        const gs = DEFAULT_GAS_SAMPLERS[i];
+        const gs = gasSamplers[i];
         add(`R${r}`, gs ? `#${i + 1}` : null);
         add(`S${r}`, gs ? gs.sn : null);
         add(`T${r}`, gs ? toNumber(gs.yd) : null);
@@ -5610,6 +5695,7 @@ export default function App() {
   const activeSheet = SHEET_MENU.find(item => item.id === selectedSheet);
   const activeTheme = SHEET_THEMES[selectedSheet] || SHEET_THEMES.dust;
   const isDustSheet = selectedSheet === 'dust';
+  const isFlowSheet = selectedSheet === 'flow';
   const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
   const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
   const resolvedSkyMode = skyPreviewMode === 'auto' ? skyPhase : skyPreviewMode;
@@ -6303,11 +6389,50 @@ export default function App() {
                 <div className="flex gap-2 mt-1">
                   <select name="log-gas-sampler" value={log.gasSamplerId} onChange={(e) => handleSamplingLogGasSampler(e.target.value)} className={`${logInput} flex-1`}>
                     <option value="">선택</option>
-                    {DEFAULT_GAS_SAMPLERS.map((item) => <option key={item.id} value={item.id}>{`가스샘플러${item.id} (S/N ${item.sn})`}</option>)}
+                    {gasSamplers.map((item) => <option key={item.id} value={item.id}>{`가스샘플러${item.id}${item.sn ? ` (S/N ${item.sn})` : ''}`}</option>)}
                   </select>
                   <input type="number" step="0.0001" value={log.gasSamplerYd} onChange={(e) => updateSamplingLogField('gasSamplerYd', e.target.value)} className={`${logInput} w-24`} placeholder="Yd" title="가스 샘플러 Yd" />
                 </div>
               </label>
+              <details className="md:col-span-4 border border-slate-200 rounded-lg p-2 bg-slate-50/60">
+                <summary className="cursor-pointer text-[11px] font-bold text-slate-700">
+                  샘플러 프리셋 직접 편집 (입자: 기록부 5번 섹션 · 가스: 아래 표 / 번호·S/N·Yd)
+                </summary>
+                <div className="mt-2 flex items-center gap-2">
+                  <button type="button" onClick={saveGasSamplerPresets} className="px-2 py-1 text-[11px] font-bold bg-orange-600 text-white rounded border border-orange-700 inline-flex items-center gap-1">
+                    <PresetSaveIcon />
+                    가스 샘플러 저장
+                  </button>
+                  <button type="button" onClick={addGasSamplerPreset} className="px-2 py-1 text-[11px] font-bold bg-white text-slate-700 rounded border border-slate-300">행 추가</button>
+                  <button type="button" onClick={resetGasSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
+                  <span className="text-[10px] text-slate-500">양식의 S6:T10(가스 샘플러 5대)에 순서대로 들어갑니다</span>
+                </div>
+                <div className="mt-2 overflow-x-auto border border-slate-200 rounded-lg bg-white">
+                  <table className="w-full text-[11px] text-center">
+                    <thead className="bg-slate-100 text-slate-700">
+                      <tr>
+                        <th className="p-1 w-16">번호</th>
+                        <th className="p-1">S/N</th>
+                        <th className="p-1 w-32">Yd</th>
+                        <th className="p-1 w-14">삭제</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gasSamplers.length === 0 && (
+                        <tr><td colSpan="4" className="p-3 text-slate-400">등록된 가스 샘플러가 없습니다. "행 추가"로 입력하세요.</td></tr>
+                      )}
+                      {gasSamplers.map((item, idx) => (
+                        <tr key={`${item.id}-${idx}`}>
+                          <td className="p-1 font-bold text-slate-700">#{item.id}</td>
+                          <td className="p-1"><input type="text" value={item.sn} onChange={(e) => handleGasSamplerPresetChange(idx, 'sn', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" placeholder="S/N" /></td>
+                          <td className="p-1"><input type="number" step="0.0001" value={item.yd} onChange={(e) => handleGasSamplerPresetChange(idx, 'yd', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" placeholder="Yd" /></td>
+                          <td className="p-1"><button type="button" onClick={() => removeGasSamplerPreset(idx)} className="text-red-600 font-bold text-[11px]">삭제</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           </div>
 
@@ -6735,7 +6860,7 @@ export default function App() {
                     <p>※ 반대편 측정공이 없어 깊게 찔러야 할 경우에도 <strong>기록표의 칸수는 변하지 않으며</strong>, 위 표의 <strong>[깊은 쪽] 삽입 깊이 수치</strong>만 보시고 1~5번에 맞춰 찌르시면 됩니다.</p>
                   </div>
                   <p className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 shrink-0">
-                    기록표는 5번 섹션에서 노즐·채취시간을 정한 뒤 "측정점/채취시간 표 자동 생성"으로 만듭니다.
+                    기록표는 5번 섹션의 "측정점/채취시간 표 자동 생성"으로 만듭니다.
                   </p>
                 </div>
               </div>
@@ -6890,9 +7015,10 @@ export default function App() {
                   <div className="text-2xl font-black text-cyan-700">{calcMoisture()}%</div>
                 </div>
                 
+                {!isFlowSheet && (
                 <div className="mt-6 pt-4 border-t border-slate-200">
                   <label className="block text-sm font-bold text-slate-800 mb-2 flex items-center gap-1">
-                    사후 수분량 (임핀저 무게법) <span className="text-slate-500 font-normal text-xs">- 최종 등속흡인계수 계산용</span>
+                    사후 수분량 (임핀저 무게법)
                   </label>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-center border-collapse">
@@ -6933,6 +7059,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
 
@@ -7188,9 +7315,6 @@ export default function App() {
                 </div>
                 <div className="text-right">
                   <div className="text-2xl font-black text-emerald-700">{calcGasVelocity()} <span className="text-sm font-bold text-slate-700">m/s</span></div>
-                  {getRawGasVelocity() === 0 && getGasVelocityMissingInputs().length > 0 && (
-                    <p className="text-[11px] text-amber-700 font-bold mt-1">입력 필요: {getGasVelocityMissingInputs().join(', ')}</p>
-                  )}
                 </div>
               </div>
             </div>
@@ -7200,9 +7324,10 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
               <span className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">5</span>
-              시료 채취 기록 (적산유량계 및 등속흡인)
+              {isFlowSheet ? '유속·유량 측정 기록' : '시료 채취 기록 (적산유량계 및 등속흡인)'}
             </h2>
 
+            {!isFlowSheet && (<>
             {/* 1단계: 자동 산정 및 예측 결과 통합 패널 */}
             <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg mb-6 shadow-sm">
                <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-4 gap-2">
@@ -7541,13 +7666,15 @@ export default function App() {
               </div>
             </div>
 
+            </>)}
+
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-800">2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)</h3>
+                <h3 className="text-sm font-bold text-slate-800">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                      총 채취시간
+                      {isFlowSheet ? '총 측정시간' : '총 채취시간'}
                       <input
                         type="number"
                         step="1"
@@ -7592,7 +7719,7 @@ export default function App() {
               </div>
               
               <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
-                <table className="w-full text-xs text-center min-w-[900px]">
+                <table className={`w-full text-xs text-center ${isFlowSheet ? 'min-w-[560px]' : 'min-w-[900px]'}`}>
                   <thead className="bg-slate-100 text-slate-700 border-b border-slate-300">
                     <tr>
                       <th className="p-1 font-bold whitespace-nowrap">순번</th>
@@ -7600,15 +7727,15 @@ export default function App() {
                       <th className="p-1 font-bold whitespace-nowrap">누적 시간<br/>(분)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>온도(T<sub>s</sub>, ℃)</th>
                       <th className="p-1 font-bold text-emerald-700 whitespace-nowrap">동압<br/>(Δp)</th>
-                      <th className="p-1 font-bold text-teal-700 whitespace-nowrap">오리피스압<br/>(ΔH)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">적산유량<br/>(V<sub>m</sub>, L)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-500">입구 | 출구</span></th>
-                      <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>
+                      {!isFlowSheet && <th className="p-1 font-bold text-teal-700 whitespace-nowrap">오리피스압<br/>(ΔH)</th>}
+                      {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">적산유량<br/>(V<sub>m</sub>, L)</th>}
+                      {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">미터온도(T<sub>m</sub>, ℃)<br/><span className="text-[10px] text-slate-500">입구 | 출구</span></th>}
+                      {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">진공압<br/>(mmHg)</th>}
+                      {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">임핀저<br/>온도(℃)</th>}
                       <th className="p-1 font-bold whitespace-nowrap">배출가스<br/>속도(m/s)</th>
                       <th className="p-1 font-bold whitespace-nowrap">배출가스보정<br/>밀도(kg/m³)</th>
-                      <th className="p-1 font-bold whitespace-nowrap">수분량<br/>(ml)</th>
-                      <th className="p-1 font-black text-emerald-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>
+                      {!isFlowSheet && <th className="p-1 font-bold whitespace-nowrap">수분량<br/>(ml)</th>}
+                      {!isFlowSheet && <th className="p-1 font-black text-emerald-600 border-l border-slate-300 whitespace-nowrap">순간 등속<br/>(I%)</th>}
                       <th className="p-1"></th>
                     </tr>
                   </thead>
@@ -7645,26 +7772,36 @@ export default function App() {
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
                           </td>
+                          {!isFlowSheet && (
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.pressure} onChange={(e) => handleGasMeterChange(idx, 'pressure', e.target.value)} className="w-full p-1 border border-teal-300 bg-teal-50 rounded text-center font-black text-teal-800 outline-none focus:ring-2 focus:ring-teal-500" />
                           </td>
+                          )}
+                          {!isFlowSheet && (
                           <td className="p-1 w-20">
                             <input type="number" step="0.1" value={meter.volume} onChange={(e) => handleGasMeterChange(idx, 'volume', e.target.value)} className={`w-full p-1 border ${isStartRow ? 'border-slate-300 bg-slate-100 text-slate-900 font-bold' : 'border-slate-200 bg-white font-medium'} rounded text-center outline-none focus:ring-2 focus:ring-emerald-500`} placeholder={isStartRow ? '초기유량' : ''} />
                           </td>
+                          )}
                           
+                          {!isFlowSheet && (
                           <td className="p-1 w-28">
                             <div className="flex items-center gap-1">
                               <input type="number" step="0.1" value={meter.tmIn} onChange={(e) => handleGasMeterChange(idx, 'tmIn', e.target.value)} placeholder="입구" className="w-1/2 p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500" />
                               <input type="number" step="0.1" value={meter.tmOut} onChange={(e) => handleGasMeterChange(idx, 'tmOut', e.target.value)} placeholder="출구" className="w-1/2 p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500" />
                             </div>
                           </td>
+                          )}
                           
+                          {!isFlowSheet && (
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.vacuum} onChange={(e) => handleGasMeterChange(idx, 'vacuum', e.target.value)} placeholder="압" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
                           </td>
+                          )}
+                          {!isFlowSheet && (
                           <td className="p-1 w-14">
                             <input type="number" step="0.1" value={meter.impingerTemp} onChange={(e) => handleGasMeterChange(idx, 'impingerTemp', e.target.value)} placeholder="온도" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
                           </td>
+                          )}
                           <td className="p-1 w-16">
                             <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowVelocity === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
                               {rowVelocity}
@@ -7675,17 +7812,21 @@ export default function App() {
                               {rowDensity}
                             </span>
                           </td>
+                          {!isFlowSheet && (
                           <td className="p-1 w-20">
                             <span className={`inline-block w-full py-1 rounded-lg font-bold ${rowMoisture === '-' ? 'text-slate-400 bg-slate-100' : 'text-slate-900 bg-slate-50 border border-slate-200'}`}>
                               {rowMoisture}
                             </span>
                           </td>
+                          )}
                           
+                          {!isFlowSheet && (
                           <td className="p-1 border-l border-slate-200 w-16">
                             <span className={`inline-block w-full py-1 rounded-lg font-black ${rowRate === '-' ? 'text-slate-400 bg-slate-100' : isRateValid ? 'text-emerald-900 bg-emerald-200' : 'text-white bg-red-500'}`}>
                               {rowRate === '-' ? '-' : `${rowRate}%`}
                             </span>
                           </td>
+                          )}
                           <td className="p-1 w-8">
                             {!isStartRow && <button type="button" onClick={() => removeGasMeter(idx)} className="text-red-500 hover:text-red-700 text-xs font-bold p-1 transition-colors">삭제</button>}
                           </td>
@@ -7698,15 +7839,15 @@ export default function App() {
                       <td className="p-1">{meterTableAverages.time}</td>
                       <td className="p-1">{meterTableAverages.stackTemp}</td>
                       <td className="p-1">{meterTableAverages.dp}</td>
-                      <td className="p-1">{meterTableAverages.pressure}</td>
-                      <td className="p-1">{meterTableAverages.volume}</td>
-                      <td className="p-1">{meterTableAverages.tmPair}</td>
-                      <td className="p-1">{meterTableAverages.vacuum}</td>
-                      <td className="p-1">{meterTableAverages.impingerTemp}</td>
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.pressure}</td>}
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.volume}</td>}
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.tmPair}</td>}
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.vacuum}</td>}
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.impingerTemp}</td>}
                       <td className="p-1">{meterTableAverages.velocity}</td>
                       <td className="p-1">{meterTableAverages.density}</td>
-                      <td className="p-1">{meterTableAverages.moisture}</td>
-                      <td className="p-1 text-emerald-700">{meterTableAverages.rate === '-' ? '-' : `${meterTableAverages.rate}%`}</td>
+                      {!isFlowSheet && <td className="p-1">{meterTableAverages.moisture}</td>}
+                      {!isFlowSheet && <td className="p-1 text-emerald-700">{meterTableAverages.rate === '-' ? '-' : `${meterTableAverages.rate}%`}</td>}
                       <td className="p-1"></td>
                     </tr>
                   </tbody>
@@ -7718,11 +7859,24 @@ export default function App() {
             </div>
 
             {/* 유량계 기록 요약표 */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+            <div className={`grid grid-cols-1 ${isFlowSheet ? 'md:grid-cols-3' : 'md:grid-cols-6'} gap-4 mb-6`}>
               <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-slate-600 font-bold mb-1">총 채취 시간 (분)</span>
+                <span className="text-xs text-slate-600 font-bold mb-1">{isFlowSheet ? '총 측정 시간 (분)' : '총 채취 시간 (분)'}</span>
                 <span className="text-lg font-black text-slate-800">{getSamplingMinutes()}</span>
               </div>
+              {isFlowSheet && (
+                <>
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
+                    <span className="text-xs text-slate-600 font-bold mb-1">평균 유속 (V<sub>s</sub>, m/s)</span>
+                    <span className="text-lg font-black text-slate-800">{calcFinalGasVelocity()}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
+                    <span className="text-xs text-slate-600 font-bold mb-1">측정 행 수</span>
+                    <span className="text-lg font-black text-slate-800">{getMeterRowsWithVolume().filter((_, i) => i > 0 || !isFlowSheet).length}</span>
+                  </div>
+                </>
+              )}
+              {!isFlowSheet && (<>
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex flex-col items-center justify-center">
                 <span className="text-xs text-emerald-700 font-bold mb-1">총 시료채취량 (m³, Yd 적용)</span>
                 <span className="text-xl font-black text-emerald-900">{calcGasMeterVolDiffM3()}</span>
@@ -7743,8 +7897,10 @@ export default function App() {
                 <span className="text-xs text-cyan-700 font-bold mb-1">평균 오리피스압 (ΔH)</span>
                 <span className="text-lg font-black text-cyan-900">{calcAvgOrifice()}</span>
               </div>
+              </>)}
             </div>
 
+            {!isFlowSheet && (
             <div className="bg-white p-5 rounded-2xl flex flex-col justify-between shadow-lg border-2 border-slate-300">
               <div className="mb-4">
                 <div>
@@ -7776,6 +7932,7 @@ export default function App() {
                 )}
               </div>
             </div>
+            )}
           </div>
 
           {/* 섹션 6: 시료 분석 및 비고 */}
@@ -7819,9 +7976,6 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center p-2">
                       <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
                       <span className="text-2xl font-bold text-amber-300">{calcFinalGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
-                      {calcFinalGasVelocity() === '-' && getFinalGasVelocityMissingInputs().length > 0 && (
-                        <span className="text-[10px] text-amber-200 mt-1 text-center">입력 필요: {getFinalGasVelocityMissingInputs().join(', ')}</span>
-                      )}
                   </div>
                   {isDustSheet && (
                     <div className="flex flex-col items-center justify-center p-2">
@@ -7887,11 +8041,12 @@ export default function App() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <div className={`grid grid-cols-1 ${isFlowSheet ? 'md:grid-cols-1' : 'md:grid-cols-4'} gap-3 mb-4`}>
             <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-3 text-center">
               <p className="text-[11px] text-slate-300 font-bold">저장 건수</p>
               <p className="text-2xl font-black text-white">{savedData.length}</p>
             </div>
+            {!isFlowSheet && (<>
             <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-3 text-center">
               <p className={`text-[11px] font-bold ${activeTheme.accentText}`}>등속 적합</p>
               <p className={`text-2xl font-black ${activeTheme.accentText}`}>{savedFitCount}</p>
@@ -7904,6 +8059,7 @@ export default function App() {
               <p className="text-[11px] text-slate-200 font-bold">평균 실측농도</p>
               <p className="text-2xl font-black text-white">{savedAvgActualC}</p>
             </div>
+            </>)}
           </div>
 
           {savedData.length === 0 ? (
