@@ -459,6 +459,7 @@ const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
 const DEFAULT_MEASURE_ROW_COUNT = 12;
 const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
 const TABLE_PLAN_TARGET_INTERVAL = 5; // 자동 탐색 시 선호하는 행 간격(분)
+const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
 const TABLE_PLAN_MIN_ROWS_PER_POINT = 3; // 지점당 최소 측정 행 수
 const TABLE_PLAN_MAX_ROWS_PER_POINT = 20;
 const TABLE_PLAN_MAX_ROWS = 80;
@@ -872,7 +873,17 @@ const STORAGE_KEYS = {
   sessionAuth: 'dust-sampling.session-auth.v1',
   skyPreviewMode: 'dust-sampling.sky-preview-mode.v1',
   cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
+  samplingLogDraftPrefix: 'dust-sampling.samplinglog-draft.v1.',
+  sheetContext: 'dust-sampling.sheet-context.v1',
 };
+
+// 통합 시료채취기록부를 별도 창(window.open)으로 띄웠을 때 true (#sheet=samplinglog&popup=1)
+const IS_POPUP_WINDOW = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.hash.replace(/^#/, '')).get('popup') === '1';
+
+const getSamplingLogDraftStorageKey = (userId) => (
+  `${STORAGE_KEYS.samplingLogDraftPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
+);
 
 const getUserNozzlesStorageKey = (userId) => (
   `${STORAGE_KEYS.nozzlesUserPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
@@ -1390,20 +1401,15 @@ export default function App() {
 
   const [secureUsers, setSecureUsers] = useState({});
   const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
-  // 기록부 화면 위에 통합 시료채취기록부를 패널로 함께 띄우기
-  const [isSamplingLogPanelOpen, setIsSamplingLogPanelOpen] = useState(false);
+  // 통합 시료채취기록부 별도 창 핸들 (이미 열려 있으면 다시 띄우지 않고 앞으로 가져옴)
+  const samplingLogWindowRef = useRef(null);
+  // 통합 기록부 임시 저장본이 어느 사용자 키로 로드됐는지 (로드 전에 빈 내용으로 덮어쓰지 않도록)
+  const [samplingLogDraftReadyKey, setSamplingLogDraftReadyKey] = useState('');
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   const [samplingLogRequestedOnly, setSamplingLogRequestedOnly] = useState(false);
   // 측정점 표 자동 생성 옵션: 총 채취시간(분, 비우면 1단계 예상 채취시간 또는 60분), 행 간격(분)
   const [tableTotalMinutes, setTableTotalMinutes] = useState('');
   const [tableIntervalMinutes, setTableIntervalMinutes] = useState('');
-  const [tableMinRowsPerPoint, setTableMinRowsPerPoint] = useState(String(TABLE_PLAN_MIN_ROWS_PER_POINT));
-  useEffect(() => {
-    if (!isSamplingLogPanelOpen) return undefined;
-    const onKeyDown = (event) => { if (event.key === 'Escape') setIsSamplingLogPanelOpen(false); };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isSamplingLogPanelOpen]);
   const [activeUser, setActiveUser] = useState('');
   const [activeUserReports, setActiveUserReports] = useState([]);
   const [isUserUnlocked, setIsUserUnlocked] = useState(false);
@@ -1633,6 +1639,99 @@ export default function App() {
       console.error('활성 사용자 저장 실패:', error);
     }
   }, [activeUser, isStorageHydrated]);
+
+  // ── 통합 시료채취기록부: 창 사이 공유 ──
+  // 입력 중인 내용을 사용자별 임시 저장본으로 보관하고, 다른 창(별도 창/메인 창)의 변경을 storage 이벤트로 받아 동기화
+  const samplingLogDraftKey = activeUser && isUserUnlocked ? getSamplingLogDraftStorageKey(activeUser) : '';
+  useEffect(() => {
+    if (!samplingLogDraftKey) {
+      setSamplingLogDraftReadyKey('');
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(samplingLogDraftKey);
+      if (raw) setSamplingLogData(sanitizeSamplingLog(JSON.parse(raw)));
+    } catch (error) {
+      console.error('통합 기록부 임시 저장본 로딩 실패:', error);
+    }
+    setSamplingLogDraftReadyKey(samplingLogDraftKey);
+  }, [samplingLogDraftKey]);
+
+  useEffect(() => {
+    if (!samplingLogDraftKey || samplingLogDraftReadyKey !== samplingLogDraftKey) return;
+    try {
+      const next = JSON.stringify(samplingLogData);
+      if (localStorage.getItem(samplingLogDraftKey) !== next) localStorage.setItem(samplingLogDraftKey, next);
+    } catch (error) {
+      console.error('통합 기록부 임시 저장 실패:', error);
+    }
+  }, [samplingLogData, samplingLogDraftKey, samplingLogDraftReadyKey]);
+
+  useEffect(() => {
+    const onStorage = async (event) => {
+      if (!event || !event.key) return;
+      if (samplingLogDraftKey && event.key === samplingLogDraftKey && event.newValue) {
+        try {
+          setSamplingLogData(sanitizeSamplingLog(JSON.parse(event.newValue)));
+        } catch (error) {
+          console.error('다른 창의 통합 기록부 동기화 실패:', error);
+        }
+        return;
+      }
+      if (event.key === STORAGE_KEYS.secureUsers && event.newValue) {
+        // 다른 창에서 리포트를 저장하면 이 창의 저장 목록도 갱신 (덮어쓰기 방지)
+        try {
+          const parsed = sanitizeSecureUsers(JSON.parse(event.newValue));
+          if (!parsed) return;
+          setSecureUsers(parsed);
+          const record = activeUser ? parsed[activeUser] : null;
+          const key = activeUser ? vaultKeyRef.current[activeUser] : null;
+          if (record && key) {
+            const decrypted = await decryptJsonWithKey(key, record.dataIv, record.dataCipher);
+            setActiveUserReports(Array.isArray(decrypted) ? decrypted.filter((item) => item && typeof item === 'object') : []);
+          }
+        } catch (error) {
+          console.error('다른 창의 저장 목록 동기화 실패:', error);
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [samplingLogDraftKey, activeUser]);
+
+  // 메인 창의 현재 기록부 정보(사업장·배출구·측정일)를 별도 창에서 가져갈 수 있도록 기록
+  useEffect(() => {
+    if (IS_POPUP_WINDOW || !selectedSheet || selectedSheet === 'samplinglog') return;
+    try {
+      localStorage.setItem(STORAGE_KEYS.sheetContext, JSON.stringify({
+        company: formData.company || '',
+        location: formData.location || '',
+        date: formData.date || '',
+        sheetTitle: SHEET_MENU.find((item) => item.id === selectedSheet)?.title || '',
+      }));
+    } catch (error) {
+      console.error('기록부 정보 공유 실패:', error);
+    }
+  }, [formData.company, formData.location, formData.date, selectedSheet]);
+
+  useEffect(() => {
+    if (IS_POPUP_WINDOW) document.title = 'StackPilot - 통합 시료채취기록부';
+  }, []);
+
+  const openSamplingLogWindow = () => {
+    const existing = samplingLogWindowRef.current;
+    if (existing && !existing.closed) {
+      try { existing.focus(); } catch (error) { console.error(error); }
+      return;
+    }
+    const url = `${window.location.pathname}${window.location.search}#sheet=samplinglog&popup=1`;
+    const popup = window.open(url, 'stackpilot-samplinglog', 'popup=yes,width=1180,height=920');
+    if (!popup) {
+      alert('새 창을 열 수 없습니다. 브라우저의 팝업 차단을 해제한 뒤 다시 시도해주세요.');
+      return;
+    }
+    samplingLogWindowRef.current = popup;
+  };
 
   const buildReportKey = (id, savedAt) => String(id || savedAt || '');
   const getReportKey = (report) => buildReportKey(report?.id, report?.savedAt);
@@ -3156,7 +3255,8 @@ export default function App() {
   const getTableGenerationPlan = () => {
     const spData = getSamplingPoints();
     if (!spData) return null;
-    const pointCount = spData.perRadius;
+    // 반경당 측정점은 공정시험기준상 최대 5개
+    const pointCount = Math.min(TABLE_PLAN_MAX_POINTS, Math.max(1, spData.perRadius));
     const requestedRaw = parseFloat(tableTotalMinutes);
     const planTotal = parseFloat(formData.planSamplingTime);
     const requestedTotal = Number.isFinite(requestedRaw) && requestedRaw > 0
@@ -3165,8 +3265,7 @@ export default function App() {
     const intervalRaw = parseFloat(tableIntervalMinutes);
     const preferredInterval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? intervalRaw : null;
     const intervalAuto = preferredInterval === null;
-    const minRowsRaw = parseInt(tableMinRowsPerPoint, 10);
-    const minRowsPerPoint = Number.isFinite(minRowsRaw) && minRowsRaw > 0 ? minRowsRaw : TABLE_PLAN_MIN_ROWS_PER_POINT;
+    const minRowsPerPoint = TABLE_PLAN_MIN_ROWS_PER_POINT;
 
     let rowsPerPoint;
     let intervalMinutes;
@@ -5348,6 +5447,10 @@ export default function App() {
     return isMobileLightMode ? Math.max(3, Math.round(baseCount * 0.4)) : baseCount;
   };
   const navigateToMenu = () => {
+    if (IS_POPUP_WINDOW) {
+      window.close();
+      return;
+    }
     setSelectedSheet('');
     if (window.location.hash) {
       window.location.hash = '';
@@ -5375,7 +5478,8 @@ export default function App() {
         setSelectedSheet('');
         return;
       }
-      setSelectedSheet(hashSheet);
+      // 별도 창은 통합 시료채취기록부 전용
+      setSelectedSheet(IS_POPUP_WINDOW ? 'samplinglog' : hashSheet);
     };
 
     applyHashRoute();
@@ -6367,11 +6471,27 @@ export default function App() {
   };
 
   const importSheetInfoToSamplingLog = () => {
+    let source = { company: formData.company || '', location: formData.location || '', date: formData.date || '' };
+    if (IS_POPUP_WINDOW || selectedSheet === 'samplinglog') {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.sheetContext);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && typeof parsed === 'object') {
+          source = { company: String(parsed.company || ''), location: String(parsed.location || ''), date: String(parsed.date || '') };
+        }
+      } catch (error) {
+        console.error('기록부 정보 읽기 실패:', error);
+      }
+    }
+    if (!source.company && !source.location && !source.date) {
+      alert('가져올 기록부 정보가 없습니다. 메인 창에서 기록부(먼지·수은 등)를 열고 사업장명/배출구/측정일자를 입력해주세요.');
+      return;
+    }
     setSamplingLogData(prev => ({
       ...prev,
-      company: prev.company || formData.company || '',
-      stackName: prev.stackName || formData.location || '',
-      days: prev.days.map((day, idx) => (idx === 0 && !day.date && formData.date ? { ...day, date: formData.date } : day)),
+      company: prev.company || source.company,
+      stackName: prev.stackName || source.location,
+      days: prev.days.map((day, idx) => (idx === 0 && !day.date && source.date ? { ...day, date: source.date } : day)),
     }));
   };
 
@@ -6555,9 +6675,17 @@ export default function App() {
               <span className="font-black text-slate-800">시료채취기록부(종합)</span>
               {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
             </p>
-            <button type="button" onClick={navigateToMenu} className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-              기록부 선택
-            </button>
+            <div className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 flex flex-wrap justify-center gap-2">
+              <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-2 text-xs font-bold rounded-lg border border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100" title="메인 창에서 열어 둔 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
+                현재 기록부 정보 가져오기
+              </button>
+              <button type="button" onClick={navigateToMenu} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+                {IS_POPUP_WINDOW ? '창 닫기' : '기록부 선택'}
+              </button>
+            </div>
+            {IS_POPUP_WINDOW && (
+              <p className="mt-2 text-[11px] font-bold text-orange-700">별도 창으로 열림 · 입력 내용은 메인 창과 실시간으로 공유되고 자동 보관됩니다</p>
+            )}
           </div>
           {renderSamplingLogBody()}
         </div>
@@ -6569,56 +6697,23 @@ export default function App() {
     <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
-      {!isSamplingLogPanelOpen && (() => {
+      {!IS_POPUP_WINDOW && (() => {
         const stats = getSamplingLogStats(samplingLogData);
         return (
           <button
             type="button"
-            onClick={() => setIsSamplingLogPanelOpen(true)}
+            onClick={openSamplingLogWindow}
             className="fixed bottom-5 right-5 z-[60] pl-3 pr-4 py-2.5 rounded-full shadow-xl bg-gradient-to-r from-orange-600 to-amber-500 text-white font-bold text-sm hover:from-orange-700 hover:to-amber-600 border border-orange-700/60 flex items-center gap-2 transition-transform hover:scale-105"
-            title="통합 시료채취기록부를 이 화면 위에 함께 엽니다"
+            title="통합 시료채취기록부를 별도 창으로 엽니다 (내용은 두 창에서 실시간 공유)"
           >
-            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">≡</span>
+            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-base">⧉</span>
             <span className="flex flex-col items-start leading-tight">
               <span>통합 시료채취기록부</span>
-              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '함께 열기'}</span>
+              <span className="text-[10px] font-normal opacity-90">{stats.requestedCount > 0 ? `의뢰 ${stats.requestedCount}건 · 시각 ${stats.filledCount}건 입력` : '새 창으로 열기'}</span>
             </span>
           </button>
         );
       })()}
-      {isSamplingLogPanelOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[70] flex">
-          <div className="hidden md:block flex-1 bg-black/30" onClick={() => setIsSamplingLogPanelOpen(false)} />
-          <div className="w-full md:w-[72vw] md:max-w-[1250px] h-full bg-orange-50/95 shadow-2xl overflow-y-auto border-l-4 border-orange-500 flex flex-col">
-            <div className="sticky top-0 z-20 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 text-white px-4 py-3 shadow-md">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black">≡</span>
-                  <div>
-                    <h2 className="text-base font-black leading-tight">통합 시료채취기록부</h2>
-                    <p className="text-[11px] opacity-90">{activeSheet?.title || '기록부'} 위에 함께 열림 · 입력 내용은 서로 독립적으로 유지됩니다</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25" title="현재 기록부의 사업장명, 배출구, 측정일자를 비어 있는 칸에 채웁니다">
-                    현재 기록부 정보 가져오기
-                  </button>
-                  <button type="button" onClick={() => { setIsSamplingLogPanelOpen(false); window.location.hash = 'sheet=samplinglog'; }} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white/15 border border-white/40 hover:bg-white/25">
-                    전체 화면으로
-                  </button>
-                  <button type="button" onClick={() => setIsSamplingLogPanelOpen(false)} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900/80 hover:bg-slate-900 border border-slate-900">
-                    닫기 (Esc)
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 space-y-4">
-              {renderSamplingLogBody()}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       {renderSheetSkyScene()}
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
@@ -7586,19 +7681,6 @@ export default function App() {
                       />
                       분
                     </label>
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                      지점당 최소
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={tableMinRowsPerPoint}
-                        onChange={(e) => setTableMinRowsPerPoint(e.target.value)}
-                        className="w-12 p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                        title="각 측정점에서 최소 몇 번(행) 측정할지 (기본 3행)"
-                      />
-                      행
-                    </label>
                     <button type="button" onClick={applySamplingPointsToTable} className="py-2 px-5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition-colors border border-emerald-700">
                       측정점/채취시간 표 자동 생성
                     </button>
@@ -7608,7 +7690,7 @@ export default function App() {
                       const changed = plan.adjustedTotal !== plan.requestedTotal;
                       return (
                         <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
-                          {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분{plan.intervalAuto ? '(자동)' : ''} = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분)
+                          {plan.pointCount}지점 × 지점당 {plan.rowsPerPoint}행 × {plan.intervalMinutes}분{plan.intervalAuto ? '(자동)' : ''} = 총 {plan.adjustedTotal}분 (지점당 {plan.perPointMinutes}분, 최소 {plan.minRowsPerPoint}행)
                           {changed ? ` · ${plan.requestedTotal}분은 지점당 최소 ${plan.minRowsPerPoint}행으로 똑같이 나눌 수 없어 ${plan.adjustedTotal}분으로 맞춤` : ''}
                         </span>
                       );

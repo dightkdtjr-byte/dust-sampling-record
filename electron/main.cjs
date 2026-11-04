@@ -32,6 +32,17 @@ function registerAppProtocol() {
   });
 }
 
+const WEB_PREFERENCES = {
+  preload: path.join(__dirname, 'preload.cjs'),
+  contextIsolation: true,
+  nodeIntegration: false,
+  sandbox: true,
+};
+
+const isAppUrl = (url) => (
+  url.startsWith(`${APP_SCHEME}://`) || (DEV_SERVER_URL && url.startsWith(DEV_SERVER_URL))
+);
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -41,18 +52,41 @@ function createWindow() {
     title: 'StackPilot',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
+    webPreferences: WEB_PREFERENCES,
   });
+  attachWindowBehaviors(win);
 
-  // Open external links (e.g. GitHub token pages) in the system browser.
+  if (DEV_SERVER_URL) {
+    win.loadURL(DEV_SERVER_URL);
+  } else {
+    win.loadURL(`${APP_SCHEME}://bundle/index.html`);
+  }
+}
+
+// 모든 창(메인 창, 통합 시료채취기록부 별도 창)에 공통으로 적용되는 동작
+function attachWindowBehaviors(win) {
+  // 앱 내부 주소(window.open)는 새 창으로, 외부 링크는 시스템 브라우저로.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAppUrl(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 1180,
+          height: 920,
+          minWidth: 800,
+          minHeight: 500,
+          title: 'StackPilot - 통합 시료채취기록부',
+          icon: path.join(__dirname, '..', 'build', 'icon.png'),
+          autoHideMenuBar: true,
+          webPreferences: WEB_PREFERENCES,
+        },
+      };
+    }
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+  win.webContents.on('did-create-window', (childWindow) => {
+    attachWindowBehaviors(childWindow);
   });
 
   // Wrap native dialogs so the window regains keyboard focus after they close.
@@ -75,12 +109,6 @@ function createWindow() {
       };
     })();`).catch(() => {});
   });
-
-  if (DEV_SERVER_URL) {
-    win.loadURL(DEV_SERVER_URL);
-  } else {
-    win.loadURL(`${APP_SCHEME}://bundle/index.html`);
-  }
 }
 
 let lastDownloadName = '';
