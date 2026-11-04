@@ -469,8 +469,8 @@ const DEFAULT_MEASURE_ROW_COUNT = 12;
 const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
 const PITOT_BASE_CP = 0.84; // 피토계수 자동 선정 시 유속 가계산에 쓰는 기준계수
 const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
-// 지점 수별 권장 지점당 행 수: 지점이 적으면 촘촘히(1점 12행), 많으면 지점당 3행
-const RECOMMENDED_ROWS_PER_POINT = { 1: 12, 2: 6, 3: 4, 4: 3, 5: 3 };
+// 지점 수별 권장 지점당 행 수: 지점이 적으면 촘촘히(1점 6행), 많으면 지점당 3행
+const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 
 const isMobileViewportWidth = () => {
   if (typeof window === 'undefined') return false;
@@ -8330,7 +8330,7 @@ export default function App() {
                             <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
                           </td>
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.sp || ''} onChange={(e) => handleGasMeterChange(idx, 'sp', e.target.value)} placeholder="정압" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                            <input type="number" step="0.1" value={meter.sp || ''} onChange={(e) => handleGasMeterChange(idx, 'sp', e.target.value)} className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
                           </td>
                           {!isFlowSheet && (
                           <td className="p-1 w-14">
