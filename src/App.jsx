@@ -459,6 +459,7 @@ const DEFAULT_MEASURE_TOTAL_MINUTES = 60;
 const DEFAULT_MEASURE_ROW_COUNT = 12;
 const DEFAULT_SLOT_MINUTES = DEFAULT_MEASURE_TOTAL_MINUTES / DEFAULT_MEASURE_ROW_COUNT;
 const TABLE_PLAN_TARGET_INTERVAL = 5; // 자동 탐색 시 선호하는 행 간격(분)
+const PITOT_BASE_CP = 0.84; // 피토계수 자동 선정 시 유속 가계산에 쓰는 기준계수
 const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
 const TABLE_PLAN_MIN_ROWS_PER_POINT = 3; // 지점당 최소 측정 행 수
 const TABLE_PLAN_MAX_ROWS_PER_POINT = 20;
@@ -3077,25 +3078,26 @@ export default function App() {
     if (sampler) setFormData(prev => ({ ...prev, samplerId: id, gasMeterFactor: sampler.yd, deltaHAt: sampler.dHAt }));
   };
 
-  const handlePitotPresetChange = (e) => {
-    const id = e.target.value;
-    if (id === '') {
+  const applyPitotPresetById = (id) => {
+    if (id === '' || id === null || id === undefined) {
       setFormData(prev => ({ ...prev, pitotPresetId: '' }));
       return;
     }
     const preset = pitotPresets.find(item => item.id === parseInt(id, 10));
     if (preset) {
       const nextInfo = String(preset.sn || '').trim();
-      setFormData(prev => ({ ...prev, pitotPresetId: id, pitotFactor: preset.factor, pitotInfo: nextInfo || prev.pitotInfo }));
+      setFormData(prev => ({ ...prev, pitotPresetId: String(id), pitotFactor: preset.factor, pitotInfo: nextInfo || prev.pitotInfo }));
     }
   };
+
+  const handlePitotPresetChange = (e) => applyPitotPresetById(e.target.value);
 
   // 선택된 피토관 프리셋에 유속별 Cp 표가 있으면, 예비조사 유속에 맞는 Cp를 자동 적용
   // 현재 기록부에 맞는 피토관 용도 (먼지/금속=입자, 수은, PAHs) 를 목록 앞쪽에 표시
   const isPitotUsageForSheet = (usage) => {
     const u = String(usage || '').trim();
     if (!u) return false;
-    const sheetId = activeSheet?.id;
+    const sheetId = selectedSheet; // (activeSheet는 아래에서 정의되므로 state를 직접 사용)
     if (sheetId === 'mercury') return u.includes('수은');
     if (sheetId === 'pahs') return u.toUpperCase().includes('PAH');
     return u.includes('입자') || u.includes('먼지') || u.includes('금속');
@@ -3382,8 +3384,9 @@ export default function App() {
     return !isNaN(Pa) ? Pa + (avgPs / 13.6) : NaN;
   };
 
-  const getRawGasVelocity = () => {
-    const avgTs = getRawAvgTs(), C = parseFloat(formData.pitotFactor) || 0.84, P = getRawStackPressure(); 
+  const getRawGasVelocity = (cpOverride = null) => {
+    const avgTs = getRawAvgTs(), P = getRawStackPressure();
+    const C = Number.isFinite(cpOverride) && cpOverride > 0 ? cpOverride : (parseFloat(formData.pitotFactor) || 0.84);
     const dpAvg = getRawAvgDp();
     if (dpAvg === 0 || isNaN(avgTs) || isNaN(P)) return 0;
     
@@ -3444,7 +3447,7 @@ export default function App() {
     return getRawCorrectedDensityFromRows(meterRows);
   };
 
-  const getRawGasVelocityFactorsFromMeterRows = () => {
+  const getRawGasVelocityFactorsFromMeterRows = (cpOverride = null) => {
     const meterRows = getMeterRowsWithVolume();
     const dpValues = meterRows
       .map((row) => parseFloat(row.dp))
@@ -3457,7 +3460,7 @@ export default function App() {
 
     const avgDp = dpValues.reduce((a, b) => a + b, 0) / dpValues.length;
     const avgTs = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
-    const C = parseFloat(formData.pitotFactor) || 0.84;
+    const C = Number.isFinite(cpOverride) && cpOverride > 0 ? cpOverride : (parseFloat(formData.pitotFactor) || 0.84);
     const gasComp = getGasComposition();
 
     if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
@@ -3473,8 +3476,8 @@ export default function App() {
     return { velocity, avgDp, avgTs, C, r0: gasComp.r0, r, avgDensity: r };
   };
 
-  const getRawGasVelocityFromMeterRows = () => {
-    const factors = getRawGasVelocityFactorsFromMeterRows();
+  const getRawGasVelocityFromMeterRows = (cpOverride = null) => {
+    const factors = getRawGasVelocityFactorsFromMeterRows(cpOverride);
     return factors ? factors.velocity : NaN;
   };
 
@@ -5257,21 +5260,56 @@ export default function App() {
     }
   };
 
-  // (모든 계산 함수 정의 이후) 선택된 피토관 프리셋의 유속별 Cp 자동 적용
-  // 적용 유속: 기록표(적산유량 행)의 유속이 있으면 그것을, 없으면 예비조사 유속을 사용
-  const meterBasedPitotVelocity = isPitotCpAutoApplied ? getRawGasVelocityFromMeterRows() : NaN;
-  const appliedPitotVelocitySource = Number.isFinite(meterBasedPitotVelocity) && meterBasedPitotVelocity > 0 ? '기록표' : '예비조사';
-  const appliedPitotVelocity = isPitotCpAutoApplied
-    ? (appliedPitotVelocitySource === '기록표' ? meterBasedPitotVelocity : getRawGasVelocity())
-    : NaN;
+  // ── 피토계수 AI 자동 선정 (모든 계산 함수 정의 이후) ──
+  // ① 기준계수 0.84로 유속을 가계산 → ② 피토관의 유속별 Cp 표에서 그 유속 구간의 Cp를 선정(직선 보간)
+  // → ③ 선정한 Cp로 유속을 다시 계산하고, Cp가 더 이상 바뀌지 않을 때까지 반복(수렴)
+  // 유속 출처: 기록표(적산유량 행)에 동압이 있으면 기록표, 없으면 예비조사(4번 섹션)
+  const buildPitotAutoSelection = () => {
+    if (!isPitotCpAutoApplied || !activePitotPreset) return null;
+    const meterV = getRawGasVelocityFromMeterRows(PITOT_BASE_CP);
+    const useMeter = Number.isFinite(meterV) && meterV > 0;
+    const baseVelocity = useMeter ? meterV : getRawGasVelocity(PITOT_BASE_CP);
+    const source = useMeter ? '기록표' : '예비조사';
+    if (!Number.isFinite(baseVelocity) || baseVelocity <= 0) return { ready: false, source, steps: [] };
+    const kFactor = baseVelocity / PITOT_BASE_CP; // 유속 = Cp × K (K는 동압·밀도만의 함수)
+    const steps = [{ cp: PITOT_BASE_CP, velocity: baseVelocity, note: '기준계수 가계산' }];
+    let cp = resolvePitotCpByVelocity(activePitotPreset, baseVelocity);
+    let velocity = baseVelocity;
+    let converged = false;
+    for (let i = 0; i < 6; i += 1) {
+      velocity = cp * kFactor;
+      steps.push({ cp, velocity, note: i === 0 ? '유속 구간 Cp 선정' : '재계산' });
+      const nextCp = resolvePitotCpByVelocity(activePitotPreset, velocity);
+      if (!Number.isFinite(nextCp) || Math.abs(nextCp - cp) < 0.00005) { converged = true; break; }
+      cp = nextCp;
+    }
+    const rows = activePitotVelocityRows;
+    const minV = rows[0].v;
+    const maxV = rows[rows.length - 1].v;
+    const inRange = velocity >= minV && velocity <= maxV;
+    const coversVelocity = (preset) => {
+      const presetRows = getPitotVelocityRows(preset);
+      return presetRows.length > 0 && velocity >= presetRows[0].v && velocity <= presetRows[presetRows.length - 1].v;
+    };
+    const alternative = inRange
+      ? null
+      : (pitotPresets.find((preset) => preset.id !== activePitotPreset.id && isPitotUsageForSheet(preset.usage) && coversVelocity(preset))
+        || pitotPresets.find((preset) => preset.id !== activePitotPreset.id && coversVelocity(preset))
+        || null);
+    return { ready: true, source, steps, finalCp: cp, finalVelocity: velocity, converged, inRange, minV, maxV, alternative };
+  };
+  const pitotAutoSelection = buildPitotAutoSelection();
+  const appliedPitotVelocity = pitotAutoSelection?.ready ? pitotAutoSelection.finalVelocity : NaN;
+  const appliedPitotVelocitySource = pitotAutoSelection?.source || '예비조사';
+  const autoSelectedPitotCp = pitotAutoSelection?.ready
+    ? pitotAutoSelection.finalCp
+    : (isPitotCpAutoApplied ? resolvePitotCpByVelocity(activePitotPreset, NaN) : NaN);
   useEffect(() => {
-    if (!isPitotCpAutoApplied) return;
-    const nextCp = resolvePitotCpByVelocity(activePitotPreset, appliedPitotVelocity);
-    if (!Number.isFinite(nextCp)) return;
+    if (!isPitotCpAutoApplied || !Number.isFinite(autoSelectedPitotCp)) return;
     const current = parseFloat(formData.pitotFactor);
-    if (Number.isFinite(current) && Math.abs(current - nextCp) < 0.00005) return;
-    setFormData(prev => ({ ...prev, pitotFactor: formatPitotCp(nextCp) }));
-  }, [isPitotCpAutoApplied, activePitotPreset, appliedPitotVelocity, formData.pitotFactor]);
+    if (Number.isFinite(current) && Math.abs(current - autoSelectedPitotCp) < 0.00005) return;
+    setFormData(prev => ({ ...prev, pitotFactor: formatPitotCp(autoSelectedPitotCp) }));
+  }, [isPitotCpAutoApplied, autoSelectedPitotCp, formData.pitotFactor]);
 
   const appGasComp = getGasComposition();
   const o2 = appGasComp.o2, co2 = appGasComp.co2, co = appGasComp.co, sox = appGasComp.sox, nox = appGasComp.nox, n2 = appGasComp.n2, Md = appGasComp.Md, Ms = appGasComp.Ms, r0 = appGasComp.r0;
@@ -7107,8 +7145,8 @@ export default function App() {
                     {isPitotCpAutoApplied && (
                       <span className="text-[10px] text-emerald-700 font-bold whitespace-nowrap">
                         {Number.isFinite(appliedPitotVelocity) && appliedPitotVelocity > 0
-                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동`
-                          : '동압 입력 시 유속별 자동'}
+                          ? `${appliedPitotVelocitySource} 유속 ${appliedPitotVelocity.toFixed(1)} m/s 기준 자동 선정`
+                          : '동압 입력 시 자동 선정'}
                       </span>
                     )}
                     <select
@@ -7137,6 +7175,47 @@ export default function App() {
                 </div>
               </div>
 
+              {isPitotCpAutoApplied && (() => {
+                const sel = pitotAutoSelection;
+                const fmtV = (v) => `${v.toFixed(2)} m/s`;
+                return (
+                  <div className="mb-3 border-l-2 border-emerald-600 pl-3 text-[11px] text-slate-700 leading-5">
+                    <div>
+                      <span className="font-black text-slate-900">피토계수 자동 선정</span>
+                      <span className="text-slate-500"> · {activePitotPreset?.sn ? `S/N ${activePitotPreset.sn}` : '선택 피토관'}</span>
+                      {sel?.ready && (
+                        <span className="text-slate-500"> · {sel.source} 유속 기준</span>
+                      )}
+                    </div>
+                    {sel?.ready ? (
+                      <div>
+                        {sel.steps.map((step, idx) => (
+                          <span key={idx}>
+                            {idx > 0 && <span className="text-slate-400"> → </span>}
+                            {idx === 0
+                              ? <>기준 C<sub>p</sub> {PITOT_BASE_CP} 가계산 유속 {fmtV(step.velocity)}</>
+                              : <>{step.note} C<sub>p</sub> <b className="text-slate-900">{formatPitotCp(step.cp)}</b> → {fmtV(step.velocity)}</>}
+                          </span>
+                        ))}
+                        <span className="font-black text-emerald-800"> · {sel.converged ? '수렴' : '반복 한도'} C<sub>p</sub> {formatPitotCp(sel.finalCp)} 적용</span>
+                      </div>
+                    ) : (
+                      <div className="text-slate-600">동압·온도·대기압·가스 조성이 입력되면 기준 C<sub>p</sub> {PITOT_BASE_CP}로 유속을 가계산한 뒤 유속 구간에 맞는 C<sub>p</sub>를 선정합니다. 현재 공칭값 {formData.pitotFactor} 적용.</div>
+                    )}
+                    {sel?.ready && !sel.inRange && (
+                      <div className="font-bold text-amber-800">
+                        유속 {fmtV(sel.finalVelocity)}는 이 피토관 표 범위({sel.minV}~{sel.maxV} m/s) 밖이라 가장 가까운 끝값을 적용했습니다.
+                        {sel.alternative ? (
+                          <>
+                            {' '}범위에 맞는 피토관: S/N {sel.alternative.sn || sel.alternative.id}{sel.alternative.usage ? ` (${sel.alternative.usage})` : ''}
+                            {' '}<button type="button" onClick={() => applyPitotPresetById(sel.alternative.id)} className="underline text-amber-900 hover:text-amber-700">이 피토관으로 변경</button>
+                          </>
+                        ) : ' 범위에 맞는 다른 피토관 프리셋이 없습니다.'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <details className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                 <summary className="cursor-pointer text-[11px] font-bold text-emerald-800">
                   피토 프리셋 직접 편집 (C<sub>p</sub>)
