@@ -16,6 +16,28 @@ const DEFAULT_NOZZLE_SET = IS_DESKTOP_BUILD ? [] : [
   { num: 20, d: 15.95 }, { num: 22, d: 17.51 }, { num: 26, d: 20.72 }
 ];
 
+// 수은·PAHs는 노즐 세트가 따로 있음 (각 양식 노즐산정 B39:C 목록)
+const DEFAULT_GROUP_NOZZLE_SETS = IS_DESKTOP_BUILD ? { mercury: [], pahs: [] } : {
+  mercury: [
+    { num: 1, d: 4.10 }, { num: 2, d: 4.69 }, { num: 3, d: 5.10 }, { num: 4, d: 5.69 }, { num: 5, d: 6.05 },
+    { num: 6, d: 6.72 }, { num: 7, d: 7.14 }, { num: 8, d: 7.69 }, { num: 9, d: 8.08 }, { num: 10, d: 8.68 },
+    { num: 13, d: 10.00 }, { num: 15, d: 11.03 }, { num: 17, d: 12.12 }, { num: 18, d: 12.51 }, { num: 19, d: 13.10 },
+  ],
+  pahs: [
+    { num: 1, d: 4.10 }, { num: 2, d: 4.39 }, { num: 3, d: 5.09 }, { num: 4, d: 5.68 }, { num: 5, d: 6.09 },
+    { num: 6, d: 6.74 }, { num: 7, d: 7.08 }, { num: 8, d: 7.61 }, { num: 9, d: 8.13 }, { num: 10, d: 8.65 },
+    { num: 11, d: 9.06 }, { num: 12, d: 9.70 }, { num: 13, d: 10.09 }, { num: 14, d: 10.68 }, { num: 15, d: 11.05 },
+    { num: 16, d: 11.44 }, { num: 17, d: 12.16 }, { num: 18, d: 12.47 }, { num: 19, d: 13.12 },
+  ],
+};
+// 기록부 → 노즐 세트 (먼지·금속·유량은 같은 세트)
+const getNozzleGroupForSheet = (sheetId) => (sheetId === 'mercury' || sheetId === 'pahs' ? sheetId : 'dust');
+const NOZZLE_GROUP_LABELS = { dust: '먼지·금속·유량', mercury: '수은', pahs: 'PAHs' };
+const cloneDefaultGroupNozzleSets = () => ({
+  mercury: DEFAULT_GROUP_NOZZLE_SETS.mercury.map((item) => ({ ...item })),
+  pahs: DEFAULT_GROUP_NOZZLE_SETS.pahs.map((item) => ({ ...item })),
+});
+
 const DEFAULT_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
   { id: 1, name: '샘플러 1호기 (1910162K)', yd: '0.991', dHAt: '47.6079' },
   { id: 2, name: '샘플러 2호기 (1910163K)', yd: '0.994', dHAt: '47.4726' },
@@ -1300,6 +1322,8 @@ const STORAGE_KEYS = {
   samplers: 'dust-sampling.samplers.v1',
   pitotPresets: 'dust-sampling.pitot-presets.v1',
   nozzlesUserPrefix: 'dust-sampling.nozzles.user.v1.',
+  groupNozzles: 'dust-sampling.group-nozzles.v1',
+  groupNozzlesUserPrefix: 'dust-sampling.group-nozzles.user.v1.',
   samplersUserPrefix: 'dust-sampling.samplers.user.v1.',
   gasSamplers: 'dust-sampling.gas-samplers.v1',
   gasSamplersUserPrefix: 'dust-sampling.gas-samplers.user.v1.',
@@ -1502,6 +1526,31 @@ const resolvePitotCpByVelocity = (preset, velocity) => {
 };
 
 const formatPitotCp = (value) => (Number.isFinite(value) ? String(Math.round(value * 10000) / 10000) : '');
+
+const getGroupNozzlesStorageKey = (userId) => {
+  const normalizedId = String(userId || '').trim().toLowerCase();
+  return normalizedId && normalizedId !== 'user' && normalizedId !== 'user1'
+    ? `${STORAGE_KEYS.groupNozzlesUserPrefix}${encodeURIComponent(normalizedId)}`
+    : STORAGE_KEYS.groupNozzles;
+};
+const sanitizeGroupNozzleSets = (value) => {
+  const base = cloneDefaultGroupNozzleSets();
+  if (!value || typeof value !== 'object') return base;
+  ['mercury', 'pahs'].forEach((group) => {
+    const parsed = sanitizeNozzleSet(value[group]);
+    if (parsed) base[group] = parsed;
+  });
+  return base;
+};
+const getStoredGroupNozzlesForUser = (userId) => {
+  try {
+    const raw = localStorage.getItem(getGroupNozzlesStorageKey(userId));
+    if (raw) return sanitizeGroupNozzleSets(JSON.parse(raw));
+  } catch (error) {
+    console.error('수은·PAHs 노즐 프리셋 로딩 실패:', error);
+  }
+  return cloneDefaultGroupNozzleSets();
+};
 
 const getStoredNozzlesForUser = (userId) => {
   const normalizedId = String(userId || '').trim().toLowerCase();
@@ -1839,6 +1888,21 @@ export default function App() {
   };
   const [selectedSheet, setSelectedSheet] = useState('');
   const [nozzleSet, setNozzleSet] = useState(cloneDefaultNozzles);
+  const [groupNozzleSets, setGroupNozzleSets] = useState(() => getStoredGroupNozzlesForUser(''));
+  // 지금 열린 기록부가 쓰는 노즐 세트 (편집·추천 모두 이 세트 기준)
+  const activeNozzleGroup = getNozzleGroupForSheet(selectedSheet);
+  const activeNozzleSet = activeNozzleGroup === 'dust' ? nozzleSet : (groupNozzleSets[activeNozzleGroup] || []);
+  const setActiveNozzleSet = (updater) => {
+    if (activeNozzleGroup === 'dust') { setNozzleSet(updater); return; }
+    setGroupNozzleSets((prev) => ({
+      ...prev,
+      [activeNozzleGroup]: typeof updater === 'function' ? updater(prev[activeNozzleGroup] || []) : updater,
+    }));
+  };
+  const getNozzleSetForSheet = (sheetId) => {
+    const group = getNozzleGroupForSheet(sheetId);
+    return group === 'dust' ? nozzleSet : (groupNozzleSets[group] || []);
+  };
   const [samplers, setSamplers] = useState(cloneDefaultSamplers);
   const [gasSamplers, setGasSamplers] = useState(cloneDefaultGasSamplers);
   const [pitotPresets, setPitotPresets] = useState(cloneDefaultPitotPresets);
@@ -2081,6 +2145,15 @@ export default function App() {
   useEffect(() => {
     if (!isStorageHydrated || isPresetHydratingRef.current) return;
     try {
+      localStorage.setItem(getGroupNozzlesStorageKey(activeUser), JSON.stringify(groupNozzleSets));
+    } catch (error) {
+      console.error('수은·PAHs 노즐 설정 저장 실패:', error);
+    }
+  }, [groupNozzleSets, isStorageHydrated, activeUser]);
+
+  useEffect(() => {
+    if (!isStorageHydrated || isPresetHydratingRef.current) return;
+    try {
       const targetKey = canUseUserScopedPresets(activeUser)
         ? getUserSamplersStorageKey(activeUser)
         : STORAGE_KEYS.samplers;
@@ -2170,6 +2243,10 @@ export default function App() {
         } catch (error) {
           console.error('다른 창의 통합 기록부 동기화 실패:', error);
         }
+        return;
+      }
+      if (event.newValue && event.key === getGroupNozzlesStorageKey(activeUser)) {
+        try { setGroupNozzleSets(sanitizeGroupNozzleSets(JSON.parse(event.newValue))); } catch (error) { console.error(error); }
         return;
       }
       if (activeUser && event.newValue && (event.key === getUserNozzlesStorageKey(activeUser) || event.key === STORAGE_KEYS.nozzles)) {
@@ -2462,21 +2539,25 @@ export default function App() {
     sheetSelectableReportKeys.length > 0 && sheetCheckedReportKeysValid.length === sheetSelectableReportKeys.length;
 
   const getConfiguredNozzles = () => {
-    return nozzleSet
+    return activeNozzleSet
       .map((n) => ({ num: parseInt(n.num, 10), d: parseFloat(n.d) }))
       .filter((n) => !isNaN(n.num) && !isNaN(n.d) && n.d > 0)
       .sort((a, b) => a.num - b.num);
   };
 
   const saveNozzlePresets = () => {
-    const sanitized = sanitizeNozzleSet(nozzleSet) || [];
+    const sanitized = sanitizeNozzleSet(activeNozzleSet) || [];
     try {
-      const targetKey = canUseUserScopedPresets(activeUser)
-        ? getUserNozzlesStorageKey(activeUser)
-        : STORAGE_KEYS.nozzles;
-      localStorage.setItem(targetKey, JSON.stringify(sanitized));
-      setNozzleSet(sanitized);
-      alert('노즐 프리셋을 저장했습니다.');
+      if (activeNozzleGroup === 'dust') {
+        const targetKey = canUseUserScopedPresets(activeUser)
+          ? getUserNozzlesStorageKey(activeUser)
+          : STORAGE_KEYS.nozzles;
+        localStorage.setItem(targetKey, JSON.stringify(sanitized));
+      } else {
+        localStorage.setItem(getGroupNozzlesStorageKey(activeUser), JSON.stringify({ ...groupNozzleSets, [activeNozzleGroup]: sanitized }));
+      }
+      setActiveNozzleSet(sanitized);
+      alert(`${NOZZLE_GROUP_LABELS[activeNozzleGroup]} 노즐 프리셋을 저장했습니다.`);
     } catch (error) {
       console.error('노즐 프리셋 수동 저장 실패:', error);
       alert('노즐 프리셋 저장에 실패했습니다.');
@@ -2484,21 +2565,21 @@ export default function App() {
   };
 
   const handleNozzleConfigChange = (index, field, value) => {
-    setNozzleSet(prev => prev.map((item, i) => (
+    setActiveNozzleSet(prev => prev.map((item, i) => (
       i === index ? { ...item, [field]: value } : item
     )));
   };
 
   const addNozzleConfig = () => {
-    setNozzleSet(prev => [...prev, { num: '', d: '' }]);
+    setActiveNozzleSet(prev => [...prev, { num: '', d: '' }]);
   };
 
   const removeNozzleConfig = (index) => {
-    setNozzleSet(prev => prev.filter((_, i) => i !== index));
+    setActiveNozzleSet(prev => prev.filter((_, i) => i !== index));
   };
 
   const resetNozzleDefaults = () => {
-    setNozzleSet(cloneDefaultNozzles());
+    setActiveNozzleSet(activeNozzleGroup === 'dust' ? cloneDefaultNozzles() : cloneDefaultGroupNozzleSets()[activeNozzleGroup]);
   };
 
   const handleSamplerPresetChange = (index, field, value) => {
@@ -2678,11 +2759,14 @@ export default function App() {
     const gasList = sanitizeGasSamplers(gasSamplers) || [];
     try {
       persistAllEquipmentPresets(nozzles, samplerList, pitotList, gasList);
+      const groupSets = sanitizeGroupNozzleSets(groupNozzleSets);
+      localStorage.setItem(getGroupNozzlesStorageKey(activeUser), JSON.stringify(groupSets));
       setNozzleSet(nozzles);
+      setGroupNozzleSets(groupSets);
       setSamplers(samplerList);
       setPitotPresets(pitotList);
       setGasSamplers(gasList);
-      alert(`장비 프리셋을 저장했습니다.\n노즐 ${nozzles.length}개 / 샘플러 ${samplerList.length}개 / 가스 샘플러 ${gasList.length}개 / 피토관 ${pitotList.length}개`);
+      alert(`장비 프리셋을 저장했습니다.\n노즐 ${nozzles.length}개 (수은 ${groupSets.mercury.length} / PAHs ${groupSets.pahs.length}) / 샘플러 ${samplerList.length}개 / 가스 샘플러 ${gasList.length}개 / 피토관 ${pitotList.length}개`);
     } catch (error) {
       console.error('장비 프리셋 전체 저장 실패:', error);
       alert('장비 프리셋 저장에 실패했습니다.');
@@ -2698,6 +2782,7 @@ export default function App() {
     const presetPrefixes = [
       STORAGE_KEYS.nozzles, STORAGE_KEYS.samplers, STORAGE_KEYS.pitotPresets, STORAGE_KEYS.gasSamplers,
       STORAGE_KEYS.nozzlesUserPrefix, STORAGE_KEYS.samplersUserPrefix, STORAGE_KEYS.pitotUserPrefix, STORAGE_KEYS.gasSamplersUserPrefix,
+      STORAGE_KEYS.groupNozzles, STORAGE_KEYS.groupNozzlesUserPrefix,
     ];
     try {
       const staleKeys = [];
@@ -2719,6 +2804,7 @@ export default function App() {
       console.error('장비 프리셋 초기화 저장 실패:', error);
     }
     setNozzleSet(nozzles);
+    setGroupNozzleSets(cloneDefaultGroupNozzleSets());
     setSamplers(samplerList);
     setPitotPresets(pitotList);
     setGasSamplers(gasList);
@@ -2804,6 +2890,7 @@ export default function App() {
     setLoginUserId(userId);
     localStorage.setItem(STORAGE_KEYS.lastLoginId, userId);
     setNozzleSet(userNozzles);
+    setGroupNozzleSets(getStoredGroupNozzlesForUser(userId));
     setSamplers(userSamplers);
     setGasSamplers(userGasSamplers);
     setPitotPresets(userPitotPresets);
@@ -3200,6 +3287,7 @@ export default function App() {
       userId: activeUser,
       secureUser: userRecord,
       nozzles: sanitizeNozzleSet(nozzleSet) || [],
+      groupNozzles: sanitizeGroupNozzleSets(groupNozzleSets),
       samplers: sanitizeSamplers(samplers) || [],
       pitotPresets: sanitizePitotPresets(pitotPresets) || [],
     };
@@ -3213,6 +3301,7 @@ export default function App() {
         userId: activeUser,
         secureUser: userRecord,
         nozzles: sanitizeNozzleSet(nozzleSet) || [],
+        groupNozzles: sanitizeGroupNozzleSets(groupNozzleSets),
         samplers: sanitizeSamplers(samplers) || [],
         pitotPresets: sanitizePitotPresets(pitotPresets) || [],
       });
@@ -3394,6 +3483,12 @@ export default function App() {
         || localReports.some((report) => !cloudReports.some((c) => getReportKey(c) === getReportKey(report) && c.savedAt === report.savedAt));
 
       const restoredNozzles = sanitizeNozzleSet(payload.nozzles);
+      const groupNozzleKey = getGroupNozzlesStorageKey(activeUser);
+      if (payload.groupNozzles && !(silent && localStorage.getItem(groupNozzleKey))) {
+        const restoredGroups = sanitizeGroupNozzleSets(payload.groupNozzles);
+        setGroupNozzleSets(restoredGroups);
+        localStorage.setItem(groupNozzleKey, JSON.stringify(restoredGroups));
+      }
       const restoredSamplers = sanitizeSamplers(payload.samplers);
       const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
 
@@ -3542,6 +3637,7 @@ export default function App() {
     cloudSyncBusy,
     activeUserReports,
     nozzleSet,
+    groupNozzleSets,
     samplers,
     pitotPresets,
     secureUsers,
@@ -5897,9 +5993,11 @@ export default function App() {
       }
       addUpdate('노즐산정', 'A39', toNumber(sourceData.planSamplingTime));
       addUpdate('노즐산정', 'K39', toNumber(sourceData.usedNozzleNum) || toNumber(sourceData.recommendedNozzleNum));
+      const exportNozzles = (sanitizeNozzleSet(getNozzleSetForSheet(exportSheetId)) || []).slice().sort((a, b) => Number(a.num) - Number(b.num));
       for (let i = 0; i < layout.nozzleRows; i++) {
         const row = 39 + i;
-        const nozzle = nozzleSet[i];
+        // 수은·PAHs 양식에는 그 기록부의 노즐 세트를 쓴다
+        const nozzle = exportNozzles[i];
         addUpdate('노즐산정', `B${row}`, nozzle ? toNumber(nozzle.num) : null);
         addUpdate('노즐산정', `C${row}`, nozzle ? toNumber(nozzle.d) : null);
       }
@@ -8672,6 +8770,7 @@ export default function App() {
                      <span className="text-[10px] text-slate-500">표에서 노즐 번호나 직경을 직접 입력할 수 있습니다</span>
                   </summary>
                   <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">{NOZZLE_GROUP_LABELS[activeNozzleGroup]} 노즐 세트</span>
                     <button type="button" onClick={saveNozzlePresets} className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded border border-emerald-700 inline-flex items-center gap-1">
                       <PresetSaveIcon />
                       저장
@@ -8695,7 +8794,7 @@ export default function App() {
                           </tr>
                        </thead>
                        <tbody className="bg-white">
-                          {nozzleSet.map((n, idx) => {
+                          {activeNozzleSet.map((n, idx) => {
                              let k='-', dh='-', vl='-', vsl='-', vsm='-', reqTime='-';
                              const nozzleNum = parseInt(n.num, 10);
                              const Dn = parseFloat(n.d);
@@ -8770,7 +8869,7 @@ export default function App() {
                                </tr>
                              )
                           })}
-                          {nozzleSet.length === 0 && (
+                          {activeNozzleSet.length === 0 && (
                             <tr>
                               <td className="border border-emerald-200 p-2 text-slate-500" colSpan={9}>
                                 노즐이 없습니다. "행 추가"로 입력하세요.
