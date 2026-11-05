@@ -229,6 +229,10 @@ const daysBetween = (a, b) => {
   if (!Number.isFinite(t1) || !Number.isFinite(t2)) return Infinity;
   return Math.abs(t2 - t1) / 86400000;
 };
+// 사업장·배출구 이름 비교용: 앞뒤·중간 공백과 대소문자 차이는 같은 곳으로 본다
+const normalizeSiteName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+// 통합기록부 일차 칸 수
+const SAMPLING_LOG_DAY_SLOTS = 4;
 const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS) => {
   const sites = new Map();
   (reports || []).forEach((report) => {
@@ -238,7 +242,7 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
     const location = String(report?.location || report?.stackName || '').trim();
     const date = String(report?.date || '').trim();
     if (!company && !location && !date) return;
-    const key = `${company}|${location}`;
+    const key = `${normalizeSiteName(company)}|${normalizeSiteName(location)}`;
     if (!sites.has(key)) sites.set(key, { company, location, items: [] });
     sites.get(key).items.push({ report, sheetId, date });
   });
@@ -251,7 +255,10 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
     const clusters = [];
     dated.forEach((it) => {
       const last = clusters[clusters.length - 1];
-      if (last && daysBetween(last.dates[last.dates.length - 1], it.date) <= CAMPAIGN_MAX_GAP_DAYS) {
+      const fitsLast = last
+        && daysBetween(last.dates[last.dates.length - 1], it.date) <= CAMPAIGN_MAX_GAP_DAYS
+        && (last.dates.includes(it.date) || last.dates.length < SAMPLING_LOG_DAY_SLOTS);
+      if (fitsLast) {
         last.items.push(it);
         if (!last.dates.includes(it.date)) last.dates.push(it.date);
       } else {
@@ -471,6 +478,14 @@ const PITOT_BASE_CP = 0.84; // 피토계수 자동 선정 시 유속 가계산�
 const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
 // 지점 수별 권장 지점당 행 수: 지점이 적으면 촘촘히(1점 6행), 많으면 지점당 3행
 const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
+// 실제로 측정값이 들어간 마지막 기록표 행 (표 자동 생성으로 미리 채워지는 채취점·시간은 측정값으로 보지 않음)
+const METER_MEASURED_FIELDS = ['stackTemp', 'dp', 'sp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
+const getLastMeasuredMeterIdx = (rows) => (rows || []).reduce((lastIdx, row, idx) => (
+  idx > 0 && METER_MEASURED_FIELDS.some((field) => {
+    const raw = row?.[field];
+    return raw !== null && raw !== undefined && String(raw).trim() !== '';
+  }) ? idx : lastIdx
+), 0);
 
 const isMobileViewportWidth = () => {
   if (typeof window === 'undefined') return false;
@@ -1803,7 +1818,8 @@ export default function App() {
   const [gasSamplers, setGasSamplers] = useState(cloneDefaultGasSamplers);
   const [pitotPresets, setPitotPresets] = useState(cloneDefaultPitotPresets);
 
-  const [formData, setFormData] = useState({
+  // 빈 기록지 (처음 열 때·로그아웃·불러오기 전 초기화에 공통 사용)
+  const createInitialFormData = () => ({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
     totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotInfo: '', pitotFactor: '0.84',
@@ -1831,6 +1847,7 @@ export default function App() {
     gasMeters: createGasMeterRowsByPoints(5),
     filterId: '', filterInitial: '', filterFinal: '', remarks: ''
   });
+  const [formData, setFormData] = useState(createInitialFormData);
 
   const [secureUsers, setSecureUsers] = useState({});
   const [samplingLogData, setSamplingLogData] = useState(createEmptySamplingLog);
@@ -1868,6 +1885,8 @@ export default function App() {
   const autoCloudRestoreInFlightRef = useRef(false);
   const autoCloudUploadTimerRef = useRef(null);
   const autoCloudUploadInFlightRef = useRef(false);
+  const autoCloudUploadFailRef = useRef(null);
+  const [cloudRetryTick, setCloudRetryTick] = useState(0);
   const lastAutoCloudUploadSignatureRef = useRef('');
   const csvImportInputRef = useRef(null);
   const [menuCheckedReportKeys, setMenuCheckedReportKeys] = useState([]);
@@ -2072,6 +2091,8 @@ export default function App() {
       localStorage.setItem(STORAGE_KEYS.secureUsers, JSON.stringify(secureUsers));
     } catch (error) {
       console.error('보안 사용자 저장 실패:', error);
+      // 저장 공간이 가득 차면 "저장했습니다"만 보고 재시작 후 사라지는 일이 없도록 알린다
+      alert('저장 공간이 가득 차서 방금 저장한 기록이 이 PC에 보관되지 않았습니다.\n오래된 리포트를 엑셀로 추출한 뒤 삭제하고 다시 저장해주세요.');
     }
   }, [secureUsers, isStorageHydrated]);
 
@@ -2138,6 +2159,12 @@ export default function App() {
         try { const parsed = sanitizePitotPresets(JSON.parse(event.newValue)); if (parsed) setPitotPresets(parsed); } catch (error) { console.error(error); }
         return;
       }
+      if (event.key === STORAGE_KEYS.sessionAuth && !event.newValue && activeUser) {
+        // 다른 창에서 로그아웃하면 이 창도 잠근다 (기록부 창은 닫음)
+        handleLockActiveUser();
+        if (IS_POPUP_WINDOW) window.close();
+        return;
+      }
       if (event.key === STORAGE_KEYS.secureUsers && event.newValue) {
         // 다른 창에서 리포트를 저장하면 이 창의 저장 목록도 갱신 (덮어쓰기 방지)
         try {
@@ -2157,6 +2184,7 @@ export default function App() {
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [samplingLogDraftKey, activeUser]);
 
   // 메인 창의 현재 기록부 정보(사업장·배출구·측정일)를 별도 창에서 가져갈 수 있도록 기록
@@ -2209,6 +2237,14 @@ export default function App() {
     }
     sheetWindowsRef.current[sheetId] = popup;
   };
+  // 이미 열린 기록부 창에 불러오기를 보내면 주소(#...&load=)만 바뀌므로, 주소 변경도 감지한다
+  const [hashLoadTick, setHashLoadTick] = useState(0);
+  useEffect(() => {
+    if (!IS_POPUP_WINDOW) return undefined;
+    const onHash = () => { if (window.location.hash.includes('load=')) setHashLoadTick((t) => t + 1); };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   // 별도 창: 주소의 load 토큰과 맞는 리포트가 전달돼 있으면 열리자마자 불러오기
   useEffect(() => {
     if (!IS_POPUP_WINDOW || !activeUser || !isUserUnlocked) return;
@@ -2228,7 +2264,7 @@ export default function App() {
     params.delete('load');
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${params.toString()}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeUser, isUserUnlocked, selectedSheet]);
+  }, [activeUser, isUserUnlocked, selectedSheet, hashLoadTick]);
 
   const buildReportKey = (id, savedAt) => String(id || savedAt || '');
   const getReportKey = (report) => buildReportKey(report?.id, report?.savedAt);
@@ -3085,6 +3121,9 @@ export default function App() {
     setActiveUser('');
     setIsUserUnlocked(false);
     setActiveUserReports([]);
+    // 다음에 로그인하는 사람에게 이전 사용자의 입력 내용이 넘어가지 않도록 화면 데이터도 비움
+    setFormData(createInitialFormData());
+    setSamplingLogData(createEmptySamplingLog());
     setLoginUserId(BETA_USER_ID);
     setLoginPassword('');
     setProfileAvatarUrl('');
@@ -3298,16 +3337,49 @@ export default function App() {
       const key = vaultKeyRef.current[activeUser];
       if (!key) throw new Error('복원을 위해 다시 로그인해주세요.');
       const decrypted = await decryptJsonWithKey(key, cloudUser.dataIv, cloudUser.dataCipher);
-      const restoredReports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
+      const cloudReports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
+
+      // 이 PC에만 있는 리포트(업로드 실패 중 저장한 것 등)를 잃지 않도록 클라우드 것과 합친다.
+      // 같은 리포트면 더 최근에 저장된 쪽을 남긴다.
+      let localReports = [];
+      try {
+        const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.secureUsers) || '{}');
+        const localUser = storedUsers?.[activeUser];
+        if (localUser?.dataIv && localUser?.dataCipher) {
+          const localDecrypted = await decryptJsonWithKey(key, localUser.dataIv, localUser.dataCipher);
+          if (Array.isArray(localDecrypted)) localReports = localDecrypted.filter(item => item && typeof item === 'object');
+        }
+      } catch (localError) {
+        console.warn('로컬 리포트 읽기 실패, 클라우드 데이터만 사용:', localError);
+      }
+      const mergedByKey = new Map();
+      [...cloudReports, ...localReports].forEach((report) => {
+        const reportKey = getReportKey(report);
+        if (!reportKey) return;
+        const existing = mergedByKey.get(reportKey);
+        const time = (item) => new Date(item?.savedAt || 0).getTime() || 0;
+        if (!existing || time(report) >= time(existing)) mergedByKey.set(reportKey, report);
+      });
+      const restoredReports = [...mergedByKey.values()];
+      const hasLocalOnly = restoredReports.length !== cloudReports.length
+        || localReports.some((report) => !cloudReports.some((c) => getReportKey(c) === getReportKey(report) && c.savedAt === report.savedAt));
 
       const restoredNozzles = sanitizeNozzleSet(payload.nozzles);
       const restoredSamplers = sanitizeSamplers(payload.samplers);
       const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
 
-      setSecureUsers(prev => ({
-        ...prev,
-        [activeUser]: cloudUser,
-      }));
+      if (hasLocalOnly) {
+        const mergedCipher = await encryptJsonWithKey(key, restoredReports);
+        setSecureUsers(prev => ({
+          ...prev,
+          [activeUser]: { ...cloudUser, dataIv: mergedCipher.iv, dataCipher: mergedCipher.cipher, updatedAt: new Date().toISOString() },
+        }));
+      } else {
+        setSecureUsers(prev => ({
+          ...prev,
+          [activeUser]: cloudUser,
+        }));
+      }
       setActiveUserReports(restoredReports);
 
       const nozzleTargetKey = canUseUserScopedPresets(activeUser)
@@ -3320,15 +3392,18 @@ export default function App() {
         ? getUserPitotStorageKey(activeUser)
         : STORAGE_KEYS.pitotPresets;
 
-      if (restoredNozzles && restoredNozzles.length > 0) {
+      const hasLocalPreset = (storageKey) => {
+        try { const v = JSON.parse(localStorage.getItem(storageKey) || 'null'); return Array.isArray(v) && v.length > 0; } catch { return false; }
+      };
+      if (restoredNozzles && restoredNozzles.length > 0 && !(silent && hasLocalPreset(nozzleTargetKey))) {
         setNozzleSet(restoredNozzles);
         localStorage.setItem(nozzleTargetKey, JSON.stringify(restoredNozzles));
       }
-      if (restoredSamplers && restoredSamplers.length > 0) {
+      if (restoredSamplers && restoredSamplers.length > 0 && !(silent && hasLocalPreset(samplerTargetKey))) {
         setSamplers(restoredSamplers);
         localStorage.setItem(samplerTargetKey, JSON.stringify(restoredSamplers));
       }
-      if (restoredPitot && restoredPitot.length > 0) {
+      if (restoredPitot && restoredPitot.length > 0 && !(silent && hasLocalPreset(pitotTargetKey))) {
         setPitotPresets(restoredPitot);
         localStorage.setItem(pitotTargetKey, JSON.stringify(restoredPitot));
       }
@@ -3374,6 +3449,8 @@ export default function App() {
 
   useEffect(() => {
     if (!isStorageHydrated || !activeUser || !isUserUnlocked) return;
+    // 자동 복원은 메인 창에서만 (기록부 창을 열 때마다 복원·업로드가 겹치지 않게)
+    if (IS_POPUP_WINDOW) return;
     const token = String(cloudSyncConfig.token || '').trim();
     const gistId = String(cloudSyncConfig.gistId || '').trim();
     if (!token || !gistId) return;
@@ -3408,16 +3485,25 @@ export default function App() {
       autoCloudUploadTimerRef.current = null;
     }
 
+    // 업로드 실패(현장 인터넷 끊김 등) 뒤에는 1분 쉬었다가 다시 시도
+    const failed = autoCloudUploadFailRef.current;
+    const retryWait = failed && failed.signature === nextSignature
+      ? Math.max(1200, 60000 - (Date.now() - failed.at))
+      : 1200;
     autoCloudUploadTimerRef.current = setTimeout(async () => {
       if (autoCloudUploadInFlightRef.current || cloudSyncBusyRef.current || autoCloudRestoreInFlightRef.current) return;
       autoCloudUploadInFlightRef.current = true;
       const result = await uploadCloudSyncToGist({ silent: true });
       if (result?.ok) {
         lastAutoCloudUploadSignatureRef.current = nextSignature;
+        autoCloudUploadFailRef.current = null;
+      } else {
+        autoCloudUploadFailRef.current = { signature: nextSignature, at: Date.now() };
+        setCloudRetryTick((tick) => tick + 1);
       }
       autoCloudUploadInFlightRef.current = false;
       autoCloudUploadTimerRef.current = null;
-    }, 1200);
+    }, retryWait);
   }, [
     isStorageHydrated,
     activeUser,
@@ -3430,6 +3516,7 @@ export default function App() {
     samplers,
     pitotPresets,
     secureUsers,
+    cloudRetryTick,
   ]);
 
   const clearActiveUserReports = async () => {
@@ -3676,8 +3763,9 @@ export default function App() {
     }
     const targetImpingerCount = getImpingerStageCount(targetSheet);
 
-    setFormData(prev => {
-      const nextForm = { ...prev };
+    setFormData(() => {
+      // 이전 기록지 내용이 섞이지 않도록 빈 기록지에서 시작해 리포트 값을 채운다
+      const nextForm = { ...createInitialFormData() };
       Object.keys(nextForm).forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(report, key)) {
           if (key === 'gasMeters') {
@@ -3934,7 +4022,8 @@ export default function App() {
       : (Number.isFinite(planTotal) && planTotal > 0 ? planTotal : DEFAULT_MEASURE_TOTAL_MINUTES);
     const rowsPerPoint = RECOMMENDED_ROWS_PER_POINT[pointCount] || 3;
     const measureRows = pointCount * rowsPerPoint;
-    const intervalMinutes = Math.max(0.5, Math.round((requestedTotal / measureRows) * 2) / 2);
+    // 0.5분 단위로 올림: 총 채취시간이 목표보다 짧아지지 않게
+    const intervalMinutes = Math.max(0.5, Math.ceil((requestedTotal / measureRows) * 2 - 1e-9) / 2);
     const adjustedTotal = Math.round(measureRows * intervalMinutes * 100) / 100;
     return {
       pointCount,
@@ -4067,6 +4156,9 @@ export default function App() {
       .filter((row, idx) => isActiveMeterRow(row, idx))
   );
 
+  // 엑셀 양식과 같이 등속·수분량·평균 계산은 시작행(0분, 17행)을 빼고 18행부터 평균
+  const getSamplingRowsUntil = (endIdx) => getActiveMeterRowsUntil(endIdx).slice(1);
+
   const getRawOrificePressureFromRow = (row) => {
     const kVal = parseFloat(formData.kFactor);
     const dpVal = parseFloat(row?.dp);
@@ -4093,13 +4185,15 @@ export default function App() {
   const getRawAvgCorrectedDensityFromMeterRows = () => {
     // 적산유량계 기록표에서 마지막 유효행의 누적 보정밀도(N행 방식) 사용
     // = r0 * 273/(273+AVERAGE(Ts_start:Ts_last)) * (Ps/760)
-    const meterRows = getMeterRowsWithVolume();
+    // 엑셀 계산식!K24: 평균 배출가스 온도 D28(18행부터)
+    const meterRows = getMeterRowsWithVolume().filter((row) => row !== formData.gasMeters[0]);
     if (meterRows.length === 0) return NaN;
     return getRawCorrectedDensityFromRows(meterRows);
   };
 
   const getRawGasVelocityFactorsFromMeterRows = (cpOverride = null) => {
-    const meterRows = getMeterRowsWithVolume();
+    // 엑셀 계산식!G35: 평균 동압 E28·평균 온도 D28 모두 18행부터 (시작행 제외)
+    const meterRows = getMeterRowsWithVolume().filter((row) => row !== formData.gasMeters[0]);
     const dpValues = meterRows
       .map((row) => parseFloat(row.dp))
       .filter((v) => Number.isFinite(v) && v >= 0);
@@ -4117,8 +4211,7 @@ export default function App() {
     if (!Number.isFinite(avgDp) || avgDp <= 0 || !Number.isFinite(avgTs) || !Number.isFinite(C) || C <= 0) return null;
     if (!Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return null;
 
-    // 요청식:
-    // Vs = Cp * sqrt((2*9.81*초기포함 평균동압) / (초기포함 평균 보정밀도))
+    // Vs = Cp * sqrt((2*9.81*평균동압) / (평균 보정밀도))
     const r = getRawAvgCorrectedDensityFromMeterRows();
     if (!Number.isFinite(r) || r <= 0) return null;
 
@@ -4150,8 +4243,8 @@ export default function App() {
   };
 
   const getRawAvgTm = () => {
-    // 시작행(0분)의 미터온도도 평균에 포함
-    const validTemps = getActiveMeterRows().flatMap(g => {
+    // 엑셀 H28 = AVERAGE(H18:I27): 시작행(0분)은 평균에서 제외
+    const validTemps = getActiveMeterRows().slice(1).flatMap(g => {
       const inT = parseFloat(g.tmIn);
       const outT = parseFloat(g.tmOut);
       const values = [];
@@ -4163,13 +4256,13 @@ export default function App() {
   };
 
   const getRawAvgSamplingTs = () => {
-    const validTemps = getMeterRowsWithVolume().map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
+    const validTemps = getMeterRowsWithVolume().filter((row) => row !== formData.gasMeters[0]).map(g => parseFloat(g.stackTemp)).filter(v => Number.isFinite(v));
     return validTemps.length === 0 ? NaN : validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
   };
 
   const getRawAvgOrifice = () => {
-    // 시작행(0분)의 오리피스압도 평균에 포함
-    const validPressures = getActiveMeterRows().map(g => getRawOrificePressureFromRow(g)).filter(v => Number.isFinite(v));
+    // 엑셀 F28 = AVERAGE(F18:F27): 시작행(0분)은 평균에서 제외
+    const validPressures = getActiveMeterRows().slice(1).map(g => getRawOrificePressureFromRow(g)).filter(v => Number.isFinite(v));
     return validPressures.length === 0 ? NaN : validPressures.reduce((a, b) => a + b, 0) / validPressures.length;
   };
 
@@ -4225,7 +4318,8 @@ export default function App() {
     const pa = parseFloat(formData.atmPressure);
     if (!Number.isFinite(yd) || yd <= 0 || !Number.isFinite(pa)) return null;
 
-    const tmValues = meterRows.flatMap((row) => {
+    const samplingRows = meterRows.slice(1); // 엑셀 H28/F28: 18행부터
+    const tmValues = samplingRows.flatMap((row) => {
       const inT = parseFloat(row.tmIn);
       const outT = parseFloat(row.tmOut);
       const values = [];
@@ -4236,7 +4330,7 @@ export default function App() {
     if (tmValues.length === 0) return null;
     const tmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length; // E44
 
-    const pmValues = meterRows
+    const pmValues = samplingRows
       .map((row) => getRawOrificePressureFromRow(row))
       .filter((v) => Number.isFinite(v));
     if (pmValues.length === 0) return null;
@@ -4352,28 +4446,27 @@ export default function App() {
   };
   const calcDustWeightDiff = () => { const v = getRawDustWeightDiff(); return v.toFixed(4); };
 
+  const hasMeasuredO2 = () => (formData.gasAnalyzer || []).some((item) => Number.isFinite(parseFloat(item?.o2)));
   const calcO2CorrectionFactor = () => {
     const o2_ref = parseFloat(formData.standardO2);
     const gasComp = getGasComposition();
     const o2_act = gasComp.o2;
-    if (isNaN(o2_ref) || isNaN(o2_act) || o2_act >= 21) return 1.0;
+    if (isNaN(o2_ref)) return 1.0;
+    // 표준산소농도는 있는데 실측 O2가 없으면 0%로 보정하지 않고 계산 불가로 둔다
+    if (!hasMeasuredO2() || isNaN(o2_act) || o2_act >= 21) return NaN;
     return (21 - o2_ref) / (21 - o2_act);
   };
 
   const getSamplingMinutes = () => {
+    // 엑셀 B28 = MAX(B17:B27): 누적 시간의 최댓값. 미리 채워진 계획 행은 빼고 실제 측정한 행까지만 본다
+    const lastMeasured = getLastMeasuredMeterIdx(formData.gasMeters);
     const times = formData.gasMeters
-      .filter((meter, idx) => idx > 0 && String(meter?.pointNum || '').trim() !== '')
+      .filter((meter, idx) => idx > 0 && idx <= lastMeasured && String(meter?.pointNum || '').trim() !== '')
       .map((meter) => parseFloat(meter.time))
       .filter((v) => Number.isFinite(v) && v > 0);
 
     if (times.length === 0) return 0;
-
-    const isCumulativeTimeline = times.length >= 2
-      && times.every((v, i) => i === 0 || v > times[i - 1]);
-
-    return isCumulativeTimeline
-      ? times[times.length - 1]
-      : times.reduce((sum, value) => sum + value, 0);
+    return Math.max(...times);
   };
 
   const getRawGasFlowFactors = () => {
@@ -4401,7 +4494,10 @@ export default function App() {
     // 중간 계산은 반올림 없이 원시값 사용 (엑셀과 동일한 계산 경로)
     const A = Math.PI * Math.pow(D / 2, 2);
     // 유량측정기록부는 임핀저 무게법이 없으므로 자동측정기 수분량(사전)을 사용
-    const postMoisture = isFlowRecordSheet ? getRawPreMoisture() : getRawPostMoisture();
+    const postFactors = isFlowRecordSheet ? null : getRawPostMoistureFactors();
+    const postMoisture = isFlowRecordSheet
+      ? getRawPreMoisture()
+      : (postFactors && Number.isFinite(postFactors.Xw) ? postFactors.Xw : NaN);
     const moistureRatio = Math.min(1, Math.max(0, (Number.isFinite(postMoisture) ? postMoisture : 0) / 100));
     const tempTerm = 273 / (273 + Ts);
     const pressureTerm = absPressure / 760;
@@ -4431,7 +4527,8 @@ export default function App() {
 
     // Qn(건조) = v * A * 273/(273+Ts) * (Pa+Ps)/760 * (1 - Xw/100) * 3600
     const Q_wet = factors.Vs * factors.A * factors.tempTerm * factors.pressureTerm * factors.constant3600;
-    const Q_dry = Q_wet * factors.moistureTerm;
+    // 사후 수분량(임핀저 무게)이 없으면 건조유량은 계산하지 않는다 (습식=건조로 보이지 않게)
+    const Q_dry = Number.isFinite(factors.XwPercent) ? Q_wet * factors.moistureTerm : NaN;
 
     return {
       wet: formatFlowDisplay(Q_wet),
@@ -4572,20 +4669,16 @@ export default function App() {
       .filter((v) => Number.isFinite(v) && v > 0);
     if (timeValues.length === 0) return '-';
 
-    // 시간 입력이 누적(예: 5,10,18...)이면 마지막 값을 θ로, 구간(예: 5,5,5...)이면 합계를 θ로 사용
-    const isCumulativeTimeline = timeValues.length >= 2
-      && timeValues.every((v, i) => i === 0 || v > timeValues[i - 1]);
-    const thetaCum = isCumulativeTimeline
-      ? timeValues[timeValues.length - 1]
-      : timeValues.reduce((sum, value) => sum + value, 0);
+    // 시료채취 시간은 누적 시간(엑셀 B열): 지금까지의 최댓값
+    const thetaCum = Math.max(...timeValues);
     if (!Number.isFinite(thetaCum) || thetaCum <= 0) return '-';
 
-    const rangeRows = getActiveMeterRowsUntil(idx);
+    const rangeRows = getSamplingRowsUntil(idx);
     const tsValues = rangeRows.map(row => parseFloat(row.stackTemp)).filter(v => Number.isFinite(v));
     if (tsValues.length === 0) return '-';
     const TsAvg = tsValues.reduce((a, b) => a + b, 0) / tsValues.length;
 
-    // 엑셀 AVERAGE(H17:I19)처럼 입구/출구 모두 누적 평균
+    // 엑셀 AVERAGE($H$18:I19)처럼 입구/출구 모두 누적 평균 (시작행 제외)
     const tmValues = rangeRows.flatMap((row) => {
       const inT = parseFloat(row.tmIn);
       const outT = parseFloat(row.tmOut);
@@ -4597,7 +4690,7 @@ export default function App() {
     if (tmValues.length === 0) return '-';
     const TmAvg = tmValues.reduce((a, b) => a + b, 0) / tmValues.length;
 
-    // 엑셀 AVERAGE(F17:F19)처럼 오리피스압 누적 평균
+    // 엑셀 AVERAGE($F$18:F19)처럼 오리피스압 누적 평균 (시작행 제외)
     const pmValues = rangeRows.map(row => getRawOrificePressureFromRow(row)).filter(v => Number.isFinite(v));
     if (pmValues.length === 0) return '-';
     const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
@@ -4619,7 +4712,7 @@ export default function App() {
     const vicCum = getRowMoistureCaptureRaw(idx);
     if (!Number.isFinite(vicCum) || vicCum < 0) return '-';
 
-    // 엑셀 L열 수식과 동일한 누적 순간등속(시작행 포함)
+    // 엑셀 L열 수식과 동일한 누적 순간등속 (온도·오리피스 평균은 18행부터)
     const postTerm = (0.00346 * vicCum)
       + (((VmCum * Y) / 1000) / (273 + TmAvg)) * PmAbs;
     const rate = ((273 + TsAvg) * postTerm)
@@ -4680,7 +4773,7 @@ export default function App() {
     const VmCum = currentVol - startVol;
     if (!Number.isFinite(VmCum) || VmCum <= 0) return NaN;
 
-    const rangeRows = getActiveMeterRowsUntil(idx);
+    const rangeRows = getSamplingRowsUntil(idx);
     const tmValues = rangeRows.flatMap((row) => {
       const inT = parseFloat(row.tmIn);
       const outT = parseFloat(row.tmOut);
@@ -4771,7 +4864,7 @@ export default function App() {
       const C = Wm / Vm_std_sm3;
       actualC = C.toFixed(2);
       const K = calcO2CorrectionFactor();
-      correctedC = (C * K).toFixed(2);
+      correctedC = Number.isFinite(K) ? (C * K).toFixed(2) : '-';
     }
     return { actualC, correctedC };
   };
@@ -4816,7 +4909,7 @@ export default function App() {
       totalSamplingMinutes: String(getSamplingMinutes()),
       avgTm: calcAvgTm(),
       avgOrifice: calcAvgOrifice(),
-      o2CorrectionFactor: calcO2CorrectionFactor().toFixed(3),
+      o2CorrectionFactor: Number.isFinite(calcO2CorrectionFactor()) ? calcO2CorrectionFactor().toFixed(3) : '-',
       nozzleUsed: formData.usedNozzleNum || formData.recommendedNozzleNum || '-',
       nozzleDiameterUsed: formData.nozzleDiameter || '-',
       kFactorApplied: formData.kFactor || '-',
@@ -5048,13 +5141,20 @@ export default function App() {
 
   const shiftFormulaRowRefsFromRow = (formula, fromRow, delta) => {
     if (!formula || !Number.isFinite(delta) || delta === 0) return formula;
-    return String(formula).replace(/(^|[^A-Z0-9_])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
+    // 다른 시트 참조(노즐산정!C39:C56 등)는 범위의 끝까지 통째로 보호한 뒤 이동하고 되돌린다
+    const protectedRefs = [];
+    const masked = String(formula).replace(
+      /('(?:[^']|'')+'|[^\s!(),=+\-*/&<>:^;"{}]+)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?/g,
+      (ref) => { protectedRefs.push(ref); return `\uE000${protectedRefs.length - 1}\uE000`; },
+    );
+    const shiftedFormula = masked.replace(/(^|[^A-Z0-9_\uE000])(\$?[A-Z]{1,3})(\$?)(\d+)/g, (full, prefix, colPart, rowAbs, rowText) => {
       if (rowAbs === '$' || prefix === '!') return full; // 절대행, 다른 시트 참조는 그대로
       const row = parseInt(rowText, 10);
       if (!Number.isFinite(row) || row < fromRow) return full;
       const shifted = Math.max(1, row + delta);
       return `${prefix}${colPart}${shifted}`;
     });
+    return shiftedFormula.replace(/\uE000(\d+)\uE000/g, (_, i) => protectedRefs[Number(i)]);
   };
 
   const shiftCellRefRowsFrom = (refText, fromRow, delta) => {
@@ -5374,6 +5474,21 @@ export default function App() {
     });
   };
 
+  const removeCalcChainFromZip = async (zip) => {
+    if (!zip.file('xl/calcChain.xml')) return;
+    zip.remove('xl/calcChain.xml');
+    const relsFile = zip.file('xl/_rels/workbook.xml.rels');
+    if (relsFile) {
+      const relsXmlNow = await relsFile.async('string');
+      zip.file('xl/_rels/workbook.xml.rels', relsXmlNow.replace(/<Relationship[^>]*calcChain\.xml"[^>]*\/>/g, ''));
+    }
+    const ctFile = zip.file('[Content_Types].xml');
+    if (ctFile) {
+      const ctXml = await ctFile.async('string');
+      zip.file('[Content_Types].xml', ctXml.replace(/<Override[^>]*calcChain\.xml"[^>]*\/>/g, ''));
+    }
+  };
+
   const setXmlCellValue = (cell, value, ns) => {
     getChildElementsByLocalName(cell, 'f').forEach(node => cell.removeChild(node));
     getChildElementsByLocalName(cell, 'v').forEach(node => cell.removeChild(node));
@@ -5400,7 +5515,9 @@ export default function App() {
       return;
     }
 
-    const text = String(value);
+    // XML에 쓸 수 없는 제어문자(붙여넣기로 섞여 들어온 것)는 빼고, 엑셀 셀 한도(32,767자)로 자른다
+    // eslint-disable-next-line no-control-regex
+    const text = String(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '').slice(0, 32767);
     cell.setAttribute('t', 'inlineStr');
 
     const isNode = cell.ownerDocument.createElementNS(ns, 'is');
@@ -5622,19 +5739,18 @@ export default function App() {
         if (!updatesBySheet.has(sheetName)) updatesBySheet.set(sheetName, []);
         updatesBySheet.get(sheetName).push({ ref, value });
       };
-      const lastMeaningfulIdx = sourceGasMeters.reduce((lastIdx, meter, idx) => {
-        const fields = ['pointNum', 'time', 'stackTemp', 'dp', 'sp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
-        const hasValue = fields.some((field) => {
-          const raw = meter?.[field];
-          return raw !== null && raw !== undefined && String(raw).trim() !== '';
-        });
-        if (hasValue || idx === 0) return idx;
-        return lastIdx;
-      }, 0);
+      // 측정값이 들어간 행까지만 내보낸다 (조기 종료 시 계획만 채워진 빈 행이 엑셀 시간 MAX·평균에 섞이지 않게)
+      const lastMeasuredIdx = getLastMeasuredMeterIdx(sourceGasMeters);
+      const lastMeaningfulIdx = lastMeasuredIdx > 0
+        ? lastMeasuredIdx
+        : sourceGasMeters.reduce((lastIdx, meter, idx) => (
+          String(meter?.pointNum || '').trim() !== '' || String(meter?.time || '').trim() !== '' ? idx : lastIdx
+        ), 0);
       const gasMeters = sourceGasMeters.slice(0, Math.max(1, lastMeaningfulIdx + 1));
       const meterTemplateCapacity = layout.meterTemplateEndRow - layout.meterStartRow + 1;
       // 측정행 수는 입력한 행 수 그대로: 양식보다 많으면 행 추가, 적으면 남는 양식 행 삭제
-      const meterRowsForTemplate = Math.max(1, gasMeters.length);
+      // 시작행만 남기면 평균 수식이 자기 자신을 참조하므로 측정행을 최소 1줄 둔다
+      const meterRowsForTemplate = Math.max(2, gasMeters.length);
       const meterExtraRows = meterRowsForTemplate - meterTemplateCapacity; // 음수면 삭제된 행 수
       const firstVolume = gasMeters.find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
       const lastVolume = [...gasMeters].reverse().find(m => m.volume !== '' && m.volume !== undefined)?.volume ?? '';
@@ -5675,7 +5791,8 @@ export default function App() {
       addUpdate('노즐산정', 'B5', toNumber(sourceData.samplerId));
       addUpdate('노즐산정', 'A8', toNumber(sourceData.atmTemp));
       addUpdate('노즐산정', 'B8', toNumber(sourceData.atmPressure));
-      if (pitotSerial) addUpdate('노즐산정', 'C8', pitotSerial);
+      // 피토관을 고르지 않았으면 양식에 들어 있던 예시 피토관 번호도 지운다
+      addUpdate('노즐산정', 'C8', pitotSerial || null);
       addUpdate('노즐산정', 'C10', toNumber(sourceData.pitotFactor));
       addUpdate('노즐산정', 'F8', toNumber(sourceData.deltaHAt));
       addUpdate('노즐산정', 'G8', toNumber(sourceData.gasMeterFactor));
@@ -5703,6 +5820,9 @@ export default function App() {
       addUpdate('시료측정위치', 'B34', toNumber(sourceData.totalStackDepth));
       const flangeCm = toNumber(sourceData.flangeLength);
       addUpdate('시료측정위치', 'B37', flangeCm === null ? null : flangeCm * 100);
+      // 굴뚝 내경: 유량 양식은 A37이 고정값(1.1)이라 반드시 써 넣고, 직접 고친 내경도 그대로 반영
+      const stackDiameterM = toNumber(sourceData.stackDiameter);
+      if (stackDiameterM !== null && stackDiameterM > 0) addUpdate('시료측정위치', 'A37', stackDiameterM);
 
       // 수분량: 자동측정기 5회값, 사전 가스미터, 사후 임핀저 무게
       addUpdate('수분량', 'C5', 1);
@@ -5741,7 +5861,8 @@ export default function App() {
       }
       // 기록지 B열(시료채취 시간)은 누적 분. 앱 입력이 구간(5,5,5…)이면 누적으로 변환, 이미 누적(5,10,15…)이면 그대로
       const meterTimeValues = gasMeters.slice(1).map((m) => parseFloat(m?.time)).filter((v) => Number.isFinite(v) && v > 0);
-      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v > meterTimeValues[i - 1]);
+      // 같은 시간이 연달아 있어도(5,10,10,15) 누적으로 본다
+      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v >= meterTimeValues[i - 1]);
       let runningMinutes = 0;
       gasMeters.forEach((meter, idx) => {
         const row = layout.meterStartRow + idx;
@@ -5756,7 +5877,14 @@ export default function App() {
         addUpdate(recordSheet, `C${row}`, toNumber(meter.vacuum));
         addUpdate(recordSheet, `D${row}`, toNumber(meter.stackTemp));
         addUpdate(recordSheet, `E${row}`, toNumber(meter.dp));
-        addUpdate(recordSheet, `F${row}`, toNumber(meter.pressure));
+        // 오리피스 압차: 앱 화면과 같은 값(K계수 × 동압, 없으면 직접 입력값)을 쓴다.
+        // 빈칸으로 두면 양식의 F열 수식까지 지워져 등속흡인율이 #DIV/0!가 된다
+        const exportK = toNumber(sourceData.kFactor);
+        const exportDp = toNumber(meter.dp);
+        const orifice = exportK !== null && exportDp !== null
+          ? Math.round(exportK * exportDp * 10000) / 10000
+          : toNumber(meter.pressure);
+        addUpdate(recordSheet, `F${row}`, orifice);
         addUpdate(recordSheet, `G${row}`, toNumber(meter.volume));
         addUpdate(recordSheet, `H${row}`, toNumber(meter.tmIn));
         addUpdate(recordSheet, `I${row}`, toNumber(meter.tmOut));
@@ -5833,22 +5961,24 @@ export default function App() {
             extendRangeEndFrom: layout.meterTemplateEndRow,
           }));
         }
-        // 계산 체인은 Excel이 다시 만들므로 제거 (행 삽입 후 복구 메시지 방지)
-        if (zip.file('xl/calcChain.xml')) {
-          zip.remove('xl/calcChain.xml');
-          const relsXmlNow = await zip.file('xl/_rels/workbook.xml.rels').async('string');
-          zip.file('xl/_rels/workbook.xml.rels', relsXmlNow.replace(/<Relationship[^>]*calcChain\.xml"[^>]*\/>/g, ''));
-          const ctFile = zip.file('[Content_Types].xml');
-          if (ctFile) {
-            const ctXml = await ctFile.async('string');
-            zip.file('[Content_Types].xml', ctXml.replace(/<Override[^>]*calcChain\.xml"[^>]*\/>/g, ''));
-          }
-        }
       }
+      // 계산 체인은 Excel이 다시 만들므로 항상 제거 (수식 칸에 값을 써도 복구 메시지가 뜨지 않게)
+      await removeCalcChainFromZip(zip);
 
       // 열 때 전체 재계산되도록 설정 (양식의 예시 계산값이 남지 않게)
       {
         let wbXml = workbookXml;
+        // 기록지 행 수가 바뀌면 인쇄 영역 끝 행도 같이 옮긴다
+        if (meterExtraRows !== 0) {
+          wbXml = wbXml.replace(/(<definedName\b[^>]*name="_xlnm\.Print_Area"[^>]*>)([^<]*)(<\/definedName>)/g, (full, open, body, close) => {
+            if (!body.includes(recordSheet)) return full;
+            const nextBody = body.replace(/(\$?[A-Z]{1,3}\$?)(\d+)(?=\s*(?:,|$))/g, (m, colPart, rowText) => {
+              const rowNum = parseInt(rowText, 10);
+              return rowNum > layout.meterTemplateEndRow ? `${colPart}${Math.max(layout.meterStartRow, rowNum + meterExtraRows)}` : m;
+            });
+            return `${open}${nextBody}${close}`;
+          });
+        }
         if (/<calcPr\b[^>]*\/>/.test(wbXml)) {
           wbXml = wbXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
         } else {
@@ -5883,6 +6013,14 @@ export default function App() {
     if (!group) return;
     const reports = Object.entries(group.bySheet);
     if (reports.length === 0) return;
+    // 일차 칸이 넘치는 날짜는 미리 계산 (상태 갱신 함수 안에서 모으면 실행 시점이 보장되지 않음)
+    const overflowDates = (() => {
+      const known = (samplingLogData.days || []).map((d) => d.date).filter(Boolean);
+      const freeSlots = (samplingLogData.days || []).filter((d) => !d.date).length;
+      const incoming = [...new Set([...(group.dates || [group.date]), ...reports.map(([, r]) => String(r?.date || '').trim())].filter(Boolean))];
+      const fresh = incoming.filter((d) => !known.includes(d));
+      return fresh.slice(freeSlots);
+    })();
     setSamplingLogData(prev => {
       const next = { ...prev, rows: { ...prev.rows }, days: prev.days.map((d) => ({ ...d })) };
       if (group.company) next.company = group.company;
@@ -5894,7 +6032,7 @@ export default function App() {
         if (found >= 0) return found;
         const empty = next.days.findIndex((d) => !d.date);
         if (empty >= 0) { next.days[empty] = { ...next.days[empty], date }; return empty; }
-        return 0;
+        return -1; // 일차 칸이 모두 찼음
       };
       (group.dates || [group.date]).filter(Boolean).forEach((d) => dayIndexFor(d));
       const samplerSource = reports.map(([, r]) => r).find((r) => String(r?.samplerId || '').trim() !== '');
@@ -5909,15 +6047,30 @@ export default function App() {
       }
       reports.forEach(([sheetId, report]) => {
         const values = buildSamplingLogValuesFromReport(report);
+        // 기록부에 없는 값(빈칸)으로 통합기록부에 직접 적은 값을 지우지 않는다
+        const filledValues = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== ''));
         const dayIndex = dayIndexFor(String(report?.date || '').trim());
+        if (dayIndex < 0) return;
+        const targetRows = new Set();
         (SHEET_TO_LOG_ROWS[sheetId] || []).forEach((rowNum) => {
-          const key = String(rowNum);
-          next.rows[key] = { ...next.rows[key], requested: true, dayIndex, ...values };
+          targetRows.add(String(rowNum));
+          // 같은 종으로 묶인 행(비소 입자상·가스상 등)은 의뢰 표시만 함께
+          const sub = SAMPLING_LOG_SUBSTANCES.find((item) => String(item.row) === String(rowNum));
+          if (sub) getSamplingLogRowsOfSpecies(sub).forEach((item) => {
+            const pairKey = String(item.row);
+            if (!targetRows.has(pairKey)) next.rows[pairKey] = { ...next.rows[pairKey], requested: true };
+          });
+        });
+        targetRows.forEach((key) => {
+          next.rows[key] = { ...next.rows[key], requested: true, dayIndex, ...filledValues };
         });
       });
       return next;
     });
-    if (!silent) {
+    if (overflowDates.length > 0) {
+      alert(`통합기록부 일차 칸(${SAMPLING_LOG_DAY_SLOTS}일)이 모두 차서 ${overflowDates.join(', ')} 기록은 옮기지 못했습니다.\n새 통합기록부에서 옮겨 주세요.`);
+    }
+    if (!silent && overflowDates.length === 0) {
       const names = reports.map(([sheetId]) => SHEET_MENU.find((m) => m.id === sheetId)?.title || sheetId).join(', ');
       alert(`${group.company || '사업장'} 기록(${names})을 통합기록부에 옮겨 적었습니다.`);
     }
@@ -5931,9 +6084,17 @@ export default function App() {
     const location = String(report?.location || '').trim();
     const logCompany = String(samplingLogData.company || '').trim();
     const logStack = String(samplingLogData.stackName || '').trim();
-    const sameSite = logCompany === company && (!logStack || !location || logStack === location);
+    const sameSite = normalizeSiteName(logCompany) === normalizeSiteName(company)
+      && (!logStack || !location || normalizeSiteName(logStack) === normalizeSiteName(location));
     if (logCompany && !sameSite) return false;
     const date = String(report?.date || '').trim();
+    // 같은 사업장이라도 지금 통합기록부의 측정일과 멀리 떨어진 날(다른 회차)이면 섞지 않는다
+    const logDates = (samplingLogData.days || []).map((d) => d.date).filter(Boolean);
+    if (date && logDates.length > 0 && !logDates.includes(date)) {
+      const nearest = Math.min(...logDates.map((d) => Math.abs(daysBetween(d, date))));
+      if (!Number.isFinite(nearest) || nearest > CAMPAIGN_MAX_GAP_DAYS) return false;
+      if (logDates.length >= SAMPLING_LOG_DAY_SLOTS) return false;
+    }
     applySheetGroupToSamplingLog({ company, location, date, dates: date ? [date] : [], bySheet: { [sheetId]: report } }, { silent: true });
     return true;
   };
@@ -6134,6 +6295,16 @@ export default function App() {
         workbookXml = workbookXml.replace('</workbook>', '<calcPr fullCalcOnLoad="1"/></workbook>');
       }
       zip.file('xl/workbook.xml', workbookXml);
+      await removeCalcChainFromZip(zip);
+
+      const daySheetCount = sheetNames.filter((name) => name !== inputSheet).length;
+      const lateDays = [...new Set(SAMPLING_LOG_SUBSTANCES
+        .map((sub) => log.rows[String(sub.row)])
+        .filter((row) => row && row.requested && Number(row.dayIndex) >= daySheetCount)
+        .map((row) => Number(row.dayIndex) + 1))].sort();
+      if (lateDays.length > 0) {
+        alert(`엑셀 양식의 날짜별 시트는 ${daySheetCount}일치뿐이라 ${lateDays.join('·')}일차 물질은 입력 시트에만 들어갑니다.\n해당 일차는 날짜별 시트를 복사해 따로 인쇄해주세요.`);
+      }
 
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -6205,13 +6376,18 @@ export default function App() {
     let cp = resolvePitotCpByVelocity(activePitotPreset, baseVelocity);
     let velocity = baseVelocity;
     let converged = false;
+    const seenCps = [];
     for (let i = 0; i < 6; i += 1) {
       velocity = cp * kFactor;
       steps.push({ cp, velocity, note: i === 0 ? '표에서 선정한' : '재계산' });
+      seenCps.push(cp);
       const nextCp = resolvePitotCpByVelocity(activePitotPreset, velocity);
       if (!Number.isFinite(nextCp) || Math.abs(nextCp - cp) < 0.00005) { converged = true; break; }
+      // 구간 경계에서 두 Cp를 오가면 지금 Cp(와 그 유속)로 멈춘다
+      if (seenCps.some((seen) => Math.abs(seen - nextCp) < 0.00005)) break;
       cp = nextCp;
     }
+    velocity = cp * kFactor;
     const rows = activePitotVelocityRows;
     const minV = 0;
     const maxV = rows[rows.length - 1].v;
@@ -6322,14 +6498,16 @@ export default function App() {
 
     const fmt = (value, digits) => (Number.isFinite(value) ? roundFixed(value, digits) : '-');
 
-    const tsAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.stackTemp)));
-    const dpAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.dp)));
-    const spAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.sp)));
-    const pressureAvg = avgOf(activeRowsWithIndex.map(({ row }) => getRawOrificePressureFromRow(row)));
-    const tmInAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmIn)));
-    const tmOutAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.tmOut)));
-    const vacuumAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.vacuum)));
-    const impingerTempAvg = avgOf(activeRowsWithIndex.map(({ row }) => parseFloat(row.impingerTemp)));
+    // 엑셀 평균 행(C·D·E·F·H·K·P 28행)과 같이 시작행(0분)은 빼고 평균
+    const avgRows = isFlowRecordSheet ? activeRowsWithIndex : samplingRowsWithIndex;
+    const tsAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.stackTemp)));
+    const dpAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.dp)));
+    const spAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.sp)));
+    const pressureAvg = avgOf(avgRows.map(({ row }) => getRawOrificePressureFromRow(row)));
+    const tmInAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.tmIn)));
+    const tmOutAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.tmOut)));
+    const vacuumAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.vacuum)));
+    const impingerTempAvg = avgOf(avgRows.map(({ row }) => parseFloat(row.impingerTemp)));
     const velocityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowGasVelocityRaw(idx)));
     const densityAvg = avgOf(samplingRowsWithIndex.map(({ idx }) => getRowCorrectedGasDensityRaw(idx)));
     const lastSamplingIdx = samplingRowsWithIndex.length > 0
@@ -7645,7 +7823,7 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-teal-100">
                        <span className="text-xs font-bold text-teal-700" title="(21 - 표준O2) / (21 - 실측O2)">산소 보정 계수 (K)</span>
-                       <span className="font-black text-lg text-teal-600">{calcO2CorrectionFactor().toFixed(2)}</span>
+                       <span className="font-black text-lg text-teal-600">{Number.isFinite(calcO2CorrectionFactor()) ? calcO2CorrectionFactor().toFixed(2) : '-'}</span>
                     </div>
                  </div>
 
