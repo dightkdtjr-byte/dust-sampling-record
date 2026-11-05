@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StackPilot 배경 예시</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  #bg { position: fixed; inset: 0; }           /* 배경은 화면 전체에 고정 */
+  .content { position: relative; z-index: 1; padding: 24px; color: #1d1d1f; }
+  .panel { max-width: 520px; background: rgba(255,255,255,0.86); backdrop-filter: blur(20px); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 16px; }
+  button { margin-right: 6px; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.15); background: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div id="bg"></div>
+  <div class="content">
+    <div class="panel">
+      <h2 style="margin:0 0 8px">StackPilot 배경 사용 예시</h2>
+      <p style="margin:0 0 12px;font-size:14px">아래 버튼으로 시간대를 바꿀 수 있습니다. 이 panel처럼 내용은 배경 위에 올리면 됩니다.</p>
+      <button onclick="sky.setMode('day')">낮</button>
+      <button onclick="sky.setMode('morning')">아침</button>
+      <button onclick="sky.setMode('night')">밤</button>
+      <button onclick="sky.setMode('auto')">자동</button>
+    </div>
+  </div>
+  <script src="stackpilot-skyline.js"></script>
+  <script>
+    // 두 번째 인수: { mode: 'day' | 'morning' | 'night' | 'auto' }
+    var sky = StackpilotSkyline.mount(document.getElementById('bg'), { mode: 'day' });
+  </script>
+</body>
+</html>
