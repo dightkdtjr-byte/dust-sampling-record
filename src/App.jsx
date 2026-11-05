@@ -480,6 +480,29 @@ const PITOT_BASE_CP = 0.84; // 피토계수 자동 선정 시 유속 가계산�
 const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
 // 지점 수별 권장 지점당 행 수: 지점이 적으면 촘촘히(1점 6행), 많으면 지점당 3행
 const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
+
+// ── 사전 수분량 측정 방법 ──
+// excelChoice: 양식 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표)
+const MOISTURE_METHODS = [
+  { id: 'auto', label: '자동측정기', short: '자동측정기 5회 평균', excelChoice: 1 },
+  { id: 'impinger', label: '임핀저법', short: '예비 흡인 후 임핀저 무게 증가량', excelChoice: 2 },
+  { id: 'wetdry', label: '습구·건구 온도법', short: '건구·습구 온도로 수증기압 계산', excelChoice: 1 },
+  { id: 'saturation', label: '포화수증기압', short: '포화 가스(습식 세정기 후단 등): 배출가스 온도의 포화수증기압', excelChoice: 1 },
+  { id: 'manual', label: '직접 입력', short: '이전 측정값 등 참고값', excelChoice: 1 },
+];
+const createEmptyPreImpinger = () => ({
+  impingers: [1, 2, 3, 4].map((id) => ({ id, initial: '', final: '' })),
+  meterStart: '', meterEnd: '', meterTemp: '', orifice: '',
+});
+// 물의 포화수증기압 (mmHg), Antoine 식: 1~100℃ / 100~374℃ 계수
+const waterSaturationPressureMmHg = (tempC) => {
+  const t = Number(tempC);
+  if (!Number.isFinite(t) || t < -20 || t > 374) return NaN;
+  const [a, b, c] = t <= 100 ? [8.07131, 1730.63, 233.426] : [8.14019, 1810.94, 244.485];
+  return Math.pow(10, a - b / (c + t));
+};
+// 통풍 건습구 습도계 계수 (1/℃)
+const PSYCHROMETER_COEFFICIENT = 0.000662;
 // 실제로 측정값이 들어간 마지막 기록표 행 (표 자동 생성으로 미리 채워지는 채취점·시간은 측정값으로 보지 않음)
 const METER_MEASURED_FIELDS = ['stackTemp', 'dp', 'sp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
 const getLastMeasuredMeterIdx = (rows) => (rows || []).reduce((lastIdx, row, idx) => (
@@ -1833,6 +1856,10 @@ export default function App() {
       { time: '', o2: '', co2: '', co: '', nox: '', sox: '' }
     ],
     moistureValues: ['', '', '', '', ''],
+    moistureMethod: 'auto',
+    preImpinger: createEmptyPreImpinger(),
+    wetBulbTemp: '', dryBulbTemp: '',
+    moistureManual: '', moistureManualNote: '',
     impingers: normalizeImpingers([], getImpingerStageCount('dust')),
     // 동정압 측정 시 가스미터 온도 (예비조사 Tm)
     traverseTmIn: '', traverseTmOut: '',
@@ -4091,12 +4118,71 @@ export default function App() {
     return { o2, co2, co, sox, nox, n2, Md, Ms, Xw, r0 };
   };
 
+  // 방법별 사전 수분량(%) 계산. ready=false면 입력이 부족함
+  const getMoistureByMethod = (methodId, data = formData) => {
+    const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; };
+    const Pa = num(data.atmPressure);
+    const spVals = (data.points || []).map((p) => num(p?.sp)).filter(Number.isFinite);
+    const tsVals = (data.points || []).map((p) => num(p?.ts)).filter(Number.isFinite);
+    // 배출가스 절대압 (mmHg) = 대기압 + 평균 정압/13.6
+    const Ps = Number.isFinite(Pa) ? Pa + (spVals.length ? spVals.reduce((a, b) => a + b, 0) / spVals.length : 0) / 13.6 : NaN;
+    if (methodId === 'auto') {
+      const vals = (data.moistureValues || []).map(num).filter(Number.isFinite);
+      if (vals.length === 0) return { ready: false, value: NaN, detail: '5회 측정값을 입력하세요' };
+      const value = vals.reduce((a, b) => a + b, 0) / vals.length;
+      return { ready: true, value, detail: `${vals.length}회 평균` };
+    }
+    if (methodId === 'impinger') {
+      const pre = data.preImpinger || createEmptyPreImpinger();
+      const vlc = (pre.impingers || []).reduce((sum, imp) => {
+        const a = num(imp?.initial), b = num(imp?.final);
+        return Number.isFinite(a) && Number.isFinite(b) ? sum + (b - a) : sum;
+      }, 0);
+      const vm = num(pre.meterEnd) - num(pre.meterStart);
+      const yd = num(data.gasMeterFactor) || 1;
+      const tm = num(pre.meterTemp);
+      const orifice = Number.isFinite(num(pre.orifice)) ? num(pre.orifice) : 0;
+      if (!(vlc > 0) || !(vm > 0) || !Number.isFinite(tm) || !Number.isFinite(Pa)) {
+        return { ready: false, value: NaN, detail: '임핀저 무게, 가스미터 전후 값, 미터 온도, 대기압이 필요합니다' };
+      }
+      // 양식 수분량!H28: 22.4/18·Vlc / (Vm·Yd·273/(273+Tm)·(Pa+ΔH/13.6)/760 + 22.4/18·Vlc) × 100
+      const vw = (22.4 / 18) * vlc;
+      const vmStd = vm * yd * (273 / (273 + tm)) * ((Pa + orifice / 13.6) / 760);
+      const value = (vw / (vmStd + vw)) * 100;
+      return { ready: Number.isFinite(value), value, detail: `응축수 ${vlc.toFixed(2)} g · 흡인 ${vm.toFixed(2)} L` };
+    }
+    if (methodId === 'wetdry') {
+      const td = num(data.dryBulbTemp), tw = num(data.wetBulbTemp);
+      if (!Number.isFinite(td) || !Number.isFinite(tw) || !Number.isFinite(Ps) || Ps <= 0) {
+        return { ready: false, value: NaN, detail: '건구·습구 온도와 대기압(정압)이 필요합니다' };
+      }
+      if (tw > td) return { ready: false, value: NaN, detail: '습구 온도가 건구 온도보다 높을 수 없습니다' };
+      if (tw > 100) return { ready: false, value: NaN, detail: '습구 온도 100℃ 이하에서만 쓸 수 있습니다' };
+      // 수증기압 Pv = Pw(습구) − A·P·(건구 − 습구), 수분량 = Pv / P × 100
+      const pv = waterSaturationPressureMmHg(tw) - PSYCHROMETER_COEFFICIENT * Ps * (td - tw);
+      const value = Math.max(0, (pv / Ps) * 100);
+      return { ready: Number.isFinite(value), value, detail: `건구 ${td}℃ · 습구 ${tw}℃ · 수증기압 ${pv.toFixed(2)} mmHg` };
+    }
+    if (methodId === 'saturation') {
+      const ts = tsVals.length ? tsVals.reduce((a, b) => a + b, 0) / tsVals.length : NaN;
+      if (!Number.isFinite(ts) || !Number.isFinite(Ps) || Ps <= 0) return { ready: false, value: NaN, detail: '측정점 배출가스 온도와 대기압이 필요합니다' };
+      const pw = waterSaturationPressureMmHg(ts);
+      if (!Number.isFinite(pw) || pw >= Ps) return { ready: false, value: NaN, detail: `${ts.toFixed(1)}℃에서는 가스가 포화될 수 없습니다 (끓는점 이상)` };
+      const value = (pw / Ps) * 100;
+      return { ready: true, value, detail: `${ts.toFixed(1)}℃ 포화수증기압 ${pw.toFixed(2)} mmHg` };
+    }
+    if (methodId === 'manual') {
+      const v = num(data.moistureManual);
+      if (!Number.isFinite(v) || v < 0 || v >= 100) return { ready: false, value: NaN, detail: '수분량(%)을 입력하세요' };
+      return { ready: true, value: v, detail: String(data.moistureManualNote || '').trim() || '직접 입력값' };
+    }
+    return { ready: false, value: NaN, detail: '' };
+  };
+  const activeMoistureMethod = MOISTURE_METHODS.find((m) => m.id === formData.moistureMethod) || MOISTURE_METHODS[0];
+
   const getRawPreMoisture = () => {
-    const validVals = formData.moistureValues
-      .map((v) => parseFloat(v))
-      .filter((v) => Number.isFinite(v));
-    if (validVals.length === 0) return 0;
-    return validVals.reduce((a, b) => a + b, 0) / validVals.length;
+    const result = getMoistureByMethod(activeMoistureMethod.id);
+    return result.ready ? result.value : 0;
   };
 
   const getRawAvgTp = () => {
@@ -5826,17 +5912,52 @@ export default function App() {
       const stackDiameterM = toNumber(sourceData.stackDiameter);
       if (stackDiameterM !== null && stackDiameterM > 0) addUpdate('시료측정위치', 'A37', stackDiameterM);
 
-      // 수분량: 자동측정기 5회값, 사전 가스미터, 사후 임핀저 무게
-      addUpdate('수분량', 'C5', 1);
-      for (let i = 0; i < 5; i++) {
-        addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
+      // 수분량: 사전 수분량은 고른 방법대로, 사후는 임핀저 무게
+      //  - 자동측정기: C5=1, B10~B14에 5회값
+      //  - 임핀저법: C5=2, 예비 임핀저(C20~D23)·가스미터(A28~G28)
+      //  - 습구·건구 / 포화수증기압 / 직접 입력: C5=1, 방법 이름을 B5에, 계산값을 B10에
+      const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS[0];
+      const exportMoisture = getMoistureByMethod(exportMoistureMethod.id, sourceData);
+      addUpdate('수분량', 'C5', exportMoistureMethod.excelChoice);
+      if (exportMoistureMethod.id === 'auto') {
+        for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
+      } else if (exportMoistureMethod.id === 'impinger') {
+        // 자동측정기 값이 있으면 참고로 남긴다 (선택은 C5=2라 임핀저 값이 적용됨)
+        for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
+      } else {
+        addUpdate('수분량', 'B5', exportMoistureMethod.label);
+        addUpdate('수분량', 'A8', `▶수분량 ${exportMoistureMethod.label} (${exportMoisture.detail})`);
+        addUpdate('수분량', 'B10', exportMoisture.ready ? Math.round(exportMoisture.value * 100) / 100 : null);
+        for (let i = 1; i < 5; i++) addUpdate('수분량', `B${10 + i}`, null);
       }
-      addUpdate('수분량', 'A28', toNumber(firstVolume));
-      addUpdate('수분량', 'B28', toNumber(lastVolume));
-      addUpdate('수분량', 'D28', Number.isFinite(avgTm) ? avgTm : null);
-      addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
-      addUpdate('수분량', 'F28', Number.isFinite(avgOrifice) ? avgOrifice : null);
-      addUpdate('수분량', 'G28', Number.isFinite(avgOrifice) ? avgOrifice / 13.6 : null);
+      if (exportMoistureMethod.id !== 'auto') {
+        // 양식의 가스 밀도(노즐산정 F26)와 유량 양식의 수분량(계산식 O75)이 자동측정기 평균(B15)만 보던 것을
+        // 선택한 방법의 사전 수분량(노즐산정 C15)을 보도록 바꿔 화면 값과 맞춘다
+        addUpdate('노즐산정', 'F26', { formula: 'C15' });
+        if (exportSheetId === 'flow') addUpdate('계산식', 'O75', { formula: '노즐산정!C15' });
+      }
+      const preImp = sourceData.preImpinger || createEmptyPreImpinger();
+      if (exportMoistureMethod.id === 'impinger') {
+        for (let i = 0; i < 4; i++) {
+          const imp = (preImp.impingers || [])[i] || {};
+          addUpdate('수분량', `C${20 + i}`, toNumber(imp.initial));
+          addUpdate('수분량', `D${20 + i}`, toNumber(imp.final));
+        }
+        const preOrifice = toNumber(preImp.orifice);
+        addUpdate('수분량', 'A28', toNumber(preImp.meterStart));
+        addUpdate('수분량', 'B28', toNumber(preImp.meterEnd));
+        addUpdate('수분량', 'D28', toNumber(preImp.meterTemp));
+        addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
+        addUpdate('수분량', 'F28', preOrifice);
+        addUpdate('수분량', 'G28', preOrifice !== null ? preOrifice / 13.6 : 0);
+      } else {
+        addUpdate('수분량', 'A28', toNumber(firstVolume));
+        addUpdate('수분량', 'B28', toNumber(lastVolume));
+        addUpdate('수분량', 'D28', Number.isFinite(avgTm) ? avgTm : null);
+        addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
+        addUpdate('수분량', 'F28', Number.isFinite(avgOrifice) ? avgOrifice : null);
+        addUpdate('수분량', 'G28', Number.isFinite(avgOrifice) ? avgOrifice / 13.6 : null);
+      }
       for (let i = 0; i < layout.impingerRows; i++) {
         const imp = sourceImpingers[i] || {};
         addUpdate('수분량', `C${33 + i}`, toNumber(imp.initial));
@@ -7917,31 +8038,170 @@ export default function App() {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
                 <span className="bg-cyan-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">3</span>
-                배출가스 수분량 (자동측정기법)
+                배출가스 수분량
               </h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-2">사전 수분량 (%) - 5회 측정값 입력</label>
-                  <div className="grid grid-cols-5 gap-2">
-                    {formData.moistureValues.map((val, idx) => (
-                      <div key={idx}>
-                        <label className="block text-[10px] text-slate-500 text-center mb-1">{idx + 1}회차</label>
-                        <input 
-                          type="number" step="0.01" value={val} 
-                          onChange={(e) => handleMoistureChange(idx, e.target.value)} 
-                          className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-cyan-500 bg-slate-50 text-center text-sm outline-none" 
-                        />
-                      </div>
+                  <label className="block text-xs font-bold text-slate-600 mb-2">사전 수분량 측정 방법</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MOISTURE_METHODS.map((method) => (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, moistureMethod: method.id }))}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md border transition-colors ${activeMoistureMethod.id === method.id ? 'bg-cyan-600 border-cyan-600 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {method.label}
+                      </button>
                     ))}
                   </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">{activeMoistureMethod.short}</p>
                 </div>
-                
+
+                {activeMoistureMethod.id === 'auto' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-2">자동측정기 5회 측정값 (%)</label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {formData.moistureValues.map((val, idx) => (
+                        <div key={idx}>
+                          <label className="block text-[10px] text-slate-500 text-center mb-1">{idx + 1}회차</label>
+                          <input
+                            type="number" step="0.01" value={val}
+                            onChange={(e) => handleMoistureChange(idx, e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-cyan-500 bg-slate-50 text-center text-sm outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeMoistureMethod.id === 'impinger' && (() => {
+                  const pre = formData.preImpinger || createEmptyPreImpinger();
+                  const setPre = (patch) => setFormData((prev) => ({ ...prev, preImpinger: { ...(prev.preImpinger || createEmptyPreImpinger()), ...patch } }));
+                  const setImp = (idx, key, value) => setPre({ impingers: (pre.impingers || []).map((imp, i) => (i === idx ? { ...imp, [key]: value } : imp)) });
+                  return (
+                    <div className="space-y-3">
+                      <table className="w-full text-sm text-center border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700">
+                            <th className="p-2 border border-slate-200 font-bold">예비 임핀저</th>
+                            <th className="p-2 border border-slate-200 font-bold">흡인 전 (g)</th>
+                            <th className="p-2 border border-slate-200 font-bold">흡인 후 (g)</th>
+                            <th className="p-2 border border-slate-200 font-bold">증가량 (g)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(pre.impingers || []).map((imp, idx) => {
+                            const gain = parseFloat(imp.final) - parseFloat(imp.initial);
+                            return (
+                              <tr key={imp.id || idx}>
+                                <td className="p-1.5 border border-slate-200 font-bold text-slate-600">{idx + 1}</td>
+                                <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={imp.initial} onChange={(e) => setImp(idx, 'initial', e.target.value)} className="w-full p-1.5 text-center outline-none" /></td>
+                                <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={imp.final} onChange={(e) => setImp(idx, 'final', e.target.value)} className="w-full p-1.5 text-center outline-none" /></td>
+                                <td className="p-1.5 border border-slate-200 font-bold text-slate-700">{Number.isFinite(gain) ? gain.toFixed(2) : '-'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          ['meterStart', '가스미터 흡인 전 (L)'],
+                          ['meterEnd', '가스미터 흡인 후 (L)'],
+                          ['meterTemp', '가스미터 온도 (℃)'],
+                          ['orifice', '가스미터압 (mmH₂O)'],
+                        ].map(([key, label]) => (
+                          <label key={key} className="block">
+                            <span className="block text-[11px] font-bold text-slate-600 mb-1">{label}</span>
+                            <input type="number" step="0.01" value={pre[key]} onChange={(e) => setPre({ [key]: e.target.value })} className="w-full p-2 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-cyan-500" />
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-500">가스미터 보정계수(Y<sub>d</sub>)와 대기압은 위에서 입력한 값을 씁니다.</p>
+                    </div>
+                  );
+                })()}
+
+                {activeMoistureMethod.id === 'wetdry' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-slate-600 mb-1">건구 온도 (℃)</span>
+                      <input type="number" step="0.1" name="dryBulbTemp" value={formData.dryBulbTemp} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-cyan-500" />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-slate-600 mb-1">습구 온도 (℃)</span>
+                      <input type="number" step="0.1" name="wetBulbTemp" value={formData.wetBulbTemp} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-cyan-500" />
+                    </label>
+                    <p className="col-span-2 text-[11px] text-slate-500">수증기압 = 습구 온도의 포화수증기압 − {PSYCHROMETER_COEFFICIENT} × 배출가스 압력 × (건구 − 습구). 습구 100℃ 이하에서 씁니다.</p>
+                  </div>
+                )}
+
+                {activeMoistureMethod.id === 'saturation' && (
+                  <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded p-2">
+                    4번 섹션 측정점 배출가스 평균 온도의 포화수증기압 ÷ 배출가스 압력. 물방울이 보이는 포화 가스(습식 세정기 후단 등)에서만 씁니다.
+                  </p>
+                )}
+
+                {activeMoistureMethod.id === 'manual' && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <label className="block">
+                      <span className="block text-[11px] font-bold text-slate-600 mb-1">수분량 (%)</span>
+                      <input type="number" step="0.01" name="moistureManual" value={formData.moistureManual} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-cyan-500" />
+                    </label>
+                    <label className="block col-span-2">
+                      <span className="block text-[11px] font-bold text-slate-600 mb-1">근거 (예: 2026-09 정기측정값)</span>
+                      <input type="text" name="moistureManualNote" value={formData.moistureManualNote} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:ring-2 focus:ring-cyan-500" />
+                    </label>
+                  </div>
+                )}
+
                 <div className="bg-cyan-50 p-4 rounded-lg flex justify-between items-center border border-cyan-100 mt-4 shadow-sm">
                   <div className="text-slate-800">
-                    <span className="font-bold">사전 적용 수분량 (평균)</span>
+                    <span className="font-bold">사전 적용 수분량</span>
+                    <span className="block text-[11px] text-slate-500">{activeMoistureMethod.label} · {getMoistureByMethod(activeMoistureMethod.id).detail}</span>
                   </div>
-                  <div className="text-2xl font-black text-cyan-700">{calcMoisture()}%</div>
+                  <div className="text-2xl font-black text-cyan-700">{getMoistureByMethod(activeMoistureMethod.id).ready ? `${calcMoisture()}%` : '-'}</div>
                 </div>
+
+                {(() => {
+                  const rows = MOISTURE_METHODS.map((method) => ({ method, result: getMoistureByMethod(method.id) })).filter(({ result }) => result.ready);
+                  const postFactors = isFlowSheet ? null : getRawPostMoistureFactors();
+                  const post = postFactors && Number.isFinite(postFactors.Xw) ? postFactors.Xw : NaN;
+                  if (rows.length < 2 && !Number.isFinite(post)) return null;
+                  return (
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700">
+                          <th className="p-1.5 border border-slate-200 text-left font-bold">방법별 비교</th>
+                          <th className="p-1.5 border border-slate-200 font-bold">수분량 (%)</th>
+                          <th className="p-1.5 border border-slate-200 font-bold">적용값과 차이</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(({ method, result }) => {
+                          const applied = method.id === activeMoistureMethod.id;
+                          const base = getMoistureByMethod(activeMoistureMethod.id);
+                          const diff = base.ready ? result.value - base.value : NaN;
+                          return (
+                            <tr key={method.id} className={applied ? 'bg-cyan-50 font-bold' : ''}>
+                              <td className="p-1.5 border border-slate-200 text-left">{method.label}{applied ? ' (적용)' : ''}</td>
+                              <td className="p-1.5 border border-slate-200 text-center">{result.value.toFixed(2)}</td>
+                              <td className="p-1.5 border border-slate-200 text-center">{applied || !Number.isFinite(diff) ? '-' : `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`}</td>
+                            </tr>
+                          );
+                        })}
+                        {Number.isFinite(post) && (
+                          <tr>
+                            <td className="p-1.5 border border-slate-200 text-left">사후 임핀저 무게법 (본 측정)</td>
+                            <td className="p-1.5 border border-slate-200 text-center">{post.toFixed(2)}</td>
+                            <td className="p-1.5 border border-slate-200 text-center">{(() => { const base = getMoistureByMethod(activeMoistureMethod.id); if (!base.ready) return '-'; const d = post - base.value; return `${d >= 0 ? '+' : ''}${d.toFixed(2)}`; })()}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  );
+                })()}
                 
                 {!isFlowSheet && (
                 <div className="mt-6 pt-4 border-t border-slate-200">
