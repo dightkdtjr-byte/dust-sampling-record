@@ -779,6 +779,24 @@ const SKYLINE_FLYER_CSS = `
   animation: skylineBeacon 2.4s ease-in-out infinite;
   animation-delay: var(--beacon-delay, 0s);
 }
+@keyframes skylineFlap {
+  from { transform: scaleY(1); }
+  to { transform: scaleY(0.3); }
+}
+.skyline-bird {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: skylineFlap var(--flap-duration, 0.8s) ease-in-out infinite alternate;
+  animation-delay: var(--flap-delay, 0s);
+}
+@keyframes skylineFog {
+  from { transform: translateX(-70px); }
+  to { transform: translateX(70px); }
+}
+.skyline-fog {
+  animation: skylineFog var(--fog-duration, 36s) ease-in-out infinite alternate;
+  animation-delay: var(--fog-delay, 0s);
+}
 .skyline-svg {
   position: absolute;
   left: 0;
@@ -800,6 +818,9 @@ const SKYLINE_PALETTES = {
     cooling: ['#f7f9fb', '#d2dbe5', '#9aa7b7'], stack: ['#f3f6fa', '#c2cedd', '#8495ad'], stackCap: '#7b8ca4', band: '#d9534f',
     window: 'rgba(40, 60, 95, 0.25)', windowLit: null, smoke: ['rgba(255,255,255,0.95)', 'rgba(205,215,228,0)'],
     tree: ['#93cb84', '#3d7f4e'], trunk: '#7a5a44', beacon: null, cityGlow: null,
+    mountain: ['#f1f6fc', '#cbdcef'], asphalt: '#707a89', roadLine: 'rgba(255,255,255,0.75)', wire: 'rgba(60,70,90,0.38)', pylon: '#8a94a6',
+    tank: ['#eef1f5', '#c3ccd8', '#8d9aae'], fog: 'rgba(255,255,255,0.42)', bird: '#3b4252', plane: '#f3f4f6', contrail: 'rgba(255,255,255,0.75)',
+    lampGlow: null, headlight: null, taillight: null, carColors: ['#d9534f', '#3b82f6', '#f5f5f5', '#f4c20d', '#6b7280'],
   },
   morning: {
     hillFar: ['#ebdff0', '#c6b4db'], hillMid: ['#d3c1b2', '#95818a'], hillNear: ['#a9a97c', '#64704f'],
@@ -809,6 +830,9 @@ const SKYLINE_PALETTES = {
     cooling: ['#fff7ee', '#e4cfc3', '#a8918d'], stack: ['#fff5ea', '#dcc3b7', '#968085'], stackCap: '#9a848a', band: '#d9534f',
     window: 'rgba(90, 60, 70, 0.22)', windowLit: null, smoke: ['rgba(255,245,235,0.95)', 'rgba(230,205,200,0)'],
     tree: ['#c2c080', '#737f4f'], trunk: '#6f5143', beacon: null, cityGlow: null,
+    mountain: ['#f8e9f1', '#dcc6df'], asphalt: '#7a6f78', roadLine: 'rgba(255,240,220,0.75)', wire: 'rgba(80,60,70,0.38)', pylon: '#8d7f88',
+    tank: ['#fbeee4', '#d6bcb1', '#9a8488'], fog: 'rgba(255,230,200,0.45)', bird: '#4b3f4a', plane: '#fff5ec', contrail: 'rgba(255,235,215,0.75)',
+    lampGlow: null, headlight: null, taillight: null, carColors: ['#c94f4b', '#4f7fd1', '#f8efe6', '#e6b83a', '#6e6a73'],
   },
   night: {
     hillFar: ['#2c3d6c', '#1a274a'], hillMid: ['#20304f', '#121c35'], hillNear: ['#172a34', '#0b151c'],
@@ -818,6 +842,9 @@ const SKYLINE_PALETTES = {
     cooling: ['#5c687f', '#3c465b', '#232b3b'], stack: ['#51607c', '#363f58', '#1f2638'], stackCap: '#2b3448', band: '#a33f3b',
     window: 'rgba(255, 232, 170, 0.12)', windowLit: 'rgba(255, 224, 150, 0.95)', smoke: ['rgba(205,214,235,0.6)', 'rgba(205,214,235,0)'],
     tree: ['#1f4b3d', '#0e2a22'], trunk: '#2a1f19', beacon: '#ff5a4a', cityGlow: 'rgba(255, 190, 110, 0.18)',
+    mountain: ['#1c2c56', '#14203f'], asphalt: '#0f1620', roadLine: 'rgba(230,220,170,0.35)', wire: 'rgba(170,185,220,0.25)', pylon: '#3c4760',
+    tank: ['#4b586f', '#2f3a4f', '#1b2232'], fog: 'rgba(120,140,190,0.16)', bird: null, plane: '#8e9ab5', contrail: null,
+    lampGlow: 'rgba(255,214,130,0.5)', headlight: 'rgba(255,240,200,0.95)', taillight: '#ff4d3d', carColors: ['#5b6475', '#4a5366', '#6b7386', '#565e70', '#3f4756'],
   },
 };
 
@@ -839,6 +866,21 @@ const SKYLINE_SVG_STACKS = [
 const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
   x: 20 + ((idx * 73) % 1560), rx: 11 + ((idx * 7) % 9), ry: 16 + ((idx * 11) % 14), dy: (idx * 5) % 12,
 }));
+// 송전탑(전선으로 이어짐), 저장탱크, 가로등, 도로 위 차량, 새 떼, 비행기
+const SKYLINE_SVG_PYLONS = [{ x: 470, h: 150 }, { x: 1020, h: 165 }, { x: 1345, h: 150 }];
+const SKYLINE_SVG_TANKS = [{ x: 1500, w: 30, h: 58 }, { x: 1538, w: 30, h: 70 }, { x: 1576, w: 30, h: 58 }];
+const SKYLINE_ROAD_PATH = 'M-40,471 C300,462 600,478 900,468 C1200,458 1400,474 1640,466';
+const SKYLINE_SVG_LAMPS = [{ x: 150, y: 467 }, { x: 450, y: 470 }, { x: 750, y: 473 }, { x: 1050, y: 465 }, { x: 1350, y: 470 }];
+const SKYLINE_SVG_CARS = [
+  { dir: 1, dur: 34, delay: -5, len: 26, color: 0 }, { dir: -1, dur: 42, delay: -20, len: 24, color: 1 },
+  { dir: 1, dur: 50, delay: -31, len: 34, color: 2 }, { dir: -1, dur: 38, delay: -12, len: 22, color: 3 },
+  { dir: 1, dur: 44, delay: -17, len: 24, color: 4 },
+];
+const SKYLINE_BIRD_FLOCKS = [
+  { path: 'M-80,150 C300,120 700,170 1700,130', dur: 52, delay: -8, birds: [[0, 0], [-16, 9], [-32, 18], [16, 9], [32, 18], [-48, 26]] },
+  { path: 'M1700,200 C1200,170 600,230 -120,190', dur: 64, delay: -30, birds: [[0, 0], [-14, 8], [14, 8], [-28, 16]] },
+];
+const SKYLINE_PLANE = { path: 'M-160,58 L1760,92', dur: 78, delay: -26 };
 
 const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
@@ -882,13 +924,13 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   return (
     <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        {[['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].map(([name, colors]) => (
+        {[['mountain', pal.mountain], ['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].map(([name, colors]) => (
           <linearGradient key={name} id={id(name)} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={colors[0]} />
             <stop offset="1" stopColor={colors[1]} />
           </linearGradient>
         ))}
-        {[['tower', pal.tower], ['factory', pal.factory], ['cooling', pal.cooling], ['stack', pal.stack]].map(([name, colors]) => (
+        {[['tower', pal.tower], ['factory', pal.factory], ['cooling', pal.cooling], ['stack', pal.stack], ['tank', pal.tank]].map(([name, colors]) => (
           <linearGradient key={name} id={id(name)} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor={colors[0]} />
             <stop offset="0.45" stopColor={colors[1]} />
@@ -909,13 +951,32 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
             <stop offset="1" stopColor={pal.cityGlow} stopOpacity="0" />
           </radialGradient>
         )}
+        {pal.contrail && (
+          <linearGradient id={id('contrail')} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor={pal.contrail} stopOpacity="0" />
+            <stop offset="1" stopColor={pal.contrail} />
+          </linearGradient>
+        )}
+        {pal.lampGlow && (
+          <radialGradient id={id('lampglow')} cx="0.5" cy="0" r="0.75">
+            <stop offset="0" stopColor={pal.lampGlow} />
+            <stop offset="1" stopColor={pal.lampGlow} stopOpacity="0" />
+          </radialGradient>
+        )}
         <filter id={id('blur')} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" />
         </filter>
         <filter id={id('soft')} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="1.2" />
         </filter>
+        <filter id={id('fogblur')} x="-20%" y="-100%" width="140%" height="300%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
       </defs>
+
+      {/* 먼 산맥 (대기 원근으로 가장 연함) */}
+      <path d="M0,300 L90,250 L150,276 L230,214 L300,262 L360,236 L430,286 L520,206 L600,258 L660,238 L740,282 L830,222 L900,266 L960,244 L1040,292 L1130,226 L1200,264 L1260,232 L1340,288 L1420,218 L1500,262 L1560,248 L1600,270 L1600,520 L0,520 Z" fill={`url(#${id('mountain')})`} />
+      {pal.contrail && <path d="M230,214 L205,236 L255,232 Z M520,206 L498,228 L545,226 Z M830,222 L808,242 L852,240 Z M1130,226 L1108,248 L1152,246 Z M1420,218 L1398,240 L1442,238 Z" fill="rgba(255,255,255,0.55)" />}
 
       {/* 원경 언덕 두 겹 + 안개 */}
       <path d="M0,330 C140,286 260,300 400,268 C560,232 680,282 840,262 C1000,240 1120,290 1280,258 C1400,232 1500,262 1600,238 L1600,520 L0,520 Z" fill={`url(#${id('hillFar')})`} />
@@ -998,8 +1059,37 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         );
       })}
 
-      {/* 앞쪽 언덕, 나무, 땅과 길 */}
+      {/* 송전탑과 전선 */}
+      {SKYLINE_SVG_PYLONS.map((py, i) => {
+        const top = GROUND_Y - py.h;
+        const next = SKYLINE_SVG_PYLONS[i + 1];
+        return (
+          <g key={`pylon-${i}`} stroke={pal.pylon} strokeWidth="2" fill="none" strokeLinecap="round">
+            <path d={`M${py.x - 16},${GROUND_Y} L${py.x - 4},${top} L${py.x + 4},${top} L${py.x + 16},${GROUND_Y}`} />
+            <path d={`M${py.x - 12},${GROUND_Y - 30} L${py.x + 12},${GROUND_Y - 30} M${py.x - 9},${GROUND_Y - 62} L${py.x + 9},${GROUND_Y - 62} M${py.x - 13},${top + 22} L${py.x + 13},${top + 22} M${py.x - 22},${top + 46} L${py.x + 22},${top + 46}`} />
+            <path d={`M${py.x - 12},${GROUND_Y - 30} L${py.x + 9},${GROUND_Y - 62} M${py.x + 12},${GROUND_Y - 30} L${py.x - 9},${GROUND_Y - 62} M${py.x - 9},${GROUND_Y - 62} L${py.x + 7},${GROUND_Y - 94} M${py.x + 9},${GROUND_Y - 62} L${py.x - 7},${GROUND_Y - 94}`} strokeWidth="1.2" />
+            {next && [[22, 46], [13, 22]].map(([dx, dy], k) => (
+              <path key={k} d={`M${py.x + dx},${top + dy} Q${(py.x + next.x) / 2},${Math.max(top, GROUND_Y - next.h) + dy + 46} ${next.x - dx},${GROUND_Y - next.h + dy} M${py.x - dx},${top + dy} Q${(py.x + next.x) / 2},${Math.max(top, GROUND_Y - next.h) + dy + 46} ${next.x + dx},${GROUND_Y - next.h + dy}`} stroke={pal.wire} strokeWidth="1" />
+            ))}
+          </g>
+        );
+      })}
+
+      {/* 저장 탱크 */}
+      {SKYLINE_SVG_TANKS.map((tk, i) => (
+        <g key={`tank-${i}`}>
+          <rect x={tk.x} y={GROUND_Y - tk.h} width={tk.w} height={tk.h} rx="3" fill={`url(#${id('tank')})`} stroke={pal.towerEdge} strokeWidth="1" />
+          <ellipse cx={tk.x + tk.w / 2} cy={GROUND_Y - tk.h} rx={tk.w / 2} ry="4" fill={pal.stackCap} opacity="0.8" />
+          <rect x={tk.x} y={GROUND_Y - tk.h * 0.55} width={tk.w} height="3" fill={pal.band} opacity="0.7" />
+          <rect x={tk.x + tk.w - 6} y={GROUND_Y - tk.h + 6} width="2" height={tk.h - 8} fill={pal.pylon} opacity="0.7" />
+        </g>
+      ))}
+
+      {/* 앞쪽 언덕, 땅안개, 나무, 땅과 길 */}
       <path d="M0,418 C180,392 300,428 480,404 C660,380 820,420 1000,398 C1180,376 1320,418 1600,392 L1600,520 L0,520 Z" fill={`url(#${id('hillNear')})`} />
+      {[{ cx: 380, rx: 420, dur: 38, delay: -6 }, { cx: 1180, rx: 480, dur: 46, delay: -21 }].map((fg, i) => (
+        <ellipse key={`fog-${i}`} className="skyline-fog" cx={fg.cx} cy={GROUND_Y - 6} rx={fg.rx} ry="16" fill={pal.fog} filter={`url(#${id('fogblur')})`} style={{ '--fog-duration': `${fg.dur}s`, '--fog-delay': `${fg.delay}s` }} />
+      ))}
       {trees.map((tree, i) => {
         const baseY = 436 + tree.dy;
         return (
@@ -1011,7 +1101,58 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         );
       })}
       <rect x="0" y={GROUND_Y + 8} width="1600" height="80" fill={`url(#${id('ground')})`} />
-      <path d="M0,470 C300,462 600,478 900,468 C1200,458 1400,474 1600,466" fill="none" stroke={pal.road} strokeWidth="3" strokeLinecap="round" filter={`url(#${id('soft')})`} />
+
+      {/* 도로: 아스팔트 띠 + 중앙선, 가로등, 달리는 차 */}
+      <path d={SKYLINE_ROAD_PATH} fill="none" stroke={pal.asphalt} strokeWidth="15" strokeLinecap="round" />
+      <path d={SKYLINE_ROAD_PATH} fill="none" stroke={pal.roadLine} strokeWidth="1.4" strokeDasharray="14 12" opacity="0.9" />
+      <path d={SKYLINE_ROAD_PATH} fill="none" stroke={pal.road} strokeWidth="15" strokeLinecap="round" opacity="0.25" filter={`url(#${id('soft')})`} />
+      {SKYLINE_SVG_LAMPS.map((lp, i) => (
+        <g key={`lamp-${i}`}>
+          {pal.lampGlow && <ellipse cx={lp.x + 10} cy={lp.y - 32} rx="34" ry="44" fill={`url(#${id('lampglow')})`} />}
+          <path d={`M${lp.x},${lp.y - 8} L${lp.x},${lp.y - 38} Q${lp.x},${lp.y - 44} ${lp.x + 6},${lp.y - 44} L${lp.x + 12},${lp.y - 44}`} fill="none" stroke={pal.pylon} strokeWidth="2" strokeLinecap="round" />
+          <rect x={lp.x + 8} y={lp.y - 46} width="8" height="4" rx="1.5" fill={pal.lampGlow ? '#ffe9b0' : pal.stackCap} />
+        </g>
+      ))}
+      {SKYLINE_SVG_CARS.map((car, i) => {
+        const body = pal.carColors[car.color % pal.carColors.length];
+        const lane = car.dir > 0 ? 3 : -3;
+        return (
+          <g key={`car-${i}`}>
+            <g transform={`translate(0 ${lane}) scale(${car.dir} 1)`}>
+              <rect x={-car.len / 2} y={-5} width={car.len} height={7} rx="2.5" fill={body} />
+              <rect x={-car.len / 2 + 5} y={-10} width={car.len * 0.55} height={6} rx="2.5" fill={body} />
+              <rect x={-car.len / 2 + 7} y={-9} width={car.len * 0.22} height={4} rx="1" fill="rgba(200,225,245,0.75)" />
+              <circle cx={-car.len / 2 + 5} cy={2.5} r="2.2" fill="#1f2937" />
+              <circle cx={car.len / 2 - 5} cy={2.5} r="2.2" fill="#1f2937" />
+              {pal.headlight && <path d={`M${car.len / 2},-3.5 L${car.len / 2 + 34},-10 L${car.len / 2 + 34},4 Z`} fill={pal.headlight} opacity="0.3" />}
+              {pal.headlight && <rect x={car.len / 2 - 1.5} y={-3.5} width="2.5" height="3" rx="1" fill={pal.headlight} />}
+              {pal.taillight && <rect x={-car.len / 2 - 1} y={-3.5} width="2.5" height="3" rx="1" fill={pal.taillight} />}
+            </g>
+            <animateMotion dur={`${car.dur}s`} begin={`${car.delay}s`} repeatCount="indefinite" path={SKYLINE_ROAD_PATH} keyPoints={car.dir > 0 ? '0;1' : '1;0'} keyTimes="0;1" calcMode="linear" />
+          </g>
+        );
+      })}
+
+      {/* 새 떼 (낮·아침) */}
+      {pal.bird && SKYLINE_BIRD_FLOCKS.slice(0, compact ? 1 : 2).map((flock, fi) => (
+        <g key={`flock-${fi}`} fill="none" stroke={pal.bird} strokeWidth="1.6" strokeLinecap="round">
+          {flock.birds.map(([bx, by], bi) => (
+            <path key={bi} className="skyline-bird" d={`M${bx - 6},${by} Q${bx - 3},${by - 5} ${bx},${by} Q${bx + 3},${by - 5} ${bx + 6},${by}`} style={{ '--flap-duration': `${0.7 + (bi % 3) * 0.12}s`, '--flap-delay': `-${(bi * 0.23) % 0.8}s` }} />
+          ))}
+          <animateMotion dur={`${flock.dur}s`} begin={`${flock.delay}s`} repeatCount="indefinite" path={flock.path} />
+        </g>
+      ))}
+
+      {/* 비행기 (낮에는 비행운, 밤에는 점멸등) */}
+      {!compact && (
+        <g>
+          {pal.contrail && <rect x="-230" y="-1.2" width="212" height="2.4" rx="1.2" fill={`url(#${id('contrail')})`} />}
+          <path d="M-14,0 L8,0 Q14,0 14,2.5 L-14,2.5 Z M-8,0 L-6,-7 L-2,-7 L2,0 Z M-10,2.5 L-14,8 L-9,8 L-3,2.5 Z" fill={pal.plane} />
+          {!pal.contrail && <circle className="skyline-beacon" cx="-12" cy="0" r="1.8" fill="#ff5a4a" />}
+          {!pal.contrail && <circle className="skyline-beacon" cx="-4" cy="-7" r="1.8" fill="#8bf0a0" style={{ '--beacon-delay': '-1.2s' }} />}
+          <animateMotion dur={`${SKYLINE_PLANE.dur}s`} begin={`${SKYLINE_PLANE.delay}s`} repeatCount="indefinite" path={SKYLINE_PLANE.path} rotate="auto" />
+        </g>
+      )}
     </svg>
   );
 };
