@@ -233,6 +233,8 @@ const daysBetween = (a, b) => {
 const normalizeSiteName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 // 통합기록부 일차 칸 수
 const SAMPLING_LOG_DAY_SLOTS = 4;
+// 통합기록부 엑셀: 날짜별 시트 열 → 입력 시트('시료채취 작성') 열
+const DAY_SHEET_INPUT_COLUMNS = { B: 'D', C: 'E', D: 'G', E: 'H', F: 'I', G: 'J', H: 'K', I: 'L', J: 'M', K: 'N' };
 const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS) => {
   const sites = new Map();
   (reports || []).forEach((report) => {
@@ -6272,6 +6274,71 @@ export default function App() {
       const inputXml = await zip.file(inputPath).async('string');
       zip.file(inputPath, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }));
 
+      // 날짜별 시트: 양식에는 1·2일차 시트만 있으므로, 완전한 1일차 시트를 복사해
+      // 각 일차가 입력 시트의 자기 날짜 행(6행=1일차 … 9행=4일차)을 읽도록 만든다.
+      // 2일차 시트도 다시 만든다 (양식의 2일차 시트는 B15 수식이 빠져 있음)
+      {
+        const templateDaySheets = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g))
+          .map((m) => m[1]).filter((name) => name !== inputSheet);
+        const firstDayPath = sheetPathMap.get(templateDaySheets[0]);
+        const firstDayXml = firstDayPath ? await zip.file(firstDayPath).async('string') : '';
+        const inputRef = inputSheet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const buildDaySheetXml = (dayIdx) => firstDayXml
+          // 입력 시트의 날짜 행 참조 6 → 6+일차
+          .replace(new RegExp(`('${inputRef}'!\\$?[A-Z]{1,3}\\$?)6(?!\\d)`, 'g'), `$1${6 + dayIdx}`)
+          // 분석 기한(N열)은 같은 행의 M열을 보도록 (양식 N16이 M17을 보던 것 바로잡음)
+          .replace(/(<c r="N(\d+)"[^>]*><f>[^<]*?DAY\(M)\d+(\))/g, '$1$2$3')
+          // 복사본에 남은 1일차 계산값은 지운다 (열 때 다시 계산)
+          .replace(/(<c\b[^>]*?)\s+t="(?:str|e|n|b)"([^>]*>(?:<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>))<v>[^<]*<\/v>/g, '$1$2')
+          .replace(/(<c\b[^>]*>(?:<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>))<v>[^<]*<\/v>/g, '$1')
+          .replace(/\s+tabSelected="1"/g, '')
+          .replace(/\s+xr:uid="[^"]*"/g, '')
+          // 양식의 깨진 참조 바로잡기: 날짜 시트 각 칸은 입력 시트의 같은 물질 행(F열 날짜와 같은 행)을 읽어야 함
+          // (양식 C40이 E42를, C41이 #REF!를 보던 것)
+          .replace(
+            new RegExp(`(<c r="([B-K])\\d+"[^>]*><f>IF\\(\\$J\\$7='${inputRef}'!\\$?F(\\d+),'${inputRef}'!)(?:\\$?[A-Z]{1,3}\\$?\\d+|#REF!)(,"")`, 'g'),
+            (full, head, col, srcRow, tail) => `${head}${DAY_SHEET_INPUT_COLUMNS[col]}${srcRow}${tail}`,
+          );
+        const dayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date)
+          || SAMPLING_LOG_SUBSTANCES.some((sub) => {
+            const row = log.rows[String(sub.row)];
+            return row && row.requested && Number(row.dayIndex) === dayIdx;
+          });
+        if (firstDayXml) {
+          // 1·2일차: 기존 시트 파일도 1일차 기반으로 다시 만든다 (양식의 깨진 참조 수정 포함)
+          zip.file(firstDayPath, buildDaySheetXml(0));
+          const secondDayPath = sheetPathMap.get(templateDaySheets[1]);
+          if (secondDayPath) zip.file(secondDayPath, buildDaySheetXml(1));
+          let relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+          const ctFile = zip.file('[Content_Types].xml');
+          let ctXml = ctFile ? await ctFile.async('string') : '';
+          const firstDayRelsPath = firstDayPath.replace(/worksheets\/([^/]+)$/, 'worksheets/_rels/$1.rels');
+          const firstDayRels = zip.file(firstDayRelsPath) ? await zip.file(firstDayRelsPath).async('string') : null;
+          for (let dayIdx = templateDaySheets.length; dayIdx < log.days.length; dayIdx += 1) {
+            if (!dayInUse(dayIdx)) continue;
+            const existingFiles = Object.keys(zip.files).filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
+            const nextNum = Math.max(0, ...existingFiles.map((f) => parseInt(f.match(/(\d+)\.xml$/)[1], 10))) + 1;
+            const partPath = `xl/worksheets/sheet${nextNum}.xml`;
+            zip.file(partPath, buildDaySheetXml(dayIdx));
+            if (firstDayRels) zip.file(`xl/worksheets/_rels/sheet${nextNum}.xml.rels`, firstDayRels);
+            const relIds = Array.from(relsXml.matchAll(/Id="rId(\d+)"/g)).map((m) => parseInt(m[1], 10));
+            const relId = `rId${Math.max(0, ...relIds) + 1}`;
+            relsXml = relsXml.replace('</Relationships>', `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${nextNum}.xml"/></Relationships>`);
+            if (ctXml) ctXml = ctXml.replace('</Types>', `<Override PartName="/${partPath}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
+            const sheetIds = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bsheetId="(\d+)"/g)).map((m) => parseInt(m[1], 10));
+            const position = Array.from(workbookXml.matchAll(/<sheet\b/g)).length;
+            const tempName = `${dayIdx + 1}일차`;
+            workbookXml = workbookXml.replace('</sheets>', `<sheet name="${tempName}" sheetId="${Math.max(0, ...sheetIds) + 1}" r:id="${relId}"/></sheets>`);
+            const printArea = `<definedName name="_xlnm.Print_Area" localSheetId="${position}">'${tempName}'!$A$2:$K$59</definedName>`;
+            workbookXml = workbookXml.includes('</definedNames>')
+              ? workbookXml.replace('</definedNames>', `${printArea}</definedNames>`)
+              : workbookXml.replace('</sheets>', `</sheets><definedNames>${printArea}</definedNames>`);
+          }
+          zip.file('xl/_rels/workbook.xml.rels', relsXml);
+          if (ctFile) zip.file('[Content_Types].xml', ctXml);
+        }
+      }
+
       // 날짜별 시트 이름을 실제 채취일(yyyymmdd)로 변경 (인쇄 영역 이름도 함께)
       const sheetNames = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)).map((m) => m[1]);
       const dayNames = log.days.map((day) => {
@@ -6296,15 +6363,6 @@ export default function App() {
       }
       zip.file('xl/workbook.xml', workbookXml);
       await removeCalcChainFromZip(zip);
-
-      const daySheetCount = sheetNames.filter((name) => name !== inputSheet).length;
-      const lateDays = [...new Set(SAMPLING_LOG_SUBSTANCES
-        .map((sub) => log.rows[String(sub.row)])
-        .filter((row) => row && row.requested && Number(row.dayIndex) >= daySheetCount)
-        .map((row) => Number(row.dayIndex) + 1))].sort();
-      if (lateDays.length > 0) {
-        alert(`엑셀 양식의 날짜별 시트는 ${daySheetCount}일치뿐이라 ${lateDays.join('·')}일차 물질은 입력 시트에만 들어갑니다.\n해당 일차는 날짜별 시트를 복사해 따로 인쇄해주세요.`);
-      }
 
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
