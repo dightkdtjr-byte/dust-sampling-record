@@ -108,6 +108,7 @@ const SHEET_MENU = [
     title: '먼지시료채취기록부',
     desc: '먼지시료채취 및 등속흡인 기록',
     toneClass: 'from-emerald-200/60 to-teal-200/20',
+    swatchClass: 'bg-emerald-500',
     hoverTextClass: 'group-hover:text-emerald-700',
   },
   {
@@ -115,6 +116,7 @@ const SHEET_MENU = [
     title: '금속시료채취기록부',
     desc: '금속시료채취 및 등속흡인 기록',
     toneClass: 'from-yellow-200/70 to-amber-200/20',
+    swatchClass: 'bg-yellow-400',
     hoverTextClass: 'group-hover:text-yellow-700',
   },
   {
@@ -122,6 +124,7 @@ const SHEET_MENU = [
     title: '수은시료채취기록부',
     desc: '수은시료채취 및 등속흡인 기록',
     toneClass: 'from-blue-200/70 to-sky-200/20',
+    swatchClass: 'bg-blue-500',
     hoverTextClass: 'group-hover:text-blue-700',
   },
   {
@@ -129,6 +132,7 @@ const SHEET_MENU = [
     title: 'PAHs시료채취기록부',
     desc: 'PAHs시료채취 및 등속흡인 기록',
     toneClass: 'from-purple-200/70 to-violet-200/20',
+    swatchClass: 'bg-purple-500',
     hoverTextClass: 'group-hover:text-purple-700',
   },
   {
@@ -136,6 +140,7 @@ const SHEET_MENU = [
     title: '유량측정기록부',
     desc: '배출가스 유속·유량 측정 기록',
     toneClass: 'from-cyan-200/70 to-sky-200/20',
+    swatchClass: 'bg-cyan-500',
     hoverTextClass: 'group-hover:text-cyan-700',
   },
   {
@@ -143,6 +148,7 @@ const SHEET_MENU = [
     title: '시료채취기록부(종합)',
     desc: '사업장별 물질 채취 현황 (가스·입자·VOCs)',
     toneClass: 'from-orange-200/70 to-amber-200/20',
+    swatchClass: 'bg-orange-500',
     hoverTextClass: 'group-hover:text-orange-700',
   },
 ];
@@ -883,6 +889,8 @@ const SKYLINE_PALETTES = {
     mountain: ['#f1f6fc', '#cbdcef'], asphalt: '#707a89', roadLine: 'rgba(255,255,255,0.75)', wire: 'rgba(60,70,90,0.38)', pylon: '#8a94a6',
     tank: ['#eef1f5', '#c3ccd8', '#8d9aae'], fog: 'rgba(255,255,255,0.42)', bird: '#3b4252', plane: '#f3f4f6', contrail: 'rgba(255,255,255,0.75)',
     lampGlow: null, headlight: null, taillight: null, carColors: ['#d9534f', '#3b82f6', '#f5f5f5', '#f4c20d', '#6b7280'],
+    farCity: ['#dde7f2', '#c3d3e5'], cirrus: 'rgba(255,255,255,0.6)', horizonGlow: 'rgba(255,236,200,0.5)',
+    crane: '#c6462f', rail: '#7d8690', sleeper: '#a0917c', loco: '#2f4f6f', wagons: ['#8a6d4b', '#6f7d6c', '#9a4b3c', '#7a7f8a'], trainLight: null,
   },
   morning: {
     hillFar: ['#ebdff0', '#c6b4db'], hillMid: ['#d3c1b2', '#95818a'], hillNear: ['#a9a97c', '#64704f'],
@@ -895,6 +903,8 @@ const SKYLINE_PALETTES = {
     mountain: ['#f8e9f1', '#dcc6df'], asphalt: '#7a6f78', roadLine: 'rgba(255,240,220,0.75)', wire: 'rgba(80,60,70,0.38)', pylon: '#8d7f88',
     tank: ['#fbeee4', '#d6bcb1', '#9a8488'], fog: 'rgba(255,230,200,0.45)', bird: '#4b3f4a', plane: '#fff5ec', contrail: 'rgba(255,235,215,0.75)',
     lampGlow: null, headlight: null, taillight: null, carColors: ['#c94f4b', '#4f7fd1', '#f8efe6', '#e6b83a', '#6e6a73'],
+    farCity: ['#e9d8e6', '#d0bdd3'], cirrus: 'rgba(255,240,225,0.55)', horizonGlow: 'rgba(255,190,150,0.55)',
+    crane: '#b6473a', rail: '#8a7f86', sleeper: '#9c8a7c', loco: '#4a4f66', wagons: ['#8d6c52', '#6f7566', '#954a3f', '#7b7682'], trainLight: null,
   },
   night: {
     hillFar: ['#2c3d6c', '#1a274a'], hillMid: ['#20304f', '#121c35'], hillNear: ['#172a34', '#0b151c'],
@@ -907,6 +917,8 @@ const SKYLINE_PALETTES = {
     mountain: ['#1c2c56', '#14203f'], asphalt: '#0f1620', roadLine: 'rgba(230,220,170,0.35)', wire: 'rgba(170,185,220,0.25)', pylon: '#3c4760',
     tank: ['#4b586f', '#2f3a4f', '#1b2232'], fog: 'rgba(120,140,190,0.16)', bird: null, plane: '#8e9ab5', contrail: null,
     lampGlow: 'rgba(255,214,130,0.5)', headlight: 'rgba(255,240,200,0.95)', taillight: '#ff4d3d', carColors: ['#5b6475', '#4a5366', '#6b7386', '#565e70', '#3f4756'],
+    farCity: ['#1f2f58', '#182546'], cirrus: 'rgba(190,205,240,0.07)', horizonGlow: 'rgba(255,170,90,0.16)',
+    crane: '#4c2b2f', rail: '#2b3340', sleeper: '#2a2420', loco: '#1c2a3a', wagons: ['#3a3129', '#2d3530', '#3f2622', '#30343c'], trainLight: 'rgba(255,240,200,0.9)',
   },
 };
 
@@ -943,6 +955,23 @@ const SKYLINE_BIRD_FLOCKS = [
   { path: 'M1700,200 C1200,170 600,230 -120,190', dur: 64, delay: -30, birds: [[0, 0], [-14, 8], [14, 8], [-28, 16]] },
 ];
 const SKYLINE_PLANE = { path: 'M-160,58 L1760,92', dur: 78, delay: -26 };
+// 원경 도시(산 앞, 언덕 뒤), 권운, 타워크레인, 가스홀더, 철길과 화물열차
+const SKYLINE_FAR_CITY = Array.from({ length: 46 }, (_, i) => ({
+  x: -10 + i * 35 + ((i * 13) % 9), w: 18 + ((i * 7) % 16), h: 14 + ((i * 11) % 34),
+}));
+const SKYLINE_CIRRUS = [
+  { x: 120, y: 48, w: 420, h: 7 }, { x: 640, y: 92, w: 300, h: 5 }, { x: 980, y: 36, w: 520, h: 8 }, { x: 1380, y: 118, w: 260, h: 5 },
+];
+const SKYLINE_CRANE = { x: 176, top: 128, jib: 230, counter: 78, hookX: 150 };
+const SKYLINE_GAS_HOLDER = { cx: 1000, cy: 352, r: 44 };
+const SKYLINE_RAIL_Y = 500;
+const SKYLINE_TRAIN = {
+  dur: 96, delay: -40,
+  cars: [
+    { w: 46, h: 16, kind: 'loco' }, { w: 40, h: 13, kind: 'tank' }, { w: 44, h: 14, kind: 'box' }, { w: 44, h: 14, kind: 'box' },
+    { w: 40, h: 13, kind: 'tank' }, { w: 44, h: 11, kind: 'flat' }, { w: 44, h: 14, kind: 'box' }, { w: 40, h: 13, kind: 'tank' },
+  ],
+};
 
 const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
@@ -986,7 +1015,7 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   return (
     <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        {[['mountain', pal.mountain], ['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].map(([name, colors]) => (
+        {[['mountain', pal.mountain], ['farCity', pal.farCity], ['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].map(([name, colors]) => (
           <linearGradient key={name} id={id(name)} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={colors[0]} />
             <stop offset="1" stopColor={colors[1]} />
@@ -1013,6 +1042,11 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
             <stop offset="1" stopColor={pal.cityGlow} stopOpacity="0" />
           </radialGradient>
         )}
+        <linearGradient id={id('horizon')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.horizonGlow} stopOpacity="0" />
+          <stop offset="0.85" stopColor={pal.horizonGlow} />
+          <stop offset="1" stopColor={pal.horizonGlow} stopOpacity="0" />
+        </linearGradient>
         {pal.contrail && (
           <linearGradient id={id('contrail')} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor={pal.contrail} stopOpacity="0" />
@@ -1036,15 +1070,63 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         </filter>
       </defs>
 
+      {/* 지평선 빛 띠와 권운 */}
+      <rect x="0" y="150" width="1600" height="170" fill={`url(#${id('horizon')})`} />
+      {SKYLINE_CIRRUS.map((c, i) => (
+        <ellipse key={`cirrus-${i}`} cx={c.x + c.w / 2} cy={c.y} rx={c.w / 2} ry={c.h / 2} fill={pal.cirrus} filter={`url(#${id('fogblur')})`} />
+      ))}
+
       {/* 먼 산맥 (대기 원근으로 가장 연함) */}
       <path d="M0,300 L90,250 L150,276 L230,214 L300,262 L360,236 L430,286 L520,206 L600,258 L660,238 L740,282 L830,222 L900,266 L960,244 L1040,292 L1130,226 L1200,264 L1260,232 L1340,288 L1420,218 L1500,262 L1560,248 L1600,270 L1600,520 L0,520 Z" fill={`url(#${id('mountain')})`} />
       {pal.contrail && <path d="M230,214 L205,236 L255,232 Z M520,206 L498,228 L545,226 Z M830,222 L808,242 L852,240 Z M1130,226 L1108,248 L1152,246 Z M1420,218 L1398,240 L1442,238 Z" fill="rgba(255,255,255,0.55)" />}
+
+      {/* 원경 도시: 산 앞에 납작한 건물 열 (밤에는 창이 켜짐) */}
+      <g>
+        {SKYLINE_FAR_CITY.map((b, i) => (
+          <rect key={`farcity-${i}`} x={b.x} y={302 - b.h} width={b.w} height={b.h + 40} fill={`url(#${id('farCity')})`} />
+        ))}
+        {pal.windowLit && SKYLINE_FAR_CITY.filter((_, i) => i % 3 !== 1).map((b, i) => (
+          <rect key={`farlit-${i}`} x={b.x + 3} y={302 - b.h + 4 + ((i * 7) % 10)} width={b.w - 6} height="2" fill={pal.windowLit} opacity="0.35" />
+        ))}
+      </g>
 
       {/* 원경 언덕 두 겹 + 안개 */}
       <path d="M0,330 C140,286 260,300 400,268 C560,232 680,282 840,262 C1000,240 1120,290 1280,258 C1400,232 1500,262 1600,238 L1600,520 L0,520 Z" fill={`url(#${id('hillFar')})`} />
       <path d="M0,372 C120,340 260,352 420,330 C600,306 720,352 900,338 C1080,322 1180,362 1360,340 C1460,328 1540,350 1600,338 L1600,520 L0,520 Z" fill={`url(#${id('hillMid')})`} />
       <rect x="0" y="330" width="1600" height="120" fill={`url(#${id('haze')})`} />
       {pal.cityGlow && <rect x="0" y="260" width="1600" height="190" fill={`url(#${id('cityglow')})`} />}
+
+      {/* 타워크레인 (타워 뒤) */}
+      {!compact && (() => {
+        const c = SKYLINE_CRANE;
+        return (
+          <g stroke={pal.crane} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.92">
+            <path d={`M${c.x - 7},${GROUND_Y} L${c.x - 7},${c.top} M${c.x + 7},${GROUND_Y} L${c.x + 7},${c.top}`} />
+            <path d={Array.from({ length: 12 }).map((_, i) => `M${c.x - 7},${c.top + 14 + i * 26} L${c.x + 7},${c.top + i * 26}`).join(' ')} strokeWidth="1.2" />
+            <path d={`M${c.x - 7},${c.top} L${c.x + 7},${c.top} L${c.x + 7},${c.top - 18} L${c.x - 7},${c.top - 18} Z`} />
+            <path d={`M${c.x - c.counter},${c.top - 10} L${c.x + c.jib},${c.top - 10}`} strokeWidth="3" />
+            <path d={`M${c.x - c.counter},${c.top - 10} L${c.x},${c.top - 36} L${c.x + c.jib},${c.top - 10} M${c.x},${c.top - 36} L${c.x},${c.top - 18}`} strokeWidth="1.2" />
+            <path d={`M${c.x - c.counter + 6},${c.top - 10} L${c.x - c.counter + 6},${c.top + 4} L${c.x - c.counter + 30},${c.top + 4} L${c.x - c.counter + 30},${c.top - 10}`} fill={pal.crane} />
+            <path d={`M${c.x + c.hookX},${c.top - 10} L${c.x + c.hookX},${c.top + 150}`} strokeWidth="1" />
+            <path d={`M${c.x + c.hookX - 10},${c.top + 150} L${c.x + c.hookX + 10},${c.top + 150} L${c.x + c.hookX + 10},${c.top + 166} L${c.x + c.hookX - 10},${c.top + 166} Z`} fill={pal.stackCap} />
+            {pal.beacon && <circle className="skyline-beacon" cx={c.x} cy={c.top - 38} r="3" fill={pal.beacon} style={{ '--beacon-delay': '-1.6s' }} />}
+          </g>
+        );
+      })()}
+
+      {/* 가스홀더 (구형 탱크, 공장 뒤) */}
+      {!compact && (() => {
+        const g = SKYLINE_GAS_HOLDER;
+        return (
+          <g>
+            <path d={`M${g.cx - g.r * 0.6},${GROUND_Y} L${g.cx - g.r * 0.45},${g.cy + g.r * 0.5} M${g.cx + g.r * 0.6},${GROUND_Y} L${g.cx + g.r * 0.45},${g.cy + g.r * 0.5} M${g.cx - g.r * 0.2},${GROUND_Y} L${g.cx - g.r * 0.15},${g.cy + g.r * 0.9} M${g.cx + g.r * 0.2},${GROUND_Y} L${g.cx + g.r * 0.15},${g.cy + g.r * 0.9}`} stroke={pal.pylon} strokeWidth="2.5" fill="none" />
+            <circle cx={g.cx} cy={g.cy} r={g.r} fill={`url(#${id('tank')})`} stroke={pal.towerEdge} strokeWidth="1" />
+            <ellipse cx={g.cx} cy={g.cy} rx={g.r} ry={g.r * 0.18} fill="none" stroke={pal.band} strokeWidth="2" opacity="0.6" />
+            <path d={`M${g.cx - g.r},${g.cy} A${g.r},${g.r} 0 0 1 ${g.cx + g.r},${g.cy}`} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="6" />
+            <path d={`M${g.cx + g.r * 0.95},${g.cy - 4} L${g.cx + g.r * 0.95},${g.cy - g.r - 10} L${g.cx + g.r * 0.6},${g.cy - g.r - 10}`} stroke={pal.pylon} strokeWidth="1.5" fill="none" />
+          </g>
+        );
+      })()}
 
       {/* 뒤쪽 유리 타워 */}
       {towers.map((tower, tIdx) => (
@@ -1194,6 +1276,41 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
           </g>
         );
       })}
+
+      {/* 철길과 화물열차 (도로 앞) */}
+      <g>
+        <path d={`M0,${SKYLINE_RAIL_Y + 6} L1600,${SKYLINE_RAIL_Y + 6}`} stroke={pal.sleeper} strokeWidth="5" strokeDasharray="3 9" opacity="0.9" />
+        <path d={`M0,${SKYLINE_RAIL_Y + 3.5} L1600,${SKYLINE_RAIL_Y + 3.5} M0,${SKYLINE_RAIL_Y + 8.5} L1600,${SKYLINE_RAIL_Y + 8.5}`} stroke={pal.rail} strokeWidth="1.4" />
+      </g>
+      {(() => {
+        const gap = 5;
+        let offset = 0;
+        const cars = SKYLINE_TRAIN.cars.map((car, i) => {
+          const x = offset; offset += car.w + gap;
+          const body = car.kind === 'loco' ? pal.loco : pal.wagons[i % pal.wagons.length];
+          const y = SKYLINE_RAIL_Y + 3 - car.h;
+          return (
+            <g key={`car-${i}`}>
+              {car.kind === 'tank'
+                ? <rect x={x} y={y + 2} width={car.w} height={car.h - 2} rx={(car.h - 2) / 2} fill={body} />
+                : <rect x={x} y={y} width={car.w} height={car.h} rx="1.5" fill={body} />}
+              {car.kind === 'loco' && <rect x={x + car.w - 16} y={y - 6} width="14" height="7" rx="1.5" fill={body} />}
+              {car.kind === 'loco' && <rect x={x + car.w - 13} y={y - 5} width="8" height="4" rx="0.8" fill={pal.trainLight || 'rgba(200,225,245,0.8)'} />}
+              {car.kind === 'loco' && pal.trainLight && <path d={`M${x + car.w},${y + 4} L${x + car.w + 46},${y - 6} L${x + car.w + 46},${y + 14} Z`} fill={pal.trainLight} opacity="0.22" />}
+              {car.kind === 'box' && <rect x={x + car.w / 2 - 2} y={y + 3} width="4" height={car.h - 6} fill="rgba(0,0,0,0.2)" />}
+              {car.kind === 'flat' && [0, 1].map((k) => <rect key={k} x={x + 4 + k * 20} y={y - 7} width="16" height="8" rx="1" fill={pal.wagons[(i + k + 1) % pal.wagons.length]} />)}
+              <circle cx={x + 7} cy={SKYLINE_RAIL_Y + 3.5} r="2.4" fill="#1f2937" />
+              <circle cx={x + car.w - 7} cy={SKYLINE_RAIL_Y + 3.5} r="2.4" fill="#1f2937" />
+            </g>
+          );
+        });
+        return (
+          <g>
+            <g transform={`translate(${-offset} 0)`}>{cars}</g>
+            <animateMotion dur={`${SKYLINE_TRAIN.dur}s`} begin={`${SKYLINE_TRAIN.delay}s`} repeatCount="indefinite" path={`M-60,0 L${1600 + offset + 60},0`} />
+          </g>
+        );
+      })()}
 
       {/* 새 떼 (낮·아침) */}
       {pal.bird && SKYLINE_BIRD_FLOCKS.slice(0, compact ? 1 : 2).map((flock, fi) => (
@@ -1913,7 +2030,7 @@ const SheetSectionNav = ({ scope }) => {
 };
 
 const SignatureBadge = () => (
-  <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
+  <div className="fixed right-4 bottom-3 z-30 text-[11px] text-slate-500 tracking-wide select-none">
     sangseok
   </div>
 );
@@ -6885,12 +7002,6 @@ export default function App() {
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#fff2cc]/38 via-[#ffdca5]/20 to-transparent'
       : 'bg-gradient-to-b from-white/42 via-sky-100/12 to-transparent');
-  const menuSkyGlowLeftClass = isNightSky
-    ? 'bg-indigo-300/20'
-    : (isMorningSky ? 'bg-amber-100/70' : 'bg-white/85');
-  const menuSkyGlowRightClass = isNightSky
-    ? 'bg-violet-400/15'
-    : (isMorningSky ? 'bg-orange-200/45' : 'bg-sky-200/70');
   const sheetSkyBgClass = isNightSky
     ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
     : (isMorningSky
@@ -7022,8 +7133,6 @@ export default function App() {
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className={`absolute inset-0 ${menuSkyOverlayClass}`} />
-        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
-        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
         {renderSkyDecor('menu')}
           {isNightSky && (
@@ -7060,10 +7169,9 @@ export default function App() {
               />
             </h1>
           </div>
-          <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 relative">
             {!isUserUnlocked ? (
-              <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
-                <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
+              <div className="relative overflow-hidden border border-slate-200 rounded-2xl p-5 bg-white text-center">
                 <p className="text-sm font-black text-emerald-900">베타 접속</p>
                 <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -7341,9 +7449,10 @@ export default function App() {
                     key={sheet.id}
                     type="button"
                     onClick={() => navigateToSheet(sheet.id)}
-                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5"
+                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-colors hover:border-slate-400 menu-sheet-card"
                   >
-                    <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br ${sheet.toneClass} blur-sm group-hover:scale-110 transition-transform`} />
+                    <span className={`absolute right-4 top-4 w-3 h-3 ${sheet.swatchClass}`} aria-hidden="true" />
+                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${sheet.swatchClass}`} aria-hidden="true" />
                     <h2 className="text-base font-black text-slate-900">{sheet.title}</h2>
                     <p className="text-xs text-slate-600 mt-1">{sheet.desc}</p>
                     <div className={`mt-4 flex items-center text-[11px] font-bold text-slate-500 transition-colors ${sheet.hoverTextClass}`}>
@@ -8190,13 +8299,15 @@ export default function App() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-2">사전 수분량 측정 방법</label>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="ds-segment" role="tablist">
                     {MOISTURE_METHODS.map((method) => (
                       <button
                         key={method.id}
                         type="button"
+                        role="tab"
+                        aria-selected={activeMoistureMethod.id === method.id}
                         onClick={() => setFormData((prev) => ({ ...prev, moistureMethod: method.id }))}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md border transition-colors ${activeMoistureMethod.id === method.id ? 'bg-cyan-600 border-cyan-600 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                        className={`ds-segment-item${activeMoistureMethod.id === method.id ? ' is-on' : ''}`}
                       >
                         {method.label}
                       </button>

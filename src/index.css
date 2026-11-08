@@ -644,3 +644,40 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
   .ds-secnav-title { display: none; }
   .ds-secnav-item.is-active .ds-secnav-title { display: inline; }
 }
+
+/* ── AI 티 빼기: 유리 효과 없는 불투명 종이, 더 각진 모서리, 평평한 구분 버튼 ── */
+.ds-page > div.bg-white.shadow-sm, .ds-page > div.bg-white:nth-child(2), .ds-page > div.bg-white:nth-child(3), .ds-page > nav.ds-secnav, .ds-page > form,
+.ds-page > div.flex, .ds-page > div.mt-6, .ds-page > div.bg-white:last-child, .ds-page > div:not(.bg-white):not(form):not(nav) {
+  background: var(--ds-paper) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+.ds-page { box-shadow: 0 1px 0 rgba(26, 36, 32, 0.06), 0 14px 30px -24px rgba(26, 36, 32, 0.35); }
+.ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .ds-page select, .ds-page textarea, .ds-page button { border-radius: 2px !important; }
+.ds-page .rounded-xl, .ds-page .rounded-lg, .ds-page .rounded-2xl, .ds-page .rounded, .ds-page .rounded-md { border-radius: 2px !important; }
+.ds-page > *:first-child, .ds-page > *:last-child { border-radius: 0 !important; }
+.ds-segment { display: inline-flex; border: 1px solid var(--ds-rule-strong); border-radius: 2px; overflow: hidden; }
+.ds-segment-item {
+  padding: 6px 12px; font-size: 12.5px; font-weight: 500; color: var(--ds-ink-2); background: #fff !important; border: none !important;
+  border-left: 1px solid var(--ds-rule) !important; border-radius: 0 !important;
+}
+.ds-segment-item:first-child { border-left: none !important; }
+.ds-segment-item:hover { background: var(--ds-accent-soft) !important; color: var(--ds-ink); }
+.ds-segment-item.is-on { background: var(--ds-ink) !important; color: #fff !important; font-weight: 600; }
+/* 요약 행 호버 색, 섹션 번호 줄 밑줄은 그대로. 순간 등속 띠는 조금 더 가늘게 */
+.ds-iso-bar { height: 3px; }
+.ds-iso-mark { height: 9px; top: -3px; }
+
+/* 첫 화면: 유리·번짐 없이 평평한 카드와 색 표식 */
+.menu-sheet-card { border-radius: 4px !important; box-shadow: none !important; }
+.menu-sheet-card > span[aria-hidden] { border-radius: 0; }
+.menu-sheet-card:hover { background: #fafafa; }
+/* 메뉴 카드 색 표식: 연한색 중화 규칙(bg-*-50)에 걸리지 않게 원래 색 유지 */
+.menu-sheet-card .bg-emerald-500 { background-color: #10b981 !important; }
+.menu-sheet-card .bg-cyan-500 { background-color: #06b6d4 !important; }
+.menu-sheet-card .bg-yellow-400 { background-color: #facc15 !important; }
+.menu-sheet-card .bg-blue-500 { background-color: #3b82f6 !important; }
+.menu-sheet-card .bg-purple-500 { background-color: #a855f7 !important; }
+.menu-sheet-card .bg-orange-500 { background-color: #f97316 !important; }
+/* 첫 화면 패널도 유리 효과 없이 불투명하게 */
+div.bg-white.shadow-sm, div.bg-white.shadow-md, div.bg-white.shadow-lg, div.bg-white.shadow-xl {
+  background-color: #fff !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
