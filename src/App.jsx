@@ -5156,7 +5156,7 @@ export default function App() {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
       const synced = syncSamplingLogFromSavedReport(result);
-      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부의 해당 물질 행에도 옮겨 적었습니다.' : ''}`);
+      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부에도 반영했습니다.' : ''}`);
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
@@ -7048,7 +7048,7 @@ export default function App() {
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-slate-200 rounded-2xl p-5 bg-white text-center">
                 <p className="text-sm font-black text-emerald-900">베타 접속</p>
-                <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
+                <p className="text-xs text-emerald-800 mt-1">기본 계정(user)으로 바로 시작합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
@@ -7118,7 +7118,7 @@ export default function App() {
                     onClick={() => setAuthModal('settings')}
                     className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-10"
                   >
-                    ⚙ 설정
+                    설정
                   </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
@@ -7241,7 +7241,7 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대(아침/낮/밤) 표시를 선택합니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대 (아침·낮·밤)</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {SKY_PREVIEW_OPTIONS.map((opt) => {
                               const selected = skyPreviewMode === opt.id;
@@ -7264,7 +7264,7 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist)</p>
-                          <p className="text-[11px] text-slate-600 mt-1">다른 기기에서도 같은 계정 리포트를 복원할 수 있습니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">다른 PC에서 같은 계정의 리포트를 복원합니다.</p>
                           <div className="mt-2 space-y-2">
                             <input
                               type="password"
@@ -7342,7 +7342,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -7492,7 +7492,7 @@ export default function App() {
                   </button>
                   <button type="button" onClick={addGasSamplerPreset} className="px-2 py-1 text-[11px] font-bold bg-white text-slate-700 rounded border border-slate-300">행 추가</button>
                   <button type="button" onClick={resetGasSamplerDefaults} className="px-2 py-1 text-[11px] font-bold bg-slate-100 text-slate-700 rounded border border-slate-300">{IS_DESKTOP_BUILD ? '비우기' : '초기값 복원'}</button>
-                  <span className="text-[10px] text-slate-500">양식의 가스 샘플러 칸(최대 5대)에 순서대로 들어갑니다</span>
+                  <span className="text-[10px] text-slate-500">양식에는 앞의 5대가 들어갑니다</span>
                 </div>
                 <div className="mt-2 overflow-x-auto border border-slate-200 rounded-lg bg-white">
                   <table className="w-full text-[11px] text-center">
@@ -7506,7 +7506,7 @@ export default function App() {
                     </thead>
                     <tbody>
                       {gasSamplers.length === 0 && (
-                        <tr><td colSpan="4" className="p-3 text-slate-400">등록된 가스 샘플러가 없습니다. "행 추가"로 입력하세요.</td></tr>
+                        <tr><td colSpan="4" className="p-3 text-slate-400">가스 샘플러가 없습니다. 행 추가로 입력하세요.</td></tr>
                       )}
                       {gasSamplers.map((item, idx) => (
                         <tr key={`${item.id}-${idx}`}>
@@ -7529,8 +7529,8 @@ export default function App() {
             return (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택의 이어지는 날짜(1·2·3일차)끼리 묶음 · 날짜가 떨어지면 따로</span></h3>
-                  <span className="text-[11px] text-slate-500">가져오면 먼지·중금속·수은·PAHs 행의 시각, 가스미터 시작·종료값, 미터 온도, 오리피스압이 채워집니다</span>
+                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택, 3일 이내 날짜끼리 한 묶음</span></h3>
+                  
                 </div>
                 <div className="overflow-x-auto border border-slate-200 rounded-lg">
                   <table className="w-full text-xs text-left">
@@ -7571,7 +7571,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
               <span className="ds-sec-num">2</span>
-              채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일, 양식의 날짜별 시트는 앞의 2일)</span>
+              채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일)</span>
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-center border-collapse">
@@ -7603,7 +7603,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
               <span className="ds-sec-num">3</span>
-              물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 체크한 물질만 양식에 기록됩니다)</span>
+              물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 표시한 물질만 추출)</span>
               <span className="ml-auto flex items-center gap-1">
                 <button type="button" onClick={() => setSamplingLogRequestedOnly(false)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${!samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>전체</button>
                 <button type="button" onClick={() => setSamplingLogRequestedOnly(true)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>의뢰만 보기 ({logStats.requestedCount})</button>
@@ -7947,7 +7947,7 @@ export default function App() {
               <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-sm font-bold text-slate-800">
-                    굴뚝 내경({formData.stackDiameter}m) 연동 측정점 산출
+                    측정점 위치 (내경 {formData.stackDiameter} m)
                   </h3>
                   {samplingPointsData.isCenterOnly && (
                     <span className="bg-red-50 text-red-600 px-2 py-1 rounded text-xs font-bold animate-pulse border border-red-200">
@@ -8052,7 +8052,7 @@ export default function App() {
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-slate-200 pb-2">
               <h2 className="ds-sec-title is-inline">
                 <span className="ds-sec-num">2</span>
-                배출가스 조성 및 밀도 (가스분석기 5분 간격 3회 측정)
+                배출가스 조성 및 밀도
               </h2>
             </div>
             
@@ -8574,7 +8574,7 @@ export default function App() {
                               <button type="button" onClick={() => addPitotCpRow(idx)} className="self-start px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded border border-emerald-300 font-bold">
                                 + 유속 구간 추가
                               </button>
-                              <span className="text-[10px] text-slate-500">각 행의 유속은 그 구간의 상한입니다 (예: 4.95 → 0~4.95 m/s). 표의 최대 유속을 넘으면 마지막 값을 적용하고, 표가 비어 있으면 기본 Cp를 씁니다.</span>
+                              <span className="text-[10px] text-slate-500">유속 값은 구간 상한 (4.95 → 0~4.95 m/s). 표 범위를 넘으면 마지막 Cp, 표가 비면 기본 Cp.</span>
                             </div>
                           </td>
                           <td className="border border-emerald-200 p-1">
@@ -8652,7 +8652,7 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
               <span className="ds-sec-num">5</span>
-              시료 채취 기록 (적산유량계 및 등속흡인)
+              시료 채취 기록
             </h2>
 
             {!isFlowSheet && (<>
@@ -8660,7 +8660,7 @@ export default function App() {
             <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-lg mb-6 shadow-sm">
                <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-4 gap-2">
                  <h3 className="font-bold text-emerald-800">
-                    1단계: 채취조건 정밀 산출 (기기 고유 계수 연동)
+                    1단계 채취 조건
                  </h3>
                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
@@ -8796,13 +8796,13 @@ export default function App() {
                  </div>
                )}
                
-               <p className="text-[11px] text-emerald-700 mb-4 font-bold">K-Factor와 예상 오리피스압(ΔH)을 구한 뒤, 노즐 유량으로 <span className="text-emerald-900">목표 채취량({formData.targetVolume || 1000} SL)에 필요한 채취시간</span>을 계산합니다.</p>
+               
 
                {/* 접기/펴기 엑셀 전체 리스트 */}
                <details className="mt-4 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                   <summary className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center justify-between gap-2">
-                     <span>전체 노즐 예측표 열어보기</span>
-                     <span className="text-[10px] text-slate-500">표에서 노즐 번호나 직경을 직접 입력할 수 있습니다</span>
+                     <span>노즐 예측표</span>
+                     <span className="text-[10px] text-slate-500">번호와 직경 편집</span>
                   </summary>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">{NOZZLE_GROUP_LABELS[activeNozzleGroup]} 노즐 세트</span>
@@ -8929,7 +8929,7 @@ export default function App() {
                     </div>
                   )}
                   
-                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 및 채취량 예측 정보</h4>
+                  <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 결과</h4>
                   <div className="flex flex-wrap justify-center gap-2 text-center">
                       <div className="bg-slate-50 py-2 px-1 rounded-lg border border-slate-200 flex-1 min-w-[90px]">
                           <div className="text-[10px] text-slate-500 font-bold">가스유속(V<sub>s</sub>)</div>
@@ -9000,7 +9000,7 @@ export default function App() {
             {/* 적산유량계 기록표 */}
             <div className="mb-6">
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계: 적산유량계 기록표 (대기오염공정시험기준 통합 양식)'}</h3>
+                <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계 적산유량계 기록표'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합기록부의 시작·종료 시각에 쓰입니다 (종료 = 시작 + 총 시간)">
                       채취 시작
@@ -9034,7 +9034,7 @@ export default function App() {
                     </button>
                     {(() => {
                       const plan = getTableGenerationPlan();
-                      if (!plan) return <span className="w-full text-right text-[11px] text-amber-700 font-bold">1번 섹션에서 굴뚝 내경을 입력하면 측정점 수가 정해집니다</span>;
+                      if (!plan) return <span className="w-full text-right text-[11px] text-amber-700 font-bold">굴뚝 내경(1번 섹션)을 입력하면 표가 만들어집니다</span>;
                       const changed = plan.adjustedTotal !== plan.requestedTotal;
                       return (
                         <span className={`w-full text-right text-[11px] font-bold ${changed ? 'text-amber-700' : 'text-emerald-700'}`}>
@@ -9245,8 +9245,8 @@ export default function App() {
             <div className="bg-white p-5 rounded-2xl flex flex-col justify-between shadow-lg border-2 border-slate-300">
               <div className="mb-4">
                 <div>
-                  <h3 className="font-black text-lg text-slate-900 tracking-tight">전체 평균 등속흡인율 (Isokinetic Rate)</h3>
-                  <p className="text-xs text-slate-600 mt-1">유효 범위 90~110% (대기오염공정시험기준)</p>
+                  <h3 className="font-black text-lg text-slate-900 tracking-tight">등속흡인율</h3>
+                  <p className="text-xs text-slate-600 mt-1">적합 범위 90~110%</p>
                 </div>
               </div>
               
