@@ -26,8 +26,27 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      # Electron 바이너리 캐시: 다운로드 서버가 느리거나 끊겨도(504) 빌드가 실패하지 않게
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
+      - name: Install dependencies (retry on download failures)
+        shell: pwsh
+        run: |
+          $ok = $false
+          foreach ($i in 1..4) {
+            npm ci
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Host "npm ci failed (attempt $i), retrying in $(20 * $i)s..."
+            Start-Sleep -Seconds (20 * $i)
+          }
+          if (-not $ok) { exit 1 }
 
       - name: Build distribution exe (no company data)
         run: npm run electron:build
