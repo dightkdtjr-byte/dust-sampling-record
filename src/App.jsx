@@ -7411,8 +7411,8 @@ export default function App() {
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">1</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">1</span>
               사업장 및 장비
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
@@ -7537,8 +7537,8 @@ export default function App() {
           })()}
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">2</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">2</span>
               채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일, 양식의 날짜별 시트는 앞의 2일)</span>
             </h2>
             <div className="overflow-x-auto">
@@ -7569,8 +7569,8 @@ export default function App() {
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-gradient-to-br from-orange-500 to-amber-400 text-white font-black w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-sm">3</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">3</span>
               물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 체크한 물질만 양식에 기록됩니다)</span>
               <span className="ml-auto flex items-center gap-1">
                 <button type="button" onClick={() => setSamplingLogRequestedOnly(false)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${!samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>전체</button>
@@ -7786,7 +7786,7 @@ export default function App() {
         <style>{SKYLINE_FLYER_CSS}</style>
         {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
         {renderSheetSkyScene()}
-        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6">
+        <div className="relative z-10 max-w-[1400px] mx-auto space-y-6 ds-page">
           <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
             <h1 className="text-2xl font-black text-slate-900">
               <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
@@ -7816,7 +7816,7 @@ export default function App() {
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
       {renderSheetSkyScene()}
-      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10 ds-page">
         
         {/* 헤더 섹션 */}
         <div className={`bg-white p-6 rounded-xl shadow-md border-t-4 relative ${activeTheme.headerBorder}`}>
@@ -7829,9 +7829,9 @@ export default function App() {
                 className="h-[2.2rem] md:h-[3.2rem] w-auto select-none"
               />
             </h1>
-            <p className="text-slate-600 mt-2 text-sm font-medium">
-              <span className="font-black text-slate-800">{activeSheet?.title || '먼지시료채취기록부'}</span>
-              {' '}| 대기오염공정시험기준에 따라 전 항목을 자동 계산하는 기록부
+            <p className="ds-sheet-title">
+              <span>{activeSheet?.title || '먼지시료채취기록부'}</span>
+              <span className="ds-sheet-title-sub">대기오염공정시험기준 · 양식 A00</span>
             </p>
           </div>
           <button
@@ -7844,10 +7844,10 @@ export default function App() {
         </div>
 
         <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <p className="text-xs text-slate-600">
-            사용자: <span className="font-black text-slate-900">{displayUserNameWithFallback}</span>
-            {' '}| 상태: <span className={`font-black ${isUserUnlocked ? activeTheme.accentText : 'text-red-600'}`}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
-            {' '}| 계정 설정은 첫 화면에서 할 수 있습니다.
+          <p className="text-xs text-slate-600 ds-meta">
+            <span className="ds-meta-user">{displayUserNameWithFallback}</span>
+            <span className={isUserUnlocked ? 'ds-meta-ok' : 'ds-meta-warn'}>{isUserUnlocked ? '로그인됨' : '로그인 필요'}</span>
+            <span className="ds-meta-dim">계정 설정은 첫 화면에서</span>
           </p>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <span className="text-[11px] font-bold text-slate-500">장비 프리셋 (노즐/샘플러/피토관)</span>
@@ -7866,8 +7866,8 @@ export default function App() {
           
           {/* 섹션 1: 일반 사항 및 배출구 제원 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-slate-800 text-white font-black w-6 h-6 rounded-full flex items-center justify-center text-sm">1</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">1</span>
               일반 사항 및 배출구 제원
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -8017,8 +8017,8 @@ export default function App() {
           {/* 섹션 2: 배출가스 조성 및 분자량 (가스분석기 자료) */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b border-slate-200 pb-2">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">2</span>
+              <h2 className="ds-sec-title is-inline">
+                <span className="ds-sec-num">2</span>
                 배출가스 조성 및 밀도 (가스분석기 5분 간격 3회 측정)
               </h2>
             </div>
@@ -8134,8 +8134,8 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 섹션 3: 배출가스 수분량 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-                <span className="bg-cyan-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">3</span>
+              <h2 className="ds-sec-title">
+                <span className="ds-sec-num">3</span>
                 배출가스 수분량
               </h2>
               <div className="space-y-4">
@@ -8352,8 +8352,8 @@ export default function App() {
             {/* ✅ 4번 섹션 동정압 측정 시의 미터온도(Tm) 입력칸 추가 */}
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
               <div className="flex flex-col mb-4 border-b border-slate-200 pb-3 gap-2">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
-                  <span className="bg-emerald-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black shrink-0">4</span>
+                <h2 className="ds-sec-title is-inline whitespace-nowrap">
+                  <span className="ds-sec-num">4</span>
                   측정점별 동압 및 온도
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
@@ -8615,8 +8615,8 @@ export default function App() {
           {/* 섹션 5: 시료채취 및 등속흡인 (유량측정기록부에서는 사용하지 않음) */}
           {!isFlowSheet && (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">5</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">5</span>
               시료 채취 기록 (적산유량계 및 등속흡인)
             </h2>
 
@@ -8721,8 +8721,8 @@ export default function App() {
                </div>
 
                <div className="mb-4">
-                  <button type="button" onClick={handleCalculateOptions} className="w-full py-3 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition shadow-md border border-emerald-700">
-                    K-Factor 및 예상 채취시간 자동 산출
+                  <button type="button" onClick={handleCalculateOptions} className="ds-btn-primary">
+                    K-Factor와 예상 채취시간 계산
                   </button>
                </div>
                
@@ -8888,7 +8888,7 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <span className="font-black text-teal-900">추천 노즐:</span>
                         <span className="text-lg font-black text-emerald-900 bg-emerald-200 px-3 py-1 border border-emerald-300 rounded-lg">
-                          No.{formData.recommendedNozzleNum} ({formData.recommendedNozzleDia} mm)
+                          No.{formData.recommendedNozzleNum}{formData.recommendedNozzleDia ? ` (${formData.recommendedNozzleDia} mm)` : ''}
                         </span>
                       </div>
                     </div>
@@ -9118,10 +9118,18 @@ export default function App() {
                           )}
                           
                           {!isFlowSheet && (
-                          <td className="p-1 border-l border-slate-200 w-16">
-                            <span className={`inline-block w-full py-1 rounded-lg font-black ${rowRate === '-' ? 'text-slate-400 bg-slate-100' : isRateValid ? 'text-emerald-900 bg-emerald-200' : 'text-white bg-red-500'}`}>
-                              {rowRate === '-' ? '-' : `${rowRate}%`}
-                            </span>
+                          <td className="p-1 border-l border-slate-200 w-24 ds-iso-cell">
+                            {rowRate === '-' ? (
+                              <span className="ds-iso-empty">-</span>
+                            ) : (
+                              <span className={`ds-iso ${isRateValid ? 'is-ok' : 'is-out'}`} title={isRateValid ? '등속 범위(90~110%) 안' : '등속 범위(90~110%) 밖'}>
+                                <span className="ds-iso-value">{rowRate}%</span>
+                                <span className="ds-iso-bar" aria-hidden="true">
+                                  <span className="ds-iso-band" />
+                                  <span className="ds-iso-mark" style={{ left: `${Math.max(0, Math.min(100, (parseFloat(rowRate) / 200) * 100))}%` }} />
+                                </span>
+                              </span>
+                            )}
                           </td>
                           )}
                           <td className="p-1 w-8">
@@ -9210,12 +9218,12 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                 <div className="bg-slate-100 p-4 rounded-xl border border-slate-300 flex flex-col items-center justify-center">
                   <span className="text-xs text-slate-700 mb-1 font-bold">사전 수분량 기준 (전체)</span>
-                  <div className="text-3xl font-black text-slate-900">{calcIsokineticRate(false)}<span className="text-base ml-1 text-slate-600">%</span></div>
+                  <div className="text-3xl font-black text-slate-900">{(() => { const v = calcIsokineticRate(false); return Number.isFinite(parseFloat(v)) ? <>{v}<span className="text-base ml-1 text-slate-600">%</span></> : '-'; })()}</div>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-center shadow-md relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-white/50"></div>
                   <span className="text-xs text-slate-200 mb-1 font-bold">사후 수분량 기준 (최종)</span>
-                  <div className="text-4xl font-black text-white">{calcIsokineticRate(true)}<span className="text-xl ml-1 text-slate-200">%</span></div>
+                  <div className="text-4xl font-black text-white">{(() => { const v = calcIsokineticRate(true); return Number.isFinite(parseFloat(v)) ? <>{v}<span className="text-xl ml-1 text-slate-200">%</span></> : <span className="text-2xl text-slate-200">사후 수분량 입력 전</span>; })()}</div>
                 </div>
               </div>
 
@@ -9236,8 +9244,8 @@ export default function App() {
 
           {/* 섹션 6: 시료 분석 및 비고 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <span className="bg-teal-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-black">{isFlowSheet ? 5 : 6}</span>
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">{isFlowSheet ? 5 : 6}</span>
               {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
@@ -9259,40 +9267,41 @@ export default function App() {
             )}
 
             {/* 최종 농도 산출 결과 패널 */}
-            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-md text-white mb-6 relative overflow-hidden">
-               <h3 className="text-sm font-bold text-slate-300 mb-4 border-b border-slate-600 pb-3">
-                 최종 산출 결과 요약
-               </h3>
-               <div className={`grid grid-cols-1 ${isDustSheet ? 'md:grid-cols-5' : 'md:grid-cols-3'} gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-600 text-center`}>
-                  <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">표준 습가스 유량 (Q<sub>sw</sub>)</span>
-                      <span className="text-2xl font-bold text-emerald-300">{gasFlowRates.wet} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
+            {(() => {
+              const finalRate = calcIsokineticRate(true);
+              const finalRateNum = parseFloat(finalRate);
+              const rateState = !Number.isFinite(finalRateNum) ? 'none' : (finalRateNum >= 90 && finalRateNum <= 110 ? 'ok' : 'out');
+              const items = [
+                { label: '표준 습가스 유량', sym: 'Qsw', value: gasFlowRates.wet, unit: 'Sm³/hr' },
+                { label: '표준 건조가스 유량', sym: 'Qs', value: gasFlowRates.dry, unit: 'Sm³/hr' },
+                { label: '배출가스 유속', sym: 'Vs', value: calcFinalGasVelocity(), unit: 'm/s' },
+                ...(isDustSheet ? [
+                  { label: '실측 먼지 농도', sym: 'C', value: calcDustConcentrations().actualC, unit: 'mg/Sm³' },
+                  { label: formData.standardO2 ? 'O₂ 보정 농도' : 'O₂ 보정 농도 (보정 제외)', sym: 'Cc', value: calcDustConcentrations().correctedC, unit: 'mg/Sm³', strong: true },
+                ] : []),
+              ];
+              return (
+                <section className="ds-ledger mb-6" aria-label="최종 산출 결과">
+                  <div className="ds-ledger-head">
+                    <span className="ds-ledger-title">최종 산출 결과</span>
+                    {!isFlowSheet && (
+                      <span className={`ds-ledger-status is-${rateState}`}>
+                        등속흡인율 <strong>{Number.isFinite(finalRateNum) ? `${finalRate}%` : '-'}</strong>
+                        <span className="ds-ledger-status-note">{rateState === 'ok' ? '90~110% 적합' : rateState === 'out' ? '90~110% 밖' : '기록표 입력 전'}</span>
+                      </span>
+                    )}
                   </div>
-                  <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">표준 건조가스 유량 (Q<sub>s</sub>)</span>
-                      <span className="text-2xl font-bold text-cyan-300">{gasFlowRates.dry} <span className="text-sm font-normal text-slate-400">Sm³/hr</span></span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-2">
-                      <span className="text-xs text-slate-400 mb-2 font-bold">배출가스 유속 (V<sub>s</sub>)</span>
-                      <span className="text-2xl font-bold text-amber-300">{calcFinalGasVelocity()} <span className="text-sm font-normal text-slate-400">m/s</span></span>
-                  </div>
-                  {isDustSheet && (
-                    <div className="flex flex-col items-center justify-center p-2">
-                        <span className="text-xs text-slate-400 mb-2 font-bold">실측 먼지 농도 (C)</span>
-                        <span className="text-2xl font-bold text-teal-300">{calcDustConcentrations().actualC} <span className="text-sm font-normal text-slate-400">mg/Sm³</span></span>
-                    </div>
-                  )}
-                  {isDustSheet && (
-                    <div className="flex flex-col items-center justify-center p-3 bg-slate-700/50 rounded-lg md:border-none md:bg-transparent">
-                        <span className="text-xs text-red-300 font-bold mb-2">
-                          O₂ 보정 농도 (C<sub>c</sub>)
-                          {!formData.standardO2 && <span className="text-[10px] font-normal text-slate-400 ml-1">(제외)</span>}
-                        </span>
-                        <span className="text-3xl font-black text-white">{calcDustConcentrations().correctedC} <span className="text-sm font-normal text-slate-300">mg/Sm³</span></span>
-                    </div>
-                  )}
-               </div>
-            </div>
+                  <dl className="ds-ledger-row">
+                    {items.map((item) => (
+                      <div key={item.sym} className={`ds-ledger-item${item.strong ? ' is-strong' : ''}`}>
+                        <dt>{item.label} <span className="ds-sym">{item.sym}</span></dt>
+                        <dd><span className="ds-num">{item.value}</span><span className="ds-unit">{item.unit}</span></dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })()}
 
             <div className="mt-2">
               <label className="block text-xs font-bold text-slate-700 mb-1">현장 특이사항 및 비고</label>

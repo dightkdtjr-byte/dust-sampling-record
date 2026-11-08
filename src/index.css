@@ -251,3 +251,304 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
   appearance: auto;
   -webkit-appearance: auto;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   기록지 디자인: "현장 계측 데이터시트"
+   종이 한 장 위에 괘선으로 구조를 나눈다. 색은 잉크(진녹) 하나와 경고(적) 하나.
+   표가 주인공이고, 상자 안의 상자는 없앤다.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  --ds-paper: #fcfcfa;
+  --ds-ink: #1a2420;
+  --ds-ink-2: #4b5651;
+  --ds-ink-3: #7c867f;
+  --ds-rule: #d9ddd8;
+  --ds-rule-strong: #8f9893;
+  --ds-accent: #1f5f43;
+  --ds-accent-soft: #eaf1ec;
+  --ds-signal: #b3261e;
+  --ds-signal-soft: #fbeceb;
+  --ds-calc: #f2f4f1;
+  --ds-font: "IBM Plex Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+}
+.ds-page, .ds-page input, .ds-page select, .ds-page textarea, .ds-page button, .ds-page table {
+  font-family: var(--ds-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.ds-page { color: var(--ds-ink); font-size: 13.5px; }
+
+/* 종이: 섹션 카드는 한 장의 종이처럼. 얇은 괘선, 그림자는 거의 없이 */
+.ds-page div.bg-white.shadow-sm, .ds-page div.bg-white.shadow-md {
+  background-color: rgba(252, 252, 250, 0.94) !important;
+  border: 1px solid var(--ds-rule) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 0 rgba(26, 36, 32, 0.04) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.ds-page .border-t-4 { border-top: 1px solid var(--ds-rule) !important; }
+.ds-page .rounded-xl, .ds-page .rounded-lg, .ds-page .rounded-2xl { border-radius: 4px !important; }
+.ds-page .rounded, .ds-page .rounded-md { border-radius: 3px !important; }
+
+/* 상자 안의 상자: 색 테두리 상자를 괘선 하나로 */
+.ds-page [class*="border-emerald-"], .ds-page [class*="border-teal-"], .ds-page [class*="border-cyan-"],
+.ds-page [class*="border-orange-"], .ds-page [class*="border-amber-"], .ds-page [class*="border-blue-"],
+.ds-page [class*="border-sky-"], .ds-page [class*="border-violet-"], .ds-page [class*="border-purple-"],
+.ds-page [class*="border-yellow-"] { border-color: var(--ds-rule) !important; }
+.ds-page .border-2 { border-width: 1px !important; }
+.ds-page [class*="bg-emerald-50"], .ds-page [class*="bg-teal-50"], .ds-page [class*="bg-cyan-50"],
+.ds-page [class*="bg-orange-50"], .ds-page [class*="bg-amber-50"], .ds-page [class*="bg-blue-50"],
+.ds-page [class*="bg-yellow-50"], .ds-page [class*="bg-sky-50"], .ds-page [class*="bg-violet-50"], .ds-page [class*="bg-purple-50"],
+.ds-page [class*="bg-emerald-100"], .ds-page [class*="bg-teal-100"], .ds-page [class*="bg-cyan-100"],
+.ds-page [class*="bg-orange-100"], .ds-page [class*="bg-amber-100"], .ds-page [class*="bg-blue-100"],
+.ds-page [class*="bg-yellow-100"], .ds-page [class*="bg-purple-100"],
+.ds-page .bg-slate-50, .ds-page [class*="bg-slate-50/"], .ds-page .bg-slate-100 { background-color: transparent !important; }
+.ds-page div[class*="bg-emerald-50"][class*="border"], .ds-page div[class*="bg-teal-50"][class*="border"],
+.ds-page div[class*="bg-cyan-50"][class*="border"], .ds-page div[class*="bg-slate-50"][class*="border"],
+.ds-page div.bg-slate-100[class*="border"] { background-color: rgba(26, 36, 32, 0.025) !important; }
+.ds-page [class*="bg-emerald-200"], .ds-page [class*="bg-teal-200"], .ds-page [class*="bg-cyan-200"] { background-color: var(--ds-accent-soft) !important; }
+.ds-page .shadow-inner { box-shadow: none !important; }
+
+/* 강조색은 잉크색 하나로 */
+.ds-page [class*="text-emerald-"], .ds-page [class*="text-teal-"], .ds-page [class*="text-cyan-"],
+.ds-page [class*="text-sky-"], .ds-page [class*="text-blue-"], .ds-page [class*="text-violet-"], .ds-page [class*="text-purple-"],
+.ds-page [class*="text-orange-"], .ds-page [class*="text-amber-"], .ds-page [class*="text-yellow-"] { color: var(--ds-accent) !important; }
+.ds-page [class*="text-red-"], .ds-page [class*="text-rose-"] { color: var(--ds-signal) !important; }
+.ds-page .text-slate-900, .ds-page .text-slate-800 { color: var(--ds-ink) !important; }
+.ds-page .text-slate-700, .ds-page .text-slate-600 { color: var(--ds-ink-2) !important; }
+.ds-page .text-slate-500, .ds-page .text-slate-400 { color: var(--ds-ink-3) !important; }
+
+/* 라벨은 가늘고 작게, 값은 굵게 */
+.ds-page label, .ds-page label.font-bold, .ds-page label.text-xs, .ds-page label.text-sm,
+.ds-page .text-xs.font-bold.text-slate-600, .ds-page .text-xs.font-bold.text-slate-700,
+.ds-page .text-\[11px\].font-bold.text-slate-600, .ds-page span.text-xs.font-bold.text-slate-500 {
+  font-weight: 500 !important;
+  color: var(--ds-ink-2) !important;
+  font-size: 11.5px !important;
+}
+.ds-page label > span.block { font-weight: 500 !important; }
+.ds-page .font-black, .ds-page .font-bold { font-weight: 600; }
+.ds-page .text-2xl.font-black, .ds-page .text-3xl.font-black, .ds-page .text-xl.font-black, .ds-page .text-lg.font-black { font-weight: 600; letter-spacing: -0.01em; }
+
+/* 입력칸: 종이 위 기입란. 아래쪽 괘선이 강조되는 낮은 상자 */
+.ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .ds-page select, .ds-page textarea {
+  background-color: #fff !important;
+  border: 1px solid var(--ds-rule) !important;
+  border-bottom-color: var(--ds-rule-strong) !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+  color: var(--ds-ink);
+  font-size: 13.5px;
+  padding-top: 7px; padding-bottom: 7px;
+}
+.ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, .ds-page select:focus, .ds-page textarea:focus {
+  border-color: var(--ds-accent) !important;
+  box-shadow: 0 0 0 2px rgba(31, 95, 67, 0.18) !important;
+}
+.ds-page input[readonly]:not([type="checkbox"]), .ds-page input:disabled:not([type="checkbox"]) {
+  background-color: var(--ds-calc) !important;
+  border-color: transparent !important;
+  color: var(--ds-ink);
+  font-weight: 600;
+}
+.ds-page input[class*="bg-emerald-50"], .ds-page input[class*="bg-teal-50"], .ds-page input[class*="bg-cyan-50"], .ds-page input[class*="bg-slate-100"] { background-color: #fff !important; }
+.ds-page input[readonly][class*="bg-emerald"], .ds-page input[readonly][class*="bg-slate"] { background-color: var(--ds-calc) !important; }
+
+/* 표: 장부. 머리글은 아래 이중선, 행은 머리카락 괘선, 요약 행은 위 이중선 */
+.ds-page .overflow-x-auto.border, .ds-page .overflow-x-auto[class*="border-"] { border: 1px solid var(--ds-rule-strong) !important; border-radius: 2px !important; }
+.ds-page thead th {
+  background-color: var(--ds-paper) !important;
+  color: var(--ds-ink-2);
+  font-weight: 500;
+  font-size: 11.5px;
+  border-bottom: 1px solid var(--ds-rule-strong) !important;
+  box-shadow: inset 0 -3px 0 -2px var(--ds-rule-strong);
+}
+.ds-page thead th[class*="text-"] { color: var(--ds-ink-2) !important; }
+.ds-page thead th.font-black, .ds-page thead th.font-bold { font-weight: 600; color: var(--ds-ink) !important; }
+.ds-page tbody td { border-color: var(--ds-rule) !important; color: var(--ds-ink); }
+.ds-page tbody tr:nth-child(even) > td:not([class*="bg-"]) { background-color: transparent; }
+.ds-page tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(31, 95, 67, 0.045); }
+.ds-page tbody td:first-child { color: var(--ds-ink-3); font-weight: 500; }
+.ds-page tbody tr.bg-slate-100 > td, .ds-page tbody tr[class*="bg-slate-50"] > td, .ds-page tbody tr.font-bold > td, .ds-page tfoot td {
+  background-color: var(--ds-paper) !important;
+  border-top: 1px solid var(--ds-rule-strong) !important;
+  box-shadow: inset 0 2px 0 -1px var(--ds-rule-strong);
+  font-weight: 600;
+  color: var(--ds-ink);
+}
+.ds-page td > input:not([type="checkbox"]), .ds-page td > select, .ds-page td > div > input:not([type="checkbox"]) {
+  border: none !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 -1px 0 var(--ds-rule) !important;
+  border-radius: 0 !important;
+  min-height: 27px;
+  text-align: center;
+}
+.ds-page td > input:not([type="checkbox"]):hover, .ds-page td > div > input:not([type="checkbox"]):hover { box-shadow: inset 0 -1px 0 var(--ds-rule-strong) !important; background-color: #fff !important; }
+.ds-page td > input:not([type="checkbox"]):focus, .ds-page td > select:focus, .ds-page td > div > input:not([type="checkbox"]):focus {
+  background-color: #fff !important;
+  box-shadow: inset 0 -2px 0 var(--ds-accent), 0 0 0 2px rgba(31, 95, 67, 0.14) !important;
+}
+.ds-page td > input[readonly]:not([type="checkbox"]), .ds-page td > input:disabled:not([type="checkbox"]), .ds-page td > div > input[readonly] {
+  background-color: var(--ds-calc) !important;
+  box-shadow: none !important;
+  border-radius: 2px !important;
+  color: var(--ds-ink);
+  font-weight: 600;
+}
+.ds-page td > input[class*="bg-emerald-50"], .ds-page td > input[class*="bg-teal-50"] { background-color: transparent !important; }
+.ds-page td > button[class*="text-red"] { color: var(--ds-ink-3) !important; }
+.ds-page td > button[class*="text-red"]:hover { color: var(--ds-signal) !important; background-color: var(--ds-signal-soft); }
+
+/* 섹션 제목: 왼쪽 네모 번호 + 제목, 아래 괘선 */
+.ds-sec-title {
+  display: flex; align-items: center; gap: 10px;
+  margin: -4px 0 16px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--ds-rule-strong);
+  font-size: 15px; font-weight: 600; color: var(--ds-ink); letter-spacing: -0.01em;
+}
+.ds-sec-title.is-inline { margin: 0; padding-bottom: 0; border-bottom: none; }
+.ds-sec-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: 0 0 22px;
+  border: 1.5px solid var(--ds-ink); border-radius: 2px;
+  font-size: 12px; font-weight: 600; color: var(--ds-ink); background: #fff;
+}
+.ds-page h3.text-sm.font-bold, .ds-page h3, .ds-page h4 { color: var(--ds-ink); font-weight: 600; }
+
+/* 머리글: 로고는 그대로, 제목줄은 조용하게 */
+.ds-sheet-title { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ds-sheet-title > span:first-child { font-size: 15px; font-weight: 600; color: var(--ds-ink); }
+.ds-sheet-title-sub { font-size: 11.5px; color: var(--ds-ink-3); font-weight: 400; }
+.ds-meta { display: flex; align-items: center; gap: 10px; }
+.ds-meta-user { font-weight: 600; color: var(--ds-ink); }
+.ds-meta-ok { color: var(--ds-accent) !important; font-weight: 500; }
+.ds-meta-warn { color: var(--ds-signal) !important; font-weight: 500; }
+.ds-meta-dim { color: var(--ds-ink-3); }
+.ds-meta > span + span::before { content: ''; display: inline-block; width: 1px; height: 10px; background: var(--ds-rule-strong); margin-right: 10px; vertical-align: -1px; }
+
+/* 버튼: 주 동작 하나만 잉크로 채움, 나머지는 괘선 버튼 */
+.ds-page button { border-radius: 3px; box-shadow: none !important; background-image: none !important; font-weight: 500; }
+.ds-page button[class*="bg-emerald-6"], .ds-page button[class*="bg-emerald-7"], .ds-page button[class*="bg-teal-6"], .ds-page button[class*="bg-cyan-6"],
+.ds-page button[class*="bg-orange-6"], .ds-page button[class*="bg-orange-7"], .ds-page button[class*="bg-blue-6"], .ds-page button[class*="bg-yellow-6"], .ds-page button[class*="bg-purple-6"],
+.ds-page button.ds-btn-primary, .ds-page button[type="submit"] {
+  background-color: var(--ds-accent) !important; color: #fff !important; border: 1px solid var(--ds-accent) !important; font-weight: 600;
+}
+.ds-page button[class*="bg-emerald-6"]:hover, .ds-page button.ds-btn-primary:hover, .ds-page button[type="submit"]:hover { background-color: #184b35 !important; }
+.ds-page button[class*="bg-red-6"], .ds-page button[class*="bg-red-7"] { background-color: var(--ds-signal) !important; color: #fff !important; }
+.ds-page button[class*="bg-slate-7"], .ds-page button[class*="bg-slate-8"], .ds-page button[class*="bg-slate-9"] { background-color: var(--ds-ink) !important; color: #fff !important; }
+.ds-page button.bg-white, .ds-page button[class*="bg-slate-50"], .ds-page button[class*="bg-slate-100"], .ds-page button[class*="bg-emerald-100"], .ds-page button[class*="bg-emerald-50"],
+.ds-page button[class*="bg-teal-100"], .ds-page button[class*="bg-cyan-100"], .ds-page button[class*="bg-orange-100"], .ds-page button[class*="bg-amber-100"] {
+  background: #fff !important; color: var(--ds-ink) !important; border: 1px solid var(--ds-rule-strong) !important;
+}
+.ds-page button.bg-white:hover, .ds-page button[class*="bg-slate-50"]:hover, .ds-page button[class*="bg-emerald-100"]:hover { background: var(--ds-accent-soft) !important; border-color: var(--ds-accent) !important; }
+.ds-btn-primary { padding: 9px 18px; font-size: 13px; }
+.ds-page button.w-full[class*="border-dashed"], .ds-page button.w-full[class*="bg-emerald-50"], .ds-page button.w-full[class*="bg-slate-50"] {
+  border: 1px dashed var(--ds-rule-strong) !important; background: transparent !important; color: var(--ds-ink-2) !important;
+}
+.ds-page button.w-full[class*="border-dashed"]:hover, .ds-page button.w-full[class*="bg-emerald-50"]:hover { background: var(--ds-accent-soft) !important; border-color: var(--ds-accent) !important; }
+.ds-page button:focus-visible, .ds-page summary:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
+
+/* 값 타일(가스유속, 노즐경 …): 상자 대신 왼쪽 괘선 한 줄 */
+.ds-page .grid > div.text-center.border, .ds-page .grid > div[class*="text-center"][class*="border"], .ds-page .grid > div[class*="flex-col"][class*="items-center"][class*="border"] {
+  background: transparent !important; border: none !important; border-left: 1px solid var(--ds-rule-strong) !important; border-radius: 0 !important;
+  align-items: flex-start !important; text-align: left !important; padding: 2px 10px !important; box-shadow: none !important;
+}
+.ds-page .grid > div[class*="bg-emerald-6"][class*="text-center"], .ds-page .grid > div.bg-emerald-600 { background: transparent !important; color: var(--ds-ink) !important; border-left: 3px solid var(--ds-accent) !important; }
+.ds-page .grid > div.bg-emerald-600 * { color: var(--ds-accent) !important; }
+
+/* 순간 등속 게이지: 숫자 + 0~200% 눈금 위의 표시. 90~110% 구간이 띠로 그려짐 */
+.ds-iso-cell { padding: 3px 6px !important; }
+.ds-iso { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+.ds-iso-value { font-weight: 600; font-size: 12.5px; line-height: 1.1; color: var(--ds-ink); }
+.ds-iso.is-out .ds-iso-value { color: var(--ds-signal); }
+.ds-iso-bar { position: relative; display: block; height: 4px; background: var(--ds-rule); border-radius: 1px; }
+.ds-iso-band { position: absolute; left: 45%; width: 10%; top: 0; bottom: 0; background: var(--ds-accent); opacity: 0.55; }
+.ds-iso-mark { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; background: var(--ds-ink); }
+.ds-iso.is-out .ds-iso-mark { background: var(--ds-signal); }
+.ds-iso-empty { color: var(--ds-ink-3); }
+
+/* 최종 산출 결과: 장부 한 줄. 위 이중선, 숫자는 잉크색 */
+.ds-ledger { border-top: 3px double var(--ds-ink); border-bottom: 1px solid var(--ds-rule-strong); padding: 10px 0 12px; }
+.ds-ledger-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.ds-ledger-title { font-size: 13px; font-weight: 600; color: var(--ds-ink); }
+.ds-ledger-status { font-size: 12.5px; color: var(--ds-ink-2); display: inline-flex; align-items: baseline; gap: 6px; }
+.ds-ledger-status strong { font-size: 15px; font-weight: 600; color: var(--ds-ink); }
+.ds-ledger-status-note { font-size: 11.5px; color: var(--ds-ink-3); padding: 1px 6px; border: 1px solid var(--ds-rule); border-radius: 2px; }
+.ds-ledger-status.is-ok strong, .ds-ledger-status.is-ok .ds-ledger-status-note { color: var(--ds-accent); border-color: var(--ds-accent); }
+.ds-ledger-status.is-out strong, .ds-ledger-status.is-out .ds-ledger-status-note { color: var(--ds-signal); border-color: var(--ds-signal); background: var(--ds-signal-soft); }
+.ds-ledger-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; }
+.ds-ledger-item { padding: 4px 14px 2px; border-left: 1px solid var(--ds-rule-strong); }
+.ds-ledger-item:first-child { border-left: none; padding-left: 0; }
+.ds-ledger-item dt { font-size: 11.5px; color: var(--ds-ink-2); font-weight: 500; margin-bottom: 4px; }
+.ds-sym { color: var(--ds-ink-3); font-weight: 400; margin-left: 2px; }
+.ds-ledger-item dd { margin: 0; display: flex; align-items: baseline; gap: 5px; }
+.ds-num { font-size: 22px; font-weight: 600; color: var(--ds-ink); letter-spacing: -0.015em; }
+.ds-unit { font-size: 11.5px; color: var(--ds-ink-3); }
+.ds-ledger-item.is-strong .ds-num { color: var(--ds-accent); font-size: 26px; }
+@media (max-width: 640px) {
+  .ds-ledger-row { grid-template-columns: 1fr 1fr; row-gap: 10px; }
+  .ds-ledger-item { border-left: none; padding-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .ds-page * { transition: none !important; } }
+
+/* 표 안 입력칸은 밑줄형 (일반 입력칸 규칙보다 우선) */
+.ds-page tbody td > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.ds-page tbody td > div > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.ds-page tbody td > select {
+  border: none !important;
+  border-bottom: 1px solid var(--ds-rule) !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding-top: 4px; padding-bottom: 4px;
+}
+.ds-page tbody td > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+.ds-page tbody td > div > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+.ds-page tbody td > select:focus {
+  border-bottom: 2px solid var(--ds-accent) !important;
+  background-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(31, 95, 67, 0.12) !important;
+}
+.ds-page tbody td > input[readonly]:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.ds-page tbody td > input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.ds-page tbody td > div > input[readonly]:not([type="checkbox"]) {
+  border-bottom-color: transparent !important;
+  background-color: var(--ds-calc) !important;
+  border-radius: 2px !important;
+}
+/* 노즐 예측 타일(가스유속·노즐경…): 상자 대신 왼쪽 괘선 */
+.ds-page .flex-wrap.justify-center.gap-2.text-center > div[class*="min-w-"] {
+  background: transparent !important; border: none !important; border-left: 1px solid var(--ds-rule-strong) !important;
+  border-radius: 0 !important; text-align: left !important; padding: 2px 10px !important;
+}
+.ds-page .flex-wrap.justify-center.gap-2.text-center > div.bg-emerald-600 { border-left: 3px solid var(--ds-accent) !important; }
+.ds-page .flex-wrap.justify-center.gap-2.text-center > div.bg-emerald-600 * { color: var(--ds-accent) !important; }
+.ds-page .flex-wrap.justify-center.gap-2.text-center > div > div.font-black { font-size: 16px; }
+/* 추천 노즐 표시: 알약 상자 대신 글자만 */
+.ds-page span[class*="bg-emerald-200"][class*="border-emerald-300"] { background: transparent !important; border: none !important; padding: 0 !important; font-size: 17px; }
+/* 등속흡인율 두 상자: 어두운 상자 대신 종이 위 괘선 칸 */
+.ds-page div.bg-slate-900.p-4, .ds-page div.bg-slate-800.p-4 {
+  background: var(--ds-paper) !important; border: 1px solid var(--ds-rule-strong) !important; box-shadow: none !important; color: var(--ds-ink);
+}
+.ds-page div.bg-slate-900.p-4 > div.absolute { display: none; }
+.ds-page div.bg-slate-900 .text-white, .ds-page div.bg-slate-900 [class*="text-slate-2"], .ds-page div.bg-slate-800 .text-white { color: var(--ds-ink) !important; }
+.ds-page div.bg-slate-900 span.text-xs, .ds-page div.bg-slate-800 span.text-xs { color: var(--ds-ink-2) !important; }
+.ds-page div.bg-slate-100.p-4[class*="border-slate-300"] { background: transparent !important; border: 1px solid var(--ds-rule) !important; }
+
+/* 숫자 칸은 줄바꿈 없이 (증가량 50.00 등) */
+.ds-page tbody td:not(:has(input)):not(:has(select)):not(:has(button)) { white-space: nowrap; }
+/* 채워진 초록 띠(사후 수분량)와 적합 배지: 종이 위 글자로 */
+.ds-page div.bg-emerald-600.p-3 { background: var(--ds-paper) !important; border: 1px solid var(--ds-rule-strong) !important; color: var(--ds-ink) !important; box-shadow: none !important; }
+.ds-page div.bg-emerald-600.p-3 .text-white, .ds-page div.bg-emerald-600.p-3 span { color: var(--ds-ink) !important; }
+.ds-page div.bg-emerald-600.p-3 span.font-black { color: var(--ds-accent) !important; font-size: 20px; }
+.ds-page span.bg-green-700.rounded-full, .ds-page span.bg-red-600.rounded-full {
+  background: transparent !important; border-radius: 2px !important; box-shadow: none !important; padding: 4px 10px !important; font-weight: 600;
+}
+.ds-page span.bg-green-700.rounded-full { color: var(--ds-accent) !important; border: 1px solid var(--ds-accent); }
+.ds-page span.bg-red-600.rounded-full { color: var(--ds-signal) !important; border: 1px solid var(--ds-signal); background: var(--ds-signal-soft) !important; }
+/* 통합기록부 표 머리글은 세로로 쪼개지지 않게 */
+.ds-page thead th { white-space: nowrap; }
+.ds-page thead th br { display: inline; }
