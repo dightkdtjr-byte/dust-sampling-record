@@ -1,5 +1,5 @@
 /*
- * StackPilot 배경 (하늘 · 해/달 · 별 · 구름 · 공장 풍경 · 연기 애니메이션)
+ * StackPilot 배경 (겹겹이 오린 종이 디오라마: 먼 산 · 도시 · 공단 · 앞 땅, 연기·기차·차량 애니메이션)
  * React 없이 쓰는 단독 스크립트. 사용법:
  *   <div id="bg"></div>
  *   <script src="stackpilot-skyline.js"></script>
@@ -34,70 +34,55 @@ const SKYLINE_CLOUDS = [
   { id: 'cl-7', top: '26%', scale: 0.7, duration: 150, delay: -10, opacity: 0.65 },
 ];
 
+// ── 겹겹이 오린 종이 디오라마: 깊이별 한 가지 색 실루엣으로 그린 공단 풍경 ──
 const SKYLINE_PALETTES = {
   day: {
-    hillFar: ['#dbe8f6', '#adc6e4'], hillMid: ['#b3cdbf', '#73a08c'], hillNear: ['#86b88f', '#4b8762'],
-    ground: ['#5f9f71', '#2b5740'], road: 'rgba(255,255,255,0.35)', haze: 'rgba(236, 246, 255, 0.75)',
-    tower: ['#f5f9fd', '#bdd0e4', '#7e97b6'], towerEdge: 'rgba(40, 60, 90, 0.18)',
-    factory: ['#e9e2da', '#bcb0a6', '#7f746b'], roof: '#8c7f76',
-    cooling: ['#f7f9fb', '#d2dbe5', '#9aa7b7'], stack: ['#f3f6fa', '#c2cedd', '#8495ad'], stackCap: '#7b8ca4', band: '#d9534f',
-    window: 'rgba(40, 60, 95, 0.25)', windowLit: null, smoke: ['rgba(255,255,255,0.95)', 'rgba(205,215,228,0)'],
-    tree: ['#93cb84', '#3d7f4e'], trunk: '#7a5a44', beacon: null, cityGlow: null,
-    mountain: ['#f1f6fc', '#cbdcef'], asphalt: '#707a89', roadLine: 'rgba(255,255,255,0.75)', wire: 'rgba(60,70,90,0.38)', pylon: '#8a94a6',
-    tank: ['#eef1f5', '#c3ccd8', '#8d9aae'], fog: 'rgba(255,255,255,0.42)', bird: '#3b4252', plane: '#f3f4f6', contrail: 'rgba(255,255,255,0.75)',
-    lampGlow: null, headlight: null, taillight: null, carColors: ['#d9534f', '#3b82f6', '#f5f5f5', '#f4c20d', '#6b7280'],
-    farCity: ['#dde7f2', '#c3d3e5'], cirrus: 'rgba(255,255,255,0.6)', horizonGlow: 'rgba(255,236,200,0.5)',
-    crane: '#c6462f', rail: '#7d8690', sleeper: '#a0917c', loco: '#2f4f6f', wagons: ['#8a6d4b', '#6f7d6c', '#9a4b3c', '#7a7f8a'], trainLight: null,
+    far: '#cfdceb', farDetail: '#bccbdd', city: '#a7bbd1', cityWin: '#bfd0e2', haze1: 'rgba(222,236,250,0.65)', haze2: 'rgba(214,230,246,0.5)',
+    plant: '#73899f', plantShade: '#5e7389', plantLight: '#8ea2b6', plantBand: '#9fb1c3', plantWin: '#95a9bd',
+    near: '#4b7362', nearShade: '#3a5c4e', nearLight: '#64917b', road: '#587566', roadLine: 'rgba(235,245,238,0.75)', rail: '#34514a',
+    smoke: ['rgba(255,255,255,0.85)', 'rgba(255,255,255,0)'], windowLit: null, beacon: null, lamp: null, headlight: null,
+    bird: '#48607a', plane: '#f2f6fa', contrail: 'rgba(255,255,255,0.7)', cirrus: 'rgba(255,255,255,0.55)', sunHaze: 'rgba(255,238,200,0.22)',
   },
   morning: {
-    hillFar: ['#ebdff0', '#c6b4db'], hillMid: ['#d3c1b2', '#95818a'], hillNear: ['#a9a97c', '#64704f'],
-    ground: ['#84976a', '#3f4c39'], road: 'rgba(255, 240, 220, 0.35)', haze: 'rgba(255, 226, 190, 0.7)',
-    tower: ['#fff4ea', '#dcc0b8', '#957f8b'], towerEdge: 'rgba(90, 60, 70, 0.18)',
-    factory: ['#f3e1d2', '#c9aa9b', '#826d69'], roof: '#8f7570',
-    cooling: ['#fff7ee', '#e4cfc3', '#a8918d'], stack: ['#fff5ea', '#dcc3b7', '#968085'], stackCap: '#9a848a', band: '#d9534f',
-    window: 'rgba(90, 60, 70, 0.22)', windowLit: null, smoke: ['rgba(255,245,235,0.95)', 'rgba(230,205,200,0)'],
-    tree: ['#c2c080', '#737f4f'], trunk: '#6f5143', beacon: null, cityGlow: null,
-    mountain: ['#f8e9f1', '#dcc6df'], asphalt: '#7a6f78', roadLine: 'rgba(255,240,220,0.75)', wire: 'rgba(80,60,70,0.38)', pylon: '#8d7f88',
-    tank: ['#fbeee4', '#d6bcb1', '#9a8488'], fog: 'rgba(255,230,200,0.45)', bird: '#4b3f4a', plane: '#fff5ec', contrail: 'rgba(255,235,215,0.75)',
-    lampGlow: null, headlight: null, taillight: null, carColors: ['#c94f4b', '#4f7fd1', '#f8efe6', '#e6b83a', '#6e6a73'],
-    farCity: ['#e9d8e6', '#d0bdd3'], cirrus: 'rgba(255,240,225,0.55)', horizonGlow: 'rgba(255,190,150,0.55)',
-    crane: '#b6473a', rail: '#8a7f86', sleeper: '#9c8a7c', loco: '#4a4f66', wagons: ['#8d6c52', '#6f7566', '#954a3f', '#7b7682'], trainLight: null,
+    far: '#e3cfdd', farDetail: '#d4bccd', city: '#c0a3b8', cityWin: '#d2bacb', haze1: 'rgba(255,228,214,0.6)', haze2: 'rgba(250,220,210,0.45)',
+    plant: '#8f7489', plantShade: '#776076', plantLight: '#a58ca0', plantBand: '#b59fb0', plantWin: '#ad95a8',
+    near: '#5a4f6a', nearShade: '#473d57', nearLight: '#6e6380', road: '#66597a', roadLine: 'rgba(255,235,225,0.65)', rail: '#3d3450',
+    smoke: ['rgba(255,246,238,0.85)', 'rgba(255,246,238,0)'], windowLit: null, beacon: null, lamp: null, headlight: null,
+    bird: '#5a4a5c', plane: '#fff6ee', contrail: 'rgba(255,236,220,0.7)', cirrus: 'rgba(255,240,228,0.5)', sunHaze: 'rgba(255,190,150,0.3)',
   },
   night: {
-    hillFar: ['#2c3d6c', '#1a274a'], hillMid: ['#20304f', '#121c35'], hillNear: ['#172a34', '#0b151c'],
-    ground: ['#13232b', '#04090f'], road: 'rgba(120, 150, 170, 0.25)', haze: 'rgba(16, 26, 56, 0.6)',
-    tower: ['#3f4f75', '#263455', '#141c33'], towerEdge: 'rgba(150, 170, 220, 0.22)',
-    factory: ['#4a4546', '#312d31', '#1b191e'], roof: '#2a2628',
-    cooling: ['#5c687f', '#3c465b', '#232b3b'], stack: ['#51607c', '#363f58', '#1f2638'], stackCap: '#2b3448', band: '#a33f3b',
-    window: 'rgba(255, 232, 170, 0.12)', windowLit: 'rgba(255, 224, 150, 0.95)', smoke: ['rgba(205,214,235,0.6)', 'rgba(205,214,235,0)'],
-    tree: ['#1f4b3d', '#0e2a22'], trunk: '#2a1f19', beacon: '#ff5a4a', cityGlow: 'rgba(255, 190, 110, 0.18)',
-    mountain: ['#1c2c56', '#14203f'], asphalt: '#0f1620', roadLine: 'rgba(230,220,170,0.35)', wire: 'rgba(170,185,220,0.25)', pylon: '#3c4760',
-    tank: ['#4b586f', '#2f3a4f', '#1b2232'], fog: 'rgba(120,140,190,0.16)', bird: null, plane: '#8e9ab5', contrail: null,
-    lampGlow: 'rgba(255,214,130,0.5)', headlight: 'rgba(255,240,200,0.95)', taillight: '#ff4d3d', carColors: ['#5b6475', '#4a5366', '#6b7386', '#565e70', '#3f4756'],
-    farCity: ['#1f2f58', '#182546'], cirrus: 'rgba(190,205,240,0.07)', horizonGlow: 'rgba(255,170,90,0.16)',
-    crane: '#4c2b2f', rail: '#2b3340', sleeper: '#2a2420', loco: '#1c2a3a', wagons: ['#3a3129', '#2d3530', '#3f2622', '#30343c'], trainLight: 'rgba(255,240,200,0.9)',
+    far: '#1a2850', farDetail: '#162243', city: '#111c3a', cityWin: '#ffd47a', haze1: 'rgba(30,45,90,0.5)', haze2: 'rgba(20,32,70,0.5)',
+    plant: '#0d1630', plantShade: '#080f22', plantLight: '#16223f', plantBand: '#5a2d35', plantWin: '#ffd47a',
+    near: '#060a18', nearShade: '#04060f', nearLight: '#0b1224', road: '#0e1526', roadLine: 'rgba(255,230,180,0.3)', rail: '#03050c',
+    smoke: ['rgba(200,210,235,0.5)', 'rgba(200,210,235,0)'], windowLit: '#ffd47a', beacon: '#ff5a4a', lamp: 'rgba(255,214,130,0.9)', headlight: 'rgba(255,240,200,0.9)',
+    bird: null, plane: '#8e9ab5', contrail: null, cirrus: 'rgba(190,205,240,0.07)', sunHaze: 'rgba(255,170,90,0.14)',
   },
 };
-
-const SKYLINE_SVG_TOWERS = [
-  { x: 40, w: 70, h: 190 }, { x: 125, w: 56, h: 150 }, { x: 196, w: 84, h: 250 }, { x: 296, w: 62, h: 170 },
-  { x: 560, w: 76, h: 230 }, { x: 650, w: 58, h: 180 }, { x: 760, w: 92, h: 290 }, { x: 870, w: 60, h: 200 },
-  { x: 1130, w: 72, h: 210 }, { x: 1215, w: 56, h: 160 }, { x: 1490, w: 66, h: 180 },
+const SCENE_GROUND = 432;
+const SCENE_CITY = Array.from({ length: 64 }, (_, i) => ({ x: -12 + i * 26 + ((i * 7) % 9), w: 14 + ((i * 5) % 20), h: 26 + ((i * 13) % 74), antenna: i % 9 === 4 }));
+const SCENE_HALLS = [{ x: 40, w: 280, h: 72, teeth: 5 }, { x: 880, w: 320, h: 92, teeth: 6 }, { x: 1320, w: 220, h: 62, teeth: 4 }];
+const SCENE_BLOCKS = [{ x: 600, w: 84, h: 196 }, { x: 1090, w: 72, h: 166 }, { x: 0, w: 56, h: 140 }, { x: 760, w: 60, h: 120 }, { x: 1560, w: 60, h: 150 }];
+const SCENE_STACKS = [
+  { x: 150, w: 34, h: 296, smoke: 7 }, { x: 362, w: 48, h: 392, smoke: 9 }, { x: 556, w: 40, h: 336, smoke: 8 },
+  { x: 1004, w: 52, h: 380, smoke: 9 }, { x: 1186, w: 30, h: 256, smoke: 6 }, { x: 1486, w: 36, h: 300, smoke: 7 },
 ];
-const SKYLINE_SVG_FACTORIES = [
-  { x: 360, w: 150, h: 120, teeth: 4 }, { x: 930, w: 170, h: 140, teeth: 5 }, { x: 1300, w: 150, h: 110, teeth: 4 },
+const SCENE_COOLING = [{ x: 690, w: 150, h: 208 }, { x: 1236, w: 118, h: 178 }];
+const SCENE_TANKS = [{ x: 420, w: 72, h: 60 }, { x: 504, w: 72, h: 82 }, { x: 1398, w: 62, h: 50 }, { x: 1468, w: 62, h: 50 }];
+const SCENE_SPHERE = { cx: 862, cy: 388, r: 40 };
+const SCENE_CRANE = { x: 262, top: 146, jib: 230, counter: 72, hookX: 140 };
+const SCENE_PYLONS = [{ x: 470, h: 150 }, { x: 940, h: 165 }, { x: 1300, h: 150 }];
+const SCENE_TREE_CLUSTERS = [[40, 62, 88], [230, 250], [330, 352, 372, 390], [560, 580], [700, 724, 744], [880, 902], [1010, 1036, 1052, 1076], [1210, 1230], [1360, 1384, 1402], [1520, 1544, 1566, 1590]];
+const SCENE_TREES = SCENE_TREE_CLUSTERS.flatMap((cluster, ci) => cluster.map((x, k) => ({ x, r: 15 + ((ci * 5 + k * 3) % 11) })));
+const SCENE_LAMPS = [120, 400, 680, 960, 1240, 1500];
+const SCENE_CARS = [{ dir: 1, dur: 36, delay: -6, len: 26 }, { dir: -1, dur: 44, delay: -21, len: 24 }, { dir: 1, dur: 52, delay: -33, len: 36 }, { dir: -1, dur: 40, delay: -13, len: 22 }];
+const SCENE_TRAIN = { dur: 100, delay: -42, cars: [50, 42, 46, 46, 42, 46, 42, 46] };
+const SCENE_BIRD_FLOCKS = [
+  { path: 'M-80,150 C300,120 700,170 1700,130', dur: 52, delay: -8, birds: [[0, 0], [-16, 9], [-32, 18], [16, 9], [32, 18], [-48, 26]] },
+  { path: 'M1700,200 C1200,170 600,230 -120,190', dur: 64, delay: -30, birds: [[0, 0], [-14, 8], [14, 8], [-28, 16]] },
 ];
-const SKYLINE_SVG_COOLING = [
-  { x: 1180, w: 130, h: 200 }, { x: 1380, w: 110, h: 170 },
-];
-const SKYLINE_SVG_STACKS = [
-  { x: 330, w: 36, h: 310, smoke: 7 }, { x: 515, w: 52, h: 400, smoke: 9 }, { x: 700, w: 46, h: 360, smoke: 8 },
-  { x: 905, w: 32, h: 290, smoke: 6 }, { x: 1060, w: 50, h: 380, smoke: 9 }, { x: 1250, w: 30, h: 250, smoke: 6 },
-];
-const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
-  x: 20 + ((idx * 73) % 1560), rx: 11 + ((idx * 7) % 9), ry: 16 + ((idx * 11) % 14), dy: (idx * 5) % 12,
-}));
-
+const SCENE_PLANE = { path: 'M-160,58 L1760,92', dur: 78, delay: -26 };
+const SCENE_ROAD_Y = 478;
+const SCENE_RAIL_Y = 500;
 
   const SKY = {
     day: { bg: 'linear-gradient(180deg, #dff3ff 0%, #bee5ff 50%, #ffe8be 100%)', overlay: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(224,242,254,0.1) 50%, rgba(0,0,0,0) 100%)', cloud: 'rgba(255,255,255,0.93)', cloudShadow: 'rgba(120,140,170,0.2)' },
@@ -304,48 +289,6 @@ const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
 }
 `;
 
-  const SVG_TOWERS = [
-    { x: 40, w: 70, h: 190 }, { x: 125, w: 56, h: 150 }, { x: 196, w: 84, h: 250 }, { x: 296, w: 62, h: 170 },
-    { x: 560, w: 76, h: 230 }, { x: 650, w: 58, h: 180 }, { x: 760, w: 92, h: 290 }, { x: 870, w: 60, h: 200 },
-    { x: 1130, w: 72, h: 210 }, { x: 1215, w: 56, h: 160 }, { x: 1490, w: 66, h: 180 },
-  ];
-  const SVG_FACTORIES = [
-    { x: 360, w: 150, h: 120, teeth: 4 }, { x: 930, w: 170, h: 140, teeth: 5 }, { x: 1300, w: 150, h: 110, teeth: 4 },
-  ];
-  const SVG_COOLING = [{ x: 1180, w: 130, h: 200 }, { x: 1380, w: 110, h: 170 }];
-  const SVG_STACKS = [
-    { x: 330, w: 36, h: 310, smoke: 7 }, { x: 515, w: 52, h: 400, smoke: 9 }, { x: 700, w: 46, h: 360, smoke: 8 },
-    { x: 905, w: 32, h: 290, smoke: 6 }, { x: 1060, w: 50, h: 380, smoke: 9 }, { x: 1250, w: 30, h: 250, smoke: 6 },
-  ];
-  const SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
-    x: 20 + ((idx * 73) % 1560), rx: 11 + ((idx * 7) % 9), ry: 16 + ((idx * 11) % 14), dy: (idx * 5) % 12,
-  }));
-  // 송전탑(전선으로 이어짐), 저장탱크, 가로등, 도로 위 차량, 새 떼, 비행기
-  const SVG_PYLONS = [{ x: 470, h: 150 }, { x: 1020, h: 165 }, { x: 1345, h: 150 }];
-  const SVG_TANKS = [{ x: 1500, w: 30, h: 58 }, { x: 1538, w: 30, h: 70 }, { x: 1576, w: 30, h: 58 }];
-  const ROAD_PATH = 'M-40,471 C300,462 600,478 900,468 C1200,458 1400,474 1640,466';
-  const SVG_LAMPS = [{ x: 150, y: 467 }, { x: 450, y: 470 }, { x: 750, y: 473 }, { x: 1050, y: 465 }, { x: 1350, y: 470 }];
-  const SVG_CARS = [
-    { dir: 1, dur: 34, delay: -5, len: 26, color: 0 }, { dir: -1, dur: 42, delay: -20, len: 24, color: 1 },
-    { dir: 1, dur: 50, delay: -31, len: 34, color: 2 }, { dir: -1, dur: 38, delay: -12, len: 22, color: 3 },
-    { dir: 1, dur: 44, delay: -17, len: 24, color: 4 },
-  ];
-  const BIRD_FLOCKS = [
-    { path: 'M-80,150 C300,120 700,170 1700,130', dur: 52, delay: -8, birds: [[0, 0], [-16, 9], [-32, 18], [16, 9], [32, 18], [-48, 26]] },
-    { path: 'M1700,200 C1200,170 600,230 -120,190', dur: 64, delay: -30, birds: [[0, 0], [-14, 8], [14, 8], [-28, 16]] },
-  ];
-  const PLANE = { path: 'M-160,58 L1760,92', dur: 78, delay: -26 };
-  // 원경 도시, 권운, 타워크레인, 가스홀더, 철길과 화물열차
-  const FAR_CITY = Array.from({ length: 46 }, (_, i) => ({ x: -10 + i * 35 + ((i * 13) % 9), w: 18 + ((i * 7) % 16), h: 14 + ((i * 11) % 34) }));
-  const CIRRUS = [{ x: 120, y: 48, w: 420, h: 7 }, { x: 640, y: 92, w: 300, h: 5 }, { x: 980, y: 36, w: 520, h: 8 }, { x: 1380, y: 118, w: 260, h: 5 }];
-  const CRANE = { x: 176, top: 128, jib: 230, counter: 78, hookX: 150 };
-  const GAS_HOLDER = { cx: 1000, cy: 352, r: 44 };
-  const RAIL_Y = 500;
-  const TRAIN = { dur: 96, delay: -40, cars: [
-    { w: 46, h: 16, kind: 'loco' }, { w: 40, h: 13, kind: 'tank' }, { w: 44, h: 14, kind: 'box' }, { w: 44, h: 14, kind: 'box' },
-    { w: 40, h: 13, kind: 'tank' }, { w: 44, h: 11, kind: 'flat' }, { w: 44, h: 14, kind: 'box' }, { w: 40, h: 13, kind: 'tank' },
-  ] };
-
   const esc = (v) => String(v);
   const el = (tag, attrs, children) => {
     const a = Object.keys(attrs || {}).map((k) => ` ${k}="${esc(attrs[k])}"`).join('');
@@ -355,203 +298,165 @@ const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
   function buildSvg(mode, scope) {
     const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
     const id = (n) => `${scope}-sky-${n}`;
-    const G = 440;
-    const defs = [];
-    [['mountain', pal.mountain], ['farCity', pal.farCity], ['hillFar', pal.hillFar], ['hillMid', pal.hillMid], ['hillNear', pal.hillNear], ['ground', pal.ground], ['tree', pal.tree]].forEach(([n, c]) => {
-      defs.push(el('linearGradient', { id: id(n), x1: 0, y1: 0, x2: 0, y2: 1 }, [el('stop', { offset: 0, 'stop-color': c[0] }), el('stop', { offset: 1, 'stop-color': c[1] })]));
-    });
-    [['tower', pal.tower], ['factory', pal.factory], ['cooling', pal.cooling], ['stack', pal.stack], ['tank', pal.tank]].forEach(([n, c]) => {
-      defs.push(el('linearGradient', { id: id(n), x1: 0, y1: 0, x2: 1, y2: 0 }, [el('stop', { offset: 0, 'stop-color': c[0] }), el('stop', { offset: 0.45, 'stop-color': c[1] }), el('stop', { offset: 1, 'stop-color': c[2] })]));
-    });
-    defs.push(el('linearGradient', { id: id('haze'), x1: 0, y1: 0, x2: 0, y2: 1 }, [el('stop', { offset: 0, 'stop-color': pal.haze, 'stop-opacity': 0 }), el('stop', { offset: 1, 'stop-color': pal.haze })]));
-    defs.push(el('radialGradient', { id: id('smoke'), cx: 0.45, cy: 0.4, r: 0.55 }, [el('stop', { offset: 0, 'stop-color': pal.smoke[0] }), el('stop', { offset: 1, 'stop-color': pal.smoke[1] })]));
-    if (pal.cityGlow) defs.push(el('radialGradient', { id: id('cityglow'), cx: 0.5, cy: 1, r: 0.6 }, [el('stop', { offset: 0, 'stop-color': pal.cityGlow }), el('stop', { offset: 1, 'stop-color': pal.cityGlow, 'stop-opacity': 0 })]));
-    defs.push(el('filter', { id: id('blur'), x: '-50%', y: '-50%', width: '200%', height: '200%' }, [el('feGaussianBlur', { stdDeviation: 3 })]));
-    defs.push(el('filter', { id: id('soft'), x: '-20%', y: '-20%', width: '140%', height: '140%' }, [el('feGaussianBlur', { stdDeviation: 1.2 })]));
-    defs.push(el('filter', { id: id('fogblur'), x: '-20%', y: '-100%', width: '140%', height: '300%' }, [el('feGaussianBlur', { stdDeviation: 9 })]));
-    if (pal.contrail) defs.push(el('linearGradient', { id: id('contrail'), x1: 0, y1: 0, x2: 1, y2: 0 }, [el('stop', { offset: 0, 'stop-color': pal.contrail, 'stop-opacity': 0 }), el('stop', { offset: 1, 'stop-color': pal.contrail })]));
-    if (pal.lampGlow) defs.push(el('radialGradient', { id: id('lampglow'), cx: 0.5, cy: 0, r: 0.75 }, [el('stop', { offset: 0, 'stop-color': pal.lampGlow }), el('stop', { offset: 1, 'stop-color': pal.lampGlow, 'stop-opacity': 0 })]));
-
-    defs.push(el('linearGradient', { id: id('horizon'), x1: 0, y1: 0, x2: 0, y2: 1 }, [el('stop', { offset: 0, 'stop-color': pal.horizonGlow, 'stop-opacity': 0 }), el('stop', { offset: 0.85, 'stop-color': pal.horizonGlow }), el('stop', { offset: 1, 'stop-color': pal.horizonGlow, 'stop-opacity': 0 })]));
+    const G = SCENE_GROUND;
+    const night = Boolean(pal.windowLit);
+    const shadeW = (w) => Math.max(4, Math.round(w * 0.34));
+    const grad = (n, stops, horizontal) => el(horizontal ? 'linearGradient' : 'linearGradient', { id: id(n), x1: 0, y1: 0, x2: horizontal ? 1 : 0, y2: horizontal ? 0 : 1 }, stops.map(([o, c, op]) => el('stop', op === undefined ? { offset: o, 'stop-color': c } : { offset: o, 'stop-color': c, 'stop-opacity': op })));
+    const defs = [
+      el('radialGradient', { id: id('smoke'), cx: 0.45, cy: 0.4, r: 0.55 }, [el('stop', { offset: 0, 'stop-color': pal.smoke[0] }), el('stop', { offset: 1, 'stop-color': pal.smoke[1] })]),
+      grad('haze1', [[0, pal.haze1, 0], [1, pal.haze1]]), grad('haze2', [[0, pal.haze2, 0], [1, pal.haze2]]),
+      grad('sunhaze', [[0, pal.sunHaze, 0], [0.8, pal.sunHaze], [1, pal.sunHaze, 0]]), grad('ground', [[0, pal.near], [1, pal.nearShade]]),
+      el('filter', { id: id('blur'), x: '-50%', y: '-50%', width: '200%', height: '200%' }, [el('feGaussianBlur', { stdDeviation: 3 })]),
+      el('filter', { id: id('wide'), x: '-20%', y: '-100%', width: '140%', height: '300%' }, [el('feGaussianBlur', { stdDeviation: 9 })]),
+    ];
+    if (pal.contrail) defs.push(grad('contrail', [[0, pal.contrail, 0], [1, pal.contrail]], true));
+    if (pal.lamp) defs.push(el('radialGradient', { id: id('lampglow'), cx: 0.5, cy: 0, r: 0.75 }, [el('stop', { offset: 0, 'stop-color': pal.lamp, 'stop-opacity': 0.55 }), el('stop', { offset: 1, 'stop-color': pal.lamp, 'stop-opacity': 0 })]));
 
     const parts = [el('defs', {}, defs)];
-    // 지평선 빛 띠와 권운
-    parts.push(el('rect', { x: 0, y: 150, width: 1600, height: 170, fill: `url(#${id('horizon')})` }));
-    CIRRUS.forEach((c) => parts.push(el('ellipse', { cx: c.x + c.w / 2, cy: c.y, rx: c.w / 2, ry: c.h / 2, fill: pal.cirrus, filter: `url(#${id('fogblur')})` })));
-    // 먼 산맥 (대기 원근으로 가장 연함) + 낮에는 만년설
-    parts.push(el('path', { d: 'M0,300 L90,250 L150,276 L230,214 L300,262 L360,236 L430,286 L520,206 L600,258 L660,238 L740,282 L830,222 L900,266 L960,244 L1040,292 L1130,226 L1200,264 L1260,232 L1340,288 L1420,218 L1500,262 L1560,248 L1600,270 L1600,520 L0,520 Z', fill: `url(#${id('mountain')})` }));
-    if (pal.contrail) parts.push(el('path', { d: 'M230,214 L205,236 L255,232 Z M520,206 L498,228 L545,226 Z M830,222 L808,242 L852,240 Z M1130,226 L1108,248 L1152,246 Z M1420,218 L1398,240 L1442,238 Z', fill: 'rgba(255,255,255,0.55)' }));
-    // 원경 도시: 산 앞에 납작한 건물 열
-    FAR_CITY.forEach((b) => parts.push(el('rect', { x: b.x, y: 302 - b.h, width: b.w, height: b.h + 40, fill: `url(#${id('farCity')})` })));
-    if (pal.windowLit) FAR_CITY.forEach((b, i) => { if (i % 3 !== 1) parts.push(el('rect', { x: b.x + 3, y: 302 - b.h + 4 + ((i * 7) % 10), width: b.w - 6, height: 2, fill: pal.windowLit, opacity: 0.35 })); });
-    parts.push(el('path', { d: 'M0,330 C140,286 260,300 400,268 C560,232 680,282 840,262 C1000,240 1120,290 1280,258 C1400,232 1500,262 1600,238 L1600,520 L0,520 Z', fill: `url(#${id('hillFar')})` }));
-    parts.push(el('path', { d: 'M0,372 C120,340 260,352 420,330 C600,306 720,352 900,338 C1080,322 1180,362 1360,340 C1460,328 1540,350 1600,338 L1600,520 L0,520 Z', fill: `url(#${id('hillMid')})` }));
-    parts.push(el('rect', { x: 0, y: 330, width: 1600, height: 120, fill: `url(#${id('haze')})` }));
-    if (pal.cityGlow) parts.push(el('rect', { x: 0, y: 260, width: 1600, height: 190, fill: `url(#${id('cityglow')})` }));
+    const box = (x, y, w, h, extra) => el('g', {}, [el('rect', { x, y, width: w, height: h, fill: pal.plant }), el('rect', { x: x + w - shadeW(w), y, width: shadeW(w), height: h, fill: pal.plantShade })].concat(extra || []));
+    const windowsFor = (x, y, w, h, seedBase) => {
+      const cols = Math.max(2, Math.floor(w / 14)), rows = Math.max(2, Math.floor((h - 16) / 18)), out = [];
+      for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) {
+        const seed = seedBase + r * 17 + c * 7, lit = night && seededNoise(seed) > 0.45;
+        if (night && !lit) continue;
+        out.push(el('rect', { x: x + 6 + c * ((w - 12) / cols) + 1, y: y + 10 + r * ((h - 16) / rows), width: Math.max(3, (w - 12) / cols - 4), height: 6, fill: pal.plantWin, class: lit ? 'skyline-window-night' : '', style: lit ? `--glow-duration:${4 + (seed % 5)}s;--glow-delay:-${seed % 7}s` : '' }));
+      }
+      return out;
+    };
+    const smokeFor = (cx, cy, baseR, count, seedBase) => Array.from({ length: count }).map((_, i) => {
+      const seed = seedBase + i * 31;
+      return el('circle', { class: 'skyline-svg-smoke', cx, cy, r: baseR + (i % 3) * 3, fill: `url(#${id('smoke')})`, filter: `url(#${id('blur')})`, style: `--drift:${(seededNoise(seed + 2) > 0.2 ? 1 : -1) * (60 + seededNoise(seed + 3) * 150)}px;--rise:${170 + seededNoise(seed + 5) * 170}px;--end-scale:${2.6 + seededNoise(seed + 8) * 1.6};--max-opacity:${0.35 + seededNoise(seed + 6) * 0.3};--rise-duration:${14 + seededNoise(seed + 4) * 9}s;--rise-delay:-${seededNoise(seed + 11) * 23}s` });
+    });
+    const treeBlob = (list, yBase) => list.map((t) => `M${t.x - t.r},${yBase} A${t.r},${t.r} 0 0 1 ${t.x + t.r},${yBase} Z`).join(' ');
 
-    // 타워크레인
+    // 하늘 아래 빛 띠와 권운
+    parts.push(el('rect', { x: 0, y: 140, width: 1600, height: 190, fill: `url(#${id('sunhaze')})` }));
+    [[120, 48, 420, 7], [640, 92, 300, 5], [980, 36, 520, 8], [1380, 118, 260, 5]].forEach(([x, y, w, h]) => parts.push(el('ellipse', { cx: x + w / 2, cy: y, rx: w / 2, ry: h / 2, fill: pal.cirrus, filter: `url(#${id('wide')})` })));
+    // 1층 먼 산
+    parts.push(el('path', { d: 'M0,296 L70,262 L130,280 L210,226 L290,268 L350,246 L430,286 L520,214 L600,262 L660,244 L740,282 L830,228 L900,268 L960,250 L1040,292 L1130,230 L1200,266 L1260,238 L1340,288 L1420,224 L1500,264 L1560,250 L1600,270 L1600,520 L0,520 Z', fill: pal.far }));
+    parts.push(el('path', { d: 'M520,214 L498,236 L545,234 Z M830,228 L808,248 L852,246 Z M1420,224 L1398,246 L1442,244 Z M210,226 L190,246 L232,244 Z', fill: pal.farDetail, opacity: 0.9 }));
+    parts.push(el('rect', { x: 0, y: 230, width: 1600, height: 120, fill: `url(#${id('haze1')})` }));
+    // 2층 도시
+    SCENE_CITY.forEach((b, i) => {
+      const g = [el('rect', { x: b.x, y: 318 - b.h, width: b.w, height: b.h + 60, fill: pal.city })];
+      if (b.antenna) g.push(el('rect', { x: b.x + b.w / 2 - 1, y: 318 - b.h - 18, width: 2, height: 18, fill: pal.city }));
+      if (night ? i % 2 === 0 : i % 3 === 0) [0, 1, 2].forEach((k) => g.push(el('rect', { x: b.x + 3, y: 318 - b.h + 6 + k * 12, width: Math.max(4, b.w - 6), height: 2, fill: pal.cityWin, opacity: night ? 0.55 : 0.8 })));
+      parts.push(el('g', {}, g));
+    });
+    parts.push(el('rect', { x: 0, y: 300, width: 1600, height: 150, fill: `url(#${id('haze2')})` }));
+    // 3층 공단
     {
-      const c = CRANE;
+      const c = SCENE_CRANE;
       const g = [
         el('path', { d: `M${c.x - 7},${G} L${c.x - 7},${c.top} M${c.x + 7},${G} L${c.x + 7},${c.top}` }),
-        el('path', { d: Array.from({ length: 12 }).map((_, i) => `M${c.x - 7},${c.top + 14 + i * 26} L${c.x + 7},${c.top + i * 26}`).join(' '), 'stroke-width': 1.2 }),
-        el('path', { d: `M${c.x - 7},${c.top} L${c.x + 7},${c.top} L${c.x + 7},${c.top - 18} L${c.x - 7},${c.top - 18} Z` }),
+        el('path', { d: Array.from({ length: 11 }).map((_, i) => `M${c.x - 7},${c.top + 14 + i * 26} L${c.x + 7},${c.top + i * 26}`).join(' '), 'stroke-width': 1.2 }),
         el('path', { d: `M${c.x - c.counter},${c.top - 10} L${c.x + c.jib},${c.top - 10}`, 'stroke-width': 3 }),
         el('path', { d: `M${c.x - c.counter},${c.top - 10} L${c.x},${c.top - 36} L${c.x + c.jib},${c.top - 10} M${c.x},${c.top - 36} L${c.x},${c.top - 18}`, 'stroke-width': 1.2 }),
-        el('path', { d: `M${c.x - c.counter + 6},${c.top - 10} L${c.x - c.counter + 6},${c.top + 4} L${c.x - c.counter + 30},${c.top + 4} L${c.x - c.counter + 30},${c.top - 10}`, fill: pal.crane }),
+        el('rect', { x: c.x - c.counter + 6, y: c.top - 10, width: 24, height: 14, fill: pal.plantShade, stroke: 'none' }),
         el('path', { d: `M${c.x + c.hookX},${c.top - 10} L${c.x + c.hookX},${c.top + 150}`, 'stroke-width': 1 }),
-        el('path', { d: `M${c.x + c.hookX - 10},${c.top + 150} L${c.x + c.hookX + 10},${c.top + 150} L${c.x + c.hookX + 10},${c.top + 166} L${c.x + c.hookX - 10},${c.top + 166} Z`, fill: pal.stackCap }),
+        el('rect', { x: c.x + c.hookX - 10, y: c.top + 150, width: 20, height: 16, fill: pal.plantShade, stroke: 'none' }),
       ];
-      if (pal.beacon) g.push(el('circle', { class: 'skyline-beacon', cx: c.x, cy: c.top - 38, r: 3, fill: pal.beacon, style: '--beacon-delay:-1.6s' }));
-      parts.push(el('g', { stroke: pal.crane, 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round', opacity: 0.92 }, g));
+      if (pal.beacon) g.push(el('circle', { class: 'skyline-beacon', cx: c.x, cy: c.top - 38, r: 3, fill: pal.beacon, stroke: 'none', style: '--beacon-delay:-1.6s' }));
+      parts.push(el('g', { stroke: pal.plantShade, 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round' }, g));
     }
-    // 가스홀더
+    SCENE_BLOCKS.forEach((b, i) => parts.push(box(b.x, G - b.h, b.w, b.h, windowsFor(b.x, G - b.h, b.w, b.h, i * 131))));
+    SCENE_HALLS.forEach((f, i) => {
+      const tw = f.w / f.teeth;
+      const roof = Array.from({ length: f.teeth }).map((_, k) => `L${f.x + k * tw},${G - f.h} L${f.x + k * tw + tw * 0.62},${G - f.h - 22} L${f.x + (k + 1) * tw},${G - f.h}`).join(' ');
+      parts.push(box(f.x, G - f.h, f.w, f.h, [
+        el('path', { d: `M${f.x},${G - f.h} ${roof} Z`, fill: pal.plantLight }),
+        el('path', { d: Array.from({ length: f.teeth }).map((_, k) => `M${f.x + k * tw + tw * 0.62},${G - f.h - 22} L${f.x + (k + 1) * tw},${G - f.h} L${f.x + k * tw + tw * 0.62},${G - f.h} Z`).join(' '), fill: pal.plantShade }),
+        el('rect', { x: f.x + 14, y: G - f.h * 0.62, width: f.w - 28, height: 6, fill: pal.plantWin, opacity: night ? 0.9 : 1, class: night ? 'skyline-window-night' : '', style: night ? `--glow-duration:${5 + i}s;--glow-delay:-${i * 2}s` : '' }),
+      ]));
+    });
     {
-      const g = GAS_HOLDER;
+      const s = SCENE_SPHERE;
       parts.push(el('g', {}, [
-        el('path', { d: `M${g.cx - g.r * 0.6},${G} L${g.cx - g.r * 0.45},${g.cy + g.r * 0.5} M${g.cx + g.r * 0.6},${G} L${g.cx + g.r * 0.45},${g.cy + g.r * 0.5} M${g.cx - g.r * 0.2},${G} L${g.cx - g.r * 0.15},${g.cy + g.r * 0.9} M${g.cx + g.r * 0.2},${G} L${g.cx + g.r * 0.15},${g.cy + g.r * 0.9}`, stroke: pal.pylon, 'stroke-width': 2.5, fill: 'none' }),
-        el('circle', { cx: g.cx, cy: g.cy, r: g.r, fill: `url(#${id('tank')})`, stroke: pal.towerEdge, 'stroke-width': 1 }),
-        el('ellipse', { cx: g.cx, cy: g.cy, rx: g.r, ry: g.r * 0.18, fill: 'none', stroke: pal.band, 'stroke-width': 2, opacity: 0.6 }),
-        el('path', { d: `M${g.cx - g.r},${g.cy} A${g.r},${g.r} 0 0 1 ${g.cx + g.r},${g.cy}`, fill: 'none', stroke: 'rgba(255,255,255,0.22)', 'stroke-width': 6 }),
-        el('path', { d: `M${g.cx + g.r * 0.95},${g.cy - 4} L${g.cx + g.r * 0.95},${g.cy - g.r - 10} L${g.cx + g.r * 0.6},${g.cy - g.r - 10}`, stroke: pal.pylon, 'stroke-width': 1.5, fill: 'none' }),
+        el('path', { d: `M${s.cx - s.r * 0.6},${G} L${s.cx - s.r * 0.45},${s.cy + s.r * 0.5} M${s.cx + s.r * 0.6},${G} L${s.cx + s.r * 0.45},${s.cy + s.r * 0.5} M${s.cx - s.r * 0.18},${G} L${s.cx - s.r * 0.14},${s.cy + s.r * 0.92} M${s.cx + s.r * 0.18},${G} L${s.cx + s.r * 0.14},${s.cy + s.r * 0.92}`, stroke: pal.plantShade, 'stroke-width': 2.5, fill: 'none' }),
+        el('circle', { cx: s.cx, cy: s.cy, r: s.r, fill: pal.plant }),
+        el('path', { d: `M${s.cx + s.r * 0.25},${s.cy - s.r * 0.97} A${s.r},${s.r} 0 0 1 ${s.cx + s.r * 0.25},${s.cy + s.r * 0.97} A${s.r * 0.55},${s.r} 0 0 0 ${s.cx + s.r * 0.25},${s.cy - s.r * 0.97} Z`, fill: pal.plantShade }),
+        el('ellipse', { cx: s.cx, cy: s.cy, rx: s.r, ry: s.r * 0.16, fill: 'none', stroke: pal.plantLight, 'stroke-width': 1.5, opacity: 0.8 }),
       ]));
     }
-    SVG_TOWERS.forEach((t, i) => {
-      const g = [el('rect', { x: t.x, y: G - t.h, width: t.w, height: t.h, rx: 6, fill: `url(#${id('tower')})`, stroke: pal.towerEdge, 'stroke-width': 1 }),
-        el('rect', { x: t.x + 4, y: G - t.h + 4, width: Math.max(4, t.w * 0.22), height: t.h - 8, rx: 3, fill: 'rgba(255,255,255,0.22)' })];
-      if (i % 3 === 0) g.push(el('rect', { x: t.x + t.w / 2 - 1.5, y: G - t.h - 26, width: 3, height: 26, rx: 1.5, fill: pal.stackCap }));
-      if (pal.beacon && i % 3 === 0) g.push(el('circle', { class: 'skyline-beacon', cx: t.x + t.w / 2, cy: G - t.h - 27, r: 3, fill: pal.beacon, style: `--beacon-delay:-${i * 0.7}s` }));
-      const cols = Math.max(2, Math.floor(t.w / 16)), rows = Math.max(2, Math.floor((t.h - 24) / 20));
-      for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) {
-        const seed = i * 131 + r * 17 + c * 7;
-        const lit = pal.windowLit && seededNoise(seed) > 0.42;
-        g.push(el('rect', { x: t.x + 8 + c * ((t.w - 16) / cols) + 1, y: G - t.h + 16 + r * ((t.h - 24) / rows), width: Math.max(3, (t.w - 16) / cols - 5), height: 8, rx: 1, fill: lit ? pal.windowLit : pal.window, class: lit ? 'skyline-window-night' : '', style: lit ? `--glow-duration:${4 + (seed % 5)}s;--glow-delay:-${seed % 7}s` : '' }));
-      }
-      parts.push(el('g', {}, g));
-    });
-    SVG_FACTORIES.forEach((f, fi) => {
-      const tw = f.w / f.teeth;
-      const roof = Array.from({ length: f.teeth }).map((_, i) => `L${f.x + i * tw},${G - f.h} L${f.x + i * tw + tw * 0.62},${G - f.h - 22} L${f.x + (i + 1) * tw},${G - f.h}`).join(' ');
-      const g = [el('rect', { x: f.x, y: G - f.h, width: f.w, height: f.h, rx: 4, fill: `url(#${id('factory')})` }), el('path', { d: `M${f.x},${G - f.h} ${roof} Z`, fill: pal.roof })];
-      [0.3, 0.58].forEach((t, i) => g.push(el('rect', { x: f.x + 12, y: G - f.h + f.h * t, width: f.w - 24, height: 7, rx: 2, fill: pal.windowLit || pal.window, opacity: pal.windowLit ? 0.8 : 1, class: pal.windowLit ? 'skyline-window-night' : '', style: pal.windowLit ? `--glow-duration:${5 + i + fi}s;--glow-delay:-${fi * 2 + i}s` : '' })));
-      parts.push(el('g', {}, g));
-    });
-    SVG_COOLING.forEach((t, ci) => {
+    SCENE_TANKS.forEach((t) => parts.push(box(t.x, G - t.h, t.w, t.h, [
+      el('ellipse', { cx: t.x + t.w / 2, cy: G - t.h, rx: t.w / 2, ry: 5, fill: pal.plantLight }),
+      el('rect', { x: t.x, y: G - t.h * 0.5, width: t.w, height: 3, fill: pal.plantBand, opacity: 0.7 }),
+    ])));
+    SCENE_COOLING.forEach((t, i) => {
       const top = G - t.h, x0 = t.x, x1 = t.x + t.w, inset = t.w * 0.17, waist = G - t.h * 0.42;
-      const d = `M${x0},${G} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset},${top + 18} L${x1 - inset},${top + 18} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${G} Z`;
-      const g = [el('path', { d, fill: `url(#${id('cooling')})`, stroke: pal.towerEdge, 'stroke-width': 1 }), el('ellipse', { cx: t.x + t.w / 2, cy: top + 18, rx: t.w * 0.33, ry: 5, fill: pal.stackCap, opacity: 0.55 })];
-      for (let i = 0; i < 5; i += 1) g.push(el('circle', { class: 'skyline-svg-smoke', cx: t.x + t.w / 2, cy: top + 14, r: 16 + (i % 3) * 5, fill: `url(#${id('smoke')})`, filter: `url(#${id('blur')})`, style: `--drift:${50 + seededNoise(ci * 31 + i) * 120}px;--rise:${140 + seededNoise(ci * 17 + i * 3) * 110}px;--end-scale:${2.4 + seededNoise(ci + i * 5) * 1.2};--max-opacity:${0.3 + seededNoise(ci * 7 + i) * 0.25};--rise-duration:${15 + seededNoise(ci * 3 + i * 11) * 9}s;--rise-delay:-${seededNoise(ci * 13 + i * 2) * 20}s` }));
-      parts.push(el('g', {}, g));
+      parts.push(el('g', {}, [
+        el('path', { d: `M${x0},${G} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset},${top + 18} L${x1 - inset},${top + 18} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${G} Z`, fill: pal.plant }),
+        el('path', { d: `M${t.x + t.w * 0.62},${G} C${t.x + t.w * 0.66},${waist} ${t.x + t.w * 0.72},${waist} ${t.x + t.w * 0.72},${top + 18} L${x1 - inset},${top + 18} C${x1 - inset},${waist} ${x1 - t.w * 0.05},${waist} ${x1},${G} Z`, fill: pal.plantShade }),
+        el('ellipse', { cx: t.x + t.w / 2, cy: top + 18, rx: t.w * 0.33, ry: 5, fill: pal.plantShade }),
+      ].concat(smokeFor(t.x + t.w / 2, top + 14, 16, 5, i * 53))));
     });
-    SVG_STACKS.forEach((st, si) => {
-      const h = st.h, top = G - h;
-      const g = [el('rect', { x: st.x, y: top, width: st.w, height: h, rx: st.w * 0.16, fill: `url(#${id('stack')})`, stroke: pal.towerEdge, 'stroke-width': 1 }),
-        el('rect', { x: st.x + 3, y: top + 6, width: Math.max(3, st.w * 0.2), height: h - 12, rx: 2, fill: 'rgba(255,255,255,0.25)' }),
-        el('rect', { x: st.x - 3, y: top, width: st.w + 6, height: 8, rx: 3, fill: pal.stackCap }),
-        el('rect', { x: st.x, y: top + 26, width: st.w, height: 9, fill: pal.band, opacity: 0.85 }),
-        el('rect', { x: st.x, y: top + 52, width: st.w, height: 9, fill: pal.band, opacity: 0.85 })];
-      if (pal.beacon) g.push(el('circle', { class: 'skyline-beacon', cx: st.x + st.w / 2, cy: top - 4, r: 3.2, fill: pal.beacon, style: `--beacon-delay:-${si * 0.9}s` }));
-      for (let i = 0; i < st.smoke; i += 1) {
-        const seed = si * 97 + i * 31;
-        g.push(el('circle', { class: 'skyline-svg-smoke', cx: st.x + st.w / 2, cy: top - 2, r: st.w * 0.32 + (i % 3) * 3, fill: `url(#${id('smoke')})`, filter: `url(#${id('blur')})`, style: `--drift:${(seededNoise(seed + 2) > 0.2 ? 1 : -1) * (60 + seededNoise(seed + 3) * 150)}px;--rise:${170 + seededNoise(seed + 5) * 170}px;--end-scale:${2.6 + seededNoise(seed + 8) * 1.6};--max-opacity:${0.35 + seededNoise(seed + 6) * 0.3};--rise-duration:${14 + seededNoise(seed + 4) * 9}s;--rise-delay:-${seededNoise(seed + 11) * 23}s` }));
-      }
-      parts.push(el('g', {}, g));
+    SCENE_STACKS.forEach((st, i) => {
+      const top = G - st.h;
+      const g = [
+        el('rect', { x: st.x, y: top, width: st.w, height: st.h, fill: pal.plant }),
+        el('rect', { x: st.x + st.w - shadeW(st.w), y: top, width: shadeW(st.w), height: st.h, fill: pal.plantShade }),
+        el('rect', { x: st.x - 3, y: top, width: st.w + 6, height: 7, fill: pal.plantShade }),
+        el('rect', { x: st.x, y: top + 24, width: st.w, height: 8, fill: pal.plantBand }),
+        el('rect', { x: st.x, y: top + 48, width: st.w, height: 8, fill: pal.plantBand }),
+      ];
+      if (pal.beacon) g.push(el('circle', { class: 'skyline-beacon', cx: st.x + st.w / 2, cy: top - 4, r: 3.2, fill: pal.beacon, style: `--beacon-delay:-${i * 0.9}s` }));
+      parts.push(el('g', {}, g.concat(smokeFor(st.x + st.w / 2, top - 2, st.w * 0.32, st.smoke, i * 97))));
     });
-    SVG_PYLONS.forEach((py, i) => {
-      const top = G - py.h, next = SVG_PYLONS[i + 1];
+    SCENE_PYLONS.forEach((py, i) => {
+      const top = G - py.h, next = SCENE_PYLONS[i + 1];
       const g = [
         el('path', { d: `M${py.x - 16},${G} L${py.x - 4},${top} L${py.x + 4},${top} L${py.x + 16},${G}` }),
         el('path', { d: `M${py.x - 12},${G - 30} L${py.x + 12},${G - 30} M${py.x - 9},${G - 62} L${py.x + 9},${G - 62} M${py.x - 13},${top + 22} L${py.x + 13},${top + 22} M${py.x - 22},${top + 46} L${py.x + 22},${top + 46}` }),
-        el('path', { d: `M${py.x - 12},${G - 30} L${py.x + 9},${G - 62} M${py.x + 12},${G - 30} L${py.x - 9},${G - 62} M${py.x - 9},${G - 62} L${py.x + 7},${G - 94} M${py.x + 9},${G - 62} L${py.x - 7},${G - 94}`, 'stroke-width': 1.2 }),
       ];
-      if (next) [[22, 46], [13, 22]].forEach(([dx, dy]) => {
-        const sag = Math.max(top, G - next.h) + dy + 46;
-        g.push(el('path', { d: `M${py.x + dx},${top + dy} Q${(py.x + next.x) / 2},${sag} ${next.x - dx},${G - next.h + dy} M${py.x - dx},${top + dy} Q${(py.x + next.x) / 2},${sag} ${next.x + dx},${G - next.h + dy}`, stroke: pal.wire, 'stroke-width': 1 }));
-      });
-      parts.push(el('g', { stroke: pal.pylon, 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round' }, g));
+      if (next) [[22, 46], [13, 22]].forEach(([dx, dy]) => { const sag = Math.max(top, G - next.h) + dy + 46; g.push(el('path', { d: `M${py.x + dx},${top + dy} Q${(py.x + next.x) / 2},${sag} ${next.x - dx},${G - next.h + dy} M${py.x - dx},${top + dy} Q${(py.x + next.x) / 2},${sag} ${next.x + dx},${G - next.h + dy}`, 'stroke-width': 1, opacity: 0.7 })); });
+      parts.push(el('g', { stroke: pal.plantShade, 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round' }, g));
     });
-    SVG_TANKS.forEach((tk) => {
-      parts.push(el('g', {}, [
-        el('rect', { x: tk.x, y: G - tk.h, width: tk.w, height: tk.h, rx: 3, fill: `url(#${id('tank')})`, stroke: pal.towerEdge, 'stroke-width': 1 }),
-        el('ellipse', { cx: tk.x + tk.w / 2, cy: G - tk.h, rx: tk.w / 2, ry: 4, fill: pal.stackCap, opacity: 0.8 }),
-        el('rect', { x: tk.x, y: G - tk.h * 0.55, width: tk.w, height: 3, fill: pal.band, opacity: 0.7 }),
-        el('rect', { x: tk.x + tk.w - 6, y: G - tk.h + 6, width: 2, height: tk.h - 8, fill: pal.pylon, opacity: 0.7 }),
-      ]));
-    });
-    parts.push(el('path', { d: 'M0,418 C180,392 300,428 480,404 C660,380 820,420 1000,398 C1180,376 1320,418 1600,392 L1600,520 L0,520 Z', fill: `url(#${id('hillNear')})` }));
-    [{ cx: 380, rx: 420, dur: 38, delay: -6 }, { cx: 1180, rx: 480, dur: 46, delay: -21 }].forEach((fg) => {
-      parts.push(el('ellipse', { class: 'skyline-fog', cx: fg.cx, cy: G - 6, rx: fg.rx, ry: 16, fill: pal.fog, filter: `url(#${id('fogblur')})`, style: `--fog-duration:${fg.dur}s;--fog-delay:${fg.delay}s` }));
-    });
-    SVG_TREES.forEach((tr) => {
-      const baseY = 436 + tr.dy;
-      parts.push(el('g', {}, [
-        el('rect', { x: tr.x - 1.5, y: baseY - tr.ry - 2, width: 3, height: tr.ry + 4, rx: 1.5, fill: pal.trunk }),
-        el('ellipse', { cx: tr.x, cy: baseY - tr.ry - 6, rx: tr.rx, ry: tr.ry, fill: `url(#${id('tree')})` }),
-        el('ellipse', { cx: tr.x - tr.rx * 0.3, cy: baseY - tr.ry - 10, rx: tr.rx * 0.45, ry: tr.ry * 0.5, fill: 'rgba(255,255,255,0.14)' }),
-      ]));
-    });
-    parts.push(el('rect', { x: 0, y: G + 8, width: 1600, height: 80, fill: `url(#${id('ground')})` }));
-    parts.push(el('path', { d: ROAD_PATH, fill: 'none', stroke: pal.asphalt, 'stroke-width': 15, 'stroke-linecap': 'round' }));
-    parts.push(el('path', { d: ROAD_PATH, fill: 'none', stroke: pal.roadLine, 'stroke-width': 1.4, 'stroke-dasharray': '14 12', opacity: 0.9 }));
-    parts.push(el('path', { d: ROAD_PATH, fill: 'none', stroke: pal.road, 'stroke-width': 15, 'stroke-linecap': 'round', opacity: 0.25, filter: `url(#${id('soft')})` }));
-    SVG_LAMPS.forEach((lp) => {
+    parts.push(el('rect', { x: 0, y: G - 40, width: 1600, height: 44, fill: `url(#${id('haze2')})` }));
+    // 4층 앞 땅
+    parts.push(el('path', { d: `M0,${G - 14} C180,${G - 36} 300,${G} 480,${G - 24} C660,${G - 48} 820,${G - 8} 1000,${G - 30} C1180,${G - 52} 1320,${G - 10} 1600,${G - 36} L1600,520 L0,520 Z`, fill: `url(#${id('ground')})` }));
+    parts.push(el('path', { d: treeBlob(SCENE_TREES, G + 6), fill: pal.nearLight, transform: 'translate(0 -26)' }));
+    parts.push(el('path', { d: treeBlob(SCENE_TREES.map((t) => ({ x: t.x + 3, r: t.r * 0.72 })), G + 6), fill: pal.nearShade, transform: 'translate(0 -22)', opacity: 0.55 }));
+    parts.push(el('rect', { x: 0, y: G + 6, width: 1600, height: 100, fill: pal.near }));
+    parts.push(el('rect', { x: 0, y: G + 6, width: 1600, height: 18, fill: pal.nearLight, opacity: 0.35 }));
+    parts.push(el('rect', { x: 0, y: SCENE_ROAD_Y - 8, width: 1600, height: 16, fill: pal.road }));
+    parts.push(el('path', { d: `M0,${SCENE_ROAD_Y} L1600,${SCENE_ROAD_Y}`, stroke: pal.roadLine, 'stroke-width': 1.3, 'stroke-dasharray': '14 12' }));
+    SCENE_LAMPS.forEach((x) => {
       const g = [];
-      if (pal.lampGlow) g.push(el('ellipse', { cx: lp.x + 10, cy: lp.y - 32, rx: 34, ry: 44, fill: `url(#${id('lampglow')})` }));
-      g.push(el('path', { d: `M${lp.x},${lp.y - 8} L${lp.x},${lp.y - 38} Q${lp.x},${lp.y - 44} ${lp.x + 6},${lp.y - 44} L${lp.x + 12},${lp.y - 44}`, fill: 'none', stroke: pal.pylon, 'stroke-width': 2, 'stroke-linecap': 'round' }));
-      g.push(el('rect', { x: lp.x + 8, y: lp.y - 46, width: 8, height: 4, rx: 1.5, fill: pal.lampGlow ? '#ffe9b0' : pal.stackCap }));
+      if (pal.lamp) g.push(el('ellipse', { cx: x + 10, cy: SCENE_ROAD_Y - 34, rx: 36, ry: 46, fill: `url(#${id('lampglow')})` }));
+      g.push(el('path', { d: `M${x},${SCENE_ROAD_Y - 10} L${x},${SCENE_ROAD_Y - 40} Q${x},${SCENE_ROAD_Y - 46} ${x + 6},${SCENE_ROAD_Y - 46} L${x + 12},${SCENE_ROAD_Y - 46}`, fill: 'none', stroke: pal.nearShade, 'stroke-width': 2, 'stroke-linecap': 'round' }));
+      g.push(el('rect', { x: x + 8, y: SCENE_ROAD_Y - 48, width: 8, height: 4, fill: pal.lamp || pal.nearLight }));
       parts.push(el('g', {}, g));
     });
-    SVG_CARS.forEach((car) => {
-      const body = pal.carColors[car.color % pal.carColors.length];
-      const lane = car.dir > 0 ? 3 : -3, L = car.len;
-      const inner = [
-        el('rect', { x: -L / 2, y: -5, width: L, height: 7, rx: 2.5, fill: body }),
-        el('rect', { x: -L / 2 + 5, y: -10, width: L * 0.55, height: 6, rx: 2.5, fill: body }),
-        el('rect', { x: -L / 2 + 7, y: -9, width: L * 0.22, height: 4, rx: 1, fill: 'rgba(200,225,245,0.75)' }),
-        el('circle', { cx: -L / 2 + 5, cy: 2.5, r: 2.2, fill: '#1f2937' }),
-        el('circle', { cx: L / 2 - 5, cy: 2.5, r: 2.2, fill: '#1f2937' }),
-      ];
+    SCENE_CARS.forEach((car) => {
+      const lane = car.dir > 0 ? 3 : -4, L = car.len;
+      const inner = [el('rect', { x: -L / 2, y: -5, width: L, height: 6, rx: 2, fill: pal.nearShade }), el('rect', { x: -L / 2 + 5, y: -9, width: L * 0.55, height: 5, rx: 2, fill: pal.nearShade })];
       if (pal.headlight) {
-        inner.push(el('path', { d: `M${L / 2},-3.5 L${L / 2 + 34},-10 L${L / 2 + 34},4 Z`, fill: pal.headlight, opacity: 0.3 }));
-        inner.push(el('rect', { x: L / 2 - 1.5, y: -3.5, width: 2.5, height: 3, rx: 1, fill: pal.headlight }));
+        inner.push(el('path', { d: `M${L / 2},-3 L${L / 2 + 34},-9 L${L / 2 + 34},4 Z`, fill: pal.headlight, opacity: 0.2 }));
+        inner.push(el('rect', { x: L / 2 - 1.5, y: -3.5, width: 2.5, height: 2.5, fill: pal.headlight }));
+        inner.push(el('rect', { x: -L / 2 - 1, y: -3.5, width: 2.5, height: 2.5, fill: '#ff4d3d' }));
       }
-      if (pal.taillight) inner.push(el('rect', { x: -L / 2 - 1, y: -3.5, width: 2.5, height: 3, rx: 1, fill: pal.taillight }));
       parts.push(el('g', {}, [
-        el('g', { transform: `translate(0 ${lane}) scale(${car.dir} 1)` }, inner),
-        el('animateMotion', { dur: `${car.dur}s`, begin: `${car.delay}s`, repeatCount: 'indefinite', path: ROAD_PATH, keyPoints: car.dir > 0 ? '0;1' : '1;0', keyTimes: '0;1', calcMode: 'linear' }),
+        el('g', { transform: `translate(0 ${SCENE_ROAD_Y + lane}) scale(${car.dir} 1)` }, inner),
+        el('animateMotion', { dur: `${car.dur}s`, begin: `${car.delay}s`, repeatCount: 'indefinite', path: 'M-60,0 L1660,0', keyPoints: car.dir > 0 ? '0;1' : '1;0', keyTimes: '0;1', calcMode: 'linear' }),
       ]));
     });
-    // 철길과 화물열차
-    parts.push(el('g', {}, [
-      el('path', { d: `M0,${RAIL_Y + 6} L1600,${RAIL_Y + 6}`, stroke: pal.sleeper, 'stroke-width': 5, 'stroke-dasharray': '3 9', opacity: 0.9 }),
-      el('path', { d: `M0,${RAIL_Y + 3.5} L1600,${RAIL_Y + 3.5} M0,${RAIL_Y + 8.5} L1600,${RAIL_Y + 8.5}`, stroke: pal.rail, 'stroke-width': 1.4 }),
-    ]));
+    parts.push(el('path', { d: `M0,${SCENE_RAIL_Y + 6} L1600,${SCENE_RAIL_Y + 6}`, stroke: pal.rail, 'stroke-width': 5, 'stroke-dasharray': '3 9' }));
+    parts.push(el('path', { d: `M0,${SCENE_RAIL_Y + 3.5} L1600,${SCENE_RAIL_Y + 3.5} M0,${SCENE_RAIL_Y + 8.5} L1600,${SCENE_RAIL_Y + 8.5}`, stroke: pal.rail, 'stroke-width': 1.4 }));
     {
-      const gap = 5; let offset = 0;
-      const cars = TRAIN.cars.map((car, i) => {
-        const x = offset; offset += car.w + gap;
-        const body = car.kind === 'loco' ? pal.loco : pal.wagons[i % pal.wagons.length];
-        const y = RAIL_Y + 3 - car.h;
-        const g = [];
-        if (car.kind === 'tank') g.push(el('rect', { x, y: y + 2, width: car.w, height: car.h - 2, rx: (car.h - 2) / 2, fill: body }));
-        else g.push(el('rect', { x, y, width: car.w, height: car.h, rx: 1.5, fill: body }));
-        if (car.kind === 'loco') {
-          g.push(el('rect', { x: x + car.w - 16, y: y - 6, width: 14, height: 7, rx: 1.5, fill: body }));
-          g.push(el('rect', { x: x + car.w - 13, y: y - 5, width: 8, height: 4, rx: 0.8, fill: pal.trainLight || 'rgba(200,225,245,0.8)' }));
-          if (pal.trainLight) g.push(el('path', { d: `M${x + car.w},${y + 4} L${x + car.w + 46},${y - 6} L${x + car.w + 46},${y + 14} Z`, fill: pal.trainLight, opacity: 0.22 }));
-        }
-        if (car.kind === 'box') g.push(el('rect', { x: x + car.w / 2 - 2, y: y + 3, width: 4, height: car.h - 6, fill: 'rgba(0,0,0,0.2)' }));
-        if (car.kind === 'flat') [0, 1].forEach((k) => g.push(el('rect', { x: x + 4 + k * 20, y: y - 7, width: 16, height: 8, rx: 1, fill: pal.wagons[(i + k + 1) % pal.wagons.length] })));
-        g.push(el('circle', { cx: x + 7, cy: RAIL_Y + 3.5, r: 2.4, fill: '#1f2937' }));
-        g.push(el('circle', { cx: x + car.w - 7, cy: RAIL_Y + 3.5, r: 2.4, fill: '#1f2937' }));
+      let offset = 0;
+      const cars = SCENE_TRAIN.cars.map((w, i) => {
+        const x = offset; offset += w + 5;
+        const h = i === 0 ? 16 : 13, y = SCENE_RAIL_Y + 3 - h;
+        const g = [el('rect', { x, y, width: w, height: h, rx: i % 3 === 1 ? 6 : 1.5, fill: pal.nearShade })];
+        if (i === 0) g.push(el('rect', { x: x + w - 16, y: y - 6, width: 14, height: 7, fill: pal.nearShade }));
+        if (i === 0 && pal.headlight) g.push(el('path', { d: `M${x + w},${y + 4} L${x + w + 46},${y - 6} L${x + w + 46},${y + 14} Z`, fill: pal.headlight, opacity: 0.22 }));
+        g.push(el('circle', { cx: x + 7, cy: SCENE_RAIL_Y + 3.5, r: 2.4, fill: pal.rail }));
+        g.push(el('circle', { cx: x + w - 7, cy: SCENE_RAIL_Y + 3.5, r: 2.4, fill: pal.rail }));
         return el('g', {}, g);
       });
-      parts.push(el('g', {}, [
-        el('g', { transform: `translate(${-offset} 0)` }, cars),
-        el('animateMotion', { dur: `${TRAIN.dur}s`, begin: `${TRAIN.delay}s`, repeatCount: 'indefinite', path: `M-60,0 L${1600 + offset + 60},0` }),
-      ]));
+      parts.push(el('g', {}, [el('g', { transform: `translate(${-offset} 0)` }, cars), el('animateMotion', { dur: `${SCENE_TRAIN.dur}s`, begin: `${SCENE_TRAIN.delay}s`, repeatCount: 'indefinite', path: `M-60,0 L${1600 + offset + 60},0` })]));
     }
-    if (pal.bird) BIRD_FLOCKS.forEach((flock) => {
+    if (pal.bird) SCENE_BIRD_FLOCKS.forEach((flock) => {
       const g = flock.birds.map(([bx, by], bi) => el('path', { class: 'skyline-bird', d: `M${bx - 6},${by} Q${bx - 3},${by - 5} ${bx},${by} Q${bx + 3},${by - 5} ${bx + 6},${by}`, style: `--flap-duration:${0.7 + (bi % 3) * 0.12}s;--flap-delay:-${(bi * 0.23) % 0.8}s` }));
       g.push(el('animateMotion', { dur: `${flock.dur}s`, begin: `${flock.delay}s`, repeatCount: 'indefinite', path: flock.path }));
       parts.push(el('g', { fill: 'none', stroke: pal.bird, 'stroke-width': 1.6, 'stroke-linecap': 'round' }, g));
@@ -560,11 +465,8 @@ const SKYLINE_SVG_TREES = Array.from({ length: 22 }, (_, idx) => ({
       const g = [];
       if (pal.contrail) g.push(el('rect', { x: -230, y: -1.2, width: 212, height: 2.4, rx: 1.2, fill: `url(#${id('contrail')})` }));
       g.push(el('path', { d: 'M-14,0 L8,0 Q14,0 14,2.5 L-14,2.5 Z M-8,0 L-6,-7 L-2,-7 L2,0 Z M-10,2.5 L-14,8 L-9,8 L-3,2.5 Z', fill: pal.plane }));
-      if (!pal.contrail) {
-        g.push(el('circle', { class: 'skyline-beacon', cx: -12, cy: 0, r: 1.8, fill: '#ff5a4a' }));
-        g.push(el('circle', { class: 'skyline-beacon', cx: -4, cy: -7, r: 1.8, fill: '#8bf0a0', style: '--beacon-delay:-1.2s' }));
-      }
-      g.push(el('animateMotion', { dur: `${PLANE.dur}s`, begin: `${PLANE.delay}s`, repeatCount: 'indefinite', path: PLANE.path, rotate: 'auto' }));
+      if (!pal.contrail) { g.push(el('circle', { class: 'skyline-beacon', cx: -12, cy: 0, r: 1.8, fill: '#ff5a4a' })); g.push(el('circle', { class: 'skyline-beacon', cx: -4, cy: -7, r: 1.8, fill: '#8bf0a0', style: '--beacon-delay:-1.2s' })); }
+      g.push(el('animateMotion', { dur: `${SCENE_PLANE.dur}s`, begin: `${SCENE_PLANE.delay}s`, repeatCount: 'indefinite', path: SCENE_PLANE.path, rotate: 'auto' }));
       parts.push(el('g', {}, g));
     }
     return `<svg class="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${parts.join('')}</svg>`;
