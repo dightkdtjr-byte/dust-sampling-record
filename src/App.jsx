@@ -7048,7 +7048,7 @@ export default function App() {
             {!isUserUnlocked ? (
               <div className="relative overflow-hidden border border-slate-200 rounded-2xl p-5 bg-white text-center">
                 <p className="text-sm font-black text-emerald-900">베타 접속</p>
-                <p className="text-xs text-emerald-800 mt-1">기본 계정(user)으로 바로 시작합니다.</p>
+                <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
@@ -7118,7 +7118,7 @@ export default function App() {
                     onClick={() => setAuthModal('settings')}
                     className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-10"
                   >
-                    설정
+                    ⚙ 설정
                   </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
@@ -7241,7 +7241,7 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대 (아침·낮·밤)</p>
+                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대(아침/낮/밤) 표시를 선택합니다.</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {SKY_PREVIEW_OPTIONS.map((opt) => {
                               const selected = skyPreviewMode === opt.id;
@@ -7264,7 +7264,7 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist)</p>
-                          <p className="text-[11px] text-slate-600 mt-1">다른 PC에서 같은 계정의 리포트를 복원합니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">다른 기기에서도 같은 계정 리포트를 복원할 수 있습니다.</p>
                           <div className="mt-2 space-y-2">
                             <input
                               type="password"
@@ -7342,7 +7342,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -9153,17 +9153,11 @@ export default function App() {
                           )}
                           
                           {!isFlowSheet && (
-                          <td className="p-1 border-l border-slate-200 w-24 ds-iso-cell">
+                          <td className="p-1 border-l border-slate-200 w-20 ds-iso-cell">
                             {rowRate === '-' ? (
                               <span className="ds-iso-empty">-</span>
                             ) : (
-                              <span className={`ds-iso ${isRateValid ? 'is-ok' : 'is-out'}`} title={isRateValid ? '등속 범위(90~110%) 안' : '등속 범위(90~110%) 밖'}>
-                                <span className="ds-iso-value">{rowRate}%</span>
-                                <span className="ds-iso-bar" aria-hidden="true">
-                                  <span className="ds-iso-band" />
-                                  <span className="ds-iso-mark" style={{ left: `${Math.max(0, Math.min(100, (parseFloat(rowRate) / 200) * 100))}%` }} />
-                                </span>
-                              </span>
+                              <span className={`ds-iso-value ${isRateValid ? 'is-ok' : 'is-out'}`} title={isRateValid ? '등속 범위(90~110%) 안' : '등속 범위(90~110%) 밖'}>{rowRate}%</span>
                             )}
                           </td>
                           )}
