@@ -1865,6 +1865,53 @@ const PresetSaveIcon = ({ className = 'w-3.5 h-3.5' }) => (
   </svg>
 );
 
+// 기록지 섹션 번호 줄: 머리글 아래에 붙어 스크롤해도 따라오고, 보고 있는 섹션을 표시
+const SheetSectionNav = ({ scope }) => {
+  const [items, setItems] = useState([]);
+  const [active, setActive] = useState('');
+  useEffect(() => {
+    const heads = Array.from(document.querySelectorAll('h2.ds-sec-title'));
+    const next = heads.map((h, i) => {
+      const num = h.querySelector('.ds-sec-num')?.textContent?.trim() || String(i + 1);
+      const title = (h.textContent || '').replace(num, '').replace(/\s*\(.*$/, '').trim();
+      if (!h.id) h.id = `ds-sec-${scope}-${num}`;
+      return { id: h.id, num, title };
+    });
+    const frame = requestAnimationFrame(() => setItems(next));
+    if (!heads.length) return () => cancelAnimationFrame(frame);
+    // 보고 있는 섹션 = 화면 위쪽(번호 줄 아래)을 지나간 마지막 제목
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const line = 72;
+      let current = heads[0];
+      heads.forEach((h) => { if (h.getBoundingClientRect().top <= line) current = h; });
+      setActive(current.id);
+    };
+    const onScroll = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
+  }, [scope]);
+  if (items.length < 2) return null;
+  return (
+    <nav className="ds-secnav" aria-label="기록지 섹션">
+      {items.map((item) => (
+        <a
+          key={item.id}
+          href={`#${item.id}`}
+          className={`ds-secnav-item${active === item.id ? ' is-active' : ''}`}
+          onClick={(e) => { e.preventDefault(); document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); setActive(item.id); }}
+        >
+          <span className="ds-secnav-num">{item.num}</span>
+          <span className="ds-secnav-title">{item.title}</span>
+        </a>
+      ))}
+    </nav>
+  );
+};
+
 const SignatureBadge = () => (
   <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
     sangseok
@@ -7409,6 +7456,7 @@ export default function App() {
               {log.company && <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-700">{log.company}{log.stackName ? ` · ${log.stackName}` : ''}</span>}
             </div>
           </div>
+          <SheetSectionNav scope="samplinglog" />
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
@@ -7791,9 +7839,9 @@ export default function App() {
             <h1 className="text-2xl font-black text-slate-900">
               <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
             </h1>
-            <p className="text-slate-600 mt-2 text-sm font-medium">
-              <span className="font-black text-slate-800">시료채취기록부(종합)</span>
-              {' '}| 사업장별 채취 물질, 측정 일시, 가스미터 지시값을 기록하고 양식으로 추출합니다
+            <p className="ds-sheet-title">
+              <span>시료채취기록부(종합)</span>
+              <span className="ds-sheet-title-sub">사업장별 채취 물질과 가스미터 지시값 · 날짜별 시트로 추출</span>
             </p>
             <div className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 flex flex-wrap justify-center gap-2">
               <button type="button" onClick={importSheetInfoToSamplingLog} className="px-3 py-2 text-xs font-bold rounded-lg border border-orange-300 bg-orange-50 text-orange-800 hover:bg-orange-100" title="다른 창에서 열어 둔 기록부의 사업장명·배출구·측정일자를 비어 있는 칸에 채웁니다">
@@ -7861,8 +7909,9 @@ export default function App() {
             </button>
           </div>
         </div>
+        <SheetSectionNav scope={selectedSheet || 'sheet'} />
 
-        <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} className="space-y-6">
+        <form onSubmit={handleSave} onKeyDown={handleFormKeyDown} className="space-y-6 ds-paper">
           
           {/* 섹션 1: 일반 사항 및 배출구 제원 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">

@@ -552,3 +552,95 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 /* 통합기록부 표 머리글은 세로로 쪼개지지 않게 */
 .ds-page thead th { white-space: nowrap; }
 .ds-page thead th br { display: inline; }
+
+/* ── 2차: 한 장의 종이 ── 섹션 카드를 띄우지 않고 괘선으로만 나눈다 */
+.ds-page { position: relative; }
+.ds-page > div.bg-white, .ds-page > form > div.bg-white, .ds-page > form > div.grid > div.bg-white, .ds-page > form > div > div.bg-white.p-6 {
+  background: transparent !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important;
+  border-radius: 0 !important; padding-left: 0 !important; padding-right: 0 !important;
+}
+/* 종이 본체: 머리글 아래 전부를 한 장으로 */
+.ds-page > div.bg-white:first-child { padding: 18px 28px 14px !important; }
+.ds-page > div.bg-white:first-child, .ds-page > div.bg-white:nth-child(2), .ds-page > div.bg-white:nth-child(3), .ds-page > nav.ds-secnav, .ds-page > form, .ds-page > div.flex, .ds-page > div.mt-6, .ds-page > div.bg-white:last-child,
+.ds-page > div:not(.bg-white):not(form):not(nav) {
+  background: rgba(252, 252, 250, 0.96); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-left: 1px solid var(--ds-rule); border-right: 1px solid var(--ds-rule);
+  margin-top: 0 !important; padding-left: 28px; padding-right: 28px;
+}
+.ds-page > div.bg-white:nth-child(2), .ds-page > div.bg-white:nth-child(3) { padding-top: 8px !important; padding-bottom: 8px !important; border-top: 1px solid var(--ds-rule-strong); }
+.ds-page > *:first-child { border-top: 1px solid var(--ds-rule); border-radius: 3px 3px 0 0; }
+.ds-page > *:last-child { border-bottom: 1px solid var(--ds-rule); border-radius: 0 0 3px 3px; padding-bottom: 24px; }
+.ds-page > form > * + *, .ds-page > form > div.grid > div.bg-white + div.bg-white { margin-top: 0 !important; }
+.ds-page > form > div.bg-white, .ds-page > form > div.grid, .ds-page > form > div.flex { border-top: 1px solid var(--ds-rule-strong); padding-top: 22px !important; padding-bottom: 26px !important; }
+.ds-page > form > div.grid { gap: 0 !important; }
+@media (min-width: 1024px) {
+  .ds-page > form > div.grid > div.bg-white + div.bg-white { border-left: 1px solid var(--ds-rule) !important; padding-left: 26px !important; }
+  .ds-page > form > div.grid > div.bg-white:first-child { padding-right: 26px !important; }
+}
+@media (max-width: 1023px) {
+  .ds-page > form > div.grid > div.bg-white + div.bg-white { border-top: 1px solid var(--ds-rule) !important; padding-top: 22px !important; margin-top: 8px !important; }
+}
+.ds-page > div.flex.items-center.justify-center { padding-top: 10px !important; padding-bottom: 28px !important; border-bottom: none !important; }
+/* 섹션 안의 상자(회색·초록 테두리 묶음)는 풀어서 괘선 묶음으로 */
+.ds-page form div[class*="bg-slate-50"][class*="border"], .ds-page form div.bg-slate-100[class*="border"],
+.ds-page form div[class*="bg-emerald-50"][class*="border"], .ds-page form div[class*="bg-teal-50"][class*="border"], .ds-page form div[class*="bg-cyan-50"][class*="border"],
+.ds-page form div[class*="bg-orange-50"][class*="border"], .ds-page form div[class*="bg-amber-50"][class*="border"],
+.ds-page form div.bg-white.p-4[class*="border"], .ds-page form div.bg-white.p-3[class*="border"], .ds-page form div.bg-white.p-5[class*="border"] {
+  background: transparent !important; border: none !important; border-top: 1px dashed var(--ds-rule-strong) !important; border-radius: 0 !important;
+  box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important;
+}
+/* 측정점 그림 상자와 결과 패널(산소 보정 계수 등)은 테두리를 남긴다 */
+.ds-page form div.bg-white.p-4.max-w-3xl { border: 1px solid var(--ds-rule) !important; padding: 16px !important; }
+.ds-page form div.bg-white.p-4.max-w-3xl, .ds-page form .lg\\:col-span-1[class*="border"] { border-top-style: solid !important; }
+/* 섹션 제목을 조금 더 크게, 위에 여유 */
+.ds-sec-title { font-size: 16.5px; margin-bottom: 18px; }
+.ds-sec-title.is-inline { margin-bottom: 0; }
+/* 섹션 번호 줄: 머리글 아래 고정 */
+.ds-secnav {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 0;
+  border-top: 1px solid var(--ds-rule-strong); border-bottom: 1px solid var(--ds-rule-strong);
+  padding-top: 0 !important; padding-bottom: 0 !important;
+}
+.ds-secnav-item {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px 8px 0; margin-right: 18px;
+  font-size: 12.5px; color: var(--ds-ink-2); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ds-secnav-item:hover { color: var(--ds-ink); }
+.ds-secnav-item.is-active { color: var(--ds-ink); border-bottom-color: var(--ds-ink); font-weight: 600; }
+.ds-secnav-num { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid currentColor; border-radius: 2px; font-size: 11px; }
+.ds-secnav-item.is-active .ds-secnav-num { background: var(--ds-ink); color: #fff; border-color: var(--ds-ink); }
+h2.ds-sec-title { scroll-margin-top: 56px; }
+/* 등속흡인율 묶음: 장부 형식 (위 이중선) */
+.ds-page form div.rounded-xl.border-2, .ds-page form div[class*="border-2"][class*="p-6"] { border-top: 3px double var(--ds-ink) !important; }
+
+/* 종이 레이아웃 보정: 카드 사이 간격 제거, 가로 여백은 종이 바깥 테두리에서만 */
+.ds-page > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+.ds-page > form > *, .ds-page > form > div.grid > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+.ds-page > div.bg-white.shadow-sm, .ds-page > div.bg-white.shadow-md, .ds-page > div.bg-white.shadow-lg {
+  padding-left: 28px !important; padding-right: 28px !important; border-left: 1px solid var(--ds-rule) !important; border-right: 1px solid var(--ds-rule) !important;
+}
+.ds-page > div.bg-white.shadow-sm:first-child { border-top: 1px solid var(--ds-rule) !important; }
+.ds-page > div.bg-white.shadow-sm:last-child { border-bottom: 1px solid var(--ds-rule) !important; }
+.ds-page > form > div.bg-white.shadow-sm, .ds-page > form > div.grid > div.bg-white.shadow-sm, .ds-page > form > div.bg-white.shadow-md {
+  background: transparent !important; border: none !important; border-top: 1px solid var(--ds-rule-strong) !important;
+  box-shadow: none !important; backdrop-filter: none !important; border-radius: 0 !important;
+  padding-left: 0 !important; padding-right: 0 !important;
+}
+.ds-page > form > div.grid > div.bg-white.shadow-sm { border-top: none !important; }
+.ds-page > form > div.bg-white.shadow-sm:first-child { border-top: none !important; padding-top: 10px !important; }
+@media (min-width: 1024px) {
+  .ds-page > form > div.grid > div.bg-white.shadow-sm + div.bg-white.shadow-sm { border-left: 1px solid var(--ds-rule) !important; padding-left: 26px !important; }
+}
+.ds-page > nav.ds-secnav { padding-left: 28px; padding-right: 28px; }
+/* 풀어낸 묶음이 바로 겹칠 때 점선이 두 줄 되지 않게 */
+.ds-page form div[class*="border"][class*="rounded"] > div[class*="border"][class*="rounded"]:first-child { border-top: none !important; }
+/* 좁은 화면: 종이 여백을 줄이고 번호 줄은 가로 스크롤 */
+@media (max-width: 640px) {
+  .ds-page > div.bg-white.shadow-sm, .ds-page > nav.ds-secnav, .ds-page > form { padding-left: 14px !important; padding-right: 14px !important; }
+  .ds-page > div.bg-white.shadow-sm:first-child { padding-left: 14px !important; padding-right: 14px !important; }
+  .ds-secnav { flex-wrap: nowrap; overflow-x: auto; }
+  .ds-secnav-item { margin-right: 10px; white-space: nowrap; }
+  .ds-secnav-title { display: none; }
+  .ds-secnav-item.is-active .ds-secnav-title { display: inline; }
+}
