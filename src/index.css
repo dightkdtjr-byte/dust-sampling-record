@@ -666,10 +666,6 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 .ds-iso-bar { height: 3px; }
 .ds-iso-mark { height: 9px; top: -3px; }
 
-/* 첫 화면: 유리·번짐 없이 평평한 카드와 색 표식 */
-.menu-sheet-card { border-radius: 4px !important; box-shadow: none !important; }
-.menu-sheet-card > span[aria-hidden] { border-radius: 0; }
-.menu-sheet-card:hover { background: #fafafa; }
 /* 메뉴 카드 색 표식: 연한색 중화 규칙(bg-*-50)에 걸리지 않게 원래 색 유지 */
 .menu-sheet-card .bg-emerald-500 { background-color: #10b981 !important; }
 .menu-sheet-card .bg-cyan-500 { background-color: #06b6d4 !important; }
@@ -677,7 +673,3 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 .menu-sheet-card .bg-blue-500 { background-color: #3b82f6 !important; }
 .menu-sheet-card .bg-purple-500 { background-color: #a855f7 !important; }
 .menu-sheet-card .bg-orange-500 { background-color: #f97316 !important; }
-/* 첫 화면 패널도 유리 효과 없이 불투명하게 */
-div.bg-white.shadow-sm, div.bg-white.shadow-md, div.bg-white.shadow-lg, div.bg-white.shadow-xl {
-  background-color: #fff !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-}

@@ -1905,7 +1905,7 @@ const SheetSectionNav = ({ scope }) => {
 };
 
 const SignatureBadge = () => (
-  <div className="fixed right-4 bottom-3 z-30 text-[11px] text-slate-500 tracking-wide select-none">
+  <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
     sangseok
   </div>
 );
@@ -6877,6 +6877,12 @@ export default function App() {
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#fff2cc]/38 via-[#ffdca5]/20 to-transparent'
       : 'bg-gradient-to-b from-white/42 via-sky-100/12 to-transparent');
+  const menuSkyGlowLeftClass = isNightSky
+    ? 'bg-indigo-300/20'
+    : (isMorningSky ? 'bg-amber-100/70' : 'bg-white/85');
+  const menuSkyGlowRightClass = isNightSky
+    ? 'bg-violet-400/15'
+    : (isMorningSky ? 'bg-orange-200/45' : 'bg-sky-200/70');
   const sheetSkyBgClass = isNightSky
     ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
     : (isMorningSky
@@ -7008,6 +7014,8 @@ export default function App() {
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className={`absolute inset-0 ${menuSkyOverlayClass}`} />
+        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
+        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
         {skyOrbClass && <div className={skyOrbClass} />}
         {renderSkyDecor('menu')}
           {isNightSky && (
@@ -7044,9 +7052,10 @@ export default function App() {
               />
             </h1>
           </div>
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 relative">
+          <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
             {!isUserUnlocked ? (
-              <div className="relative overflow-hidden border border-slate-200 rounded-2xl p-5 bg-white text-center">
+              <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
+                <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
                 <p className="text-sm font-black text-emerald-900">베타 접속</p>
                 <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -7324,10 +7333,9 @@ export default function App() {
                     key={sheet.id}
                     type="button"
                     onClick={() => navigateToSheet(sheet.id)}
-                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-colors hover:border-slate-400 menu-sheet-card"
+                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5"
                   >
-                    <span className={`absolute right-4 top-4 w-3 h-3 ${sheet.swatchClass}`} aria-hidden="true" />
-                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${sheet.swatchClass}`} aria-hidden="true" />
+                    <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br ${sheet.toneClass} blur-sm group-hover:scale-110 transition-transform`} />
                     <h2 className="text-base font-black text-slate-900">{sheet.title}</h2>
                     <p className="text-xs text-slate-600 mt-1">{sheet.desc}</p>
                     <div className={`mt-4 flex items-center text-[11px] font-bold text-slate-500 transition-colors ${sheet.hoverTextClass}`}>
