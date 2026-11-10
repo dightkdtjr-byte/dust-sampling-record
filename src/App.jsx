@@ -511,11 +511,15 @@ const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 
 // ── 사전 수분량 측정 방법 ──
 // excelChoice: 양식 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표)
-// 엑셀 수분량 시트의 측정방법 (선택번호 C5: 1=자동측정기, 2=임핀저)
+// 사전 수분량 측정방법. excelChoice = 엑셀 수분량!C5 선택번호
+// (1=자동측정기 표, 2=임핀저 표 20~23행, 3=사후 수분량 칸을 그대로 사용)
 const MOISTURE_METHODS = [
+  { id: 'imp2', label: '임핀저(2구)', excelChoice: 2, stages: 2 },
   { id: 'auto', label: '자동측정기', excelChoice: 1 },
-  { id: 'impinger', label: '임핀저', excelChoice: 2 },
+  { id: 'impinger', label: '임핀저(4구)', excelChoice: 2, stages: 4 },
+  { id: 'post', label: '사후 수분량', excelChoice: 3 },
 ];
+const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
   impingers: [1, 2, 3, 4].map((id) => ({ id, initial: '', final: '' })),
   meterStart: '', meterEnd: '', meterTemp: '', pressure: '', orifice: '',
@@ -4250,9 +4254,16 @@ export default function App() {
       const value = vals.reduce((a, b) => a + b, 0) / vals.length;
       return { ready: true, value, detail: `${vals.length}회 평균` };
     }
-    if (methodId === 'impinger') {
+    if (methodId === 'post') {
+      // 사후 수분량(시료채취 후 임핀저 무게법)을 사전 수분량으로 쓴다
+      const post = data === formData ? getRawPostMoistureFactors() : null;
+      if (!post || !Number.isFinite(post.Xw)) return { ready: false, value: NaN, detail: '아래 사후 수분량(임핀저 무게)과 기록표 가스미터 값이 필요합니다' };
+      return { ready: true, value: post.Xw, detail: '시료채취 후 임핀저 무게' };
+    }
+    const impMethod = MOISTURE_METHODS.find((m) => m.id === methodId);
+    if (isImpingerMoistureMethod(impMethod)) {
       const pre = data.preImpinger || createEmptyPreImpinger();
-      const vlc = (pre.impingers || []).reduce((sum, imp) => {
+      const vlc = (pre.impingers || []).slice(0, impMethod.stages).reduce((sum, imp) => {
         const a = num(imp?.initial), b = num(imp?.final);
         return Number.isFinite(a) && Number.isFinite(b) ? sum + (b - a) : sum;
       }, 0);
@@ -4273,7 +4284,7 @@ export default function App() {
     }
     return { ready: false, value: NaN, detail: '' };
   };
-  const activeMoistureMethod = MOISTURE_METHODS.find((m) => m.id === formData.moistureMethod) || MOISTURE_METHODS[0];
+  const activeMoistureMethod = MOISTURE_METHODS.find((m) => m.id === formData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
 
   const getRawPreMoisture = () => {
     const result = getMoistureByMethod(activeMoistureMethod.id);
@@ -6012,8 +6023,16 @@ export default function App() {
       // 수분량: 사전 수분량은 고른 방법대로, 사후는 임핀저 무게
       //  - 자동측정기: C5=1, B10~B14에 5회값
       //  - 임핀저법: C5=2, 예비 임핀저(C20~D23)·가스미터(A28~G28)
-      const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS[0];
+      const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
       addUpdate('수분량', 'C5', exportMoistureMethod.excelChoice);
+      if (exportMoistureMethod.id === 'post') {
+        // 선택표에 3번(사후 수분량)을 적고, 노즐산정 예비수분량(C15)을 사후 수분량 칸으로 연결
+        addUpdate('수분량', 'A7', 3);
+        addUpdate('수분량', 'B7', '사후 수분량');
+        addUpdate('노즐산정', 'C15', { formula: `수분량!H${33 + layout.impingerRows + 6}` });
+      } else if (isImpingerMoistureMethod(exportMoistureMethod)) {
+        addUpdate('수분량', 'B6', exportMoistureMethod.label);
+      }
       if (exportMoistureMethod.id === 'auto') {
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       } else {
@@ -6027,9 +6046,9 @@ export default function App() {
         if (exportSheetId === 'flow') addUpdate('계산식', 'O75', { formula: '노즐산정!C15' });
       }
       const preImp = sourceData.preImpinger || createEmptyPreImpinger();
-      if (exportMoistureMethod.id === 'impinger') {
+      if (isImpingerMoistureMethod(exportMoistureMethod)) {
         for (let i = 0; i < 4; i++) {
-          const imp = (preImp.impingers || [])[i] || {};
+          const imp = i < exportMoistureMethod.stages ? ((preImp.impingers || [])[i] || {}) : {};
           addUpdate('수분량', `C${20 + i}`, toNumber(imp.initial));
           addUpdate('수분량', `D${20 + i}`, toNumber(imp.final));
         }
@@ -8145,7 +8164,7 @@ export default function App() {
                         onClick={() => setFormData((prev) => ({ ...prev, moistureMethod: method.id }))}
                         className={`ds-segment-item${activeMoistureMethod.id === method.id ? ' is-on' : ''}`}
                       >
-                        {method.excelChoice} {method.label}
+                        {MOISTURE_METHODS.indexOf(method) + 1}. {method.label}
                       </button>
                     ))}
                   </div>
@@ -8169,16 +8188,21 @@ export default function App() {
                   </div>
                 )}
 
-                {activeMoistureMethod.id === 'impinger' && (() => {
+                {activeMoistureMethod.id === 'post' && (
+                  <p className="text-[11px] text-slate-600">아래 사후 수분량(시료채취 후 임핀저 무게)을 사전 수분량으로 씁니다.</p>
+                )}
+
+                {isImpingerMoistureMethod(activeMoistureMethod) && (() => {
                   const pre = formData.preImpinger || createEmptyPreImpinger();
                   const setPre = (patch) => setFormData((prev) => ({ ...prev, preImpinger: { ...(prev.preImpinger || createEmptyPreImpinger()), ...patch } }));
                   const setImp = (idx, key, value) => setPre({ impingers: (pre.impingers || []).map((imp, i) => (i === idx ? { ...imp, [key]: value } : imp)) });
                   const n = (v) => { const x = parseFloat(v); return Number.isFinite(x) ? x : NaN; };
-                  const vlc = (pre.impingers || []).reduce((sum, imp) => { const d = n(imp.final) - n(imp.initial); return Number.isFinite(d) ? sum + d : sum; }, 0);
+                  const stages = activeMoistureMethod.stages;
+                  const vlc = (pre.impingers || []).slice(0, stages).reduce((sum, imp) => { const d = n(imp.final) - n(imp.initial); return Number.isFinite(d) ? sum + d : sum; }, 0);
                   const yd = n(formData.gasMeterFactor) || 1;
                   const vol = (n(pre.meterEnd) - n(pre.meterStart)) * yd;
                   const gaugeMmHg = n(pre.orifice) / 13.6;
-                  const result = getMoistureByMethod('impinger');
+                  const result = getMoistureByMethod(activeMoistureMethod.id);
                   const cellInput = (value, onChange, placeholder = '') => (
                     <input type="number" step="0.01" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="w-full p-1.5 text-center outline-none" />
                   );
@@ -8194,7 +8218,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(pre.impingers || []).map((imp, idx) => {
+                          {(pre.impingers || []).slice(0, stages).map((imp, idx) => {
                             const gain = n(imp.final) - n(imp.initial);
                             return (
                               <tr key={imp.id || idx}>
@@ -8252,7 +8276,7 @@ export default function App() {
                 <div className="bg-cyan-50 p-4 rounded-lg flex justify-between items-center border border-cyan-100 mt-4 shadow-sm">
                   <div className="text-slate-800">
                     <span className="font-bold">사전 적용 수분량</span>
-                    <span className="block text-[11px] text-slate-500">{activeMoistureMethod.excelChoice} {activeMoistureMethod.label}</span>
+                    <span className="block text-[11px] text-slate-500">{activeMoistureMethod.label}</span>
                   </div>
                   <div className="text-2xl font-black text-cyan-700">{getMoistureByMethod(activeMoistureMethod.id).ready ? `${calcMoisture()}%` : '-'}</div>
                 </div>
