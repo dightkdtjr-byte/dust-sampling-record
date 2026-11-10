@@ -428,7 +428,7 @@ const SCENE_RAIL_Y = 500;
       g.push(el('rect', { x: x + 8, y: SCENE_ROAD_Y - 48, width: 8, height: 4, fill: pal.lamp || pal.nearLight }));
       parts.push(el('g', {}, g));
     });
-    SCENE_CARS.forEach((car) => {
+    [...SCENE_CARS].sort((a, b) => a.dir - b.dir).forEach((car) => {
       const lane = car.dir > 0 ? 3 : -4, L = car.len;
       const inner = [el('rect', { x: -L / 2, y: -5, width: L, height: 6, rx: 2, fill: pal.nearShade }), el('rect', { x: -L / 2 + 5, y: -9, width: L * 0.55, height: 5, rx: 2, fill: pal.nearShade })];
       if (pal.headlight) {
@@ -445,8 +445,9 @@ const SCENE_RAIL_Y = 500;
     parts.push(el('path', { d: `M0,${SCENE_RAIL_Y + 3.5} L1600,${SCENE_RAIL_Y + 3.5} M0,${SCENE_RAIL_Y + 8.5} L1600,${SCENE_RAIL_Y + 8.5}`, stroke: pal.rail, 'stroke-width': 1.4 }));
     {
       let offset = 0;
+      const trainLength = SCENE_TRAIN.cars.reduce((sum, w) => sum + w + 5, 0);
       const cars = SCENE_TRAIN.cars.map((w, i) => {
-        const x = offset; offset += w + 5;
+        const x = trainLength - offset - w; offset += w + 5;
         const h = i === 0 ? 16 : 13, y = SCENE_RAIL_Y + 3 - h;
         const g = [el('rect', { x, y, width: w, height: h, rx: i % 3 === 1 ? 6 : 1.5, fill: pal.nearShade })];
         if (i === 0) g.push(el('rect', { x: x + w - 16, y: y - 6, width: 14, height: 7, fill: pal.nearShade }));

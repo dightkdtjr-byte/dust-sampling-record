@@ -150,6 +150,23 @@ let lastDownloadName = '';
 ipcMain.on('desktop:download-name', (event, name) => {
   lastDownloadName = String(name || '').replace(/[\\/:*?"<>|]/g, '_');
 });
+// 엑셀 저장 시 파일을 넣을 묶음 폴더 이름(날짜_사업장명_#배출구). 화면에서 내려받기 직전에 알려 준다
+let lastDownloadFolder = '';
+ipcMain.on('desktop:download-folder', (event, name) => {
+  lastDownloadFolder = String(name || '').replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '').trim();
+});
+// 묶음 폴더를 만들 상위 위치: 처음엔 다운로드 폴더, 이후엔 마지막으로 저장한 위치를 기억
+const exportBaseFile = () => path.join(app.getPath('userData'), 'export-base.json');
+const readExportBase = () => {
+  try {
+    const dir = JSON.parse(fs.readFileSync(exportBaseFile(), 'utf8')).dir;
+    if (dir && fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+  } catch (error) { /* 처음 실행이거나 폴더가 없어졌으면 기본값 */ }
+  return app.getPath('downloads');
+};
+const writeExportBase = (dir) => {
+  try { fs.writeFileSync(exportBaseFile(), JSON.stringify({ dir })); } catch (error) { console.error('export base save failed', error); }
+};
 
 // 화면 안의 "창 닫기" 버튼: 창의 close 이벤트를 거치게 해서 저장 확인이 뜨도록 한다
 ipcMain.on('desktop:close-window', (event) => {
@@ -175,16 +192,38 @@ app.whenReady().then(() => {
       const reported = item.getFilename();
       const fileName = (!reported || reported === 'download' || !reported.includes('.')) && lastDownloadName ? lastDownloadName : reported;
       lastDownloadName = '';
+      const folderName = lastDownloadFolder;
+      lastDownloadFolder = '';
+      // 묶음 폴더(날짜_사업장명_#배출구)를 미리 만들어 저장 창이 그 안에서 열리게 한다
+      let targetDir = readExportBase();
+      let createdDir = '';
+      if (folderName) {
+        const dir = path.join(targetDir, folderName);
+        try {
+          if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); createdDir = dir; }
+          targetDir = dir;
+        } catch (error) {
+          console.error('export folder create failed', error);
+        }
+      }
       item.setSaveDialogOptions({
         title: '파일 저장',
-        defaultPath: path.join(app.getPath('downloads'), fileName),
+        defaultPath: path.join(targetDir, fileName),
       });
       // 저장이 끝나면 저장된 파일이 있는 폴더를 열어 파일을 선택해 보여줌
       item.once('done', (_event, state) => {
-        if (state !== 'completed') return;
         try {
-          const savedPath = item.getSavePath();
-          if (savedPath) shell.showItemInFolder(savedPath);
+          const savedPath = state === 'completed' ? item.getSavePath() : '';
+          // 저장을 취소했거나 다른 곳에 저장했으면, 방금 만든 빈 폴더는 지운다
+          if (createdDir && (!savedPath || path.dirname(savedPath) !== createdDir)) {
+            try { if (fs.readdirSync(createdDir).length === 0) fs.rmdirSync(createdDir); } catch (error) { /* 비어 있지 않으면 둔다 */ }
+          }
+          if (!savedPath) return;
+          if (folderName) {
+            const savedDir = path.dirname(savedPath);
+            writeExportBase(path.basename(savedDir) === folderName ? path.dirname(savedDir) : savedDir);
+          }
+          shell.showItemInFolder(savedPath);
         } catch (error) {
           console.error('open folder failed', error);
         }

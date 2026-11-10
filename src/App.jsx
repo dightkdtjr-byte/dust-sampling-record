@@ -1146,7 +1146,8 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
           <rect x={x + 8} y={SCENE_ROAD_Y - 48} width="8" height="4" fill={pal.lamp || pal.nearLight} />
         </g>
       ))}
-      {SCENE_CARS.map((car, i) => {
+      {/* 뒤 차선(왼쪽으로 가는 차)을 먼저 그려, 엇갈릴 때 앞 차선 차가 위에 오게 한다 */}
+      {[...SCENE_CARS.map((car, i) => ({ car, i }))].sort((a, b) => a.car.dir - b.car.dir).map(({ car, i }) => {
         const lane = car.dir > 0 ? 3 : -4;
         return (
           <g key={`car-${i}`}>
@@ -1166,8 +1167,10 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
       <path d={`M0,${SCENE_RAIL_Y + 3.5} L1600,${SCENE_RAIL_Y + 3.5} M0,${SCENE_RAIL_Y + 8.5} L1600,${SCENE_RAIL_Y + 8.5}`} stroke={pal.rail} strokeWidth="1.4" />
       {(() => {
         let offset = 0;
+        const trainLength = SCENE_TRAIN.cars.reduce((sum, w) => sum + w + 5, 0);
         const cars = SCENE_TRAIN.cars.map((w, i) => {
-          const x = offset; offset += w + 5;
+          // 기관차(i=0)를 진행 방향(오른쪽) 맨 앞에 두고 화차를 그 뒤로 잇는다 → 전조등이 앞을 비춘다
+          const x = trainLength - offset - w; offset += w + 5;
           const h = i === 0 ? 16 : 13;
           const y = SCENE_RAIL_Y + 3 - h;
           return (
@@ -1804,6 +1807,20 @@ const hashHintAnswer = async (answerText) => {
 
 // 프로필 이미지는 사용하지 않음 (이름 첫 글자로 표시)
 const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
+
+// 엑셀 저장 이름: 폴더 = 날짜_사업장명_#배출구, 파일 = 날짜_기록부명_사업장명_#배출구
+const buildExportNames = ({ date, title, company, location, ext }) => {
+  const clean = (v) => String(v || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
+  const day = clean(date) || new Date().toISOString().slice(0, 10);
+  const site = clean(company);
+  const stackRaw = clean(location);
+  const stack = stackRaw ? (stackRaw.startsWith('#') ? stackRaw : `#${stackRaw}`) : '';
+  const join = (parts) => parts.filter(Boolean).join('_').replace(/[. ]+$/, '');
+  return {
+    folder: join([day, site, stack]),
+    file: `${join([day, clean(title), site, stack])}.${ext}`,
+  };
+};
 
 // 프로필 사진: 이 기기에 저장하는 작은 이미지(data URL)만 허용
 const AVATAR_MAX_LENGTH = 300000;
@@ -6317,7 +6334,9 @@ export default function App() {
       const link = document.createElement('a');
       link.href = url;
       const targetSheetTitle = sourceData.sheetTitle || activeSheet?.title || '먼지시료채취기록부';
-      link.setAttribute('download', `${targetSheetTitle}_${sourceData.date || new Date().toISOString().slice(0, 10)}.xlsm`);
+      const exportNames = buildExportNames({ date: sourceData.date, title: targetSheetTitle, company: sourceData.company, location: sourceData.location, ext: 'xlsm' });
+      try { if (window.stackpilotDesktop?.noteDownloadFolder) window.stackpilotDesktop.noteDownloadFolder(exportNames.folder); } catch (error) { console.error(error); }
+      link.setAttribute('download', exportNames.file);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -6769,7 +6788,9 @@ export default function App() {
       const link = document.createElement('a');
       link.href = url;
       const firstDay = log.days.find((day) => day.date)?.date || new Date().toISOString().slice(0, 10);
-      link.setAttribute('download', `시료채취기록부_${(log.company || '사업장').replace(/[\\/:*?"<>|]/g, '')}_${firstDay}.xlsx`);
+      const exportNames = buildExportNames({ date: firstDay, title: '시료채취기록부(종합)', company: log.company, location: log.stackName, ext: 'xlsx' });
+      try { if (window.stackpilotDesktop?.noteDownloadFolder) window.stackpilotDesktop.noteDownloadFolder(exportNames.folder); } catch (error) { console.error(error); }
+      link.setAttribute('download', exportNames.file);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('stackpilotDesktop', {
   closeWindow: () => ipcRenderer.send('desktop:close-window'),
   // blob 다운로드는 Electron이 파일 이름을 못 받는 경우가 있어 화면에서 지정한 이름을 전달
   noteDownloadName: (name) => ipcRenderer.send('desktop:download-name', String(name || '')),
+  // 엑셀 저장 시 파일을 넣을 묶음 폴더 이름(날짜_사업장명_#배출구)
+  noteDownloadFolder: (name) => ipcRenderer.send('desktop:download-folder', String(name || '')),
 });
