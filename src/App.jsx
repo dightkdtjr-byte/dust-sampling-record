@@ -6231,7 +6231,13 @@ export default function App() {
       const rows = Array.isArray(report.gasMeters) ? report.gasMeters : [];
       // 측정값이 들어간 행까지만 (계획만 채워 둔 빈 행은 뺀다)
       const meterRows = rows.slice(0, Math.max(1, getLastMeasuredMeterIdx(rows) + 1));
-      const sheets = buildRecordSheets(report, { title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows });
+      // 흡입관(피토관) 길이: 고른 피토관 프리셋의 유효 길이(cm) → m
+      const pitot = pitotPresets.find((item) => String(item.id) === String(report.pitotPresetId));
+      const pitotLength = pitot ? parseFloat(pitot.length) : NaN;
+      const sheets = buildRecordSheets(report, {
+        title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows,
+        probeLengthM: Number.isFinite(pitotLength) && pitotLength > 0 ? Math.round(pitotLength) / 100 : null,
+      });
       const buffer = await buildWorkbook(sheets);
       downloadExportFile(buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         buildExportNames({ date: report.date, title, company: report.company, location: report.location, ext: 'xlsx' }));

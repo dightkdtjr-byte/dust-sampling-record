@@ -41,6 +41,13 @@ const STYLE_DEFS = [
   { key: 'formula', font: 6, fill: 0, border: 1, h: 'left', wrap: true },
   { key: 'calc', font: 0, fill: 4, border: 1, h: 'center' },
   { key: 'calc2', font: 0, fill: 4, border: 1, h: 'center', numFmt: 2 },
+  // 공정시험기준 기록지 양식용: 이름표(테두리 없음), 밑줄 칸, 무늬 없는 표 머리, 그림 칸
+  { key: 'formTitle', font: 3, fill: 0, border: 0, h: 'left' },
+  { key: 'formLabel', font: 0, fill: 0, border: 0, h: 'left' },
+  { key: 'formValue', font: 0, fill: 0, border: 2, h: 'center' },
+  { key: 'formHead', font: 6, fill: 0, border: 1, h: 'center', wrap: true },
+  { key: 'formBox', font: 2, fill: 0, border: 1, h: 'center', wrap: true },
+  { key: 'formCaption', font: 6, fill: 0, border: 0, h: 'center', wrap: true },
 ];
 const STYLE_INDEX = Object.fromEntries(STYLE_DEFS.map((def, index) => [def.key, index]));
 
@@ -62,6 +69,7 @@ const stylesXml = () => {
   const borders = [
     '<border><left/><right/><top/><bottom/><diagonal/></border>',
     `<border>${side('left')}${side('right')}${side('top')}${side('bottom')}<diagonal/></border>`,
+    `<border><left/><right/><top/>${side('bottom')}<diagonal/></border>`,
   ];
   const xfs = STYLE_DEFS.map((def) => (
     `<xf numFmtId="${def.numFmt || 0}" fontId="${def.font}" fillId="${def.fill}" borderId="${def.border}" xfId="0"`
@@ -190,7 +198,7 @@ const COLS = 12;
 // report: 저장된 기록부 한 건(화면에서 계산한 결과 포함), meta: { title, isFlow, moistureLabel, impingerLabels }
 export const buildRecordSheets = (report, meta) => {
   const isFlow = Boolean(meta.isFlow);
-  const s = createSheet('시료채취 기록지', { columns: Array(COLS).fill(11.5), landscape: true });
+  const s = createSheet('세부 기록', { columns: Array(COLS).fill(11.5), landscape: true });
   let r = 1;
   const section = (title) => { r += 1; s.put(r, 0, title, 'section', COLS).height(r, 21); r += 1; };
   // 한 줄에 "이름표 1칸 + 값 2칸" 네 쌍
@@ -210,7 +218,7 @@ export const buildRecordSheets = (report, meta) => {
     r += 1;
   };
 
-  s.put(r, 0, '배출가스 시료채취 기록지', 'title', COLS).height(r, 32); r += 1;
+  s.put(r, 0, '배출가스 시료채취 세부 기록', 'title', COLS).height(r, 32); r += 1;
   s.put(r, 0, `${meta.title} · 「대기오염공정시험기준」 ES 01301.1e(배출가스 중 먼지 – 반자동식 측정법) 표 3 "먼지시료채취 기록지"와 ES 01114.c(배출가스 유속 및 유량 측정방법)의 기록 항목을 따름`, 'subtitle', COLS); r += 1;
 
   section('1. 일반 사항 및 배출구 제원');
@@ -312,7 +320,121 @@ export const buildRecordSheets = (report, meta) => {
   s.put(r, 0, '측정자', 'label', 2); s.put(r, 2, report.sampler ? `${report.sampler}  (서명)` : '(서명)', 'text', 4);
   s.put(r, 6, '확인자', 'label', 2); s.put(r, 8, '(서명)', 'text', 4); s.height(r, 30);
 
-  return [s, buildFormulaSheet(isFlow)];
+  return [isFlow ? buildFlowTableSheet(report, meta, meters) : buildTable3Sheet(report, meta, meters), s, buildFormulaSheet(isFlow)];
+};
+
+// ── 「대기오염공정시험기준」 ES 01301.1e "표 3. 먼지시료채취 기록지" 양식 그대로 ──
+// 머리부(왼쪽: 공장명~등속흡입계수, 가운데: 굴뚝단면 및 측정점 배열, 오른쪽: 피토관계수~여과지 번호)와
+// 본문 표(채취점 번호 ~ 최종임핀저출구온도, 합계·평균), 비고 2개.
+const buildTable3Sheet = (report, meta, meters) => {
+  const s = createSheet('먼지시료채취 기록지', { columns: [7.5, 8, 9, 8, 9.5, 9.5, 9.5, 8, 8, 8.5, 9.5] });
+  const N = 11;
+  let r = 1;
+  s.put(r, 0, meta.title && !/먼지/.test(meta.title) ? `표 3. 먼지시료채취 기록지  (${meta.title})` : '표 3. 먼지시료채취 기록지', 'formTitle', N).height(r, 24); r += 1;
+  s.put(r, 0, '「대기오염공정시험기준」 ES 01301.1e (배출가스 중 먼지 – 반자동식 측정법) 5.6.13의 기록지 양식', 'note', N); r += 2;
+
+  const gas = Array.isArray(report.gasAnalyzer) ? report.gasAnalyzer : [];
+  const points = Array.isArray(report.points) ? report.points : [];
+  const o2 = average(gas.map((g) => g.o2));
+  const staticMmH2O = average(points.map((p) => p.sp));
+  const nozzle = toNum(report.nozzleDiameterUsed !== undefined ? report.nozzleDiameterUsed : report.nozzleDiameter);
+  const left = [
+    ['공장명', report.company || ''], ['측정대상명', report.location || ''], ['작성자명', report.sampler || ''], ['측정일', report.date || ''],
+    ['측정번호', meta.measureNo || ''], ['오리피스미터 △H', numOrText(report.deltaHAt)], null,
+    ['산소량 (%)', round(o2, 2)], ['등속흡입계수 (%)', numOrText(report.isokineticRate)],
+  ];
+  const right = [
+    ['피토관계수', numOrText(report.pitotFactor)], ['기온, ℃', numOrText(report.atmTemp)], ['기압, mmHg', numOrText(report.atmPressure)], ['수분량, %', numOrText(report.moisturePercent)],
+    ['흡입관 길이, m', meta.probeLengthM === null || meta.probeLengthM === undefined ? '' : meta.probeLengthM], ['흡입노즐 직경, cm', nozzle === null ? '' : round(nozzle / 10, 3)],
+    ['배출가스정압, mmHg', staticMmH2O === null ? '' : round(staticMmH2O / 13.6, 2)], null, ['여과지 번호', report.filterId || ''],
+  ];
+  const top = r;
+  left.forEach((item, i) => {
+    const row = top + i;
+    s.height(row, 21);
+    if (item) { s.put(row, 0, item[0], 'formLabel', 2); s.put(row, 2, item[1], 'formValue', 2); }
+    if (right[i]) { s.put(row, 7, right[i][0], 'formLabel', 2); s.put(row, 9, right[i][1], 'formValue', 2); }
+  });
+  // 가운데: 굴뚝단면 및 측정점 배열 (그림 대신 치수와 측정점 수를 적는다)
+  const diameter = toNum(report.stackDiameter);
+  const sketch = [diameter === null ? '' : `원형 · 안지름 ${diameter} m`, points.length ? `측정점 ${points.length}점` : ''].filter(Boolean).join('\n');
+  s.put(top, 4, sketch, 'formBox', 3, 7);
+  s.put(top + 7, 4, '굴뚝단면 및 측정점\n배열', 'formCaption', 3, 2);
+  r = top + left.length + 1;
+
+  // 본문 표
+  s.height(r, 42); s.height(r + 1, 22);
+  const heads = ['채취\n점\n번호', '시료\n채취\n시간\n(분)', '진공\n게이지압\n(mmHg)', '배출\n가스\n온도\n(℃)', '배출\n가스\n동압\n(mmH₂O)', '오리\n피스\n압차\n(mmH₂O)', '시료\n채취량\n(m³)'];
+  heads.forEach((label, c) => s.put(r, c, label, 'formHead', 1, 2));
+  s.put(r, 7, '건식가스미터\n에서의\n온도(℃)', 'formHead', 2); s.put(r + 1, 7, '입구', 'formHead'); s.put(r + 1, 8, '출구', 'formHead');
+  s.put(r, 9, '여과지\n홀더\n온도\n(℃)', 'formHead', 1, 2); s.put(r, 10, '최종임\n핀저출\n구온도\n(℃)', 'formHead', 1, 2);
+  r += 2;
+  const m3 = (value) => { const n = toNum(value); return n === null ? '' : Math.round(n * 10) / 10000; };
+  const dataRows = Math.max(meters.length, 8);
+  for (let i = 0; i < dataRows; i++) {
+    const m = meters[i];
+    const values = m
+      ? [m.pointNum || (i === 0 ? '시작' : ''), numOrText(m.time), numOrText(m.vacuum), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.pressure), m3(m.volume), numOrText(m.tmIn), numOrText(m.tmOut), numOrText(m.filterTemp), numOrText(m.impingerTemp)]
+      : Array(N).fill('');
+    values.forEach((value, c) => s.put(r, c, value, c === 6 ? 'num4' : 'num'));
+    s.height(r, 20);
+    r += 1;
+  }
+  const measured = meters.slice(1);
+  const volumes = meters.map((m) => toNum(m.volume)).filter((v) => v !== null);
+  const times = measured.map((m) => toNum(m.time)).filter((v) => v !== null);
+  const avgIn = average(measured.map((m) => m.tmIn)); const avgOut = average(measured.map((m) => m.tmOut));
+  const bothTemps = [avgIn, avgOut].filter((v) => v !== null);
+  // 합계 줄: 시간·채취량 합계, 입구·출구 각각의 평균
+  ['합계', times.length ? Math.max(...times) : '', '', '', '', '', volumes.length >= 2 ? Math.round((volumes[volumes.length - 1] - volumes[0]) * 10) / 10000 : '', round(avgIn, 1), round(avgOut, 1), '', '']
+    .forEach((value, c) => s.put(r, c, value, c === 6 ? 'num4' : 'num'));
+  s.height(r, 20); r += 1;
+  // 평균 줄: 각 열 평균, 가스미터 온도는 입구·출구를 합친 평균
+  s.put(r, 0, '평   균', 'num', 2);
+  [round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.pressure)), 2), '']
+    .forEach((value, i) => s.put(r, 2 + i, value, 'num'));
+  s.put(r, 7, bothTemps.length ? round(bothTemps.reduce((a, b) => a + b, 0) / bothTemps.length, 1) : '', 'num', 2);
+  s.put(r, 9, round(average(measured.map((m) => m.filterTemp)), 1), 'num'); s.put(r, 10, round(average(measured.map((m) => m.impingerTemp)), 1), 'num');
+  s.height(r, 20); r += 1;
+  s.put(r, 0, '※비고: 1. 시료채취 중 임핀저 통과 후의 가스온도가 20 ℃가 넘을 경우엔 잘게 부순 얼음을 더 채우거나 소금을 첨가하도록 한다.', 'note', N).height(r, 28); r += 1;
+  s.put(r, 0, '2. 먼지가 채취됨에 따라 여과지에 전후의 압력이 너무 높아져 등속흡입을 유지하기가 어려울 경우에 새 여과지로 교환(여과지홀더도 같이 교환하는 것이 좋다)한 후 시료채취를 계속한다. 이때 총채취먼지량은 각 여과지에 채취된 먼지량의 합이 된다.', 'note', N).height(r, 40); r += 1;
+  s.put(r, 0, '※ 시료채취 시간은 누적 분, 시료채취량은 가스미터 지시값(m³)이며 합계는 종료값 − 시작값입니다. 평균은 시작 줄을 뺀 값입니다. 배출가스 조성·수분량·측정점별 동압·산출 결과는 "세부 기록" 시트에 있습니다.', 'note', N).height(r, 28);
+  return s;
+};
+
+// ── ES 01114.c "배출가스 유량 측정표" 양식 (유량측정기록부) ──
+const buildFlowTableSheet = (report, meta, meters) => {
+  const s = createSheet('배출가스 유량 측정표', { columns: [12, 12, 15, 15, 15, 14] });
+  const N = 6;
+  let r = 1;
+  s.put(r, 0, '배출가스 유량 측정표', 'formTitle', N).height(r, 24); r += 1;
+  s.put(r, 0, '「대기오염공정시험기준」 ES 01114.c (배출가스 유속 및 유량 측정방법)의 측정표 양식', 'note', N); r += 2;
+  const diameter = toNum(report.stackDiameter);
+  const left = [['공장명', report.company || ''], ['측정대상명', report.location || ''], ['작성자명', report.sampler || ''], ['측정일', report.date || ''], ['측정번호', meta.measureNo || ''], ['굴뚝 단면적, ㎡', diameter === null ? '' : round(Math.PI * diameter * diameter / 4, 4)]];
+  const right = [['기온, ℃', numOrText(report.atmTemp)], ['기압, mmHg', numOrText(report.atmPressure)], ['피토관 계수', numOrText(report.pitotFactor)], ['수분량, %', numOrText(report.moisturePercent)], ['배출가스 밀도, kg/m³', meta.gasDensity === null || meta.gasDensity === undefined ? '' : meta.gasDensity], ['평균 유속, m/s', numOrText(report.avgVelocity)]];
+  left.forEach((item, i) => {
+    s.put(r, 0, item[0], 'formLabel'); s.put(r, 1, item[1], 'formValue', 2);
+    s.put(r, 3, right[i][0], 'formLabel'); s.put(r, 4, right[i][1], 'formValue', 2);
+    s.height(r, 21); r += 1;
+  });
+  r += 1;
+  const rows = meters.slice(1).length > 0 ? meters.slice(1) : (Array.isArray(report.points) ? report.points.map((p, i) => ({ pointNum: i + 1, dp: p.dp, stackTemp: p.ts, sp: p.sp })) : []);
+  ['측정점 번호', '측정 시간 (분)', '배출가스 동압 h\n(mmH₂O)', '배출가스 온도 θs\n(℃)', '배출가스 정압 Ps\n(mmHg)', '√h'].forEach((label, c) => s.put(r, c, label, 'formHead'));
+  s.height(r, 34); r += 1;
+  const roots = [];
+  rows.forEach((m) => {
+    const h = toNum(m.dp); const sp = toNum(m.sp);
+    const root = h !== null && h >= 0 ? Math.sqrt(h) : null;
+    if (root !== null) roots.push(root);
+    [m.pointNum || '', numOrText(m.time), numOrText(m.dp), numOrText(m.stackTemp), sp === null ? '' : round(sp / 13.6, 3), round(root, 3)].forEach((value, c) => s.put(r, c, value, 'num'));
+    s.height(r, 20); r += 1;
+  });
+  const avgSp = average(rows.map((m) => m.sp));
+  ['평균', '', round(average(rows.map((m) => m.dp)), 2), round(average(rows.map((m) => m.stackTemp)), 1), avgSp === null ? '' : round(avgSp / 13.6, 3), roots.length ? round(roots.reduce((a, b) => a + b, 0) / roots.length, 3) : '']
+    .forEach((value, c) => s.put(r, c, value, 'num'));
+  s.height(r, 20); r += 1;
+  s.put(r, 0, '※ 배출시설의 조업 및 가동상태는 별지에 기록한다. 수분량·배출가스 조성·유량 산출 결과는 "세부 기록" 시트에 있습니다.', 'note', N).height(r, 28);
+  return s;
 };
 
 // 계산 근거 시트: 화면이 쓰는 계산식을 「대기오염공정시험기준」의 식과 기호로 적어 둔다
