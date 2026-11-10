@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import mainLogoImage from './assets/mainlogo.png';
-import mainLogoClayImage from './assets/mainlogo-clay.png';
+import mainLogoImage from './assets/mainlogo.svg';
+import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
