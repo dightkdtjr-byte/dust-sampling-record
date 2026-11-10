@@ -220,9 +220,8 @@ export const buildStackSectionSvg = (diameter, width = 520, height = 460) => {
   if (coeffsRaw === null) return '';
   const cx = width / 2 + 30; const cy = height / 2 - 34; const R = Math.min(width, height) * 0.37;
   const coeffs = [...coeffsRaw].sort((a, b) => b - a); // 측정공(왼쪽)에 가까운 점부터 1번
-  const pts = coeffs.length === 0
-    ? [{ x: cx, n: 1 }]
-    : [...coeffs.map((c, i) => ({ x: cx - c * R, n: i + 1 })), ...[...coeffs].reverse().map((c, i) => ({ x: cx + c * R, n: coeffs.length + i + 1 }))];
+  // 측정점은 화면과 같이 반경당 점 수만큼만: 측정공 쪽 반경 위에 1번부터
+  const pts = coeffs.length === 0 ? [{ x: cx, n: 1 }] : coeffs.map((c, i) => ({ x: cx - c * R, n: i + 1 }));
   const ink = '#000';
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="Batang, 바탕, 'Malgun Gothic', serif">`,
