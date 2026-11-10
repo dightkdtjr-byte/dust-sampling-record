@@ -57,6 +57,6 @@ PALS = {
 d = sys.argv[1]
 for name, pal in PALS.items():
     open(f'{d}/mainlogo-{name}.svg', 'w').write(wordmark(pal))
-ICON = dict(PALS['green'], bg='#0f2a1c', rim='#3fd447', line='#05190c', shadow='#05190c')
+ICON = dict(PALS['green'], bg='#ffffff', rim='#3fd447')  # 아이콘 바탕은 흰색
 open(f'{d}/icon-full.svg', 'w').write(icon(['STACK', 'PILOT'], ICON, cw=9, ch=13, gap=12, linegap=44, out=4, bev=4, sh=6))
 open(f'{d}/icon-small.svg', 'w').write(icon(['SP'], ICON, cw=20, ch=30, gap=36, linegap=0, out=10, bev=8, sh=12, m=16))
