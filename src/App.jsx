@@ -1863,7 +1863,6 @@ const describeKmaWeather = (obs) => {
   if (obs.cloud <= 5) return '맑음';
   return obs.cloud <= 8 ? '구름많음' : '흐림';
 };
-const hPaToMmHg = (hPa) => Math.round(hPa * 0.750062 * 10) / 10;
 
 // 엑셀 저장 이름: 폴더 = 날짜_사업장명_#배출구, 파일 = 날짜_기록부명_사업장명_#배출구
 const buildExportNames = ({ date, title, company, location, ext }) => {
@@ -2051,7 +2050,7 @@ export default function App() {
         alert(`기상청에 ${when.day} ${when.hour}시 관측 자료가 없습니다. 날짜와 시각을 확인해 주세요.`);
         return null;
       }
-      return { ...obs, shownTime: String(result.tm || when.tm), weatherText: describeKmaWeather(obs), pressureMmHg: obs.seaPressure === null ? null : hPaToMmHg(obs.seaPressure) };
+      return { ...obs, shownTime: String(result.tm || when.tm), weatherText: describeKmaWeather(obs) };
     } catch (error) {
       console.error('기상청 자료 가져오기 실패:', error);
       alert('기상청 자료를 가져오지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
@@ -2060,28 +2059,24 @@ export default function App() {
       setWeatherBusy(false);
     }
   };
+  // 기온·기압은 현장에서 직접 잰 값을 적으므로 기상청 값으로 채우지 않는다
   const describeKmaObservation = (obs) => [
     `기상청 ${obs.name} 지점 · ${obs.shownTime} 관측`,
-    `날씨 ${obs.weatherText || '(관측값 없음)'} · 기온 ${obs.temp ?? '-'} ℃ · 습도 ${obs.humidity ?? '-'} %`,
-    `풍향 ${obs.windDir || '-'} · 풍속 ${obs.windSpeed ?? '-'} m/s · 해면기압 ${obs.seaPressure ?? '-'} hPa (${obs.pressureMmHg ?? '-'} mmHg)`,
+    `날씨 ${obs.weatherText || '(관측값 없음)'} · 습도 ${obs.humidity ?? '-'} % · 풍향 ${obs.windDir || '-'} · 풍속 ${obs.windSpeed ?? '-'} m/s`,
   ].join('\n');
-  // 기록부: 날씨·대기 온도를 채우고, 대기압은 비어 있을 때만 해면기압으로 채운다
+  // 기록부: 날씨만 채운다
   const applyKmaWeatherToSheet = async () => {
     const obs = await fetchKmaObservation(formData.date, formData.samplingStartTime);
     if (!obs) return;
-    const pressureEmpty = String(formData.atmPressure || '').trim() === '';
-    setFormData((prev) => ({
-      ...prev,
-      weather: obs.weatherText || prev.weather,
-      atmTemp: obs.temp === null ? prev.atmTemp : String(obs.temp),
-      atmPressure: String(prev.atmPressure || '').trim() === '' && obs.pressureMmHg !== null ? String(obs.pressureMmHg) : prev.atmPressure,
-    }));
+    if (!obs.weatherText) {
+      alert(`${describeKmaObservation(obs)}\n\n이 지점·시각에는 날씨 관측값이 없어 날씨 칸을 그대로 두었습니다. 가까운 다른 지점을 골라 보세요.`);
+      return;
+    }
+    setFormData((prev) => ({ ...prev, weather: obs.weatherText }));
     unsavedRef.current = true;
-    alert(`${describeKmaObservation(obs)}\n\n날씨와 대기 온도를 채웠습니다.${pressureEmpty
-      ? '\n대기압 칸은 비어 있어서 해면기압을 넣었습니다. 측정공 주변에서 잰 값(현지기압)이 있으면 그 값으로 고쳐 주세요.'
-      : '\n대기압 칸은 이미 값이 있어 그대로 두었습니다.'}`);
+    alert(`${describeKmaObservation(obs)}\n\n날씨 칸을 채웠습니다. 대기 온도와 대기압은 현장에서 잰 값을 적어 주세요.`);
   };
-  // 통합기록부: 그 일차의 기상·기온·습도·기압·풍향·풍속을 채운다 (시각은 그날 가장 이른 채취 시작 시각, 없으면 12시)
+  // 통합기록부: 그 일차의 기상·습도·풍향·풍속을 채운다 (시각은 그날 가장 이른 채취 시작 시각, 없으면 12시)
   const applyKmaWeatherToLogDay = async (dayIdx) => {
     const day = samplingLogData.days[dayIdx];
     if (!day || !day.date) { alert('먼저 채취일을 적어 주세요.'); return; }
@@ -2093,15 +2088,13 @@ export default function App() {
       days: prev.days.map((item, i) => (i === dayIdx ? {
         ...item,
         weather: obs.weatherText || item.weather,
-        temp: obs.temp === null ? item.temp : String(obs.temp),
         humidity: obs.humidity === null ? item.humidity : String(obs.humidity),
-        pressure: obs.pressureMmHg === null ? item.pressure : String(obs.pressureMmHg),
         windDir: obs.windDir || item.windDir,
         windSpeed: obs.windSpeed === null ? item.windSpeed : String(obs.windSpeed),
       } : item)),
     }));
     unsavedRef.current = true;
-    alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차 칸을 채웠습니다. 기압은 해면기압입니다. 현장에서 잰 값이 있으면 그 값으로 고쳐 주세요.`);
+    alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다. 기온과 기압은 현장에서 잰 값을 적어 주세요.`);
   };
   const weatherStationSelect = (
     <select value={weatherStation} onChange={(e) => changeWeatherStation(e.target.value)} title="기상청 관측 지점" className="p-1.5 border border-slate-300 rounded text-xs bg-white outline-none">
@@ -8131,7 +8124,7 @@ export default function App() {
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span className="font-bold">기상청 관측 지점</span>
               {weatherStationSelect}
-              <span className="text-slate-500">채취일을 적고 오른쪽 "가져오기"를 누르면 그날 관측값으로 채웁니다</span>
+              <span className="text-slate-500">채취일을 적고 오른쪽 "가져오기"를 누르면 기상·습도·풍향·풍속을 채웁니다 (기온·기압은 현장 측정값)</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-center border-collapse">
@@ -8487,7 +8480,7 @@ export default function App() {
               <button type="button" onClick={applyKmaWeatherToSheet} disabled={weatherBusy} className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold disabled:opacity-50">
                 {weatherBusy ? '가져오는 중…' : '기상청 자료 가져오기'}
               </button>
-              <span className="text-slate-500">측정 일자와 채취 시작 시각의 관측값으로 날씨·대기 온도를 채웁니다</span>
+              <span className="text-slate-500">측정 일자와 채취 시작 시각의 관측값으로 날씨 칸을 채웁니다 (기온·기압은 현장 측정값)</span>
             </div>
 
             {/* 굴뚝 제원 (직경 산출) */}
