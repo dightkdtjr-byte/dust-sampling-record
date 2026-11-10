@@ -1680,7 +1680,7 @@ const sanitizeSecureUsers = (value) => {
       updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : '',
       hintQuestion: typeof record.hintQuestion === 'string' ? record.hintQuestion : '',
       hintAnswerHash: typeof record.hintAnswerHash === 'string' ? record.hintAnswerHash : '',
-      avatarUrl: typeof record.avatarUrl === 'string' ? record.avatarUrl : '',
+      avatarUrl: sanitizeAvatarUrl(record.avatarUrl),
       nickname: typeof record.nickname === 'string' ? record.nickname : '',
     };
 
@@ -1800,7 +1800,31 @@ const hashHintAnswer = async (answerText) => {
 };
 
 // 프로필 이미지는 사용하지 않음 (이름 첫 글자로 표시)
-const getFixedAvatarUrlForUser = () => '';
+// 프로필 사진: 이 기기에 저장하는 작은 이미지(data URL)만 허용
+const AVATAR_MAX_LENGTH = 300000;
+const sanitizeAvatarUrl = (value) => (
+  typeof value === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(value) && value.length <= AVATAR_MAX_LENGTH ? value : ''
+);
+// 고른 사진을 가운데 기준 정사각형으로 잘라 256px JPEG로 줄인다
+const resizeImageFileToAvatar = (file) => new Promise((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const size = 256;
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    } catch (error) { reject(error); } finally { URL.revokeObjectURL(url); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+  img.src = url;
+});
 
 // 자바스크립트 부동소수점 오차 방지용 안전한 반올림 함수 (K * dp 오차 보정용)
 const roundDH = (val) => {
@@ -2113,7 +2137,7 @@ export default function App() {
               if (verifierText === `vault:${userId}:verified`) {
                 const decrypted = await decryptJsonWithKey(key, targetUser.dataIv, targetUser.dataCipher);
                 const reports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
-                const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
+                const fixedAvatarUrl = sanitizeAvatarUrl(targetUser.avatarUrl);
 
                 if (targetUser.avatarUrl !== fixedAvatarUrl) {
                   normalizedUsers = {
@@ -2911,7 +2935,7 @@ export default function App() {
         dataCipher: encryptedData.cipher,
         hintQuestion: hintQuestion || '',
         hintAnswerHash,
-        avatarUrl: getFixedAvatarUrlForUser(userId),
+        avatarUrl: '',
         nickname: '',
         updatedAt: new Date().toISOString(),
       },
@@ -2919,7 +2943,7 @@ export default function App() {
   };
 
   const openUserSession = (userId, key, reports, userRecord = null) => {
-    const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
+    const fixedAvatarUrl = sanitizeAvatarUrl(userRecord && userRecord.avatarUrl);
     const userNozzles = getStoredNozzlesForUser(userId);
     const userSamplers = getStoredSamplersForUser(userId);
     const userGasSamplers = getStoredGasSamplersForUser(userId);
@@ -2960,6 +2984,30 @@ export default function App() {
         },
       };
     });
+  };
+
+  const avatarFileInputRef = useRef(null);
+  const handleProfileAvatarFile = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!activeUser || !isUserUnlocked) { alert('로그인 후 프로필 사진을 바꿀 수 있습니다.'); return; }
+    if (!/^image\//.test(file.type)) { alert('사진 파일(JPG, PNG 등)을 골라 주세요.'); return; }
+    try {
+      const dataUrl = sanitizeAvatarUrl(await resizeImageFileToAvatar(file));
+      if (!dataUrl) throw new Error('avatar too large');
+      updateActiveUserProfile({ avatarUrl: dataUrl });
+      setProfileAvatarUrl(dataUrl);
+    } catch (error) {
+      console.error('프로필 사진 변경 실패:', error);
+      alert('이 사진은 사용할 수 없습니다. 다른 사진을 골라 주세요.');
+    }
+  };
+  const handleRemoveProfileAvatar = () => {
+    if (!activeUser || !isUserUnlocked) return;
+    if (!window.confirm('프로필 사진을 지우고 기본 모양으로 돌릴까요?')) return;
+    updateActiveUserProfile({ avatarUrl: '' });
+    setProfileAvatarUrl('');
   };
 
   const handleSaveProfileNickname = () => {
@@ -3055,7 +3103,7 @@ export default function App() {
 
       const decrypted = await decryptJsonWithKey(key, targetUser.dataIv, targetUser.dataCipher);
       const reports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
-      const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
+      const fixedAvatarUrl = sanitizeAvatarUrl(targetUser.avatarUrl);
 
       if (targetUser.avatarUrl !== fixedAvatarUrl) {
         setSecureUsers(prev => {
@@ -3172,7 +3220,7 @@ export default function App() {
       const decrypted = await decryptJsonWithKey(key, targetUser.dataIv, targetUser.dataCipher);
       const reports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
 
-      const fixedAvatarUrl = getFixedAvatarUrlForUser(userId);
+      const fixedAvatarUrl = sanitizeAvatarUrl(targetUser.avatarUrl);
       if (targetUser.avatarUrl !== fixedAvatarUrl) {
         setSecureUsers(prev => {
           const current = prev[userId];
@@ -6129,6 +6177,19 @@ export default function App() {
         const rowSp = toNumber(meter.sp);
         addUpdate(recordSheet, `P${row}`, rowSp !== null ? rowSp : (Number.isFinite(avgSp) ? avgSp : null));
       });
+      // ── 양식 자체의 수식 오류 보정 ──
+      // 1) 표준산소 환산 농도(계산식 DC): 양식에는 설명과 달리 (21-4)/(21-5)로 숫자가 박혀 있어
+      //    입력한 표준산소(Os)·실측산소(Oa)와 무관한 값이 나온다 → Os·Oa를 쓰도록 바꾼다 (표준산소가 없으면 보정 제외)
+      addUpdate('계산식', exportSheetId === 'flow' ? 'M115' : 'M107', { formula: 'IF(Os="",Ca,Ca*((21-Os)/(21-Oa)))' });
+      // 2) 여과지 홀더 온도(J열)는 입력 칸이 없어 평균이 #DIV/0!로 찍힌다 → 값이 없으면 빈칸
+      {
+        const firstRow = layout.meterStartRow;
+        const lastRow = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
+        addUpdate(recordSheet, `J${lastRow + 1}`, { formula: `IFERROR(AVERAGE(J${firstRow}:J${lastRow}),"")` });
+      }
+      // 3) 피토관을 고르지 않으면 흡인관 길이(J10)가 #VALUE!로 찍힌다 → 빈칸
+      addUpdate(recordSheet, 'J10', { formula: 'IFERROR(노즐산정!D9/100,"")' });
+
       // 측정점(채취점)이 바뀔 때마다 행 배경색을 바꿔 구분
       const meterRowColors = [];
       {
@@ -7192,7 +7253,14 @@ export default function App() {
                   </button>
                   <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
-                      <div className="w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center">
+                      <input ref={avatarFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarFile} />
+                      <button
+                        type="button"
+                        onClick={() => avatarFileInputRef.current && avatarFileInputRef.current.click()}
+                        title="프로필 사진 바꾸기"
+                        aria-label="프로필 사진 바꾸기"
+                        className="group relative w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center cursor-pointer p-0"
+                      >
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
@@ -7200,7 +7268,8 @@ export default function App() {
                             {String(displayUserNameWithFallback || '').trim().charAt(0).toUpperCase() || '?'}
                           </span>
                         )}
-                      </div>
+                        <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[11px] font-bold py-1 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">사진 바꾸기</span>
+                      </button>
                     </div>
                     <div className="flex-1 text-center md:text-left">
                       <p className="text-sm text-slate-600">현재 사용자</p>
@@ -7217,6 +7286,22 @@ export default function App() {
                         >
                           별명 설정
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => avatarFileInputRef.current && avatarFileInputRef.current.click()}
+                          className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                        >
+                          사진 변경
+                        </button>
+                        {profileAvatarUrl && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveProfileAvatar}
+                            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                          >
+                            사진 지우기
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={handleLockActiveUser}
