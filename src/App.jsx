@@ -2080,6 +2080,55 @@ export default function App() {
   const autoCloudUploadInFlightRef = useRef(false);
   const autoCloudUploadFailRef = useRef(null);
   const unsavedRef = useRef(false);
+
+  // ── 표 채우기(필다운): 표 안의 칸에서 Ctrl+D = 바로 윗칸 값 복사, Ctrl+Shift+D = 지금 값을 아래 끝까지 채우기 ──
+  // 화면의 모든 입력 표(측정 기록, 측정점, 가스 분석 등)에 공통으로 적용
+  useEffect(() => {
+    const cellFields = (cell) => (cell ? [...cell.querySelectorAll('input, select')].filter((f) => !f.readOnly && !f.disabled && !['checkbox', 'radio', 'file', 'button'].includes(f.type)) : []);
+    const setFieldValue = (field, value) => {
+      const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
+      field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
+    };
+    const onKeyDown = async (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || String(event.key).toLowerCase() !== 'd') return;
+      const field = event.target;
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) return;
+      const cell = field.closest('td');
+      const row = cell && cell.parentElement;
+      const body = row && row.parentElement;
+      if (!cell || !body || body.tagName !== 'TBODY') return;
+      event.preventDefault();
+      const colIdx = [...row.children].indexOf(cell);
+      const fieldIdx = cellFields(cell).indexOf(field);
+      if (fieldIdx < 0) return;
+      const rows = [...body.children];
+      const rowIdx = rows.indexOf(row);
+      const peerOf = (r) => {
+        const peer = cellFields(r.children[colIdx])[fieldIdx];
+        return peer && peer.tagName === field.tagName && peer.type === field.type ? peer : null;
+      };
+      if (event.shiftKey) {
+        const value = field.value;
+        const targets = rows.slice(rowIdx + 1).map(peerOf).filter(Boolean);
+        for (const target of targets) {
+          if (!target.isConnected) break;
+          if (target.value !== value) setFieldValue(target, value);
+          // 한 칸씩 화면에 반영된 뒤 다음 칸을 채운다
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      } else {
+        for (let i = rowIdx - 1; i >= 0; i--) {
+          const above = peerOf(rows[i]);
+          if (!above) continue;
+          if (above.value !== field.value) setFieldValue(field, above.value);
+          break;
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
   const [cloudRetryTick, setCloudRetryTick] = useState(0);
   const lastAutoCloudUploadSignatureRef = useRef('');
   const csvImportInputRef = useRef(null);
@@ -9375,6 +9424,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+              <p className="mt-2 text-[11px] text-slate-500">표 채우기: 칸에서 <b>Ctrl+D</b> 윗칸 값 복사 · <b>Ctrl+Shift+D</b> 지금 값을 아래 끝까지 채우기</p>
               <button type="button" onClick={addGasMeter} className="w-full mt-2 py-2 text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg text-sm font-bold border border-emerald-300 transition-colors shadow-sm">
                 측정 기록 칸 추가
               </button>
