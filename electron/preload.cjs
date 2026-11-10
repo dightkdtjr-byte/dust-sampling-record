@@ -11,4 +11,6 @@ contextBridge.exposeInMainWorld('stackpilotDesktop', {
   noteDownloadName: (name) => ipcRenderer.send('desktop:download-name', String(name || '')),
   // 엑셀 저장 시 파일을 넣을 묶음 폴더 이름(날짜_사업장명_#배출구)
   noteDownloadFolder: (name) => ipcRenderer.send('desktop:download-folder', String(name || '')),
+  // 기상청 도시별관측 자료 (tm: 'YYYY.MM.DD.HH:00', 한국 시각)
+  fetchWeather: (tm) => ipcRenderer.invoke('desktop:fetch-weather', String(tm || '')),
 });

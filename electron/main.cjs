@@ -168,6 +168,14 @@ const writeExportBase = (dir) => {
   try { fs.writeFileSync(exportBaseFile(), JSON.stringify({ dir })); } catch (error) { console.error('export base save failed', error); }
 };
 
+// 기상청 날씨누리 도시별관측 자료 가져오기 (인증키 없이 볼 수 있는 공식 페이지). 화면에서는 CORS로 막히므로 여기서 받는다
+ipcMain.handle('desktop:fetch-weather', async (event, tm) => {
+  const text = String(tm || '');
+  if (!/^\d{4}\.\d{2}\.\d{2}\.\d{2}:00$/.test(text)) throw new Error('시각 형식이 올바르지 않습니다.');
+  const { fetchCityObservations } = require('./weather.cjs');
+  return fetchCityObservations(text, (url, options) => net.fetch(url, options));
+});
+
 // 화면 안의 "창 닫기" 버튼: 창의 close 이벤트를 거치게 해서 저장 확인이 뜨도록 한다
 ipcMain.on('desktop:close-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
