@@ -511,13 +511,12 @@ const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 
 // ── 사전 수분량 측정 방법 ──
 // excelChoice: 양식 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표)
-// 사전 수분량 측정방법. excelChoice = 엑셀 수분량!C5 선택번호
-// (1=자동측정기 표, 2=임핀저 표 20~23행, 3=사후 수분량 칸을 그대로 사용)
+// 사전 수분량 측정방법. excelChoice = 엑셀 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표 20~23행)
+// 사후 수분량(채취 후 임핀저 전후 무게)은 방법이 아니라 아래쪽 칸에 따로 적는다
 const MOISTURE_METHODS = [
   { id: 'imp2', label: '임핀저(2구)', excelChoice: 2, stages: 2 },
   { id: 'auto', label: '자동측정기', excelChoice: 1 },
   { id: 'impinger', label: '임핀저(4구)', excelChoice: 2, stages: 4 },
-  { id: 'post', label: '사후 수분량', excelChoice: 3 },
 ];
 const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
@@ -4254,12 +4253,6 @@ export default function App() {
       const value = vals.reduce((a, b) => a + b, 0) / vals.length;
       return { ready: true, value, detail: `${vals.length}회 평균` };
     }
-    if (methodId === 'post') {
-      // 사후 수분량(시료채취 후 임핀저 무게법)을 사전 수분량으로 쓴다
-      const post = data === formData ? getRawPostMoistureFactors() : null;
-      if (!post || !Number.isFinite(post.Xw)) return { ready: false, value: NaN, detail: '아래 사후 수분량(임핀저 무게)과 기록표 가스미터 값이 필요합니다' };
-      return { ready: true, value: post.Xw, detail: '시료채취 후 임핀저 무게' };
-    }
     const impMethod = MOISTURE_METHODS.find((m) => m.id === methodId);
     if (isImpingerMoistureMethod(impMethod)) {
       const pre = data.preImpinger || createEmptyPreImpinger();
@@ -6025,12 +6018,7 @@ export default function App() {
       //  - 임핀저법: C5=2, 예비 임핀저(C20~D23)·가스미터(A28~G28)
       const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
       addUpdate('수분량', 'C5', exportMoistureMethod.excelChoice);
-      if (exportMoistureMethod.id === 'post') {
-        // 선택표에 3번(사후 수분량)을 적고, 노즐산정 예비수분량(C15)을 사후 수분량 칸으로 연결
-        addUpdate('수분량', 'A7', 3);
-        addUpdate('수분량', 'B7', '사후 수분량');
-        addUpdate('노즐산정', 'C15', { formula: `수분량!H${33 + layout.impingerRows + 6}` });
-      } else if (isImpingerMoistureMethod(exportMoistureMethod)) {
+      if (isImpingerMoistureMethod(exportMoistureMethod)) {
         addUpdate('수분량', 'B6', exportMoistureMethod.label);
       }
       if (exportMoistureMethod.id === 'auto') {
@@ -8186,10 +8174,6 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                )}
-
-                {activeMoistureMethod.id === 'post' && (
-                  <p className="text-[11px] text-slate-600">아래 사후 수분량(시료채취 후 임핀저 무게)을 사전 수분량으로 씁니다.</p>
                 )}
 
                 {isImpingerMoistureMethod(activeMoistureMethod) && (() => {
