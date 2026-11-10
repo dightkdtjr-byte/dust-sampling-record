@@ -747,3 +747,23 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 
 /* 등속 범위 밖 값은 어느 줄에서나 빨강 */
 .ds-page.ds-page .ds-iso-value.is-out { color: var(--ds-signal) !important; }
+
+/* ── 간격 보정 ── */
+/* 나란히 놓인 섹션(3·4번 등): 가운데 괘선 양쪽에 여백 */
+@media (min-width: 1024px) {
+  .ds-page > form > div.grid > div.bg-white.shadow-sm:first-child { padding-right: 28px !important; }
+  .ds-page > form > div.grid > div.bg-white.shadow-sm + div.bg-white.shadow-sm { padding-left: 28px !important; }
+}
+/* 풀어낸 묶음(점선 위 칸): 위아래 여백 */
+.ds-page form div[class*="bg-slate-50"][class*="border"], .ds-page form div.bg-slate-100[class*="border"],
+.ds-page form div[class*="bg-emerald-50"][class*="border"], .ds-page form div[class*="bg-teal-50"][class*="border"], .ds-page form div[class*="bg-cyan-50"][class*="border"],
+.ds-page form div.bg-white.p-4[class*="border"], .ds-page form div.bg-white.p-3[class*="border"], .ds-page form div.bg-white.p-5[class*="border"] {
+  padding-top: 14px !important; padding-bottom: 14px !important;
+}
+/* 섹션 안 줄 사이 기본 간격 */
+.ds-page form .space-y-4 > * + * { margin-top: 18px !important; }
+.ds-page form .mb-2 { margin-bottom: 10px; }
+/* 값 묶음 칸 사이 */
+.ds-page .ds-stat + .ds-stat { margin-left: 0; }
+.ds-page .grid.gap-4 { gap: 18px !important; }
+.ds-page .grid.gap-2 { gap: 10px !important; }
