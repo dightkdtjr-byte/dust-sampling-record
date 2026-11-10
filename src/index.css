@@ -1027,3 +1027,17 @@ html[data-palette="earth"] .ds-page.ds-page button[type="submit"], html[data-pal
 html[data-palette="earth"] .ds-page.ds-page button[type="submit"]:hover { background-color: var(--pal-clay-deep) !important; border-color: var(--pal-clay-deep) !important; }
 html[data-palette="earth"] .ds-segment-item.is-on { background: var(--ds-accent) !important; }
 html[data-palette="earth"] .menu-avatar-fallback { background-color: var(--pal-sage) !important; color: #25221c !important; }
+
+/* ── 끌어서 채우기 손잡이 (측정점 표·측정 기록표) ── */
+.fill-handle {
+  position: fixed; z-index: 15; width: 10px; height: 10px; box-sizing: border-box;
+  background: var(--ds-accent, #1f5f43); border: 1.5px solid #fff; border-radius: 1px;
+  cursor: crosshair; touch-action: none;
+}
+.fill-handle::after { content: ""; position: absolute; inset: -6px; } /* 잡기 쉽게 누를 수 있는 범위를 넓힘 */
+html[data-palette="earth"] .fill-handle { background: #c8643c; }
+body.fill-dragging, body.fill-dragging * { cursor: crosshair !important; user-select: none; }
+.ds-page.ds-page.ds-page .fill-drag-table tbody td input.fill-target:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), .fill-drag-table input.fill-target, .fill-drag-table select.fill-target {
+  box-shadow: inset 0 0 0 1.5px var(--ds-accent, #1f5f43) !important;
+  background-color: rgba(31, 95, 67, 0.08) !important;
+}

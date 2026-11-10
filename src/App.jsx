@@ -1806,6 +1806,38 @@ const hashHintAnswer = async (answerText) => {
 };
 
 // 프로필 이미지는 사용하지 않음 (이름 첫 글자로 표시)
+// 표 채우기 공통 도구: 한 칸(td) 안의 입력들, 값 넣기(React가 알아채도록 input 이벤트 발생)
+const fillCellFields = (cell) => (cell ? [...cell.querySelectorAll('input, select')].filter((f) => !f.readOnly && !f.disabled && !['checkbox', 'radio', 'file', 'button'].includes(f.type)) : []);
+const fillSetFieldValue = (field, value) => {
+  const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
+  field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
+};
+// 같은 열·같은 자리의 입력을 다른 행에서 찾는다
+const fillPeerFinder = (field) => {
+  const cell = field.closest('td');
+  const row = cell && cell.parentElement;
+  const body = row && row.parentElement;
+  if (!cell || !body || body.tagName !== 'TBODY') return null;
+  const colIdx = [...row.children].indexOf(cell);
+  const fieldIdx = fillCellFields(cell).indexOf(field);
+  if (fieldIdx < 0) return null;
+  const rows = [...body.children];
+  const peerOf = (r) => {
+    const peer = fillCellFields(r.children[colIdx])[fieldIdx];
+    return peer && peer.tagName === field.tagName && peer.type === field.type ? peer : null;
+  };
+  return { rows, rowIdx: rows.indexOf(row), peerOf };
+};
+const fillValueInto = async (targets, value) => {
+  for (const target of targets) {
+    if (!target.isConnected) break;
+    if (target.value !== value) fillSetFieldValue(target, value);
+    // 한 칸씩 화면에 반영된 뒤 다음 칸을 채운다
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+};
+
 const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
 
 // 엑셀 저장 이름: 폴더 = 날짜_사업장명_#배출구, 파일 = 날짜_기록부명_사업장명_#배출구
@@ -2084,50 +2116,113 @@ export default function App() {
   // ── 표 채우기(필다운): 표 안의 칸에서 Ctrl+D = 바로 윗칸 값 복사, Ctrl+Shift+D = 지금 값을 아래 끝까지 채우기 ──
   // 화면의 모든 입력 표(측정 기록, 측정점, 가스 분석 등)에 공통으로 적용
   useEffect(() => {
-    const cellFields = (cell) => (cell ? [...cell.querySelectorAll('input, select')].filter((f) => !f.readOnly && !f.disabled && !['checkbox', 'radio', 'file', 'button'].includes(f.type)) : []);
-    const setFieldValue = (field, value) => {
-      const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
-      field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
-    };
     const onKeyDown = async (event) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || String(event.key).toLowerCase() !== 'd') return;
       const field = event.target;
       if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) return;
-      const cell = field.closest('td');
-      const row = cell && cell.parentElement;
-      const body = row && row.parentElement;
-      if (!cell || !body || body.tagName !== 'TBODY') return;
+      const found = fillPeerFinder(field);
+      if (!found) return;
       event.preventDefault();
-      const colIdx = [...row.children].indexOf(cell);
-      const fieldIdx = cellFields(cell).indexOf(field);
-      if (fieldIdx < 0) return;
-      const rows = [...body.children];
-      const rowIdx = rows.indexOf(row);
-      const peerOf = (r) => {
-        const peer = cellFields(r.children[colIdx])[fieldIdx];
-        return peer && peer.tagName === field.tagName && peer.type === field.type ? peer : null;
-      };
+      const { rows, rowIdx, peerOf } = found;
       if (event.shiftKey) {
-        const value = field.value;
-        const targets = rows.slice(rowIdx + 1).map(peerOf).filter(Boolean);
-        for (const target of targets) {
-          if (!target.isConnected) break;
-          if (target.value !== value) setFieldValue(target, value);
-          // 한 칸씩 화면에 반영된 뒤 다음 칸을 채운다
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
+        await fillValueInto(rows.slice(rowIdx + 1).map(peerOf).filter(Boolean), field.value);
       } else {
         for (let i = rowIdx - 1; i >= 0; i--) {
           const above = peerOf(rows[i]);
           if (!above) continue;
-          if (above.value !== field.value) setFieldValue(field, above.value);
+          if (above.value !== field.value) fillSetFieldValue(field, above.value);
           break;
         }
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // ── 끌어서 채우기: 측정점 표·측정 기록표(.fill-drag-table)에서 칸을 고르면 오른쪽 아래에 작은 손잡이가 생기고,
+  //    그 손잡이를 아래(또는 위)로 끌면 지나간 칸에 같은 값이 들어간다 (엑셀의 채우기 핸들) ──
+  useEffect(() => {
+    const handle = document.createElement('div');
+    handle.className = 'fill-handle';
+    handle.title = '끌어서 같은 값 채우기';
+    handle.style.display = 'none';
+    document.body.appendChild(handle);
+    let source = null;
+    let drag = null;
+    const place = () => {
+      if (!source || !source.isConnected) { handle.style.display = 'none'; return; }
+      const rect = source.getBoundingClientRect();
+      if (rect.width === 0 || rect.bottom < 70 || rect.bottom > window.innerHeight) { handle.style.display = 'none'; return; }
+      handle.style.display = 'block';
+      handle.style.left = `${rect.right - 5}px`;
+      handle.style.top = `${rect.bottom - 5}px`;
+    };
+    const clearMarks = () => document.querySelectorAll('.fill-target').forEach((el) => el.classList.remove('fill-target'));
+    const onFocusIn = (event) => {
+      if (drag) return;
+      const field = event.target;
+      const ok = (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) && field.closest('.fill-drag-table tbody td') && fillCellFields(field.closest('td')).includes(field);
+      source = ok ? field : null;
+      place();
+    };
+    const onFocusOut = () => { if (!drag) { source = null; setTimeout(() => { if (!source && !drag) handle.style.display = 'none'; }, 0); } };
+    const targetsAt = (clientY) => {
+      const { rows, rowIdx, peerOf } = drag.found;
+      // 포인터가 놓인 행 찾기 (표 밖으로 나가면 가장 가까운 끝 행)
+      let hit = rowIdx;
+      rows.forEach((r, i) => {
+        const rect = r.getBoundingClientRect();
+        if (clientY >= rect.top && clientY < rect.bottom) hit = i;
+      });
+      const first = rows[0].getBoundingClientRect();
+      const last = rows[rows.length - 1].getBoundingClientRect();
+      if (clientY < first.top) hit = 0;
+      if (clientY >= last.bottom) hit = rows.length - 1;
+      const [from, to] = hit >= rowIdx ? [rowIdx + 1, hit] : [hit, rowIdx - 1];
+      const list = [];
+      for (let i = from; i <= to; i++) { const peer = peerOf(rows[i]); if (peer) list.push(peer); }
+      return list;
+    };
+    const onPointerDown = (event) => {
+      if (!source) return;
+      const found = fillPeerFinder(source);
+      if (!found) return;
+      event.preventDefault();
+      drag = { found, value: source.value, targets: [] };
+      handle.setPointerCapture(event.pointerId);
+      document.body.classList.add('fill-dragging');
+    };
+    const onPointerMove = (event) => {
+      if (!drag) return;
+      clearMarks();
+      drag.targets = targetsAt(event.clientY);
+      drag.targets.forEach((el) => el.classList.add('fill-target'));
+    };
+    const onPointerUp = async (event) => {
+      if (!drag) return;
+      const { targets, value } = drag;
+      try { handle.releasePointerCapture(event.pointerId); } catch { /* 이미 풀림 */ }
+      drag = null;
+      document.body.classList.remove('fill-dragging');
+      clearMarks();
+      await fillValueInto(targets, value);
+      place();
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    handle.addEventListener('pointerdown', onPointerDown);
+    handle.addEventListener('pointermove', onPointerMove);
+    handle.addEventListener('pointerup', onPointerUp);
+    handle.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      handle.remove();
+    };
   }, []);
   const [cloudRetryTick, setCloudRetryTick] = useState(0);
   const lastAutoCloudUploadSignatureRef = useRef('');
@@ -8826,7 +8921,7 @@ export default function App() {
               </details>
               
               <div className="flex-1 overflow-auto bg-slate-50/50 p-2 rounded border border-slate-200 mb-4">
-                <table className="w-full text-sm text-center">
+                <table className="fill-drag-table w-full text-sm text-center">
                   <thead>
                     <tr className="text-slate-700 border-b border-slate-300 bg-slate-100/50">
                       <th className="pb-2 pt-2 rounded-tl-lg font-bold">측정점</th>
@@ -9283,7 +9378,7 @@ export default function App() {
               </div>
               
               <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm">
-                <table className={`w-full text-xs text-center ${isFlowSheet ? 'min-w-[560px]' : 'min-w-[900px]'}`}>
+                <table className={`fill-drag-table w-full text-xs text-center ${isFlowSheet ? 'min-w-[560px]' : 'min-w-[900px]'}`}>
                   <thead className="bg-slate-100 text-slate-700 border-b border-slate-300">
                     <tr>
                       <th className="p-1 font-bold whitespace-nowrap">순번</th>
@@ -9424,7 +9519,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">표 채우기: 칸에서 <b>Ctrl+D</b> 윗칸 값 복사 · <b>Ctrl+Shift+D</b> 지금 값을 아래 끝까지 채우기</p>
+              <p className="mt-2 text-[11px] text-slate-500">표 채우기: 칸에서 <b>Ctrl+D</b> 윗칸 값 복사 · <b>Ctrl+Shift+D</b> 지금 값을 아래 끝까지 채우기 · 칸 오른쪽 아래 <b>작은 네모</b>를 끌면 지나간 칸에 같은 값</p>
               <button type="button" onClick={addGasMeter} className="w-full mt-2 py-2 text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg text-sm font-bold border border-emerald-300 transition-colors shadow-sm">
                 측정 기록 칸 추가
               </button>
