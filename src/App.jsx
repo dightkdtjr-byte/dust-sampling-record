@@ -9129,19 +9129,19 @@ export default function App() {
                           </td>
                           
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                            <input type="number" step="0.1" value={meter.dp} onChange={(e) => handleGasMeterChange(idx, 'dp', e.target.value)} placeholder="Δp" className="w-full p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
                           </td>
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.sp || ''} onChange={(e) => handleGasMeterChange(idx, 'sp', e.target.value)} className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
+                            <input type="number" step="0.1" value={meter.sp || ''} onChange={(e) => handleGasMeterChange(idx, 'sp', e.target.value)} placeholder="Ps" className={`w-full p-1 border border-slate-200 rounded text-center outline-none focus:ring-2 focus:ring-emerald-500 ${isStartRow ? 'bg-slate-50' : ''}`} />
                           </td>
                           {!isFlowSheet && (
                           <td className="p-1 w-14">
-                            <input type="number" step="0.1" value={meter.pressure} onChange={(e) => handleGasMeterChange(idx, 'pressure', e.target.value)} className="w-full p-1 border border-teal-300 bg-teal-50 rounded text-center font-black text-teal-800 outline-none focus:ring-2 focus:ring-teal-500" />
+                            <input type="number" step="0.1" value={meter.pressure} onChange={(e) => handleGasMeterChange(idx, 'pressure', e.target.value)} placeholder="ΔH" className="w-full p-1 border border-teal-300 bg-teal-50 rounded text-center font-black text-teal-800 outline-none focus:ring-2 focus:ring-teal-500" />
                           </td>
                           )}
                           {!isFlowSheet && (
                           <td className="p-1 w-20">
-                            <input type="number" step="0.1" value={meter.volume} onChange={(e) => handleGasMeterChange(idx, 'volume', e.target.value)} className={`w-full p-1 border ${isStartRow ? 'border-slate-300 bg-slate-100 text-slate-900 font-bold' : 'border-slate-200 bg-white font-medium'} rounded text-center outline-none focus:ring-2 focus:ring-emerald-500`} placeholder={isStartRow ? '초기유량' : ''} />
+                            <input type="number" step="0.1" value={meter.volume} onChange={(e) => handleGasMeterChange(idx, 'volume', e.target.value)} className={`w-full p-1 border ${isStartRow ? 'border-slate-300 bg-slate-100 text-slate-900 font-bold' : 'border-slate-200 bg-white font-medium'} rounded text-center outline-none focus:ring-2 focus:ring-emerald-500`} placeholder={isStartRow ? '초기유량' : 'Vm'} />
                           </td>
                           )}
                           
