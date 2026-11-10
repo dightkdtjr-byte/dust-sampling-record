@@ -1,5 +1,186 @@
 @import "tailwindcss";
 
+/* ── 색 체계: 세이지(#9caf88) · 베이지(#e3d9c6) · 테라코타(#c8643c) ──
+   Tailwind 색 계열을 세 색에서 뽑은 단계로 바꿔 앱 전체가 한 팔레트를 쓴다 */
+@theme {
+  --color-slate-50: #faf7f1;
+  --color-slate-100: #f3eee3;
+  --color-slate-200: #e3d9c6;
+  --color-slate-300: #cfc3ab;
+  --color-slate-400: #a99d86;
+  --color-slate-500: #857a66;
+  --color-slate-600: #655c4d;
+  --color-slate-700: #4d463a;
+  --color-slate-800: #37322a;
+  --color-slate-900: #25221c;
+  --color-slate-950: #181612;
+  --color-gray-50: #faf7f1;
+  --color-gray-100: #f3eee3;
+  --color-gray-200: #e3d9c6;
+  --color-gray-300: #cfc3ab;
+  --color-gray-400: #a99d86;
+  --color-gray-500: #857a66;
+  --color-gray-600: #655c4d;
+  --color-gray-700: #4d463a;
+  --color-gray-800: #37322a;
+  --color-gray-900: #25221c;
+  --color-gray-950: #181612;
+  --color-zinc-50: #faf7f1;
+  --color-zinc-100: #f3eee3;
+  --color-zinc-200: #e3d9c6;
+  --color-zinc-300: #cfc3ab;
+  --color-zinc-400: #a99d86;
+  --color-zinc-500: #857a66;
+  --color-zinc-600: #655c4d;
+  --color-zinc-700: #4d463a;
+  --color-zinc-800: #37322a;
+  --color-zinc-900: #25221c;
+  --color-zinc-950: #181612;
+  --color-emerald-50: #f4f7f1;
+  --color-emerald-100: #e8eee2;
+  --color-emerald-200: #d3dec8;
+  --color-emerald-300: #b7c8a7;
+  --color-emerald-400: #9caf88;
+  --color-emerald-500: #7f9569;
+  --color-emerald-600: #647a50;
+  --color-emerald-700: #4f6140;
+  --color-emerald-800: #3f4d34;
+  --color-emerald-900: #333e2b;
+  --color-emerald-950: #1f2619;
+  --color-teal-50: #f4f7f1;
+  --color-teal-100: #e8eee2;
+  --color-teal-200: #d3dec8;
+  --color-teal-300: #b7c8a7;
+  --color-teal-400: #9caf88;
+  --color-teal-500: #7f9569;
+  --color-teal-600: #647a50;
+  --color-teal-700: #4f6140;
+  --color-teal-800: #3f4d34;
+  --color-teal-900: #333e2b;
+  --color-teal-950: #1f2619;
+  --color-green-50: #f4f7f1;
+  --color-green-100: #e8eee2;
+  --color-green-200: #d3dec8;
+  --color-green-300: #b7c8a7;
+  --color-green-400: #9caf88;
+  --color-green-500: #7f9569;
+  --color-green-600: #647a50;
+  --color-green-700: #4f6140;
+  --color-green-800: #3f4d34;
+  --color-green-900: #333e2b;
+  --color-green-950: #1f2619;
+  --color-cyan-50: #f4f7f1;
+  --color-cyan-100: #e8eee2;
+  --color-cyan-200: #d3dec8;
+  --color-cyan-300: #b7c8a7;
+  --color-cyan-400: #9caf88;
+  --color-cyan-500: #7f9569;
+  --color-cyan-600: #647a50;
+  --color-cyan-700: #4f6140;
+  --color-cyan-800: #3f4d34;
+  --color-cyan-900: #333e2b;
+  --color-cyan-950: #1f2619;
+  --color-sky-50: #f4f7f1;
+  --color-sky-100: #e8eee2;
+  --color-sky-200: #d3dec8;
+  --color-sky-300: #b7c8a7;
+  --color-sky-400: #9caf88;
+  --color-sky-500: #7f9569;
+  --color-sky-600: #647a50;
+  --color-sky-700: #4f6140;
+  --color-sky-800: #3f4d34;
+  --color-sky-900: #333e2b;
+  --color-sky-950: #1f2619;
+  --color-blue-50: #f4f7f1;
+  --color-blue-100: #e8eee2;
+  --color-blue-200: #d3dec8;
+  --color-blue-300: #b7c8a7;
+  --color-blue-400: #9caf88;
+  --color-blue-500: #7f9569;
+  --color-blue-600: #647a50;
+  --color-blue-700: #4f6140;
+  --color-blue-800: #3f4d34;
+  --color-blue-900: #333e2b;
+  --color-blue-950: #1f2619;
+  --color-orange-50: #fbf1ec;
+  --color-orange-100: #f6e0d5;
+  --color-orange-200: #edc2ac;
+  --color-orange-300: #e1a083;
+  --color-orange-400: #d5805c;
+  --color-orange-500: #c8643c;
+  --color-orange-600: #ae5230;
+  --color-orange-700: #8d4227;
+  --color-orange-800: #6f3521;
+  --color-orange-900: #582b1c;
+  --color-orange-950: #33170e;
+  --color-amber-50: #fbf1ec;
+  --color-amber-100: #f6e0d5;
+  --color-amber-200: #edc2ac;
+  --color-amber-300: #e1a083;
+  --color-amber-400: #d5805c;
+  --color-amber-500: #c8643c;
+  --color-amber-600: #ae5230;
+  --color-amber-700: #8d4227;
+  --color-amber-800: #6f3521;
+  --color-amber-900: #582b1c;
+  --color-amber-950: #33170e;
+  --color-yellow-50: #fbf1ec;
+  --color-yellow-100: #f6e0d5;
+  --color-yellow-200: #edc2ac;
+  --color-yellow-300: #e1a083;
+  --color-yellow-400: #d5805c;
+  --color-yellow-500: #c8643c;
+  --color-yellow-600: #ae5230;
+  --color-yellow-700: #8d4227;
+  --color-yellow-800: #6f3521;
+  --color-yellow-900: #582b1c;
+  --color-yellow-950: #33170e;
+  --color-purple-50: #fbf1ec;
+  --color-purple-100: #f6e0d5;
+  --color-purple-200: #edc2ac;
+  --color-purple-300: #e1a083;
+  --color-purple-400: #d5805c;
+  --color-purple-500: #c8643c;
+  --color-purple-600: #ae5230;
+  --color-purple-700: #8d4227;
+  --color-purple-800: #6f3521;
+  --color-purple-900: #582b1c;
+  --color-purple-950: #33170e;
+  --color-violet-50: #fbf1ec;
+  --color-violet-100: #f6e0d5;
+  --color-violet-200: #edc2ac;
+  --color-violet-300: #e1a083;
+  --color-violet-400: #d5805c;
+  --color-violet-500: #c8643c;
+  --color-violet-600: #ae5230;
+  --color-violet-700: #8d4227;
+  --color-violet-800: #6f3521;
+  --color-violet-900: #582b1c;
+  --color-violet-950: #33170e;
+  --color-indigo-50: #fbf1ec;
+  --color-indigo-100: #f6e0d5;
+  --color-indigo-200: #edc2ac;
+  --color-indigo-300: #e1a083;
+  --color-indigo-400: #d5805c;
+  --color-indigo-500: #c8643c;
+  --color-indigo-600: #ae5230;
+  --color-indigo-700: #8d4227;
+  --color-indigo-800: #6f3521;
+  --color-indigo-900: #582b1c;
+  --color-indigo-950: #33170e;
+  --color-red-50: #fbeeea;
+  --color-red-100: #f6dcd4;
+  --color-red-200: #ecb9aa;
+  --color-red-300: #df9380;
+  --color-red-400: #cd6a51;
+  --color-red-500: #b8432a;
+  --color-red-600: #9e3620;
+  --color-red-700: #822c1b;
+  --color-red-800: #682417;
+  --color-red-900: #521d13;
+  --color-red-950: #2e0f09;
+}
+
 html,
 body,
 #root {
@@ -27,7 +208,7 @@ input.date-input-fixed[type="date"]::-webkit-date-and-time-value {
   --mac-radius-sm: 5px;
   --mac-hairline: rgba(0, 0, 0, 0.1);
   --mac-hairline-strong: rgba(0, 0, 0, 0.17);
-  --mac-accent: #0a84ff;
+  --mac-accent: #c8643c;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro KR", "Apple SD Gothic Neo", "Pretendard", "Segoe UI", "Malgun Gothic", "Helvetica Neue", sans-serif;
@@ -58,35 +239,35 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, te
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, select:focus, textarea:focus {
   outline: none !important;
   border-color: var(--mac-accent) !important;
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28) !important;
+  box-shadow: 0 0 0 3px rgba(200, 100, 60, 0.28) !important;
 }
 button { border-radius: 6px; }
 button[class*="text-white"] {
   box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.28), 0 0.5px 1.5px rgba(0, 0, 0, 0.2) !important;
 }
 button.bg-white, button[class*="bg-slate-50"], button[class*="bg-slate-100"] {
-  background-image: linear-gradient(#ffffff, #f4f4f5);
+  background-image: linear-gradient(#ffffff, #f7f3ea);
   box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 0.5px 1px rgba(0, 0, 0, 0.08) !important;
 }
 thead.bg-slate-100, thead .bg-slate-100 { background-color: rgba(0, 0, 0, 0.035) !important; }
 /* 섹션 번호 배지: 둥근 초록 원 대신 각진 진회색 사각 배지 */
-h2 > span.w-6.h-6.rounded-full { border-radius: 6px !important; background-color: #1f2937 !important; background-image: none !important; }
+h2 > span.w-6.h-6.rounded-full { border-radius: 6px !important; background-color: #37322a !important; background-image: none !important; }
 h2 { letter-spacing: -0.02em; }
 
 /* ── 기록부 내부: 표·입력칸·결과 박스를 mac 앱(Numbers/시스템 설정) 느낌으로 ── */
 /* 연한 색 배경 박스는 거의 무채색으로 (강조색은 글자·테두리·버튼에만) */
-[class*="bg-emerald-50"], [class*="bg-teal-50"], [class*="bg-cyan-50"] { background-color: #f7f9f8 !important; }
-[class*="bg-emerald-100"], [class*="bg-teal-100"], [class*="bg-cyan-100"] { background-color: #eef3f0 !important; }
-.bg-slate-50, [class*="bg-slate-50/"] { background-color: #f5f5f7 !important; }
-.bg-slate-100 { background-color: #f0f0f3 !important; }
+[class*="bg-emerald-50"], [class*="bg-teal-50"], [class*="bg-cyan-50"] { background-color: #f4f7f1 !important; }
+[class*="bg-emerald-100"], [class*="bg-teal-100"], [class*="bg-cyan-100"] { background-color: #e8eee2 !important; }
+.bg-slate-50, [class*="bg-slate-50/"] { background-color: #f6f2e9 !important; }
+.bg-slate-100 { background-color: #f0eadd !important; }
 
 table { border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
 thead th {
   font-size: 11px;
   font-weight: 600;
-  color: #6e6e73;
+  color: #746a58;
   letter-spacing: -0.005em;
-  background-color: #f5f5f7 !important;
+  background-color: #f6f2e9 !important;
   border-bottom: 1px solid var(--mac-hairline) !important;
   text-transform: none;
 }
@@ -94,7 +275,7 @@ thead th[class*="text-emerald"], thead th[class*="text-teal"], thead th[class*="
 thead th[class*="text-sky"], thead th[class*="text-amber"], thead th[class*="text-red"] { color: inherit; }
 tbody td { border-color: var(--mac-hairline) !important; }
 tbody tr:nth-child(even) > td:not([class*="bg-"]) { background-color: rgba(0, 0, 0, 0.018); }
-tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(10, 132, 255, 0.045); }
+tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(200, 100, 60, 0.045); }
 tfoot td, tr.bg-slate-100 > td, tr[class~="bg-slate-50"] > td { font-weight: 600; }
 /* 표를 감싸는 상자 */
 .overflow-x-auto.border, .overflow-x-auto[class*="border-"] { border: 1px solid var(--mac-hairline) !important; border-radius: 8px !important; }
@@ -111,10 +292,10 @@ td > input:not([type="checkbox"]), td > select, td > div > input:not([type="chec
 td > input:not([type="checkbox"]):hover, td > div > input:not([type="checkbox"]):hover { background-color: #fff !important; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16) !important; }
 td > input:not([type="checkbox"]):focus, td > select:focus, td > div > input:not([type="checkbox"]):focus {
   background-color: #fff !important;
-  box-shadow: inset 0 0 0 1.5px var(--mac-accent), 0 0 0 3px rgba(10, 132, 255, 0.22) !important;
+  box-shadow: inset 0 0 0 1.5px var(--mac-accent), 0 0 0 3px rgba(200, 100, 60, 0.22) !important;
 }
 td > input[readonly]:not([type="checkbox"]), td > input:disabled:not([type="checkbox"]) { background-color: transparent !important; box-shadow: none !important; font-weight: 600; }
-td > input[class*="bg-emerald-50"], td > input[class*="bg-teal-50"] { background-color: rgba(52, 199, 89, 0.08) !important; }
+td > input[class*="bg-emerald-50"], td > input[class*="bg-teal-50"] { background-color: rgba(156, 175, 136, 0.14) !important; }
 
 /* 일반 입력칸 */
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
@@ -122,8 +303,8 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, te
   border-color: rgba(0, 0, 0, 0.14) !important;
   box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
 }
-input[readonly]:not([type="checkbox"]) { background-color: #f5f5f7 !important; color: #1d1d1f; font-weight: 600; }
-label:not([class*="text-"]) { color: #3a3a3c; }
+input[readonly]:not([type="checkbox"]) { background-color: #f6f2e9 !important; color: #25221c; font-weight: 600; }
+label:not([class*="text-"]) { color: #4d463a; }
 
 /* 결과·요약 박스: 왼쪽 색 띠 제거, 숫자 강조 */
 [class*="border-l-4"] { border-left-width: 1px !important; border-left-color: var(--mac-hairline) !important; }
@@ -131,9 +312,9 @@ label:not([class*="text-"]) { color: #3a3a3c; }
 .text-lg.font-black, .text-xl.font-black, .text-2xl.font-black, .text-3xl.font-black, .text-4xl.font-black { letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
 /* 섹션 제목 */
-h2.text-lg.font-bold { font-size: 15px; font-weight: 700; color: #1d1d1f; }
+h2.text-lg.font-bold { font-size: 15px; font-weight: 700; color: #25221c; }
 h2.text-lg.font-bold + div, h2 ~ .border-b { border-color: var(--mac-hairline) !important; }
-h3.text-sm.font-bold { font-size: 13px; font-weight: 600; color: #1d1d1f; }
+h3.text-sm.font-bold { font-size: 13px; font-weight: 600; color: #25221c; }
 
 /* ── 표 2차 다듬기: 머리글 고정, 요약 행 강조, 계산 칸 구분, 작은 삭제 버튼 ── */
 .overflow-x-auto { border-radius: 8px; }
@@ -141,46 +322,46 @@ h3.text-sm.font-bold { font-size: 13px; font-weight: 600; color: #1d1d1f; }
 .overflow-x-auto > table thead th:first-child { border-top-left-radius: 7px; }
 .overflow-x-auto > table thead th:last-child { border-top-right-radius: 7px; }
 thead th { padding-top: 8px !important; padding-bottom: 8px !important; line-height: 1.25; }
-thead th br + span, thead th > span.text-\[10px\] { color: #8e8e93; font-weight: 500; }
+thead th br + span, thead th > span.text-\[10px\] { color: #8f8571; font-weight: 500; }
 tbody td { padding-top: 5px !important; padding-bottom: 5px !important; }
-tbody td:first-child { color: #6e6e73; font-weight: 600; }
+tbody td:first-child { color: #746a58; font-weight: 600; }
 /* 평균·합계 등 요약 행: 위쪽 이중선 느낌 + 굵은 숫자 */
 tbody tr.bg-slate-100 > td, tbody tr[class~="bg-slate-50"] > td, tbody tr.font-bold > td, tfoot td {
-  background-color: #f5f5f7 !important;
+  background-color: #f6f2e9 !important;
   border-top: 2px solid rgba(0, 0, 0, 0.16) !important;
   font-weight: 700;
-  color: #1d1d1f;
+  color: #25221c;
 }
 /* 계산된 칸(읽기 전용/비활성)은 살짝 들어간 회색 패널처럼 */
 td > input[readonly]:not([type="checkbox"]), td > input:disabled:not([type="checkbox"]), td > div > input[readonly] {
-  background-color: #f2f2f4 !important;
-  color: #3a3a3c;
+  background-color: #f0eadd !important;
+  color: #4d463a;
   box-shadow: none !important;
   border-radius: 4px !important;
 }
-td > input::placeholder, td > div > input::placeholder { color: #c7c7cc; font-weight: 400; }
+td > input::placeholder, td > div > input::placeholder { color: #cdc4b2; font-weight: 400; }
 /* 입력 칸 높이 통일 */
 td > input:not([type="checkbox"]), td > select, td > div > input:not([type="checkbox"]) { min-height: 28px; padding-top: 3px !important; padding-bottom: 3px !important; }
 /* 삭제 버튼: 작고 옅게, 올리면 빨강 */
-td > button[class*="text-red"] { color: #aeaeb2 !important; font-weight: 500; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
-td > button[class*="text-red"]:hover { color: #ff3b30 !important; background-color: rgba(255, 59, 48, 0.08); }
+td > button[class*="text-red"] { color: #a99d86 !important; font-weight: 500; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+td > button[class*="text-red"]:hover { color: #b8432a !important; background-color: rgba(184, 67, 42, 0.08); }
 /* 표 아래 전체 폭 추가 버튼은 점선 상자로 */
 button.w-full[class*="border-dashed"], button.w-full[class*="bg-emerald-50"], button.w-full[class*="bg-slate-50"] {
   border: 1px dashed rgba(0, 0, 0, 0.2) !important;
   background: rgba(0, 0, 0, 0.015) !important;
-  color: #3a3a3c !important;
+  color: #4d463a !important;
   font-weight: 600;
 }
-button.w-full[class*="border-dashed"]:hover, button.w-full[class*="bg-emerald-50"]:hover, button.w-full[class*="bg-slate-50"]:hover { background: rgba(10, 132, 255, 0.06) !important; border-color: var(--mac-accent) !important; }
+button.w-full[class*="border-dashed"]:hover, button.w-full[class*="bg-emerald-50"]:hover, button.w-full[class*="bg-slate-50"]:hover { background: rgba(200, 100, 60, 0.06) !important; border-color: var(--mac-accent) !important; }
 /* 값 요약 타일 (총 채취 시간 등) */
 .grid > div.text-center.border, .grid > div[class*="text-center"][class*="border"] { background: #fff; }
 
 /* 어두운 패널(결과 요약, 저장 리포트) 안의 글자색은 밝게 유지 */
-.bg-slate-800 h3.text-sm.font-bold, .bg-slate-900 h3.text-sm.font-bold, .bg-slate-700 h3.text-sm.font-bold { color: #cbd5e1; }
+.bg-slate-800 h3.text-sm.font-bold, .bg-slate-900 h3.text-sm.font-bold, .bg-slate-700 h3.text-sm.font-bold { color: #e3d9c6; }
 .bg-slate-800 .text-xs.font-bold, .bg-slate-900 .text-xs.font-bold, .bg-slate-700 .text-xs.font-bold,
-.bg-slate-800 label, .bg-slate-900 label, .bg-slate-700 label { color: #94a3b8; }
-.bg-slate-800 .text-\[11px\].font-bold, .bg-slate-900 .text-\[11px\].font-bold, .bg-slate-700 .text-\[11px\].font-bold { color: #cbd5e1; }
-.bg-slate-800 [class*="text-red-"], .bg-slate-900 [class*="text-red-"] { color: #fca5a5; }
+.bg-slate-800 label, .bg-slate-900 label, .bg-slate-700 label { color: #cfc3ab; }
+.bg-slate-800 .text-\[11px\].font-bold, .bg-slate-900 .text-\[11px\].font-bold, .bg-slate-700 .text-\[11px\].font-bold { color: #e3d9c6; }
+.bg-slate-800 [class*="text-red-"], .bg-slate-900 [class*="text-red-"] { color: #edc2ac; }
 .bg-slate-800 [class*="text-emerald-"], .bg-slate-800 [class*="text-cyan-"], .bg-slate-800 [class*="text-amber-"], .bg-slate-800 [class*="text-teal-"],
 .bg-slate-900 [class*="text-slate-200"], .bg-slate-800 [class*="text-slate-200"], .bg-slate-800 [class*="text-white"], .bg-slate-900 [class*="text-white"] { color: revert-layer; }
 
@@ -201,28 +382,28 @@ button:disabled, select:disabled { cursor: not-allowed; }
 button[class*="bg-slate-7"], button[class*="bg-slate-8"], button[class*="bg-slate-9"], button[class*="bg-emerald-6"], button[class*="bg-emerald-7"],
 button[class*="bg-orange-6"], button[class*="bg-red-6"], button[class*="bg-teal-6"], button[class*="bg-cyan-6"], button[class*="bg-blue-6"] { color: #fff !important; }
 /* 너무 옅은 회색 글자와 너무 작은 글자 */
-.text-slate-400 { color: #6e6e73 !important; }
-.text-slate-500 { color: #5f5f66 !important; }
+.text-slate-400 { color: #746a58 !important; }
+.text-slate-500 { color: #655c4d !important; }
 .text-\[10px\] { font-size: 11px !important; }
-input::placeholder, textarea::placeholder { color: #a1a1a6 !important; }
-td > input::placeholder, td > div > input::placeholder { color: #b0b0b5 !important; }
+input::placeholder, textarea::placeholder { color: #a99d86 !important; }
+td > input::placeholder, td > div > input::placeholder { color: #b9ae98 !important; }
 /* 어두운 패널 위의 옅은 회색은 밝게 유지 */
-.bg-slate-800 .text-slate-400, .bg-slate-900 .text-slate-400, .bg-slate-700 .text-slate-400 { color: #a1a1aa !important; }
-.bg-slate-800 .text-slate-500, .bg-slate-900 .text-slate-500 { color: #b4b4bb !important; }
+.bg-slate-800 .text-slate-400, .bg-slate-900 .text-slate-400, .bg-slate-700 .text-slate-400 { color: #cfc3ab !important; }
+.bg-slate-800 .text-slate-500, .bg-slate-900 .text-slate-500 { color: #cfc3ab !important; }
 /* 흰 바탕 위의 연한 강조색(-400)은 더 진하게, 어두운 패널 위에서는 밝게 유지 */
-.text-emerald-400 { color: #059669 !important; }
-.text-teal-400 { color: #0d9488 !important; }
-.text-cyan-400 { color: #0891b2 !important; }
-.text-blue-400 { color: #2563eb !important; }
-.text-purple-400, .text-violet-400 { color: #7e22ce !important; }
-.text-orange-400, .text-amber-400 { color: #ea580c !important; }
-.text-yellow-400 { color: #ca8a04 !important; }
-.bg-slate-800 .text-emerald-400, .bg-slate-900 .text-emerald-400 { color: #34d399 !important; }
-.bg-slate-800 .text-teal-400, .bg-slate-900 .text-teal-400 { color: #2dd4bf !important; }
-.bg-slate-800 .text-cyan-400, .bg-slate-900 .text-cyan-400 { color: #22d3ee !important; }
-.bg-slate-800 .text-blue-400, .bg-slate-900 .text-blue-400 { color: #60a5fa !important; }
-.bg-slate-800 .text-purple-400, .bg-slate-900 .text-purple-400 { color: #c084fc !important; }
-.bg-slate-800 .text-orange-400, .bg-slate-900 .text-orange-400, .bg-slate-800 .text-amber-400, .bg-slate-900 .text-amber-400 { color: #fbbf24 !important; }
+.text-emerald-400 { color: #647a50 !important; }
+.text-teal-400 { color: #647a50 !important; }
+.text-cyan-400 { color: #647a50 !important; }
+.text-blue-400 { color: #647a50 !important; }
+.text-purple-400, .text-violet-400 { color: #ae5230 !important; }
+.text-orange-400, .text-amber-400 { color: #ae5230 !important; }
+.text-yellow-400 { color: #ae5230 !important; }
+.bg-slate-800 .text-emerald-400, .bg-slate-900 .text-emerald-400 { color: #b7c8a7 !important; }
+.bg-slate-800 .text-teal-400, .bg-slate-900 .text-teal-400 { color: #b7c8a7 !important; }
+.bg-slate-800 .text-cyan-400, .bg-slate-900 .text-cyan-400 { color: #b7c8a7 !important; }
+.bg-slate-800 .text-blue-400, .bg-slate-900 .text-blue-400 { color: #b7c8a7 !important; }
+.bg-slate-800 .text-purple-400, .bg-slate-900 .text-purple-400 { color: #e1a083 !important; }
+.bg-slate-800 .text-orange-400, .bg-slate-900 .text-orange-400, .bg-slate-800 .text-amber-400, .bg-slate-900 .text-amber-400 { color: #e1a083 !important; }
 .bg-slate-800 .text-yellow-400, .bg-slate-900 .text-yellow-400 { color: #facc15 !important; }
 
 /* 표 안 버튼은 줄바꿈 없이 */
@@ -258,17 +439,17 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
    표가 주인공이고, 상자 안의 상자는 없앤다.
    ══════════════════════════════════════════════════════════════════════ */
 :root {
-  --ds-paper: #fcfcfa;
-  --ds-ink: #1a2420;
-  --ds-ink-2: #4b5651;
-  --ds-ink-3: #7c867f;
-  --ds-rule: #d9ddd8;
-  --ds-rule-strong: #8f9893;
-  --ds-accent: #1f5f43;
-  --ds-accent-soft: #eaf1ec;
-  --ds-signal: #b3261e;
-  --ds-signal-soft: #fbeceb;
-  --ds-calc: #f2f4f1;
+  --ds-paper: #fdfbf6;
+  --ds-ink: #25221c;
+  --ds-ink-2: #4d463a;
+  --ds-ink-3: #857a66;
+  --ds-rule: #e3d9c6;
+  --ds-rule-strong: #a99d86;
+  --ds-accent: #647a50;
+  --ds-accent-soft: #e8eee2;
+  --ds-signal: #c8643c;
+  --ds-signal-soft: #fbf1ec;
+  --ds-calc: #f3eee3;
   --ds-font: "IBM Plex Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
 }
 .ds-page, .ds-page input, .ds-page select, .ds-page textarea, .ds-page button, .ds-page table {
@@ -280,10 +461,10 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 
 /* 종이: 섹션 카드는 한 장의 종이처럼. 얇은 괘선, 그림자는 거의 없이 */
 .ds-page div.bg-white.shadow-sm, .ds-page div.bg-white.shadow-md {
-  background-color: rgba(252, 252, 250, 0.94) !important;
+  background-color: rgba(253, 251, 246, 0.94) !important;
   border: 1px solid var(--ds-rule) !important;
   border-radius: 4px !important;
-  box-shadow: 0 1px 0 rgba(26, 36, 32, 0.04) !important;
+  box-shadow: 0 1px 0 rgba(37, 34, 28, 0.04) !important;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
@@ -306,7 +487,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page .bg-slate-50, .ds-page [class*="bg-slate-50/"], .ds-page .bg-slate-100 { background-color: transparent !important; }
 .ds-page div[class*="bg-emerald-50"][class*="border"], .ds-page div[class*="bg-teal-50"][class*="border"],
 .ds-page div[class*="bg-cyan-50"][class*="border"], .ds-page div[class*="bg-slate-50"][class*="border"],
-.ds-page div.bg-slate-100[class*="border"] { background-color: rgba(26, 36, 32, 0.025) !important; }
+.ds-page div.bg-slate-100[class*="border"] { background-color: rgba(37, 34, 28, 0.025) !important; }
 .ds-page [class*="bg-emerald-200"], .ds-page [class*="bg-teal-200"], .ds-page [class*="bg-cyan-200"] { background-color: var(--ds-accent-soft) !important; }
 .ds-page .shadow-inner { box-shadow: none !important; }
 
@@ -344,7 +525,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 }
 .ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, .ds-page select:focus, .ds-page textarea:focus {
   border-color: var(--ds-accent) !important;
-  box-shadow: 0 0 0 2px rgba(31, 95, 67, 0.18) !important;
+  box-shadow: 0 0 0 2px rgba(100, 122, 80, 0.18) !important;
 }
 .ds-page input[readonly]:not([type="checkbox"]), .ds-page input:disabled:not([type="checkbox"]) {
   background-color: var(--ds-calc) !important;
@@ -369,7 +550,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page thead th.font-black, .ds-page thead th.font-bold { font-weight: 600; color: var(--ds-ink) !important; }
 .ds-page tbody td { border-color: var(--ds-rule) !important; color: var(--ds-ink); }
 .ds-page tbody tr:nth-child(even) > td:not([class*="bg-"]) { background-color: transparent; }
-.ds-page tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(31, 95, 67, 0.045); }
+.ds-page tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(100, 122, 80, 0.045); }
 .ds-page tbody td:first-child { color: var(--ds-ink-3); font-weight: 500; }
 .ds-page tbody tr.bg-slate-100 > td, .ds-page tbody tr[class~="bg-slate-50"] > td, .ds-page tbody tr.font-bold > td, .ds-page tfoot td {
   background-color: var(--ds-paper) !important;
@@ -389,7 +570,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page td > input:not([type="checkbox"]):hover, .ds-page td > div > input:not([type="checkbox"]):hover { box-shadow: inset 0 -1px 0 var(--ds-rule-strong) !important; background-color: #fff !important; }
 .ds-page td > input:not([type="checkbox"]):focus, .ds-page td > select:focus, .ds-page td > div > input:not([type="checkbox"]):focus {
   background-color: #fff !important;
-  box-shadow: inset 0 -2px 0 var(--ds-accent), 0 0 0 2px rgba(31, 95, 67, 0.14) !important;
+  box-shadow: inset 0 -2px 0 var(--ds-accent), 0 0 0 2px rgba(100, 122, 80, 0.14) !important;
 }
 .ds-page td > input[readonly]:not([type="checkbox"]), .ds-page td > input:disabled:not([type="checkbox"]), .ds-page td > div > input[readonly] {
   background-color: var(--ds-calc) !important;
@@ -436,7 +617,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page button.ds-btn-primary, .ds-page button[type="submit"] {
   background-color: var(--ds-accent) !important; color: #fff !important; border: 1px solid var(--ds-accent) !important; font-weight: 600;
 }
-.ds-page button[class*="bg-emerald-6"]:hover, .ds-page button.ds-btn-primary:hover, .ds-page button[type="submit"]:hover { background-color: #184b35 !important; }
+.ds-page button[class*="bg-emerald-6"]:hover, .ds-page button.ds-btn-primary:hover, .ds-page button[type="submit"]:hover { background-color: #4f6140 !important; }
 .ds-page button[class*="bg-red-6"], .ds-page button[class*="bg-red-7"] { background-color: var(--ds-signal) !important; color: #fff !important; }
 .ds-page button[class*="bg-slate-7"], .ds-page button[class*="bg-slate-8"], .ds-page button[class*="bg-slate-9"] { background-color: var(--ds-ink) !important; color: #fff !important; }
 .ds-page button.bg-white, .ds-page button[class*="bg-slate-50"], .ds-page button[class*="bg-slate-100"], .ds-page button[class*="bg-emerald-100"], .ds-page button[class*="bg-emerald-50"],
@@ -510,7 +691,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page tbody td > select:focus {
   border-bottom: 2px solid var(--ds-accent) !important;
   background-color: #fff !important;
-  box-shadow: 0 0 0 2px rgba(31, 95, 67, 0.12) !important;
+  box-shadow: 0 0 0 2px rgba(100, 122, 80, 0.12) !important;
 }
 .ds-page tbody td > input[readonly]:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
 .ds-page tbody td > input:disabled:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
@@ -563,7 +744,7 @@ input[type="checkbox"], td > input[type="checkbox"], label > input[type="checkbo
 .ds-page > div.bg-white:first-child { padding: 18px 28px 14px !important; }
 .ds-page > div.bg-white:first-child, .ds-page > div.bg-white:nth-child(2), .ds-page > div.bg-white:nth-child(3), .ds-page > nav.ds-secnav, .ds-page > form, .ds-page > div.flex, .ds-page > div.mt-6, .ds-page > div.bg-white:last-child,
 .ds-page > div:not(.bg-white):not(form):not(nav) {
-  background: rgba(252, 252, 250, 0.96); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  background: rgba(253, 251, 246, 0.96); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-left: 1px solid var(--ds-rule); border-right: 1px solid var(--ds-rule);
   margin-top: 0 !important; padding-left: 28px; padding-right: 28px;
 }
@@ -650,7 +831,7 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 .ds-page > div.flex, .ds-page > div.mt-6, .ds-page > div.bg-white:last-child, .ds-page > div:not(.bg-white):not(form):not(nav) {
   background: var(--ds-paper) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
 }
-.ds-page { box-shadow: 0 1px 0 rgba(26, 36, 32, 0.06), 0 14px 30px -24px rgba(26, 36, 32, 0.35); }
+.ds-page { box-shadow: 0 1px 0 rgba(37, 34, 28, 0.06), 0 14px 30px -24px rgba(37, 34, 28, 0.35); }
 .ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .ds-page select, .ds-page textarea, .ds-page button { border-radius: 2px !important; }
 .ds-page .rounded-xl, .ds-page .rounded-lg, .ds-page .rounded-2xl, .ds-page .rounded, .ds-page .rounded-md { border-radius: 2px !important; }
 .ds-page > *:first-child, .ds-page > *:last-child { border-radius: 0 !important; }
@@ -667,22 +848,17 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 .ds-iso-mark { height: 9px; top: -3px; }
 
 /* 메뉴 카드 색 표식: 연한색 중화 규칙(bg-*-50)에 걸리지 않게 원래 색 유지 */
-.menu-sheet-card .bg-emerald-500 { background-color: #10b981 !important; }
-.menu-sheet-card .bg-cyan-500 { background-color: #06b6d4 !important; }
-.menu-sheet-card .bg-yellow-400 { background-color: #facc15 !important; }
-.menu-sheet-card .bg-blue-500 { background-color: #3b82f6 !important; }
-.menu-sheet-card .bg-purple-500 { background-color: #a855f7 !important; }
-.menu-sheet-card .bg-orange-500 { background-color: #f97316 !important; }
+.menu-sheet-card .bg-emerald-500 { background-color: #9caf88 !important; }
+.menu-sheet-card .bg-cyan-500 { background-color: #7f9569 !important; }
+.menu-sheet-card .bg-yellow-400 { background-color: #cfc3ab !important; }
+.menu-sheet-card .bg-blue-500 { background-color: #647a50 !important; }
+.menu-sheet-card .bg-purple-500 { background-color: #ae5230 !important; }
+.menu-sheet-card .bg-orange-500 { background-color: #c8643c !important; }
 
 /* 장식용 가장자리 띠는 괘선 디자인에서 숨김 (패딩을 뺀 패널에서 첫 글자를 가리던 문제) */
 .ds-page div.absolute.top-0.left-0.h-full, .ds-page div.absolute.top-0.left-0.w-full.h-1 { display: none !important; }
 
 /* ── 기록부별 색: 시트 색 하나가 잉크(강조)색이 되고, 나머지 규칙은 모든 기록부에서 같게 ── */
-.theme-metal .ds-page { --ds-accent: #86640f; --ds-accent-soft: #f6efdc; }
-.theme-mercury .ds-page { --ds-accent: #1f4f99; --ds-accent-soft: #e7eefb; }
-.theme-pahs .ds-page { --ds-accent: #6a2c8e; --ds-accent-soft: #f2e8f8; }
-.theme-flow .ds-page { --ds-accent: #0f5f74; --ds-accent-soft: #e3f2f6; }
-.theme-samplinglog .ds-page { --ds-accent: #9a4312; --ds-accent-soft: #fbece2; }
 /* 시트 테마가 덮어쓰던 색(노란 테두리, 금색 글자, 채운 상자)을 종이 디자인 규칙으로 되돌림 */
 :is(.theme-metal, .theme-mercury, .theme-pahs, .theme-flow, .theme-samplinglog) .ds-page [class*="text-emerald-"],
 :is(.theme-metal, .theme-mercury, .theme-pahs, .theme-flow, .theme-samplinglog) .ds-page [class*="text-teal-"],
@@ -767,3 +943,25 @@ h2.ds-sec-title { scroll-margin-top: 56px; }
 .ds-page .ds-stat + .ds-stat { margin-left: 0; }
 .ds-page .grid.gap-4 { gap: 18px !important; }
 .ds-page .grid.gap-2 { gap: 10px !important; }
+
+/* ── 세 색의 역할 ──
+   세이지 #9caf88: 구조(섹션 번호, 구분선, 요약 칸)   베이지 #e3d9c6: 면(표 머리, 계산 칸, 괘선)
+   테라코타 #c8643c: 딱 한 가지 강조(저장 버튼, 지금 보는 섹션, 범위 벗어난 값, 로고) */
+:root { --pal-sage: #9caf88; --pal-sand: #e3d9c6; --pal-clay: #c8643c; --pal-clay-deep: #ae5230; }
+
+.ds-page .ds-sec-num { background: var(--pal-sage); border-color: var(--pal-sage); color: var(--ds-ink); }
+.ds-page .ds-sec-title { border-bottom: 2px solid var(--pal-sage); }
+.ds-page .ds-sec-title.is-inline { border-bottom: none; }
+.ds-page .ds-stat { border-left: 2px solid var(--pal-sage); }
+.ds-page.ds-page thead th { background-color: #efe8d8 !important; border-bottom-color: var(--pal-sand) !important; box-shadow: none; }
+.ds-secnav-item.is-active { border-bottom-color: var(--pal-clay); }
+.ds-secnav-item.is-active .ds-secnav-num { background: var(--pal-clay); border-color: var(--pal-clay); color: #fff; }
+.ds-page.ds-page button[type="submit"],
+:is(.theme-metal, .theme-mercury, .theme-pahs, .theme-flow, .theme-samplinglog) .ds-page.ds-page button[type="submit"] {
+  background-color: var(--pal-clay) !important; border-color: var(--pal-clay) !important; color: #fff !important;
+}
+.ds-page.ds-page button[type="submit"]:hover { background-color: var(--pal-clay-deep) !important; border-color: var(--pal-clay-deep) !important; }
+.ds-segment-item.is-on { background: var(--ds-accent) !important; }
+
+/* 첫 화면: 패널은 따뜻한 아이보리, 기본 프로필은 세이지 */
+.menu-avatar-fallback { background-color: var(--pal-sage) !important; color: #25221c !important; }

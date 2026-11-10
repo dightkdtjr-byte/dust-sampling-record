@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import mainLogoImage from './assets/mainlogo.png';
+import mainLogoImage from './assets/mainlogo-clay.png';
 import JSZip from 'jszip';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
@@ -107,7 +107,7 @@ const SHEET_MENU = [
     id: 'dust',
     title: '먼지시료채취기록부',
     desc: '먼지시료채취 및 등속흡인 기록',
-    toneClass: 'from-emerald-200/60 to-teal-200/20',
+    toneClass: 'from-emerald-400/70 to-emerald-200/20',
     swatchClass: 'bg-emerald-500',
     hoverTextClass: 'group-hover:text-emerald-700',
   },
@@ -115,7 +115,7 @@ const SHEET_MENU = [
     id: 'metal',
     title: '금속시료채취기록부',
     desc: '금속시료채취 및 등속흡인 기록',
-    toneClass: 'from-yellow-200/70 to-amber-200/20',
+    toneClass: 'from-slate-300/90 to-slate-200/30',
     swatchClass: 'bg-yellow-400',
     hoverTextClass: 'group-hover:text-yellow-700',
   },
@@ -123,7 +123,7 @@ const SHEET_MENU = [
     id: 'mercury',
     title: '수은시료채취기록부',
     desc: '수은시료채취 및 등속흡인 기록',
-    toneClass: 'from-blue-200/70 to-sky-200/20',
+    toneClass: 'from-emerald-600/55 to-emerald-300/20',
     swatchClass: 'bg-blue-500',
     hoverTextClass: 'group-hover:text-blue-700',
   },
@@ -131,7 +131,7 @@ const SHEET_MENU = [
     id: 'pahs',
     title: 'PAHs시료채취기록부',
     desc: 'PAHs시료채취 및 등속흡인 기록',
-    toneClass: 'from-purple-200/70 to-violet-200/20',
+    toneClass: 'from-orange-700/50 to-orange-300/20',
     swatchClass: 'bg-purple-500',
     hoverTextClass: 'group-hover:text-purple-700',
   },
@@ -139,7 +139,7 @@ const SHEET_MENU = [
     id: 'flow',
     title: '유량측정기록부',
     desc: '배출가스 유속·유량 측정 기록',
-    toneClass: 'from-cyan-200/70 to-sky-200/20',
+    toneClass: 'from-emerald-300/80 to-slate-200/30',
     swatchClass: 'bg-cyan-500',
     hoverTextClass: 'group-hover:text-cyan-700',
   },
@@ -147,7 +147,7 @@ const SHEET_MENU = [
     id: 'samplinglog',
     title: '시료채취기록부(종합)',
     desc: '사업장별 물질 채취 현황 (가스·입자·VOCs)',
-    toneClass: 'from-orange-200/70 to-amber-200/20',
+    toneClass: 'from-orange-500/65 to-orange-200/20',
     swatchClass: 'bg-orange-500',
     hoverTextClass: 'group-hover:text-orange-700',
   },
@@ -7264,7 +7264,7 @@ export default function App() {
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="w-full h-full flex items-center justify-center bg-emerald-600 text-white text-4xl font-black select-none">
+                          <span className="menu-avatar-fallback w-full h-full flex items-center justify-center bg-emerald-600 text-4xl font-black select-none">
                             {String(displayUserNameWithFallback || '').trim().charAt(0).toUpperCase() || '?'}
                           </span>
                         )}
