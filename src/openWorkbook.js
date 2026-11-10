@@ -42,12 +42,15 @@ const STYLE_DEFS = [
   { key: 'calc', font: 0, fill: 4, border: 1, h: 'center' },
   { key: 'calc2', font: 0, fill: 4, border: 1, h: 'center', numFmt: 2 },
   // 공정시험기준 기록지 양식용: 이름표(테두리 없음), 밑줄 칸, 무늬 없는 표 머리, 그림 칸
-  { key: 'formTitle', font: 3, fill: 0, border: 0, h: 'left' },
-  { key: 'formLabel', font: 0, fill: 0, border: 0, h: 'left' },
-  { key: 'formValue', font: 0, fill: 0, border: 2, h: 'center' },
-  { key: 'formHead', font: 6, fill: 0, border: 1, h: 'center', wrap: true },
-  { key: 'formBox', font: 2, fill: 0, border: 1, h: 'center', wrap: true },
-  { key: 'formCaption', font: 6, fill: 0, border: 0, h: 'center', wrap: true },
+  { key: 'formTitle', font: 8, fill: 0, border: 0, h: 'left' },
+  { key: 'formLabel', font: 7, fill: 0, border: 0, h: 'left' },
+  { key: 'formValue', font: 7, fill: 0, border: 2, h: 'center' },
+  { key: 'formHead', font: 9, fill: 0, border: 1, h: 'center', wrap: true },
+  { key: 'formBox', font: 9, fill: 0, border: 1, h: 'center', wrap: true },
+  { key: 'formCaption', font: 9, fill: 0, border: 0, h: 'center', wrap: true },
+  { key: 'formCell', font: 7, fill: 0, border: 1, h: 'center' },
+  { key: 'formCell4', font: 7, fill: 0, border: 1, h: 'center', numFmt: 166 },
+  { key: 'formNote', font: 9, fill: 0, border: 0, h: 'left', wrap: true },
 ];
 const STYLE_INDEX = Object.fromEntries(STYLE_DEFS.map((def, index) => [def.key, index]));
 
@@ -56,9 +59,12 @@ const stylesXml = () => {
   const font = (size, { bold = false, color = null } = {}) => (
     `<font>${bold ? '<b/>' : ''}<sz val="${size}"/>${color ? `<color rgb="${color}"/>` : ''}<name val="${FONT_NAME}"/><family val="2"/></font>`
   );
+  const formFont = (size, bold = false) => `<font>${bold ? '<b/>' : ''}<sz val="${size}"/><name val="바탕"/><family val="1"/></font>`;
   const fonts = [
     font(10), font(16, { bold: true }), font(9, { color: 'FF5F6368' }), font(11, { bold: true }),
     font(9, { bold: true }), font(11, { bold: true }), font(9),
+    // 공정시험기준 기록지 양식: 원문과 같은 바탕(명조) 글꼴
+    formFont(10), formFont(11, true), formFont(9),
   ];
   const solid = (rgb) => `<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`;
   const fills = [
@@ -324,29 +330,28 @@ export const buildRecordSheets = (report, meta) => {
 };
 
 // ── 「대기오염공정시험기준」 ES 01301.1e "표 3. 먼지시료채취 기록지" 양식 그대로 ──
-// 머리부(왼쪽: 공장명~등속흡입계수, 가운데: 굴뚝단면 및 측정점 배열, 오른쪽: 피토관계수~여과지 번호)와
-// 본문 표(채취점 번호 ~ 최종임핀저출구온도, 합계·평균), 비고 2개.
+// 원문에 있는 것만 둔다: 제목, 머리부(왼쪽 8칸·가운데 굴뚝단면 칸·오른쪽 8칸), 11열 표, 합계·평균 줄, 비고 1·2.
 const buildTable3Sheet = (report, meta, meters) => {
-  const s = createSheet('먼지시료채취 기록지', { columns: [7.5, 8, 9, 8, 9.5, 9.5, 9.5, 8, 8, 8.5, 9.5] });
+  const s = createSheet('표 3. 먼지시료채취 기록지', { columns: [7, 7.5, 8.5, 7.5, 9, 9, 9, 8, 8, 8, 8.5] });
   const N = 11;
   let r = 1;
-  s.put(r, 0, meta.title && !/먼지/.test(meta.title) ? `표 3. 먼지시료채취 기록지  (${meta.title})` : '표 3. 먼지시료채취 기록지', 'formTitle', N).height(r, 24); r += 1;
-  s.put(r, 0, '「대기오염공정시험기준」 ES 01301.1e (배출가스 중 먼지 – 반자동식 측정법) 5.6.13의 기록지 양식', 'note', N); r += 2;
+  s.put(r, 0, '표 3. 먼지시료채취 기록지', 'formTitle', N).height(r, 26); r += 1;
 
   const gas = Array.isArray(report.gasAnalyzer) ? report.gasAnalyzer : [];
   const points = Array.isArray(report.points) ? report.points : [];
   const o2 = average(gas.map((g) => g.o2));
   const staticMmH2O = average(points.map((p) => p.sp));
   const nozzle = toNum(report.nozzleDiameterUsed !== undefined ? report.nozzleDiameterUsed : report.nozzleDiameter);
+  // 원문 배치: 왼쪽은 공장명~오리피스미터 △H, 한 줄 띄고 산소량·등속흡입계수 / 오른쪽은 피토관계수~배출가스정압, 한 줄 띄고 여과지 번호
   const left = [
     ['공장명', report.company || ''], ['측정대상명', report.location || ''], ['작성자명', report.sampler || ''], ['측정일', report.date || ''],
-    ['측정번호', meta.measureNo || ''], ['오리피스미터 △H', numOrText(report.deltaHAt)], null,
+    ['측정번호', meta.measureNo || ''], ['오리피스미터  △H', numOrText(report.deltaHAt)], null, null,
     ['산소량 (%)', round(o2, 2)], ['등속흡입계수 (%)', numOrText(report.isokineticRate)],
   ];
   const right = [
     ['피토관계수', numOrText(report.pitotFactor)], ['기온, ℃', numOrText(report.atmTemp)], ['기압, mmHg', numOrText(report.atmPressure)], ['수분량, %', numOrText(report.moisturePercent)],
     ['흡입관 길이, m', meta.probeLengthM === null || meta.probeLengthM === undefined ? '' : meta.probeLengthM], ['흡입노즐 직경, cm', nozzle === null ? '' : round(nozzle / 10, 3)],
-    ['배출가스정압, mmHg', staticMmH2O === null ? '' : round(staticMmH2O / 13.6, 2)], null, ['여과지 번호', report.filterId || ''],
+    null, ['배출가스정압, mmHg', staticMmH2O === null ? '' : round(staticMmH2O / 13.6, 2)], null, ['여과지 번호', report.filterId || ''],
   ];
   const top = r;
   left.forEach((item, i) => {
@@ -355,16 +360,14 @@ const buildTable3Sheet = (report, meta, meters) => {
     if (item) { s.put(row, 0, item[0], 'formLabel', 2); s.put(row, 2, item[1], 'formValue', 2); }
     if (right[i]) { s.put(row, 7, right[i][0], 'formLabel', 2); s.put(row, 9, right[i][1], 'formValue', 2); }
   });
-  // 가운데: 굴뚝단면 및 측정점 배열 (그림 대신 치수와 측정점 수를 적는다)
-  const diameter = toNum(report.stackDiameter);
-  const sketch = [diameter === null ? '' : `원형 · 안지름 ${diameter} m`, points.length ? `측정점 ${points.length}점` : ''].filter(Boolean).join('\n');
-  s.put(top, 4, sketch, 'formBox', 3, 7);
-  s.put(top + 7, 4, '굴뚝단면 및 측정점\n배열', 'formCaption', 3, 2);
+  // 가운데 빈 네모(굴뚝단면을 손으로 그리는 칸)와 그 아래 이름
+  s.put(top, 4, '', 'formBox', 3, 7);
+  s.put(top + 8, 4, '굴뚝단면 및 측정점\n배열', 'formCaption', 3, 2);
   r = top + left.length + 1;
 
-  // 본문 표
-  s.height(r, 42); s.height(r + 1, 22);
-  const heads = ['채취\n점\n번호', '시료\n채취\n시간\n(분)', '진공\n게이지압\n(mmHg)', '배출\n가스\n온도\n(℃)', '배출\n가스\n동압\n(mmH₂O)', '오리\n피스\n압차\n(mmH₂O)', '시료\n채취량\n(m³)'];
+  // 본문 표 머리 (원문 줄바꿈 그대로)
+  s.height(r, 44); s.height(r + 1, 20);
+  const heads = ['채취\n점\n번호', '시료\n채취\n시간\n(분)', '진공\n게이\n지압\n(mmHg)', '배출\n가스\n온도\n(℃)', '배출\n가스\n동압\n(mmH₂O)', '오리\n피스\n압차\n(mmH₂O)', '시료\n채취량\n(m³)'];
   heads.forEach((label, c) => s.put(r, c, label, 'formHead', 1, 2));
   s.put(r, 7, '건식가스미터\n에서의\n온도(℃)', 'formHead', 2); s.put(r + 1, 7, '입구', 'formHead'); s.put(r + 1, 8, '출구', 'formHead');
   s.put(r, 9, '여과지\n홀더\n온도\n(℃)', 'formHead', 1, 2); s.put(r, 10, '최종임\n핀저출\n구온도\n(℃)', 'formHead', 1, 2);
@@ -376,7 +379,7 @@ const buildTable3Sheet = (report, meta, meters) => {
     const values = m
       ? [m.pointNum || (i === 0 ? '시작' : ''), numOrText(m.time), numOrText(m.vacuum), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.pressure), m3(m.volume), numOrText(m.tmIn), numOrText(m.tmOut), numOrText(m.filterTemp), numOrText(m.impingerTemp)]
       : Array(N).fill('');
-    values.forEach((value, c) => s.put(r, c, value, c === 6 ? 'num4' : 'num'));
+    values.forEach((value, c) => s.put(r, c, value, c === 6 ? 'formCell4' : 'formCell'));
     s.height(r, 20);
     r += 1;
   }
@@ -385,20 +388,20 @@ const buildTable3Sheet = (report, meta, meters) => {
   const times = measured.map((m) => toNum(m.time)).filter((v) => v !== null);
   const avgIn = average(measured.map((m) => m.tmIn)); const avgOut = average(measured.map((m) => m.tmOut));
   const bothTemps = [avgIn, avgOut].filter((v) => v !== null);
-  // 합계 줄: 시간·채취량 합계, 입구·출구 각각의 평균
-  ['합계', times.length ? Math.max(...times) : '', '', '', '', '', volumes.length >= 2 ? Math.round((volumes[volumes.length - 1] - volumes[0]) * 10) / 10000 : '', round(avgIn, 1), round(avgOut, 1), '', '']
-    .forEach((value, c) => s.put(r, c, value, c === 6 ? 'num4' : 'num'));
+  const withLabel = (label, value) => (value === '' || value === null ? label : `${label} ${value}`);
+  // 합계 줄: 원문처럼 입구·출구 칸에 "평균"이 적혀 있다
+  ['합계', times.length ? Math.max(...times) : '', '', '', '', '', volumes.length >= 2 ? Math.round((volumes[volumes.length - 1] - volumes[0]) * 10) / 10000 : '', withLabel('평균', round(avgIn, 1)), withLabel('평균', round(avgOut, 1)), '', '']
+    .forEach((value, c) => s.put(r, c, value, c === 6 ? 'formCell4' : 'formCell'));
   s.height(r, 20); r += 1;
-  // 평균 줄: 각 열 평균, 가스미터 온도는 입구·출구를 합친 평균
-  s.put(r, 0, '평   균', 'num', 2);
+  // 평균 줄: 원문처럼 앞 두 칸과 가스미터 온도 두 칸이 합쳐져 있다
+  s.put(r, 0, '평    균', 'formCell', 2);
   [round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.pressure)), 2), '']
-    .forEach((value, i) => s.put(r, 2 + i, value, 'num'));
-  s.put(r, 7, bothTemps.length ? round(bothTemps.reduce((a, b) => a + b, 0) / bothTemps.length, 1) : '', 'num', 2);
-  s.put(r, 9, round(average(measured.map((m) => m.filterTemp)), 1), 'num'); s.put(r, 10, round(average(measured.map((m) => m.impingerTemp)), 1), 'num');
+    .forEach((value, i) => s.put(r, 2 + i, value, 'formCell'));
+  s.put(r, 7, withLabel('평  균', bothTemps.length ? round(bothTemps.reduce((a, b) => a + b, 0) / bothTemps.length, 1) : ''), 'formCell', 2);
+  s.put(r, 9, round(average(measured.map((m) => m.filterTemp)), 1), 'formCell'); s.put(r, 10, round(average(measured.map((m) => m.impingerTemp)), 1), 'formCell');
   s.height(r, 20); r += 1;
-  s.put(r, 0, '※비고: 1. 시료채취 중 임핀저 통과 후의 가스온도가 20 ℃가 넘을 경우엔 잘게 부순 얼음을 더 채우거나 소금을 첨가하도록 한다.', 'note', N).height(r, 28); r += 1;
-  s.put(r, 0, '2. 먼지가 채취됨에 따라 여과지에 전후의 압력이 너무 높아져 등속흡입을 유지하기가 어려울 경우에 새 여과지로 교환(여과지홀더도 같이 교환하는 것이 좋다)한 후 시료채취를 계속한다. 이때 총채취먼지량은 각 여과지에 채취된 먼지량의 합이 된다.', 'note', N).height(r, 40); r += 1;
-  s.put(r, 0, '※ 시료채취 시간은 누적 분, 시료채취량은 가스미터 지시값(m³)이며 합계는 종료값 − 시작값입니다. 평균은 시작 줄을 뺀 값입니다. 배출가스 조성·수분량·측정점별 동압·산출 결과는 "세부 기록" 시트에 있습니다.', 'note', N).height(r, 28);
+  s.put(r, 0, '※비고: 1. 시료채취 중 임핀저 통과 후의 가스온도가 20 ℃가 넘을 경우엔 잘게 부순 얼음을 더 채우거나 소금을 첨가하도록 한다.', 'formNote', N).height(r, 30); r += 1;
+  s.put(r, 0, '         2. 먼지가 채취됨에 따라 여과지에 전후의 압력이 너무 높아져 등속흡입을 유지하기가 어려울 경우에 새 여과지로 교환 (여과지홀더도 같이 교환하는 것이 좋다)한 후 시료채취를 계속한다. 이때 총채취먼지량은 각 여과지에 채취된 먼지량의 합이 된다.', 'formNote', N).height(r, 44);
   return s;
 };
 
