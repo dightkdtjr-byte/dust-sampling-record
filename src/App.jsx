@@ -388,6 +388,8 @@ const createEmptySamplingLogRow = (substance) => ({
 const createEmptySamplingLog = () => ({
   company: '', industry: '', facility: '', stackName: '', siteAbbr: '',
   particleSamplerId: '', particleSamplerYd: '', gasSamplerId: '', gasSamplerYd: '',
+  // Yd 칸을 직접 고쳤는지: true면 프리셋을 고쳐도 그대로 둔다
+  particleSamplerYdManual: false, gasSamplerYdManual: false,
   days: Array.from({ length: 4 }, () => ({ date: '', weather: '', temp: '', humidity: '', pressure: '', windDir: '', windSpeed: '' })),
   rows: Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => [String(item.row), createEmptySamplingLogRow(item)])),
 });
@@ -399,6 +401,8 @@ const sanitizeSamplingLog = (value) => {
   const next = { ...base };
   ['company', 'industry', 'facility', 'stackName', 'siteAbbr', 'particleSamplerId', 'particleSamplerYd', 'gasSamplerId', 'gasSamplerYd']
     .forEach((key) => { next[key] = text(value[key]); });
+  next.particleSamplerYdManual = value.particleSamplerYdManual === true;
+  next.gasSamplerYdManual = value.gasSamplerYdManual === true;
   next.days = base.days.map((day, idx) => {
     const src = Array.isArray(value.days) ? value.days[idx] : null;
     if (!src || typeof src !== 'object') return day;
@@ -2240,6 +2244,9 @@ export default function App() {
   // ── 통합 시료채취기록부: 창 사이 공유 ──
   // 입력 중인 내용을 사용자별 임시 저장본으로 보관하고, 다른 창(별도 창/메인 창)의 변경을 storage 이벤트로 받아 동기화
   const samplingLogDraftKey = activeUser && isUserUnlocked ? getSamplingLogDraftStorageKey(activeUser) : '';
+  // 다른 창에서 받아 온 임시본(문자열). 받은 그대로라면 다시 써 보내지 않는다 —
+  // 늦게 도착한 옛 이벤트를 받아 놓고 되쓰면 더 새 값을 덮어쓰기 때문
+  const samplingLogReceivedRef = useRef('');
   useEffect(() => {
     if (!samplingLogDraftKey) {
       setSamplingLogDraftReadyKey('');
@@ -2257,7 +2264,9 @@ export default function App() {
   useEffect(() => {
     if (!samplingLogDraftKey || samplingLogDraftReadyKey !== samplingLogDraftKey) return;
     try {
-      const next = JSON.stringify(samplingLogData);
+      // 정리된 형태로 저장해야 다른 창이 받은 값을 다시 써 보내는(옛 값으로 되돌리는) 일이 없다
+      const next = JSON.stringify(sanitizeSamplingLog(samplingLogData));
+      if (next === samplingLogReceivedRef.current) return;
       if (localStorage.getItem(samplingLogDraftKey) !== next) localStorage.setItem(samplingLogDraftKey, next);
     } catch (error) {
       console.error('통합 기록부 임시 저장 실패:', error);
@@ -2269,7 +2278,9 @@ export default function App() {
       if (!event || !event.key) return;
       if (samplingLogDraftKey && event.key === samplingLogDraftKey && event.newValue) {
         try {
-          setSamplingLogData(sanitizeSamplingLog(JSON.parse(event.newValue)));
+          const received = sanitizeSamplingLog(JSON.parse(event.newValue));
+          samplingLogReceivedRef.current = JSON.stringify(received);
+          setSamplingLogData(received);
         } catch (error) {
           console.error('다른 창의 통합 기록부 동기화 실패:', error);
         }
@@ -6234,6 +6245,44 @@ export default function App() {
   // ===== 시료채취기록부(종합) =====
   const updateSamplingLogField = (key, value) => setSamplingLogData(prev => ({ ...prev, [key]: value }));
 
+  // ── 샘플러 프리셋의 Yd·ΔH@를 고치면, 그 샘플러를 골라 둔 열린 기록부와 통합기록부 칸도 따라 바꾼다 ──
+  // (다른 창에서 고친 프리셋도 storage 동기화로 들어와 같은 규칙이 적용됨. 저장된 기록은 그대로)
+  const prevSamplersRef = useRef(null);
+  useEffect(() => {
+    const prev = prevSamplersRef.current;
+    prevSamplersRef.current = samplers;
+    if (!prev || prev === samplers) return;
+    const changed = samplers
+      .map((cur) => ({ cur, old: prev.find((p) => String(p.id) === String(cur.id)) }))
+      .filter(({ cur, old }) => old && (String(old.yd) !== String(cur.yd) || String(old.dHAt) !== String(cur.dHAt)));
+    if (changed.length === 0) return;
+    setFormData((form) => {
+      const hit = changed.find(({ cur }) => String(cur.id) === String(form.samplerId));
+      if (!hit) return form;
+      return { ...form, gasMeterFactor: String(hit.cur.yd ?? ''), deltaHAt: String(hit.cur.dHAt ?? '') };
+    });
+  }, [samplers]);
+  // 통합기록부 Yd는 통합기록부 창에서만 맞춘다 (여러 창이 임시본을 동시에 쓰면 서로 덮어쓰므로).
+  // 직접 고친 칸(…YdManual)이 아니면 고른 샘플러 프리셋의 Yd를 늘 따라간다.
+  const isSamplingLogWindow = selectedSheet === 'samplinglog';
+  useEffect(() => {
+    if (!isSamplingLogWindow) return;
+    setSamplingLogData((log) => {
+      let next = log;
+      const pick = (list, idKey, ydKey, manualKey) => {
+        if (log[manualKey] === true) return;
+        const found = list.find((item) => String(item.id) === String(log[idKey]));
+        if (!found) return;
+        const yd = String(found.yd ?? '');
+        if (String(log[ydKey] ?? '') === yd) return;
+        next = { ...next, [ydKey]: yd };
+      };
+      pick(samplers, 'particleSamplerId', 'particleSamplerYd', 'particleSamplerYdManual');
+      pick(gasSamplers, 'gasSamplerId', 'gasSamplerYd', 'gasSamplerYdManual');
+      return next;
+    });
+  }, [isSamplingLogWindow, samplers, gasSamplers, samplingLogData.particleSamplerId, samplingLogData.gasSamplerId, samplingLogData.particleSamplerYd, samplingLogData.gasSamplerYd, samplingLogData.particleSamplerYdManual, samplingLogData.gasSamplerYdManual]);
+
   // 기록부 묶음(같은 사업장·배출구·날짜)을 통합기록부에 옮겨 적기: 사업장 정보, 입자 샘플러, 물질별 시각·가스미터 값
   const applySheetGroupToSamplingLog = (group, { silent = false } = {}) => {
     if (!group) return;
@@ -6267,8 +6316,11 @@ export default function App() {
         if (found) {
           next.particleSamplerId = String(found.id);
           next.particleSamplerYd = String(samplerSource.gasMeterFactor || found.yd || '');
+          // 기록부에서 Yd를 프리셋과 다르게 적었으면 그 값을 직접 고친 값으로 지킨다
+          next.particleSamplerYdManual = String(next.particleSamplerYd) !== String(found.yd ?? '');
         } else if (samplerSource.gasMeterFactor) {
           next.particleSamplerYd = String(samplerSource.gasMeterFactor);
+          next.particleSamplerYdManual = true;
         }
       }
       reports.forEach(([sheetId, report]) => {
@@ -6341,11 +6393,11 @@ export default function App() {
   });
   const handleSamplingLogParticleSampler = (id) => {
     const found = samplers.find((item) => String(item.id) === String(id));
-    setSamplingLogData(prev => ({ ...prev, particleSamplerId: id, particleSamplerYd: found ? String(found.yd) : prev.particleSamplerYd }));
+    setSamplingLogData(prev => ({ ...prev, particleSamplerId: id, particleSamplerYd: found ? String(found.yd) : prev.particleSamplerYd, particleSamplerYdManual: false }));
   };
   const handleSamplingLogGasSampler = (id) => {
     const found = gasSamplers.find((item) => String(item.id) === String(id));
-    setSamplingLogData(prev => ({ ...prev, gasSamplerId: id, gasSamplerYd: found ? String(found.yd) : prev.gasSamplerYd }));
+    setSamplingLogData(prev => ({ ...prev, gasSamplerId: id, gasSamplerYd: found ? String(found.yd) : prev.gasSamplerYd, gasSamplerYdManual: false }));
   };
   const resetSamplingLogForm = () => {
     if (!window.confirm('입력 중인 시료채취기록부 내용을 모두 지울까요?')) return;
@@ -7486,7 +7538,7 @@ export default function App() {
                     <option value="">선택</option>
                     {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                   </select>
-                  <input type="number" step="0.0001" value={log.particleSamplerYd} onChange={(e) => updateSamplingLogField('particleSamplerYd', e.target.value)} className={`${logInput} w-24`} placeholder="Yd" title="입자 샘플러 Yd" />
+                  <input type="number" step="0.0001" value={log.particleSamplerYd} onChange={(e) => setSamplingLogData(prev => ({ ...prev, particleSamplerYd: e.target.value, particleSamplerYdManual: e.target.value.trim() !== '' }))} className={`${logInput} w-24`} placeholder="Yd" title="입자 샘플러 Yd" />
                 </div>
               </label>
               <label className="text-xs font-bold text-slate-700 md:col-span-2">가스 샘플러
@@ -7495,7 +7547,7 @@ export default function App() {
                     <option value="">선택</option>
                     {gasSamplers.map((item) => <option key={item.id} value={item.id}>{`가스샘플러${item.id}${item.sn ? ` (S/N ${item.sn})` : ''}`}</option>)}
                   </select>
-                  <input type="number" step="0.0001" value={log.gasSamplerYd} onChange={(e) => updateSamplingLogField('gasSamplerYd', e.target.value)} className={`${logInput} w-24`} placeholder="Yd" title="가스 샘플러 Yd" />
+                  <input type="number" step="0.0001" value={log.gasSamplerYd} onChange={(e) => setSamplingLogData(prev => ({ ...prev, gasSamplerYd: e.target.value, gasSamplerYdManual: e.target.value.trim() !== '' }))} className={`${logInput} w-24`} placeholder="Yd" title="가스 샘플러 Yd" />
                 </div>
               </label>
               <details className="md:col-span-4 border border-slate-200 rounded-lg p-2 bg-slate-50/60">
