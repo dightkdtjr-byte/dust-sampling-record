@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
-import { buildRecordSheets, buildWorkbook } from './openWorkbook.js';
+import { buildRecordSheets, buildSamplingLogSheets, buildWorkbook } from './openWorkbook.js';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
 // 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
@@ -6893,11 +6893,52 @@ export default function App() {
   };
 
   // '시료채취 작성' 시트를 채우면 날짜별 시트는 양식 수식으로 자동 완성됨
-  const exportSamplingLogExcel = async (sourceReport = null) => {
-    if (IS_DESKTOP_BUILD) {
-      alert('배포용 버전에서는 엑셀 추출 기능을 사용할 수 없습니다.');
-      return;
+  // 공개 양식으로 시료채취기록부(종합) 내보내기 — 배포용 빌드에서 사용. 의뢰 표시한 항목만 적는다
+  const exportOpenSamplingLogExcel = async (sourceReport = null) => {
+    try {
+      const log = resolveSamplingLogYds(sanitizeSamplingLog(sourceReport && sourceReport.samplingLog ? sourceReport.samplingLog : samplingLogData));
+      const samplerName = (list, id) => {
+        const found = list.find((item) => String(item.id) === String(id));
+        return found ? [found.name, found.sn].filter(Boolean).join(' ') : '';
+      };
+      const rows = SAMPLING_LOG_SUBSTANCES.filter((sub) => log.rows[String(sub.row)]?.requested).map((sub) => {
+        const row = log.rows[String(sub.row)];
+        const volume = calcSamplingLogVolume(log, sub);
+        const species = Array.isArray(sub.options) && Array.isArray(row.speciesSel) && row.speciesSel.length > 0 ? ` (${row.speciesSel.join(', ')})` : '';
+        const notes = [];
+        if (String(row.targetVolume || '').trim()) notes.push(`목표 ${row.targetVolume} L`);
+        if (String(row.testPeriod || '').trim()) notes.push(/^\d+$/.test(String(row.testPeriod).trim()) ? `시험기한 ${row.testPeriod}일` : String(row.testPeriod));
+        return {
+          sampleNo: buildSamplingLogSampleNo(log, sub),
+          name: `${sub.name}${species}`,
+          date: log.days[row.dayIndex]?.date || '',
+          start: row.start, end: row.end, meterStart: row.meterStart, meterEnd: row.meterEnd,
+          volume: Number.isFinite(volume) ? Math.round(volume * 100) / 100 : null,
+          temp: row.temp, pressure: row.pressureH2O, suctionRate: row.suctionRate,
+          note: notes.join(' · '),
+        };
+      });
+      const sheets = buildSamplingLogSheets({
+        company: log.company, industry: log.industry, facility: log.facility, stackName: log.stackName,
+        requestedCount: getSamplingLogStats(log).requestedCount,
+        samplers: [
+          { label: '입자 시료채취기', name: samplerName(samplers, log.particleSamplerId), yd: log.particleSamplerYd },
+          { label: '가스 시료채취기', name: samplerName(gasSamplers, log.gasSamplerId), yd: log.gasSamplerYd },
+        ],
+        days: log.days, rows,
+      });
+      const buffer = await buildWorkbook(sheets);
+      const firstDay = log.days.find((day) => day.date)?.date || new Date().toISOString().slice(0, 10);
+      downloadExportFile(buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buildExportNames({ date: firstDay, title: '시료채취기록부(종합)', company: log.company, location: log.stackName, ext: 'xlsx' }));
+    } catch (error) {
+      console.error(error);
+      alert('시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 입력값을 확인해주세요.');
     }
+  };
+
+  const exportSamplingLogExcel = async (sourceReport = null) => {
+    if (IS_DESKTOP_BUILD) { await exportOpenSamplingLogExcel(sourceReport); return; }
     try {
       const log = resolveSamplingLogYds(sanitizeSamplingLog(sourceReport && sourceReport.samplingLog ? sourceReport.samplingLog : samplingLogData));
       const response = await fetch(`${import.meta.env.BASE_URL}templates/${SAMPLING_LOG_TEMPLATE_FILE}`);
@@ -7095,6 +7136,7 @@ export default function App() {
   if (import.meta.env.VITE_E2E === '1' && typeof window !== 'undefined') {
     window.__stackpilotExportForTest = exportToTemplateExcel;
     window.__stackpilotExportOpenForTest = exportOpenRecordExcel;
+    window.__stackpilotExportOpenSamplingLogForTest = exportOpenSamplingLogExcel;
     window.__stackpilotBuildReportForTest = () => buildReportSnapshot(selectedSheet || 'dust');
     window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
     window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));

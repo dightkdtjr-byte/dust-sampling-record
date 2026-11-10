@@ -77,7 +77,7 @@ jobs:
           prerelease: true
           body: |
             자동 빌드 커밋: ${{ github.sha }}
-            - StackPilot.exe: 배포용 (회사 데이터 없음, 엑셀 추출 없음)
+            - StackPilot.exe: 배포용 (회사 데이터 없음, 엑셀은 공개 양식으로 추출)
             - 개인용 StackPilot-Personal.exe 는 이 커밋의 Actions 실행 페이지 Artifacts 에서 받을 수 있습니다.
           files: release/StackPilot.exe
 

@@ -211,7 +211,7 @@ export const buildRecordSheets = (report, meta) => {
   };
 
   s.put(r, 0, '배출가스 시료채취 기록지', 'title', COLS).height(r, 32); r += 1;
-  s.put(r, 0, `${meta.title} · 「대기오염공정시험기준」 ES 01301.1(배출가스 중 입자상 물질의 시료채취방법)의 기록 항목에 맞춘 현장 기록`, 'subtitle', COLS); r += 1;
+  s.put(r, 0, `${meta.title} · 「대기오염공정시험기준」 ES 01301.1e(배출가스 중 먼지 – 반자동식 측정법) 표 3 "먼지시료채취 기록지"와 ES 01114.c(배출가스 유속 및 유량 측정방법)의 기록 항목을 따름`, 'subtitle', COLS); r += 1;
 
   section('1. 일반 사항 및 배출구 제원');
   pairs([['측정 일자', report.date || ''], ['사업장명', report.company || ''], ['배출구명', report.location || ''], ['측정자', report.sampler || '']]);
@@ -276,25 +276,34 @@ export const buildRecordSheets = (report, meta) => {
       meters.forEach((m, i) => { const t = toNum(m.time); if (i > 0 && t !== null) { running = Math.round((running + t) * 100) / 100; m.time = running; } });
     }
   }
-  section(isFlow ? '6. 측정점별 동압·온도 기록' : '6. 시료채취 기록');
+  section(isFlow ? '6. 측정점별 동압·온도 기록' : '6. 시료채취 기록 (ES 01301.1e 표 3의 열 순서)');
+  const measured = meters.slice(1);
   if (isFlow) {
-    const spans = [1, 2, 2, 2, 3, 2];
-    tableRow(spans, ['순번', '채취점', '누적 시간 (분)', '배출가스 온도 (℃)', '동압 Δp (mmH₂O)', '정압 (mmH₂O)'], 'head');
-    meters.forEach((m, i) => tableRow(spans, [i === 0 ? '초기' : i, m.pointNum || '', numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp)], 'num'));
+    const spans = [2, 2, 2, 3, 3];
+    tableRow(spans, ['채취점 번호', '측정 시간 (분)', '배출가스 온도 (℃)', '배출가스 동압 (mmH₂O)', '배출가스 정압 (mmH₂O)'], 'head');
+    meters.forEach((m, i) => tableRow(spans, [m.pointNum || (i === 0 ? '시작' : ''), numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp)], 'num'));
+    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.sp)), 2)], 'calc');
   } else {
     const spans = Array(COLS).fill(1);
-    s.height(r, 42);
-    tableRow(spans, ['순번', '채취점', '누적 시간\n(분)', '배출가스\n온도 (℃)', '동압 Δp\n(mmH₂O)', '정압\n(mmH₂O)', '오리피스\n압차 ΔH\n(mmH₂O)', '가스미터\n지시값 (L)', '가스미터\n입구 온도\n(℃)', '가스미터\n출구 온도\n(℃)', '진공\n게이지압\n(mmHg)', '임핀저\n출구 온도\n(℃)'], 'head');
-    meters.forEach((m, i) => tableRow(spans, [i === 0 ? '초기' : i, m.pointNum || '', numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp), numOrText(m.pressure), numOrText(m.volume), numOrText(m.tmIn), numOrText(m.tmOut), numOrText(m.vacuum), numOrText(m.impingerTemp)], 'num'));
+    s.height(r, 54);
+    tableRow(spans, ['채취점\n번호', '시료채취\n시간 (분)', '진공\n게이지압\n(mmHg)', '배출가스\n온도 (℃)', '배출가스\n동압\n(mmH₂O)', '배출가스\n정압\n(mmH₂O)', '오리피스\n압차\n(mmH₂O)', '가스미터\n지시값 (L)', '건식가스미터\n입구 온도\n(℃)', '건식가스미터\n출구 온도\n(℃)', '여과지홀더\n온도 (℃)', '최종 임핀저\n출구 온도\n(℃)'], 'head');
+    meters.forEach((m, i) => tableRow(spans, [m.pointNum || (i === 0 ? '시작' : ''), numOrText(m.time), numOrText(m.vacuum), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp), numOrText(m.pressure), numOrText(m.volume), numOrText(m.tmIn), numOrText(m.tmOut), numOrText(m.filterTemp), numOrText(m.impingerTemp)], 'num'));
+    const volumes = meters.map((m) => toNum(m.volume)).filter((v) => v !== null);
+    const sampled = volumes.length >= 2 ? Math.round((volumes[volumes.length - 1] - volumes[0]) * 100) / 100 : '';
+    const times = measured.map((m) => toNum(m.time)).filter((v) => v !== null);
+    tableRow(spans, ['합계', times.length ? Math.max(...times) : '', '', '', '', '', '', sampled, '', '', '', ''], 'calc');
+    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.sp)), 2), round(average(measured.map((m) => m.pressure)), 2), '', round(average(measured.map((m) => m.tmIn)), 1), round(average(measured.map((m) => m.tmOut)), 1), round(average(measured.map((m) => m.filterTemp)), 1), round(average(measured.map((m) => m.impingerTemp)), 1)], 'calc');
+    s.put(r, 0, '※ 시료채취 시간은 누적 분, 합계의 가스미터 지시값은 채취 종료값 − 시작값(보정계수 적용 전). 평균은 시작 행을 뺀 값. 여과지홀더 온도는 현장에서 직접 적는 칸입니다.', 'note', COLS); r += 1;
   }
 
   section('7. 산출 결과');
   if (isFlow) {
     pairs([['적용 수분량 Xw (%)', numOrText(report.moisturePercent)], ['평균 유속 V (m/s)', numOrText(report.avgVelocity), 'result'], ['습배출가스 유량 (Sm³/hr)', numOrText(report.wetFlowRate), 'result'], ['건조배출가스 유량 (Sm³/hr)', numOrText(report.dryFlowRate), 'result']]);
   } else {
+    pairs([['실측 산소농도 Oa (%)', round(average(gas.map((g) => g.o2)), 2)], ['표준산소농도 Os (%)', numOrText(report.standardO2) === '' ? '해당 없음' : numOrText(report.standardO2)], ['배출가스 정압 (mmH₂O)', round(average(points.map((p) => p.sp)), 2)], ['적용 수분량 Xw (%)', numOrText(report.moisturePercent)]]);
     pairs([['총 채취 시간 θ (분)', numOrText(report.totalSamplingMinutes)], ['가스미터 채취량 (L, Yd 적용)', numOrText(report.gasMeterVolume)], ['표준상태 건조가스량 (SL)', numOrText(report.vmStdSL)], ['표준상태 건조가스량 (Sm³)', numOrText(report.vmStdSm3)]]);
     pairs([['평균 가스미터 온도 Tm (℃)', numOrText(report.avgTm)], ['평균 오리피스 압차 ΔH (mmH₂O)', numOrText(report.avgOrifice)], ['평균 유속 V (m/s)', numOrText(report.avgVelocity)], ['등속흡입계수 I (%)', numOrText(report.isokineticRate), 'result']]);
-    pairs([['채취 전 무게 (mg)', numOrText(report.filterInitial)], ['채취 후 무게 (mg)', numOrText(report.filterFinal)], ['포집량 (mg)', numOrText(report.dustWeight)], ['등속흡입 판정 (90~110 %)', report.isokineticStatus || '', 'result']]);
+    pairs([['채취 전 무게 (mg)', numOrText(report.filterInitial)], ['채취 후 무게 (mg)', numOrText(report.filterFinal)], ['포집량 (mg)', numOrText(report.dustWeight)], ['등속흡입 판정 (90 %~110 %)', report.isokineticStatus || '', 'result']]);
     pairs([['실측 농도 Ca (mg/Sm³)', numOrText(report.actualConcentration), 'result'], ['표준산소 환산 농도 C (mg/Sm³)', numOrText(report.correctedConcentration), 'result'], ['습배출가스 유량 (Sm³/hr)', numOrText(report.wetFlowRate)], ['건조배출가스 유량 (Sm³/hr)', numOrText(report.dryFlowRate)]]);
   }
 
@@ -306,29 +315,88 @@ export const buildRecordSheets = (report, meta) => {
   return [s, buildFormulaSheet(isFlow)];
 };
 
-// 계산 근거 시트: 화면이 쓰는 계산식을 기호와 함께 적어 둔다
+// 계산 근거 시트: 화면이 쓰는 계산식을 「대기오염공정시험기준」의 식과 기호로 적어 둔다
 const buildFormulaSheet = (isFlow) => {
-  const s = createSheet('계산 근거', { columns: [26, 62, 44] });
+  const s = createSheet('계산 근거', { columns: [26, 66, 50, 22] });
   let r = 1;
-  s.put(r, 0, '계산 근거', 'title', 3).height(r, 30); r += 1;
-  s.put(r, 0, '기록지의 산출 결과는 아래 식으로 계산한 값입니다. (「대기오염공정시험기준」 ES 01301.1 · ES 01317.1)', 'subtitle', 3); r += 2;
-  s.put(r, 0, '항목', 'head'); s.put(r, 1, '계산식', 'head'); s.put(r, 2, '기호', 'head'); r += 1;
+  s.put(r, 0, '계산 근거', 'title', 4).height(r, 30); r += 1;
+  s.put(r, 0, '기록지의 산출 결과는 「대기오염공정시험기준」(국립환경과학원고시)의 아래 식으로 계산한 값입니다.', 'subtitle', 4); r += 2;
+  s.put(r, 0, '항목', 'head'); s.put(r, 1, '계산식', 'head'); s.put(r, 2, '기호', 'head'); s.put(r, 3, '근거', 'head'); r += 1;
   const rows = [
-    ['수분량 Xw (%)', 'Xw = (22.4/18 × ma) ÷ [ Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18 × ma ] × 100', 'ma: 흡습 수분의 질량(g), Vm: 흡인 가스량(L), θm: 가스미터 온도(℃), Pa: 대기압(mmHg), Pm: 가스미터 게이지압(mmHg)'],
-    ['배출가스 밀도 γ (kg/m³)', 'γ = γ0 × 273/(273+θs) × (Pa+Ps)/760', 'γ0: 표준상태 습배출가스 밀도(kg/Sm³), θs: 배출가스 온도(℃), Ps: 배출가스 정압(mmHg, 측정값 mmH₂O ÷ 13.6)'],
-    ['유속 V (m/s)', 'V = C × √(2 g h / γ)', 'C: 피토관 계수, g: 9.81 m/s², h: 동압(mmH₂O), γ: 배출가스 밀도(kg/m³)'],
-    ['배출가스 유량 (Sm³/hr)', '습: Q = V × A × 273/(273+θs) × (Pa+Ps)/760 × 3600,  건조: Q × (1 − Xw/100)', 'A: 굴뚝 단면적(㎡)'],
+    ['수분량 Xw (%)', 'Xw = (22.4/18 × ma) ÷ [ Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18 × ma ] × 100', 'ma: 흡습 수분의 질량(g), Vm: 흡입한 건조가스량(L), θm: 가스미터 온도(℃), Pa: 대기압(mmHg), Pm: 가스미터 게이지압(mmHg)', 'ES 01114.c 식 10\nES 01321.2'],
+    ['배출가스 밀도 γ (kg/m³)', 'γ = γo × 273/(273+θs) × (Pa+Ps)/760', 'γo: 0 ℃·760 mmHg에서 습한 배출가스 밀도(kg/Sm³), θs: 배출가스 온도(℃), Ps: 배출가스 정압(mmHg, 측정값 mmH₂O ÷ 13.6)', 'ES 01114.c 식 11'],
+    ['배출가스 유속 V (m/s)', 'V = C × √(2 g h / γ)', 'C: 피토관 계수, g: 중력가속도, h: 배출가스 동압(mmH₂O), γ: 습한 배출가스 밀도(kg/m³)', 'ES 01114.c 식 12'],
+    ['건조 배출가스 유량 QN (Sm³/h)', 'QN = V × A × 273/(273+θs) × (Pa+Ps)/760 × (1 − Xw/100) × 3,600', 'A: 굴뚝 단면적(㎡). 습한 배출가스 유량은 (1 − Xw/100)을 곱하지 않은 값', 'ES 01114.c 식 13'],
   ];
   if (!isFlow) {
     rows.push(
-      ['표준상태 건조가스량 Vn (SL)', 'Vn = Vm × Yd × 273/(273+θm) × (Pa + ΔH/13.6)/760', 'Yd: 가스미터 보정계수, ΔH: 오리피스 압차(mmH₂O)'],
-      ['등속흡입계수 I (%)', 'I = (θs+273) × [ 0.00346 × Vlc + Vm×Yd/(θm+273) × (Pa + ΔH/13.6) ] ÷ [ (Pa+Ps) × t × V × An ] × 16670', 'Vlc: 포집된 수분량(mL), t: 채취 시간(분), An: 노즐 단면적(cm²). 적합 범위 90~110 %'],
-      ['먼지 농도 Ca (mg/Sm³)', 'Ca = md ÷ Vn', 'md: 포집된 먼지량(mg), Vn: 표준상태 건조가스량(Sm³)'],
-      ['표준산소 환산 농도 C (mg/Sm³)', 'C = Ca × (21 − Os) ÷ (21 − Oa)', 'Os: 표준산소농도(%), Oa: 실측산소농도(%). 표준산소농도가 정해지지 않은 시설은 환산하지 않음'],
+      ['등속흡입계수 I (%)', 'I = Ts × [ 0.00346 × Vic + (V′m / Tm) × (Pa + ΔH/13.6) ] ÷ ( Ps × t × v × An ) × (1.667 × 10⁴)', 'Ts: 배출가스 평균 절대온도(K), Vic: 임핀저와 실리카젤에 채취된 물의 총량(mL), V′m: 건식가스미터에서 읽은 가스시료채취량(m³, 보정계수 적용), Tm: 건식가스미터 평균 절대온도(K), ΔH: 오리피스 압차(mmH₂O), Ps: 배출가스 압력(mmHg), t: 총 시료채취시간(분), v: 배출가스 유속(m/s), An: 노즐 단면적(cm²). 90 %~110 % 범위 밖이면 다시 채취', 'ES 01301.1e 식 8'],
+      ['먼지 농도 Cn (mg/Sm³)', 'Cn = md ÷ [ V′m × 273/(273+θm) × (Pa + ΔH/13.6)/760 ]', 'md: 채취된 먼지량(mg), 분모: 표준상태(0 ℃, 760 mmHg) 건조가스 채취량(Sm³)', 'ES 01301.1e 식 9'],
+      ['표준산소농도 환산 C (mg/Sm³)', 'C = Ca × (21 − Os) ÷ (21 − Oa)', 'Ca: 실측 농도, Os: 표준산소농도(%), Oa: 실측산소농도(%). 표준산소농도가 정해지지 않은 시설은 환산하지 않음', 'ES 01000.b 총칙 1.9'],
     );
   }
-  rows.forEach(([name, formula, symbols]) => {
-    s.put(r, 0, name, 'label'); s.put(r, 1, formula, 'formula'); s.put(r, 2, symbols, 'formula'); s.height(r, 48); r += 1;
+  rows.forEach(([name, formula, symbols, basis]) => {
+    s.put(r, 0, name, 'label'); s.put(r, 1, formula, 'formula'); s.put(r, 2, symbols, 'formula'); s.put(r, 3, basis, 'text'); s.height(r, 66); r += 1;
   });
+  r += 1;
+  s.put(r, 0, '※ 이 기록지는 프로그램이 직접 만든 양식입니다. 공정시험기준은 기록지를 "양식의 한 예"로 제시하고 있어, 기준의 기록 항목을 모두 담되 배치는 달리했습니다.', 'note', 4);
   return s;
+};
+
+// ── 시료채취기록부(종합) 공개 양식 ──
+// 「환경분야 시험·검사 업무처리규정」 별표 1의 시료채취기록부 기록 사항(시료채취일시, 시료채취자, 시료명·시료번호,
+// 관리분야, 시험항목, 시료채취량, 현장측정결과, 기타 참고사항)과 측정기록부(별지 제21호서식)의 현장기상 항목을 담는다.
+// data: { company, industry, facility, stackName, samplers: [{ label, name, yd }], days: [...], rows: [...], requestedCount }
+export const buildSamplingLogSheets = (data) => {
+  const widths = [25, 21, 11.5, 7.5, 7.5, 10.5, 10.5, 10.5, 9, 8, 9, 22];
+  const s = createSheet('시료채취기록부', { columns: widths, landscape: true });
+  const N = widths.length;
+  let r = 1;
+  const section = (title) => { r += 1; s.put(r, 0, title, 'section', N).height(r, 21); r += 1; };
+  s.put(r, 0, '시료채취기록부', 'title', N).height(r, 32); r += 1;
+  s.put(r, 0, '관리분야: 대기 · 「환경분야 시험·검사 업무처리규정」 별표 1의 시료채취기록부 기록 사항을 따름 (작성 후 3년 보관)', 'subtitle', N); r += 1;
+
+  section('1. 일반 사항');
+  const pair = (c, label, value, span) => { s.put(r, c, label, 'label'); s.put(r, c + 1, value === undefined || value === null ? '' : value, 'text', span); };
+  pair(0, '사업장명', data.company, 3); pair(4, '업종', data.industry, 3); pair(8, '관리분야', '대기', 3); s.height(r, 26); r += 1;
+  pair(0, '배출시설', data.facility, 3); pair(4, '배출구', data.stackName, 3); pair(8, '의뢰 항목 수', `${data.requestedCount || 0}종`, 3); s.height(r, 26); r += 1;
+  (data.samplers || []).forEach((sampler, i) => {
+    if (i % 2 === 0 && i > 0) { s.height(r, 26); r += 1; }
+    const c = (i % 2) * 6;
+    s.put(r, c, sampler.label, 'label'); s.put(r, c + 1, sampler.name || '', 'text', 3); s.put(r, c + 4, '보정계수 Yd', 'label'); s.put(r, c + 5, numOrText(sampler.yd), 'num');
+  });
+  if ((data.samplers || []).length > 0) { s.height(r, 26); r += 1; }
+
+  section('2. 시료채취일 및 현장 기상');
+  const daySpans = [1, 2, 2, 1, 1, 2, 1, 2];
+  const dayRow = (values, style) => { let c = 0; daySpans.forEach((span, i) => { s.put(r, c, values[i] === undefined ? '' : values[i], style, span); c += span; }); r += 1; };
+  dayRow(['일차', '시료채취일', '날씨', '기온 (℃)', '습도 (%)', '기압 (mmHg)', '풍향', '풍속 (m/s)'], 'head');
+  (data.days || []).forEach((day, i) => {
+    if (!day.date) return;
+    dayRow([`${i + 1}일차`, day.date, day.weather || '', numOrText(day.temp), numOrText(day.humidity), numOrText(day.pressure), day.windDir || '', numOrText(day.windSpeed)], 'num');
+  });
+
+  section('3. 시료별 채취 기록');
+  s.height(r, 44);
+  ['시료번호', '시험항목', '시료채취일', '채취\n시작', '채취\n종료', '가스미터\n시작값 (L)', '가스미터\n종료값 (L)', '시료채취량\n(L)', '가스미터\n온도 (℃)', '압력', '흡인유량\n(L/min)', '기타 참고사항'].forEach((label, c) => s.put(r, c, label, 'head'));
+  r += 1;
+  (data.rows || []).forEach((row) => {
+    [row.sampleNo || '', row.name || '', row.date || '', row.start || '', row.end || '', numOrText(row.meterStart), numOrText(row.meterEnd), row.volume === null || row.volume === undefined ? '' : row.volume, numOrText(row.temp), numOrText(row.pressure), numOrText(row.suctionRate), row.note || '']
+      .forEach((value, c) => s.put(r, c, value, c <= 1 || c === 11 ? 'text' : 'num'));
+    s.height(r, 30);
+    r += 1;
+  });
+  if ((data.rows || []).length === 0) { s.put(r, 0, '의뢰 표시한 항목이 없습니다.', 'text', N); r += 1; }
+  s.put(r, 0, '※ 시료채취량: 입자·가스 시료채취기는 (종료값 − 시작값) × 보정계수 Yd, 그 밖에는 종료값 − 시작값. 압력의 단위는 시료채취 장치에 따릅니다(오리피스 압차 mmH₂O 등).', 'note', N); r += 1;
+
+  section('4. 현장 특이사항 (육안 관찰, 보존제 등)');
+  s.put(r, 0, data.remarks || '', 'textLeft', N).height(r, 44); r += 2;
+  s.put(r, 0, '시료채취자', 'label', 1, 2);
+  ['성명', '직급', '서명'].forEach((label, i) => { s.put(r, 1 + i * 3, label, 'label'); s.put(r, 2 + i * 3, '', 'text', 2); });
+  s.put(r, 10, '', 'text', 2);
+  s.height(r, 28); r += 1;
+  ['성명', '직급', '서명'].forEach((label, i) => { s.put(r, 1 + i * 3, label, 'label'); s.put(r, 2 + i * 3, '', 'text', 2); });
+  s.put(r, 10, '', 'text', 2);
+  s.height(r, 28);
+  return [s];
 };
