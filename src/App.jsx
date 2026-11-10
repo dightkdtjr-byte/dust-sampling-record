@@ -1811,7 +1811,8 @@ const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
 // 엑셀 저장 이름: 폴더 = 날짜_사업장명_#배출구, 파일 = 날짜_기록부명_사업장명_#배출구
 const buildExportNames = ({ date, title, company, location, ext }) => {
   const clean = (v) => String(v || '').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim();
-  const day = clean(date) || new Date().toISOString().slice(0, 10);
+  // 날짜는 20261029처럼 붙여 쓴다
+  const day = (clean(date) || new Date().toISOString().slice(0, 10)).replace(/[-./\s]/g, '');
   const site = clean(company);
   const stackRaw = clean(location);
   const stack = stackRaw ? (stackRaw.startsWith('#') ? stackRaw : `#${stackRaw}`) : '';
