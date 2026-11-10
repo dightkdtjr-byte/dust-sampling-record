@@ -870,6 +870,8 @@ const SKYLINE_FLYER_CSS = `
   width: 100%;
   height: 100%;
   display: block;
+  /* 연기가 그림 영역 위로 올라가도 잘리지 않고 하늘로 이어지게 */
+  overflow: visible;
 }
 `;
 
