@@ -1,0 +1,334 @@
+// 공개 양식 엑셀 만들기: 회사 양식 파일 없이, 프로그램이 처음부터 직접 그리는 통합 문서(xlsx).
+// 배포용 빌드의 엑셀 추출에 쓴다. 값은 화면에서 계산한 결과를 그대로 적는다 (화면 = 엑셀).
+import JSZip from 'jszip';
+
+const NS_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const NS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+const escapeXml = (value) => String(value)
+  // XML에 쓸 수 없는 제어문자는 뺀다
+  // eslint-disable-next-line no-control-regex
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '')
+  .slice(0, 32767)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+export const columnName = (index) => {
+  let n = index + 1;
+  let name = '';
+  while (n > 0) { const rem = (n - 1) % 26; name = String.fromCharCode(65 + rem) + name; n = Math.floor((n - 1) / 26); }
+  return name;
+};
+
+// ── 서식 ──
+// 이름으로 고르는 셀 서식. 순서가 곧 styles.xml의 cellXfs 번호다.
+const STYLE_DEFS = [
+  { key: 'plain', font: 0, fill: 0, border: 0 },
+  { key: 'title', font: 1, fill: 0, border: 0, h: 'center' },
+  { key: 'subtitle', font: 2, fill: 0, border: 0, h: 'center' },
+  { key: 'section', font: 3, fill: 2, border: 1, h: 'left' },
+  { key: 'label', font: 4, fill: 3, border: 1, h: 'center', wrap: true },
+  { key: 'text', font: 0, fill: 0, border: 1, h: 'center', wrap: true },
+  { key: 'textLeft', font: 0, fill: 0, border: 1, h: 'left', wrap: true },
+  { key: 'num', font: 0, fill: 0, border: 1, h: 'center' },
+  { key: 'num1', font: 0, fill: 0, border: 1, h: 'center', numFmt: 164 },
+  { key: 'num2', font: 0, fill: 0, border: 1, h: 'center', numFmt: 2 },
+  { key: 'num3', font: 0, fill: 0, border: 1, h: 'center', numFmt: 165 },
+  { key: 'num4', font: 0, fill: 0, border: 1, h: 'center', numFmt: 166 },
+  { key: 'head', font: 4, fill: 3, border: 1, h: 'center', wrap: true },
+  { key: 'result', font: 5, fill: 0, border: 1, h: 'center' },
+  { key: 'result2', font: 5, fill: 0, border: 1, h: 'center', numFmt: 2 },
+  { key: 'note', font: 2, fill: 0, border: 0, h: 'left', wrap: true },
+  { key: 'formula', font: 6, fill: 0, border: 1, h: 'left', wrap: true },
+  { key: 'calc', font: 0, fill: 4, border: 1, h: 'center' },
+  { key: 'calc2', font: 0, fill: 4, border: 1, h: 'center', numFmt: 2 },
+];
+const STYLE_INDEX = Object.fromEntries(STYLE_DEFS.map((def, index) => [def.key, index]));
+
+const FONT_NAME = '맑은 고딕';
+const stylesXml = () => {
+  const font = (size, { bold = false, color = null } = {}) => (
+    `<font>${bold ? '<b/>' : ''}<sz val="${size}"/>${color ? `<color rgb="${color}"/>` : ''}<name val="${FONT_NAME}"/><family val="2"/></font>`
+  );
+  const fonts = [
+    font(10), font(16, { bold: true }), font(9, { color: 'FF5F6368' }), font(11, { bold: true }),
+    font(9, { bold: true }), font(11, { bold: true }), font(9),
+  ];
+  const solid = (rgb) => `<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`;
+  const fills = [
+    '<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>',
+    solid('FFDDE5E0'), solid('FFF1F4F2'), solid('FFF7F7F2'),
+  ];
+  const side = (name) => `<${name} style="thin"><color rgb="FF8A8F8C"/></${name}>`;
+  const borders = [
+    '<border><left/><right/><top/><bottom/><diagonal/></border>',
+    `<border>${side('left')}${side('right')}${side('top')}${side('bottom')}<diagonal/></border>`,
+  ];
+  const xfs = STYLE_DEFS.map((def) => (
+    `<xf numFmtId="${def.numFmt || 0}" fontId="${def.font}" fillId="${def.fill}" borderId="${def.border}" xfId="0"`
+    + `${def.numFmt ? ' applyNumberFormat="1"' : ''} applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">`
+    + `<alignment horizontal="${def.h || 'general'}" vertical="center"${def.wrap ? ' wrapText="1"' : ''}/></xf>`
+  ));
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="${NS_MAIN}">
+<numFmts count="3"><numFmt numFmtId="164" formatCode="0.0"/><numFmt numFmtId="165" formatCode="0.000"/><numFmt numFmtId="166" formatCode="0.0000"/></numFmts>
+<fonts count="${fonts.length}">${fonts.join('')}</fonts>
+<fills count="${fills.length}">${fills.join('')}</fills>
+<borders count="${borders.length}">${borders.join('')}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+};
+
+// ── 시트 그리기 도구 ──
+// 한 칸씩 "어느 줄, 어느 열부터 몇 칸"으로 적어 나가면 병합·테두리를 알아서 채운다.
+export const createSheet = (name, { columns, landscape = false } = {}) => {
+  const rows = new Map(); // 줄 번호(1부터) → { height, cells: Map(열 번호 → { v, s }) }
+  const merges = [];
+  const rowOf = (r) => { if (!rows.has(r)) rows.set(r, { height: null, cells: new Map() }); return rows.get(r); };
+  const sheet = {
+    name, columns, landscape,
+    // (r, c)에서 가로 span칸·세로 rowSpan줄을 차지하는 칸. value가 숫자면 숫자, { f }면 수식, 그 밖엔 글자
+    put(r, c, value, style = 'text', span = 1, rowSpan = 1) {
+      for (let dr = 0; dr < rowSpan; dr++) {
+        for (let dc = 0; dc < span; dc++) rowOf(r + dr).cells.set(c + dc, { v: dr === 0 && dc === 0 ? value : null, s: style });
+      }
+      if (span > 1 || rowSpan > 1) merges.push(`${columnName(c)}${r}:${columnName(c + span - 1)}${r + rowSpan - 1}`);
+      return sheet;
+    },
+    height(r, points) { rowOf(r).height = points; return sheet; },
+    toXml() {
+      const cols = (columns || []).map((width, i) => `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`).join('');
+      const rowXml = [...rows.keys()].sort((a, b) => a - b).map((r) => {
+        const row = rows.get(r);
+        const cells = [...row.cells.keys()].sort((a, b) => a - b).map((c) => {
+          const { v, s } = row.cells.get(c);
+          const ref = `${columnName(c)}${r}`;
+          const sAttr = ` s="${STYLE_INDEX[s] ?? 0}"`;
+          if (v === null || v === undefined || v === '') return `<c r="${ref}"${sAttr}/>`;
+          if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"${sAttr}><v>${v}</v></c>`;
+          if (typeof v === 'object' && typeof v.f === 'string') return `<c r="${ref}"${sAttr}><f>${escapeXml(v.f)}</f></c>`;
+          return `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${escapeXml(v)}</t></is></c>`;
+        }).join('');
+        return `<row r="${r}"${row.height ? ` ht="${row.height}" customHeight="1"` : ''}>${cells}</row>`;
+      }).join('');
+      const mergeXml = merges.length ? `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells>` : '';
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="${NS_MAIN}" xmlns:r="${NS_REL}">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="18"/>
+${cols ? `<cols>${cols}</cols>` : ''}
+<sheetData>${rowXml}</sheetData>
+${mergeXml}
+<printOptions horizontalCentered="1"/>
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
+<pageSetup paperSize="9" orientation="${landscape ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/>
+<headerFooter><oddFooter>&amp;C&amp;P / &amp;N</oddFooter></headerFooter>
+</worksheet>`;
+    },
+  };
+  return sheet;
+};
+
+// 시트 이름에 쓸 수 없는 글자를 빼고 31자로 자른다
+const safeSheetName = (name) => String(name || 'Sheet').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Sheet';
+
+export const buildWorkbook = async (sheets) => {
+  const zip = new JSZip();
+  const names = sheets.map((sheet) => safeSheetName(sheet.name));
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
+</Types>`);
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`);
+  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="${NS_MAIN}" xmlns:r="${NS_REL}">
+<sheets>${names.map((name, i) => `<sheet name="${escapeXml(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>
+</workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('\n')}
+<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`);
+  zip.file('xl/styles.xml', stylesXml());
+  sheets.forEach((sheet, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, sheet.toXml()));
+  return zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+};
+
+// ── 값 다듬기 ──
+const toNum = (value) => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (text === '' || text === '-') return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+};
+// 숫자로 읽히면 숫자, 아니면 글자 그대로 (빈칸은 빈칸)
+const numOrText = (value) => {
+  const n = toNum(value);
+  if (n !== null) return n;
+  const text = value === null || value === undefined ? '' : String(value).trim();
+  return text === '-' ? '' : text;
+};
+const average = (values) => {
+  const list = values.map(toNum).filter((v) => v !== null);
+  return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+};
+const round = (value, digits) => (value === null ? '' : Math.round(value * 10 ** digits) / 10 ** digits);
+
+const COLS = 12;
+
+// ── 기록부(먼지·금속·수은·PAHs·유량) 공개 양식 ──
+// report: 저장된 기록부 한 건(화면에서 계산한 결과 포함), meta: { title, isFlow, moistureLabel, impingerLabels }
+export const buildRecordSheets = (report, meta) => {
+  const isFlow = Boolean(meta.isFlow);
+  const s = createSheet('시료채취 기록지', { columns: Array(COLS).fill(11.5), landscape: true });
+  let r = 1;
+  const section = (title) => { r += 1; s.put(r, 0, title, 'section', COLS).height(r, 21); r += 1; };
+  // 한 줄에 "이름표 1칸 + 값 2칸" 네 쌍
+  const pairs = (items) => {
+    items.forEach(([label, value, style], i) => {
+      s.put(r, i * 3, label, 'label');
+      s.put(r, i * 3 + 1, value === undefined ? '' : value, style || 'text', 2);
+    });
+    for (let i = items.length; i < 4; i++) { s.put(r, i * 3, '', 'label'); s.put(r, i * 3 + 1, '', 'text', 2); }
+    s.height(r, items.some(([label]) => String(label).length > 14) ? 38 : 26);
+    r += 1;
+  };
+  // 표 한 줄: spans = 칸 너비 목록
+  const tableRow = (spans, values, style) => {
+    let c = 0;
+    spans.forEach((span, i) => { s.put(r, c, values[i] === undefined ? '' : values[i], Array.isArray(style) ? style[i] : style, span); c += span; });
+    r += 1;
+  };
+
+  s.put(r, 0, '배출가스 시료채취 기록지', 'title', COLS).height(r, 32); r += 1;
+  s.put(r, 0, `${meta.title} · 「대기오염공정시험기준」 ES 01301.1(배출가스 중 입자상 물질의 시료채취방법)의 기록 항목에 맞춘 현장 기록`, 'subtitle', COLS); r += 1;
+
+  section('1. 일반 사항 및 배출구 제원');
+  pairs([['측정 일자', report.date || ''], ['사업장명', report.company || ''], ['배출구명', report.location || ''], ['측정자', report.sampler || '']]);
+  pairs([['날씨', report.weather || ''], ['대기 온도 (℃)', numOrText(report.atmTemp)], ['대기압 (mmHg)', numOrText(report.atmPressure)], ['표준산소농도 Os (%)', numOrText(report.standardO2) === '' ? '해당 없음' : numOrText(report.standardO2)]]);
+  const diameter = toNum(report.stackDiameter);
+  pairs([['굴뚝 내경 D (m)', numOrText(report.stackDiameter)], ['단면적 A (㎡)', diameter === null ? '' : round(Math.PI * diameter * diameter / 4, 4), 'num4'], ['총 측정 깊이 (m)', numOrText(report.totalStackDepth)], ['플랜지 길이 (m)', numOrText(report.flangeLength)]]);
+
+  section('2. 사용 장비');
+  pairs([['피토관', report.pitotInfo || ''], ['피토관 계수 Cp', numOrText(report.pitotFactor)], ['가스미터 보정계수 Yd', numOrText(report.gasMeterFactor)], ['오리피스 계수 ΔH@', numOrText(report.deltaHAt)]]);
+  if (!isFlow) {
+    const leak = report.leakTest || {};
+    const leakText = `장치 ${leak.device || 'O'} · 임핀저 ${leak.impinger || 'O'} · 채취부 ${leak.samplingPart || 'O'}`;
+    const before = toNum(leak.meterBefore); const after = toNum(leak.meterAfter);
+    pairs([['노즐 직경 Dn (mm)', numOrText(report.nozzleDiameterUsed !== undefined ? report.nozzleDiameterUsed : report.nozzleDiameter)], ['K-factor', numOrText(report.kFactorApplied !== undefined ? report.kFactorApplied : report.kFactor)], ['여과지 번호', report.filterId || ''], ['채취 시작 시각', report.samplingStartTime || '']]);
+    pairs([['누출시험 (O: 이상 없음)', leakText], ['누출시험 가스미터 (L)', before !== null && after !== null ? `전 ${before} → 후 ${after}` : '']]);
+  }
+
+  section('3. 배출가스 조성');
+  const gas = Array.isArray(report.gasAnalyzer) ? report.gasAnalyzer : [];
+  const gasSpans = [1, 2, 2, 2, 2, 2, 1];
+  tableRow(gasSpans, ['회차', '측정 시각', 'O₂ (%)', 'CO₂ (%)', 'CO (ppm)', 'NOx (ppm)', 'SOx (ppm)'], 'head');
+  gas.forEach((g, i) => tableRow(gasSpans, [i + 1, g.time || '', numOrText(g.o2), numOrText(g.co2), numOrText(g.co), numOrText(g.nox), numOrText(g.sox)], 'num'));
+  tableRow(gasSpans, ['평균', '', round(average(gas.map((g) => g.o2)), 2), round(average(gas.map((g) => g.co2)), 2), round(average(gas.map((g) => g.co)), 1), round(average(gas.map((g) => g.nox)), 1), round(average(gas.map((g) => g.sox)), 1)], 'calc');
+
+  section('4. 배출가스 수분량');
+  pairs([['측정 방법', meta.moistureLabel || ''], ['사전 수분량 Xw (%)', numOrText(report.moisturePre)], ['사후 수분량 Xw (%)', numOrText(report.moisturePost)], ['적용 수분량 Xw (%)', numOrText(report.moisturePercent), 'result']]);
+  const autoValues = (Array.isArray(report.moistureValues) ? report.moistureValues : []).map(toNum).filter((v) => v !== null);
+  if (autoValues.length > 0) {
+    s.put(r, 0, '자동측정기 측정값 (%)', 'label', 3);
+    for (let i = 0; i < 5; i++) s.put(r, 3 + i, autoValues[i] === undefined ? '' : autoValues[i], 'num');
+    s.put(r, 8, '평균', 'label'); s.put(r, 9, round(average(autoValues), 2), 'calc', 3);
+    r += 1;
+  }
+  const impingers = (Array.isArray(report.impingers) ? report.impingers : []).filter((imp) => toNum(imp.initial) !== null || toNum(imp.final) !== null);
+  if (impingers.length > 0) {
+    const impSpans = [3, 3, 3, 3];
+    tableRow(impSpans, ['임핀저 (채취 후 무게법)', '채취 전 (g)', '채취 후 (g)', '증가량 (g)'], 'head');
+    let total = 0;
+    impingers.forEach((imp, i) => {
+      const a = toNum(imp.initial); const b = toNum(imp.final);
+      const gain = a !== null && b !== null ? b - a : null;
+      if (gain !== null) total += gain;
+      tableRow(impSpans, [(meta.impingerLabels && meta.impingerLabels[i]) || `${i + 1}단`, numOrText(imp.initial), numOrText(imp.final), gain === null ? '' : round(gain, 2)], 'num');
+    });
+    tableRow(impSpans, ['포집된 수분 총량', '', '', round(total, 2)], 'calc');
+  }
+
+  section('5. 측정점별 동압 및 온도');
+  const points = Array.isArray(report.points) ? report.points : [];
+  const pointSpans = [2, 2, 2, 3, 3];
+  tableRow(pointSpans, ['측정점', '전압 (mmH₂O)', '정압 (mmH₂O)', '동압 Δp (mmH₂O)', '배출가스 온도 Ts (℃)'], 'head');
+  points.forEach((p, i) => tableRow(pointSpans, [i + 1, numOrText(p.tp), numOrText(p.sp), numOrText(p.dp), numOrText(p.ts)], 'num'));
+  tableRow(pointSpans, ['평균', round(average(points.map((p) => p.tp)), 2), round(average(points.map((p) => p.sp)), 2), round(average(points.map((p) => p.dp)), 2), round(average(points.map((p) => p.ts)), 1)], 'calc');
+
+  // 기록표: 누적 시간으로 적는다. 화면 입력이 구간(5,5,5…)이면 누적으로 바꾸고, 이미 누적(5,10,15…)이면 그대로
+  const meters = (Array.isArray(meta.meterRows) ? meta.meterRows : (Array.isArray(report.gasMeters) ? report.gasMeters : [])).map((m) => ({ ...m }));
+  {
+    const times = meters.slice(1).map((m) => toNum(m.time)).filter((v) => v !== null && v > 0);
+    const cumulative = times.length >= 2 && times.every((v, i) => i === 0 || v >= times[i - 1]);
+    if (!cumulative) {
+      let running = 0;
+      meters.forEach((m, i) => { const t = toNum(m.time); if (i > 0 && t !== null) { running = Math.round((running + t) * 100) / 100; m.time = running; } });
+    }
+  }
+  section(isFlow ? '6. 측정점별 동압·온도 기록' : '6. 시료채취 기록');
+  if (isFlow) {
+    const spans = [1, 2, 2, 2, 3, 2];
+    tableRow(spans, ['순번', '채취점', '누적 시간 (분)', '배출가스 온도 (℃)', '동압 Δp (mmH₂O)', '정압 (mmH₂O)'], 'head');
+    meters.forEach((m, i) => tableRow(spans, [i === 0 ? '초기' : i, m.pointNum || '', numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp)], 'num'));
+  } else {
+    const spans = Array(COLS).fill(1);
+    s.height(r, 42);
+    tableRow(spans, ['순번', '채취점', '누적 시간\n(분)', '배출가스\n온도 (℃)', '동압 Δp\n(mmH₂O)', '정압\n(mmH₂O)', '오리피스\n압차 ΔH\n(mmH₂O)', '가스미터\n지시값 (L)', '가스미터\n입구 온도\n(℃)', '가스미터\n출구 온도\n(℃)', '진공\n게이지압\n(mmHg)', '임핀저\n출구 온도\n(℃)'], 'head');
+    meters.forEach((m, i) => tableRow(spans, [i === 0 ? '초기' : i, m.pointNum || '', numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp), numOrText(m.pressure), numOrText(m.volume), numOrText(m.tmIn), numOrText(m.tmOut), numOrText(m.vacuum), numOrText(m.impingerTemp)], 'num'));
+  }
+
+  section('7. 산출 결과');
+  if (isFlow) {
+    pairs([['적용 수분량 Xw (%)', numOrText(report.moisturePercent)], ['평균 유속 V (m/s)', numOrText(report.avgVelocity), 'result'], ['습배출가스 유량 (Sm³/hr)', numOrText(report.wetFlowRate), 'result'], ['건조배출가스 유량 (Sm³/hr)', numOrText(report.dryFlowRate), 'result']]);
+  } else {
+    pairs([['총 채취 시간 θ (분)', numOrText(report.totalSamplingMinutes)], ['가스미터 채취량 (L, Yd 적용)', numOrText(report.gasMeterVolume)], ['표준상태 건조가스량 (SL)', numOrText(report.vmStdSL)], ['표준상태 건조가스량 (Sm³)', numOrText(report.vmStdSm3)]]);
+    pairs([['평균 가스미터 온도 Tm (℃)', numOrText(report.avgTm)], ['평균 오리피스 압차 ΔH (mmH₂O)', numOrText(report.avgOrifice)], ['평균 유속 V (m/s)', numOrText(report.avgVelocity)], ['등속흡입계수 I (%)', numOrText(report.isokineticRate), 'result']]);
+    pairs([['채취 전 무게 (mg)', numOrText(report.filterInitial)], ['채취 후 무게 (mg)', numOrText(report.filterFinal)], ['포집량 (mg)', numOrText(report.dustWeight)], ['등속흡입 판정 (90~110 %)', report.isokineticStatus || '', 'result']]);
+    pairs([['실측 농도 Ca (mg/Sm³)', numOrText(report.actualConcentration), 'result'], ['표준산소 환산 농도 C (mg/Sm³)', numOrText(report.correctedConcentration), 'result'], ['습배출가스 유량 (Sm³/hr)', numOrText(report.wetFlowRate)], ['건조배출가스 유량 (Sm³/hr)', numOrText(report.dryFlowRate)]]);
+  }
+
+  section('8. 현장 특이사항 및 비고');
+  s.put(r, 0, report.remarks || '', 'textLeft', COLS).height(r, 48); r += 2;
+  s.put(r, 0, '측정자', 'label', 2); s.put(r, 2, report.sampler ? `${report.sampler}  (서명)` : '(서명)', 'text', 4);
+  s.put(r, 6, '확인자', 'label', 2); s.put(r, 8, '(서명)', 'text', 4); s.height(r, 30);
+
+  return [s, buildFormulaSheet(isFlow)];
+};
+
+// 계산 근거 시트: 화면이 쓰는 계산식을 기호와 함께 적어 둔다
+const buildFormulaSheet = (isFlow) => {
+  const s = createSheet('계산 근거', { columns: [26, 62, 44] });
+  let r = 1;
+  s.put(r, 0, '계산 근거', 'title', 3).height(r, 30); r += 1;
+  s.put(r, 0, '기록지의 산출 결과는 아래 식으로 계산한 값입니다. (「대기오염공정시험기준」 ES 01301.1 · ES 01317.1)', 'subtitle', 3); r += 2;
+  s.put(r, 0, '항목', 'head'); s.put(r, 1, '계산식', 'head'); s.put(r, 2, '기호', 'head'); r += 1;
+  const rows = [
+    ['수분량 Xw (%)', 'Xw = (22.4/18 × ma) ÷ [ Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18 × ma ] × 100', 'ma: 흡습 수분의 질량(g), Vm: 흡인 가스량(L), θm: 가스미터 온도(℃), Pa: 대기압(mmHg), Pm: 가스미터 게이지압(mmHg)'],
+    ['배출가스 밀도 γ (kg/m³)', 'γ = γ0 × 273/(273+θs) × (Pa+Ps)/760', 'γ0: 표준상태 습배출가스 밀도(kg/Sm³), θs: 배출가스 온도(℃), Ps: 배출가스 정압(mmHg, 측정값 mmH₂O ÷ 13.6)'],
+    ['유속 V (m/s)', 'V = C × √(2 g h / γ)', 'C: 피토관 계수, g: 9.81 m/s², h: 동압(mmH₂O), γ: 배출가스 밀도(kg/m³)'],
+    ['배출가스 유량 (Sm³/hr)', '습: Q = V × A × 273/(273+θs) × (Pa+Ps)/760 × 3600,  건조: Q × (1 − Xw/100)', 'A: 굴뚝 단면적(㎡)'],
+  ];
+  if (!isFlow) {
+    rows.push(
+      ['표준상태 건조가스량 Vn (SL)', 'Vn = Vm × Yd × 273/(273+θm) × (Pa + ΔH/13.6)/760', 'Yd: 가스미터 보정계수, ΔH: 오리피스 압차(mmH₂O)'],
+      ['등속흡입계수 I (%)', 'I = (θs+273) × [ 0.00346 × Vlc + Vm×Yd/(θm+273) × (Pa + ΔH/13.6) ] ÷ [ (Pa+Ps) × t × V × An ] × 16670', 'Vlc: 포집된 수분량(mL), t: 채취 시간(분), An: 노즐 단면적(cm²). 적합 범위 90~110 %'],
+      ['먼지 농도 Ca (mg/Sm³)', 'Ca = md ÷ Vn', 'md: 포집된 먼지량(mg), Vn: 표준상태 건조가스량(Sm³)'],
+      ['표준산소 환산 농도 C (mg/Sm³)', 'C = Ca × (21 − Os) ÷ (21 − Oa)', 'Os: 표준산소농도(%), Oa: 실측산소농도(%). 표준산소농도가 정해지지 않은 시설은 환산하지 않음'],
+    );
+  }
+  rows.forEach(([name, formula, symbols]) => {
+    s.put(r, 0, name, 'label'); s.put(r, 1, formula, 'formula'); s.put(r, 2, symbols, 'formula'); s.height(r, 48); r += 1;
+  });
+  return s;
+};

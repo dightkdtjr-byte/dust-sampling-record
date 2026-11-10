@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
+import { buildRecordSheets, buildWorkbook } from './openWorkbook.js';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
 // 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
@@ -2680,9 +2681,7 @@ export default function App() {
     const actionButtons = (data) => (
       <span className="inline-flex items-center gap-1">
         <button type="button" onClick={(e) => { e.stopPropagation(); handleLoadSavedReport(data); }} className="px-2 py-1 rounded text-[11px] border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 font-bold whitespace-nowrap">불러오기</button>
-        {!IS_DESKTOP_BUILD && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); exportOne(data); }} className="px-2 py-1 rounded text-[11px] border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold whitespace-nowrap">엑셀</button>
-        )}
+        <button type="button" onClick={(e) => { e.stopPropagation(); exportOne(data); }} className="px-2 py-1 rounded text-[11px] border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold whitespace-nowrap">엑셀</button>
         {allowCopy && (
           <button type="button" onClick={(e) => { e.stopPropagation(); handleCopySavedReportToCurrentSheet(data); }} className={`px-2 py-1 rounded text-[11px] text-white font-bold whitespace-nowrap ${activeTheme.primaryButton}`}>이 기록부로 복사</button>
         )}
@@ -6109,7 +6108,41 @@ export default function App() {
     return sheetMap;
   };
 
+  // 내려받기 공통: 폴더(날짜_사업장명_#배출구)와 파일 이름을 알려 주고 저장 창을 띄운다
+  const downloadExportFile = (buffer, mime, exportNames) => {
+    const url = URL.createObjectURL(new Blob([buffer], { type: mime }));
+    const link = document.createElement('a');
+    link.href = url;
+    try { if (window.stackpilotDesktop?.noteDownloadFolder) window.stackpilotDesktop.noteDownloadFolder(exportNames.folder); } catch (error) { console.error(error); }
+    link.setAttribute('download', exportNames.file);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // 공개 양식(회사 양식 파일 없이 프로그램이 직접 그리는 엑셀)으로 기록부 내보내기 — 배포용 빌드에서 사용
+  const exportOpenRecordExcel = async (sourceReport = null) => {
+    try {
+      const report = sourceReport && typeof sourceReport === 'object' ? sourceReport : buildReportSnapshot(selectedSheet || 'dust');
+      const sheetId = resolveReportSheetId(report);
+      const title = report.sheetTitle || SHEET_MENU.find((item) => item.id === sheetId)?.title || '시료채취기록부';
+      const method = MOISTURE_METHODS.find((item) => item.id === (report.moistureMethod || 'auto'));
+      const rows = Array.isArray(report.gasMeters) ? report.gasMeters : [];
+      // 측정값이 들어간 행까지만 (계획만 채워 둔 빈 행은 뺀다)
+      const meterRows = rows.slice(0, Math.max(1, getLastMeasuredMeterIdx(rows) + 1));
+      const sheets = buildRecordSheets(report, { title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows });
+      const buffer = await buildWorkbook(sheets);
+      downloadExportFile(buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buildExportNames({ date: report.date, title, company: report.company, location: report.location, ext: 'xlsx' }));
+    } catch (error) {
+      console.error(error);
+      alert('엑셀 저장 중 오류가 발생했습니다. 입력값을 확인해주세요.');
+    }
+  };
+
   const exportToTemplateExcel = async (sourceReport = null) => {
+    if (IS_DESKTOP_BUILD) { await exportOpenRecordExcel(sourceReport); return; }
     try {
       const sourceData = sourceReport && typeof sourceReport === 'object' ? sourceReport : formData;
       const sourcePoints = Array.isArray(sourceData.points) ? sourceData.points : [];
@@ -6954,16 +6987,13 @@ export default function App() {
 
   if (import.meta.env.VITE_E2E === '1' && typeof window !== 'undefined') {
     window.__stackpilotExportForTest = exportToTemplateExcel;
+    window.__stackpilotExportOpenForTest = exportOpenRecordExcel;
     window.__stackpilotBuildReportForTest = () => buildReportSnapshot(selectedSheet || 'dust');
     window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
     window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));
   }
 
   const handleExportSelectedTemplateExcel = async () => {
-    if (IS_DESKTOP_BUILD) {
-      alert('배포용 버전에서는 엑셀 추출 기능을 사용할 수 없습니다.');
-      return;
-    }
     if (!activeUser || !isUserUnlocked) {
       alert('로그인 후 추출할 수 있습니다.');
       return;
@@ -8103,11 +8133,9 @@ export default function App() {
             <button type="button" onClick={resetSamplingLogForm} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
             </button>
-            {!IS_DESKTOP_BUILD && (
-              <button type="button" onClick={() => exportSamplingLogExcel(null)} className="px-8 py-3.5 bg-white border border-orange-300 text-orange-800 font-bold rounded-xl hover:bg-orange-50 transition-colors shadow-sm">
-                현재 내용 엑셀로 추출
-              </button>
-            )}
+            <button type="button" onClick={() => exportSamplingLogExcel(null)} className="px-8 py-3.5 bg-white border border-orange-300 text-orange-800 font-bold rounded-xl hover:bg-orange-50 transition-colors shadow-sm">
+              현재 내용 엑셀로 추출
+            </button>
             <button type="button" onClick={handleSaveSamplingLog} className="px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md bg-orange-600 hover:bg-orange-700">
               기록부 데이터 저장
             </button>
@@ -8119,9 +8147,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-slate-500 font-bold">선택 {sheetCheckedReportKeysValid.length}건</span>
                 <button onClick={handleDeleteCheckedSheetReports} className="px-3 py-1.5 border border-red-300 text-red-600 bg-white hover:bg-red-50 font-bold rounded-lg text-xs">선택 삭제</button>
-                {!IS_DESKTOP_BUILD && (
-                  <button onClick={handleExportSelectedTemplateExcel} className="px-3 py-1.5 text-white font-bold rounded-lg text-xs bg-orange-600 hover:bg-orange-700">선택 항목 엑셀로 추출</button>
-                )}
+                <button onClick={handleExportSelectedTemplateExcel} className="px-3 py-1.5 text-white font-bold rounded-lg text-xs bg-orange-600 hover:bg-orange-700">선택 항목 엑셀로 추출</button>
               </div>
             </div>
             {renderReportGroupTable({
@@ -9705,14 +9731,12 @@ export default function App() {
               >
                 선택 항목을 이 기록부로 복사
               </button>
-              {!IS_DESKTOP_BUILD && (
-                <button
-                  onClick={handleExportSelectedTemplateExcel}
-                  className={`px-3 py-1.5 text-white font-bold rounded-lg text-xs ${activeTheme.primaryButton}`}
-                >
-                  선택 항목 엑셀로 추출
-                </button>
-              )}
+              <button
+                onClick={handleExportSelectedTemplateExcel}
+                className={`px-3 py-1.5 text-white font-bold rounded-lg text-xs ${activeTheme.primaryButton}`}
+              >
+                선택 항목 엑셀로 추출
+              </button>
             </div>
           </div>
 
