@@ -151,6 +151,12 @@ ipcMain.on('desktop:download-name', (event, name) => {
   lastDownloadName = String(name || '').replace(/[\\/:*?"<>|]/g, '_');
 });
 
+// 화면 안의 "창 닫기" 버튼: 창의 close 이벤트를 거치게 해서 저장 확인이 뜨도록 한다
+ipcMain.on('desktop:close-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) win.close();
+});
+
 ipcMain.on('desktop:refocus', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || win.isDestroyed()) return;

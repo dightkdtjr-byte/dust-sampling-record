@@ -6932,6 +6932,12 @@ export default function App() {
   const sceneStarsSheet = isMobileLightMode ? makeSparseLayout(SKYLINE_STARS.slice(0, 30), 3) : SKYLINE_STARS.slice(0, 30);
   const navigateToMenu = () => {
     if (IS_POPUP_WINDOW) {
+      // 데스크톱 앱: 창의 닫기 경로로 보내 저장 확인을 받는다. 웹: 저장 안 한 내용이 있으면 먼저 묻는다
+      if (window.stackpilotDesktop && window.stackpilotDesktop.closeWindow) {
+        window.stackpilotDesktop.closeWindow();
+        return;
+      }
+      if (unsavedRef.current && !window.confirm('저장하지 않은 내용이 있습니다.\n저장하지 않고 창을 닫을까요?')) return;
       window.close();
       return;
     }
