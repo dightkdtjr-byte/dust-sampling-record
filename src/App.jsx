@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import mainLogoImage from './assets/mainlogo-clay.png';
+import mainLogoImage from './assets/mainlogo.png';
+import mainLogoClayImage from './assets/mainlogo-clay.png';
 import JSZip from 'jszip';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
@@ -107,7 +108,7 @@ const SHEET_MENU = [
     id: 'dust',
     title: '먼지시료채취기록부',
     desc: '먼지시료채취 및 등속흡인 기록',
-    toneClass: 'from-emerald-400/70 to-emerald-200/20',
+    toneClass: 'from-emerald-200/60 to-teal-200/20',
     swatchClass: 'bg-emerald-500',
     hoverTextClass: 'group-hover:text-emerald-700',
   },
@@ -115,7 +116,7 @@ const SHEET_MENU = [
     id: 'metal',
     title: '금속시료채취기록부',
     desc: '금속시료채취 및 등속흡인 기록',
-    toneClass: 'from-slate-300/90 to-slate-200/30',
+    toneClass: 'from-yellow-200/70 to-amber-200/20',
     swatchClass: 'bg-yellow-400',
     hoverTextClass: 'group-hover:text-yellow-700',
   },
@@ -123,7 +124,7 @@ const SHEET_MENU = [
     id: 'mercury',
     title: '수은시료채취기록부',
     desc: '수은시료채취 및 등속흡인 기록',
-    toneClass: 'from-emerald-600/55 to-emerald-300/20',
+    toneClass: 'from-blue-200/70 to-sky-200/20',
     swatchClass: 'bg-blue-500',
     hoverTextClass: 'group-hover:text-blue-700',
   },
@@ -131,7 +132,7 @@ const SHEET_MENU = [
     id: 'pahs',
     title: 'PAHs시료채취기록부',
     desc: 'PAHs시료채취 및 등속흡인 기록',
-    toneClass: 'from-orange-700/50 to-orange-300/20',
+    toneClass: 'from-purple-200/70 to-violet-200/20',
     swatchClass: 'bg-purple-500',
     hoverTextClass: 'group-hover:text-purple-700',
   },
@@ -139,7 +140,7 @@ const SHEET_MENU = [
     id: 'flow',
     title: '유량측정기록부',
     desc: '배출가스 유속·유량 측정 기록',
-    toneClass: 'from-emerald-300/80 to-slate-200/30',
+    toneClass: 'from-cyan-200/70 to-sky-200/20',
     swatchClass: 'bg-cyan-500',
     hoverTextClass: 'group-hover:text-cyan-700',
   },
@@ -147,7 +148,7 @@ const SHEET_MENU = [
     id: 'samplinglog',
     title: '시료채취기록부(종합)',
     desc: '사업장별 물질 채취 현황 (가스·입자·VOCs)',
-    toneClass: 'from-orange-500/65 to-orange-200/20',
+    toneClass: 'from-orange-200/70 to-amber-200/20',
     swatchClass: 'bg-orange-500',
     hoverTextClass: 'group-hover:text-orange-700',
   },
@@ -1800,6 +1801,8 @@ const hashHintAnswer = async (answerText) => {
 };
 
 // 프로필 이미지는 사용하지 않음 (이름 첫 글자로 표시)
+const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
+
 // 프로필 사진: 이 기기에 저장하는 작은 이미지(data URL)만 허용
 const AVATAR_MAX_LENGTH = 300000;
 const sanitizeAvatarUrl = (value) => (
@@ -1931,8 +1934,28 @@ const SignatureBadge = () => (
 );
 
 export default function App() {
+  // 색 테마: 'default'(기본) | 'earth'(세이지·베이지·테라코타). 이 기기에 저장하고 모든 창에 같이 적용
+  const [palette, setPalette] = useState(() => {
+    try { return localStorage.getItem(PALETTE_STORAGE_KEY) === 'earth' ? 'earth' : 'default'; } catch { return 'default'; }
+  });
+  useEffect(() => {
+    if (palette === 'earth') document.documentElement.dataset.palette = 'earth';
+    else delete document.documentElement.dataset.palette;
+  }, [palette]);
+  useEffect(() => {
+    const onPaletteStorage = (event) => {
+      if (event.key === PALETTE_STORAGE_KEY) setPalette(event.newValue === 'earth' ? 'earth' : 'default');
+    };
+    window.addEventListener('storage', onPaletteStorage);
+    return () => window.removeEventListener('storage', onPaletteStorage);
+  }, []);
+  const changePalette = (next) => {
+    const value = next === 'earth' ? 'earth' : 'default';
+    setPalette(value);
+    try { localStorage.setItem(PALETTE_STORAGE_KEY, value); } catch (error) { console.error(error); }
+  };
   const logoCandidates = [
-    mainLogoImage,
+    palette === 'earth' ? mainLogoClayImage : mainLogoImage,
     `${import.meta.env.BASE_URL}mainlogo.png`,
     `${import.meta.env.BASE_URL}app-logo.png`,
     `${import.meta.env.BASE_URL}mainlogo.jpg`,
@@ -7264,7 +7287,7 @@ export default function App() {
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="menu-avatar-fallback w-full h-full flex items-center justify-center bg-emerald-600 text-4xl font-black select-none">
+                          <span className="menu-avatar-fallback w-full h-full flex items-center justify-center bg-emerald-600 text-white text-4xl font-black select-none">
                             {String(displayUserNameWithFallback || '').trim().charAt(0).toUpperCase() || '?'}
                           </span>
                         )}
@@ -7356,6 +7379,31 @@ export default function App() {
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
                           닫기
                         </button>
+                      </div>
+                      <div className="mb-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                        <p className="text-xs font-black text-slate-800">색 테마</p>
+                        <p className="text-[11px] text-slate-600 mt-1">열려 있는 모든 창에 바로 적용됩니다.</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'default', label: '기본', swatches: ['#059669', '#f8fafc', '#1e293b'] },
+                            { id: 'earth', label: '어스 (세이지·베이지·테라코타)', swatches: ['#9caf88', '#e3d9c6', '#c8643c'] },
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              aria-pressed={palette === item.id}
+                              onClick={() => changePalette(item.id)}
+                              className={`px-3 py-2 rounded border text-left text-xs font-bold ${palette === item.id ? 'border-slate-800 bg-white text-slate-900 ring-2 ring-slate-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                            >
+                              <span className="flex items-center gap-1 mb-1">
+                                {item.swatches.map((color) => (
+                                  <span key={color} className="palette-swatch inline-block w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />
+                                ))}
+                              </span>
+                              {item.label}{palette === item.id ? ' ✓' : ''}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <button
