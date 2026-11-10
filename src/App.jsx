@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
-import { buildRecordSheets, buildSamplingLogSheets, buildWorkbook } from './openWorkbook.js';
+import { buildRecordSheets, buildSamplingLogSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
 // 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
@@ -6234,8 +6234,16 @@ export default function App() {
       // 흡입관(피토관) 길이: 고른 피토관 프리셋의 유효 길이(cm) → m
       const pitot = pitotPresets.find((item) => String(item.id) === String(report.pitotPresetId));
       const pitotLength = pitot ? parseFloat(pitot.length) : NaN;
+      // 굴뚝단면 및 측정점 배열 그림: 굴뚝 안지름으로 그려 표 3의 가운데 칸에 넣는다
+      let sectionPng = null;
+      try {
+        const svg = buildStackSectionSvg(parseFloat(report.stackDiameter), 520, 460);
+        if (svg) sectionPng = await renderSvgToPng(svg, 1040, 920);
+      } catch (error) {
+        console.error('측정점 그림 만들기 실패:', error);
+      }
       const sheets = buildRecordSheets(report, {
-        title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows,
+        title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows, sectionPng,
         probeLengthM: Number.isFinite(pitotLength) && pitotLength > 0 ? Math.round(pitotLength) / 100 : null,
       });
       const buffer = await buildWorkbook(sheets);
@@ -9272,6 +9280,21 @@ export default function App() {
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1">목표 채취량 (SL)</label>
                     <input type="number" step="1" name="targetVolume" value={formData.targetVolume} onChange={handleChange} className="w-full p-2 border border-emerald-300 rounded text-sm bg-white font-bold outline-none focus:ring-2 focus:ring-emerald-500" />
+                    {IS_DESKTOP_BUILD && selectedSheet === 'dust' && (
+                      <div className="mt-1 flex items-center gap-1" role="group" aria-label="목표 채취량 고르기">
+                        {['400', '1000'].map((volume) => (
+                          <button
+                            key={volume}
+                            type="button"
+                            aria-pressed={String(formData.targetVolume) === volume}
+                            onClick={() => { setFormData((prev) => ({ ...prev, targetVolume: volume })); unsavedRef.current = true; }}
+                            className={`flex-1 px-2 py-1 rounded border text-xs font-bold ${String(formData.targetVolume) === volume ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'}`}
+                          >
+                            {volume} L
+                          </button>
+                        ))}
+                      </div>
+                    )}
                  </div>
                  <div>
                     <label className="block text-xs font-bold text-emerald-800 mb-1" title="가스미터 보정계수">보정계수 (Y<sub>d</sub>)</label>

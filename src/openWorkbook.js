@@ -111,6 +111,8 @@ export const createSheet = (name, { columns, landscape = false } = {}) => {
       return sheet;
     },
     height(r, points) { rowOf(r).height = points; return sheet; },
+    // 그림 한 장: png(Uint8Array)를 (fromCol, fromRow)~(toCol, toRow) 칸 범위에 맞춰 넣는다 (0부터 세는 칸 번호, to는 끝 다음 칸)
+    setImage(png, fromCol, fromRow, toCol, toRow) { sheet.image = { png, fromCol, fromRow, toCol, toRow }; return sheet; },
     toXml() {
       const cols = (columns || []).map((width, i) => `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`).join('');
       const rowXml = [...rows.keys()].sort((a, b) => a - b).map((r) => {
@@ -139,6 +141,7 @@ ${mergeXml}
 <pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
 <pageSetup paperSize="9" orientation="${landscape ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/>
 <headerFooter><oddFooter>&amp;C&amp;P / &amp;N</oddFooter></headerFooter>
+${sheet.image ? '<drawing r:id="rId1"/>' : ''}
 </worksheet>`;
     },
   };
@@ -155,6 +158,8 @@ export const buildWorkbook = async (sheets) => {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="png" ContentType="image/png"/>
+${sheets.map((sheet, i) => (sheet.image ? `<Override PartName="/xl/drawings/drawing${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : '')).join('')}
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 ${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
@@ -173,9 +178,87 @@ ${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.open
 <Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`);
   zip.file('xl/styles.xml', stylesXml());
-  sheets.forEach((sheet, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, sheet.toXml()));
+  sheets.forEach((sheet, i) => {
+    zip.file(`xl/worksheets/sheet${i + 1}.xml`, sheet.toXml());
+    if (!sheet.image) return;
+    const n = i + 1;
+    const { png, fromCol, fromRow, toCol, toRow } = sheet.image;
+    const pad = 38100; // 칸 테두리에 붙지 않게 4px쯤 안쪽으로
+    zip.file(`xl/media/image${n}.png`, png);
+    zip.file(`xl/worksheets/_rels/sheet${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${n}.xml"/></Relationships>`);
+    zip.file(`xl/drawings/_rels/drawing${n}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${n}.png"/></Relationships>`);
+    zip.file(`xl/drawings/drawing${n}.xml`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="${NS_REL}">
+<xdr:twoCellAnchor editAs="twoCell">
+<xdr:from><xdr:col>${fromCol}</xdr:col><xdr:colOff>${pad}</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>${pad}</xdr:rowOff></xdr:from>
+<xdr:to><xdr:col>${toCol - 1}</xdr:col><xdr:colOff>${600000}</xdr:colOff><xdr:row>${toRow - 1}</xdr:row><xdr:rowOff>${228600}</xdr:rowOff></xdr:to>
+<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="측정점 배열"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>
+<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
+<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic>
+<xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`);
+  });
   return zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
 };
+
+// ── 굴뚝단면 및 측정점 배열 그림 ──
+// 원형 굴뚝의 반경 구분 수: 화면의 측정점 계산과 같은 기준 (단면적 0.25㎡ 이하는 중심 1점)
+export const getStackPointCoeffs = (diameter) => {
+  const D = Number(diameter);
+  if (!Number.isFinite(D) || D <= 0) return null;
+  if (Math.PI * D * D / 4 <= 0.25) return [];
+  if (D <= 1) return [0.707];
+  if (D <= 2) return [0.5, 0.866];
+  if (D <= 4) return [0.408, 0.707, 0.913];
+  if (D <= 4.5) return [0.354, 0.612, 0.791, 0.935];
+  return [0.316, 0.548, 0.707, 0.837, 0.949];
+};
+// 흑백 선 그림(SVG 글자열): 굴뚝 단면, 등면적 원환(점선), 측정공, 지름 위 측정점과 번호, 안지름
+export const buildStackSectionSvg = (diameter, width = 520, height = 460) => {
+  const coeffsRaw = getStackPointCoeffs(diameter);
+  if (coeffsRaw === null) return '';
+  const cx = width / 2 + 30; const cy = height / 2 - 34; const R = Math.min(width, height) * 0.37;
+  const coeffs = [...coeffsRaw].sort((a, b) => b - a); // 측정공(왼쪽)에 가까운 점부터 1번
+  const pts = coeffs.length === 0
+    ? [{ x: cx, n: 1 }]
+    : [...coeffs.map((c, i) => ({ x: cx - c * R, n: i + 1 })), ...[...coeffs].reverse().map((c, i) => ({ x: cx + c * R, n: coeffs.length + i + 1 }))];
+  const ink = '#000';
+  const parts = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="Batang, 바탕, 'Malgun Gothic', serif">`,
+    `<rect width="${width}" height="${height}" fill="#fff"/>`,
+    `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${ink}" stroke-width="2.4"/>`,
+    ...coeffs.map((c) => `<circle cx="${cx}" cy="${cy}" r="${(c * R).toFixed(1)}" fill="none" stroke="${ink}" stroke-width="1" stroke-dasharray="5 6"/>`),
+    `<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="${ink}" stroke-width="1.4"/>`,
+    `<line x1="${cx}" y1="${cy - 9}" x2="${cx}" y2="${cy + 9}" stroke="${ink}" stroke-width="1.4"/>`,
+    `<rect x="${cx - R - 36}" y="${cy - 10}" width="36" height="20" fill="#fff" stroke="${ink}" stroke-width="1.8"/>`,
+    `<text x="${cx - R - 26}" y="${cy + 46}" font-size="27" text-anchor="middle" fill="${ink}">측정공</text>`,
+    ...pts.map((pt, i) => `<circle cx="${pt.x.toFixed(1)}" cy="${cy}" r="7.5" fill="${ink}"/><text x="${pt.x.toFixed(1)}" y="${cy + (i % 2 === 0 ? -18 : 40)}" font-size="28" text-anchor="middle" fill="${ink}">${pt.n}</text>`),
+    `<line x1="${cx - R}" y1="${cy + R + 34}" x2="${cx + R}" y2="${cy + R + 34}" stroke="${ink}" stroke-width="1.2"/>`,
+    `<line x1="${cx - R}" y1="${cy + R + 24}" x2="${cx - R}" y2="${cy + R + 44}" stroke="${ink}" stroke-width="1.2"/>`,
+    `<line x1="${cx + R}" y1="${cy + R + 24}" x2="${cx + R}" y2="${cy + R + 44}" stroke="${ink}" stroke-width="1.2"/>`,
+    `<text x="${cx - 15}" y="${cy + R + 72}" font-size="28" text-anchor="middle" fill="${ink}">안지름 ${Number(diameter)} m · 측정점 ${pts.length}점</text>`,
+    '</svg>',
+  ];
+  return parts.join('');
+};
+// SVG 글자열을 PNG(Uint8Array)로 그린다. 화면(브라우저)에서만 동작
+export const renderSvgToPng = (svg, width, height) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('png encode failed')); return; }
+        blob.arrayBuffer().then((buffer) => resolve(new Uint8Array(buffer)), reject);
+      }, 'image/png');
+    } catch (error) { reject(error); }
+  };
+  img.onerror = () => reject(new Error('svg load failed'));
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+});
 
 // ── 값 다듬기 ──
 const toNum = (value) => {
@@ -360,8 +443,9 @@ const buildTable3Sheet = (report, meta, meters) => {
     if (item) { s.put(row, 0, item[0], 'formLabel', 2); s.put(row, 2, item[1], 'formValue', 2); }
     if (right[i]) { s.put(row, 7, right[i][0], 'formLabel', 2); s.put(row, 9, right[i][1], 'formValue', 2); }
   });
-  // 가운데 빈 네모(굴뚝단면을 손으로 그리는 칸)와 그 아래 이름
+  // 가운데 네모: 굴뚝단면 및 측정점 배열 그림(굴뚝 안지름에 맞춰 그린 것). 그림이 없으면 빈 칸
   s.put(top, 4, '', 'formBox', 3, 7);
+  if (meta.sectionPng) s.setImage(meta.sectionPng, 4, top - 1, 7, top - 1 + 7);
   s.put(top + 8, 4, '굴뚝단면 및 측정점\n배열', 'formCaption', 3, 2);
   r = top + left.length + 1;
 
