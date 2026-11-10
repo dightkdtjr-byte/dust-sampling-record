@@ -8859,38 +8859,38 @@ export default function App() {
                   )}
                   
                   <h4 className="text-sm font-bold text-slate-800 mb-3 border-b border-slate-200 pb-2">노즐 선정 결과</h4>
-                  <div className="flex flex-wrap justify-center gap-2 text-center">
-                      <div className="bg-slate-50 py-2 px-1 rounded-lg border border-slate-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-slate-500 font-bold">가스유속(V<sub>s</sub>)</div>
-                          <div className="font-black text-slate-800 mt-1">{calcGasVelocity()}</div>
+                  <div className="ds-stats">
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">가스유속(V<sub>s</sub>)</div>
+                          <div className="ds-stat-value">{calcGasVelocity()}</div>
                       </div>
-                      <div className="bg-emerald-50 py-2 px-1 rounded-lg border border-emerald-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-emerald-700 font-bold">노즐경(D<sub>n</sub>)</div>
-                          <div className="font-black text-emerald-900 mt-1">{formData.nozzleDiameter || '-'}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">노즐경(D<sub>n</sub>)</div>
+                          <div className="ds-stat-value">{formData.nozzleDiameter || '-'}</div>
                       </div>
-                      <div className="bg-emerald-50 py-2 px-1 rounded-lg border border-emerald-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-emerald-700 font-bold">K-Factor</div>
-                          <div className="font-black text-emerald-900 mt-1">{formatKFactorDisplay(formData.kFactor)}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">K-Factor</div>
+                          <div className="ds-stat-value">{formatKFactorDisplay(formData.kFactor)}</div>
                       </div>
-                      <div className="bg-teal-50 py-2 px-1 rounded-lg border border-teal-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-teal-700 font-bold">예상 ΔH</div>
-                          <div className="font-black text-teal-900 mt-1">{expData.dH}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">예상 ΔH</div>
+                          <div className="ds-stat-value">{expData.dH}</div>
                       </div>
-                      <div className="bg-emerald-600 py-2 px-1 rounded-lg border border-emerald-700 flex-1 min-w-[90px] shadow-sm">
-                          <div className="text-[10px] text-emerald-100 font-bold">예상시간(분)</div>
-                          <div className="font-black text-white mt-1">{expData.reqTime}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">예상시간(분)</div>
+                          <div className="ds-stat-value">{expData.reqTime}</div>
                       </div>
-                      <div className="bg-cyan-50 py-2 px-1 rounded-lg border border-cyan-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-cyan-800 font-bold">건조채취량(V<sub>m</sub>)</div>
-                          <div className="font-black text-cyan-900 mt-1">{expData.L}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">건조채취량(V<sub>m</sub>)</div>
+                          <div className="ds-stat-value">{expData.L}</div>
                       </div>
-                      <div className="bg-cyan-50 py-2 px-1 rounded-lg border border-cyan-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-cyan-800 font-bold">표준채취량(SL)</div>
-                          <div className="font-black text-cyan-900 mt-1">{expData.SL}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">표준채취량(SL)</div>
+                          <div className="ds-stat-value">{expData.SL}</div>
                       </div>
-                      <div className="bg-cyan-50 py-2 px-1 rounded-lg border border-cyan-200 flex-1 min-w-[90px]">
-                          <div className="text-[10px] text-cyan-800 font-bold">표준채취량(Sm³)</div>
-                          <div className="font-black text-cyan-900 mt-1">{expData.Sm3}</div>
+                      <div className="ds-stat">
+                          <div className="ds-stat-label">표준채취량(Sm³)</div>
+                          <div className="ds-stat-value">{expData.Sm3}</div>
                       </div>
                   </div>
                </div>
@@ -9124,42 +9124,42 @@ export default function App() {
 
             {/* 유량계 기록 요약표 */}
             <div className={`grid grid-cols-1 ${isFlowSheet ? 'md:grid-cols-3' : 'md:grid-cols-6'} gap-4 mb-6`}>
-              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-slate-600 font-bold mb-1">{isFlowSheet ? '총 측정 시간 (분)' : '총 채취 시간 (분)'}</span>
-                <span className="text-lg font-black text-slate-800">{getSamplingMinutes()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">{isFlowSheet ? '총 측정 시간 (분)' : '총 채취 시간 (분)'}</span>
+                <span className="ds-stat-value">{getSamplingMinutes()}</span>
               </div>
               {isFlowSheet && (
                 <>
-                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                    <span className="text-xs text-slate-600 font-bold mb-1">평균 유속 (V<sub>s</sub>, m/s)</span>
-                    <span className="text-lg font-black text-slate-800">{calcFinalGasVelocity()}</span>
+                  <div className="ds-stat">
+                    <span className="ds-stat-label">평균 유속 (V<sub>s</sub>, m/s)</span>
+                    <span className="ds-stat-value">{calcFinalGasVelocity()}</span>
                   </div>
-                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                    <span className="text-xs text-slate-600 font-bold mb-1">측정 행 수</span>
-                    <span className="text-lg font-black text-slate-800">{getMeterRowsWithVolume().filter((_, i) => i > 0 || !isFlowSheet).length}</span>
+                  <div className="ds-stat">
+                    <span className="ds-stat-label">측정 행 수</span>
+                    <span className="ds-stat-value">{getMeterRowsWithVolume().filter((_, i) => i > 0 || !isFlowSheet).length}</span>
                   </div>
                 </>
               )}
               {!isFlowSheet && (<>
-              <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-emerald-700 font-bold mb-1">총 시료채취량 (m³, Yd 적용)</span>
-                <span className="text-xl font-black text-emerald-900">{calcGasMeterVolDiffM3()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">총 시료채취량 (m³, Yd 적용)</span>
+                <span className="ds-stat-value">{calcGasMeterVolDiffM3()}</span>
               </div>
-              <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-cyan-700 font-bold mb-1">표준 채취량 (SL)</span>
-                <span className="text-lg font-black text-cyan-900">{calcVmStdSL()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">표준 채취량 (SL)</span>
+                <span className="ds-stat-value">{calcVmStdSL()}</span>
               </div>
-              <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-cyan-700 font-bold mb-1">표준 채취량 (Sm³)</span>
-                <span className="text-lg font-black text-cyan-900">{calcVmStdSm3()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">표준 채취량 (Sm³)</span>
+                <span className="ds-stat-value">{calcVmStdSm3()}</span>
               </div>
-              <div className="bg-teal-50 border border-teal-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-teal-700 font-bold mb-1">평균 온도 (T<sub>m</sub>, ℃)</span>
-                <span className="text-lg font-black text-teal-900">{calcAvgTm()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">평균 온도 (T<sub>m</sub>, ℃)</span>
+                <span className="ds-stat-value">{calcAvgTm()}</span>
               </div>
-              <div className="bg-cyan-50 border border-cyan-200 p-3 rounded-xl flex flex-col items-center justify-center">
-                <span className="text-xs text-cyan-700 font-bold mb-1">평균 오리피스압 (ΔH)</span>
-                <span className="text-lg font-black text-cyan-900">{calcAvgOrifice()}</span>
+              <div className="ds-stat">
+                <span className="ds-stat-label">평균 오리피스압 (ΔH)</span>
+                <span className="ds-stat-value">{calcAvgOrifice()}</span>
               </div>
               </>)}
             </div>
