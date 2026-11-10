@@ -72,7 +72,7 @@ const EXPORT_TEMPLATE_LAYOUTS = {
   metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속', leak: { firstRow: 14, hasMeter: true } },
   mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은', leak: { firstRow: 14, hasMeter: true } },
   pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true } },
-  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: { firstRow: 13, hasMeter: false, noteCol: 'D' } },
+  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, hideSheets: ['누출시험'] }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
 };
 // 누출시험 기록 (양식 '누출시험' 시트): 구분별 유량계 멈춤 여부(O/X)와 가스미터 전·후 지시값
 const LEAK_TEST_PARTS = [
@@ -6464,6 +6464,12 @@ export default function App() {
             return `${open}${nextBody}${close}`;
           });
         }
+        // 이 기록부에 해당 없는 시트(유량의 누출시험)는 숨긴다
+        (layout.hideSheets || []).forEach((name) => {
+          wbXml = wbXml.replace(new RegExp(`<sheet\\b([^>]*\\bname="${name}"[^>]*?)\\s*/>`), (full, attrs) => (
+            /\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`
+          ));
+        });
         if (/<calcPr\b[^>]*\/>/.test(wbXml)) {
           wbXml = wbXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
         } else {
@@ -8378,8 +8384,8 @@ export default function App() {
               </div>
             )}
 
-            {/* 누출시험 (양식 '누출시험' 시트) */}
-            {(() => {
+            {/* 누출시험 (양식 '누출시험' 시트). 유량측정기록부에는 없음 */}
+            {!isFlowSheet && (() => {
               const leak = sanitizeLeakTest(formData.leakTest);
               const setLeak = (key, value) => setFormData(prev => ({ ...prev, leakTest: { ...sanitizeLeakTest(prev.leakTest), [key]: value } }));
               const diff = parseFloat(leak.meterAfter) - parseFloat(leak.meterBefore);
