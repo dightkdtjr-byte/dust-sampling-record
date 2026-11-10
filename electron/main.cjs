@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, protocol, net, shell, ipcMain, session, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -65,6 +65,41 @@ function createWindow() {
 
 // 모든 창(메인 창, 통합 시료채취기록부 별도 창)에 공통으로 적용되는 동작
 function attachWindowBehaviors(win) {
+  // 닫기 전에 저장하지 않은 입력이 있으면 저장 여부를 묻는다 (X 버튼, 창 닫기 버튼, 앱 종료 모두)
+  let closeConfirmed = false;
+  let closePrompting = false;
+  win.on('close', (event) => {
+    if (closeConfirmed || win.webContents.isDestroyed()) return;
+    event.preventDefault();
+    if (closePrompting) return;
+    closePrompting = true;
+    const finishClose = () => { closeConfirmed = true; closePrompting = false; if (!win.isDestroyed()) win.close(); };
+    win.webContents
+      .executeJavaScript('Boolean(window.__stackpilotHasUnsaved && window.__stackpilotHasUnsaved())', true)
+      .catch(() => false)
+      .then(async (hasUnsaved) => {
+        if (!hasUnsaved) { finishClose(); return; }
+        const { response } = await dialog.showMessageBox(win, {
+          type: 'question',
+          title: 'StackPilot',
+          message: '저장하지 않은 내용이 있습니다.',
+          detail: '닫기 전에 저장할까요?',
+          buttons: ['저장', '저장 안 함', '취소'],
+          defaultId: 0,
+          cancelId: 2,
+          noLink: true,
+        });
+        if (response === 2) { closePrompting = false; return; }
+        if (response === 0) {
+          const saved = await win.webContents
+            .executeJavaScript('window.__stackpilotSaveBeforeClose ? window.__stackpilotSaveBeforeClose() : false', true)
+            .catch(() => false);
+          if (!saved) { closePrompting = false; return; }
+        }
+        finishClose();
+      });
+  });
+
   // 앱 내부 주소(window.open)는 새 창으로, 외부 링크는 시스템 브라우저로.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isAppUrl(url)) {

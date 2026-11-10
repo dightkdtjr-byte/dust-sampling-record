@@ -2008,6 +2008,7 @@ export default function App() {
   const autoCloudUploadTimerRef = useRef(null);
   const autoCloudUploadInFlightRef = useRef(false);
   const autoCloudUploadFailRef = useRef(null);
+  const unsavedRef = useRef(false);
   const [cloudRetryTick, setCloudRetryTick] = useState(0);
   const lastAutoCloudUploadSignatureRef = useRef('');
   const csvImportInputRef = useRef(null);
@@ -3911,6 +3912,7 @@ export default function App() {
     }
     if (targetSheet === 'samplinglog') {
       setSamplingLogData(sanitizeSamplingLog(report.samplingLog));
+      unsavedRef.current = false;
       if (selectedSheet !== 'samplinglog') window.location.hash = 'sheet=samplinglog&popup=1';
       if (!silent) alert('시료채취기록부(종합) 리포트를 불러왔습니다.');
       return;
@@ -3941,6 +3943,7 @@ export default function App() {
       window.location.hash = `sheet=${targetSheet}${IS_POPUP_WINDOW ? '&popup=1' : ''}`;
     }
 
+    unsavedRef.current = false;
     const targetTitle = SHEET_MENU.find(item => item.id === targetSheet)?.title || report.sheetTitle || '기록부';
     if (!silent) alert(`${targetTitle} 리포트를 불러왔습니다.`);
   };
@@ -5103,15 +5106,15 @@ export default function App() {
     };
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
+  const handleSave = async (e, { silent = false } = {}) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!activeUser) {
       alert('먼저 아이디/비밀번호로 로그인해주세요.');
-      return;
+      return false;
     }
     if (!isUserUnlocked) {
       alert('저장하려면 먼저 로그인해주세요.');
-      return;
+      return false;
     }
     const result = buildReportSnapshot(selectedSheet || 'dust');
 
@@ -5120,10 +5123,13 @@ export default function App() {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
       const synced = syncSamplingLogFromSavedReport(result);
-      alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부에도 반영했습니다.' : ''}`);
+      unsavedRef.current = false;
+      if (!silent) alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부에도 반영했습니다.' : ''}`);
+      return true;
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
+      return false;
     }
   };
 
@@ -6344,6 +6350,7 @@ export default function App() {
   const resetSamplingLogForm = () => {
     if (!window.confirm('입력 중인 시료채취기록부 내용을 모두 지울까요?')) return;
     setSamplingLogData(createEmptySamplingLog());
+    unsavedRef.current = false;
   };
 
   // Yd 칸이 비어 있으면 선택한 샘플러 프리셋의 Yd를 사용
@@ -6379,20 +6386,56 @@ export default function App() {
     };
   };
 
-  const handleSaveSamplingLog = async () => {
+  const handleSaveSamplingLog = async ({ silent = false } = {}) => {
     if (!activeUser || !isUserUnlocked) {
       alert('저장하려면 먼저 로그인해주세요.');
-      return;
+      return false;
     }
     const nextReports = [...activeUserReports, buildSamplingLogReport()];
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      alert(`[${displayUserNameWithFallback}] 시료채취기록부가 저장되었습니다.`);
+      unsavedRef.current = false;
+      if (!silent) alert(`[${displayUserNameWithFallback}] 시료채취기록부가 저장되었습니다.`);
+      return true;
     } catch (error) {
       console.error(error);
       alert('암호화 저장 중 오류가 발생했습니다.');
+      return false;
     }
+  };
+
+  // ── 저장하지 않은 입력 확인: 창을 닫거나 새 기록지를 열기 전에 묻는다 ──
+  useEffect(() => {
+    const markDirty = (event) => {
+      const target = event.target;
+      if (target && target.closest && target.closest('.ds-page')) unsavedRef.current = true;
+    };
+    document.addEventListener('input', markDirty, true);
+    document.addEventListener('change', markDirty, true);
+    // 웹 브라우저에서는 기본 확인창으로 막는다 (데스크톱 앱은 메인 프로세스가 저장 여부를 묻는다)
+    const onBeforeUnload = (event) => {
+      if (window.stackpilotDesktop || !unsavedRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('input', markDirty, true);
+      document.removeEventListener('change', markDirty, true);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, []);
+  useEffect(() => {
+    window.__stackpilotHasUnsaved = () => Boolean(unsavedRef.current && selectedSheet && activeUser && isUserUnlocked);
+    window.__stackpilotSaveBeforeClose = () => (selectedSheet === 'samplinglog'
+      ? handleSaveSamplingLog({ silent: true })
+      : handleSave(null, { silent: true }));
+  });
+  const startNewRecord = () => {
+    if (unsavedRef.current && !window.confirm('저장하지 않은 내용이 있습니다.\n저장하지 않고 새 기록지를 열까요?')) return;
+    unsavedRef.current = false;
+    window.location.reload();
   };
 
   const extractSerialFromName = (name) => {
@@ -9268,7 +9311,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
-            <button type="button" onClick={() => window.location.reload()} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+            <button type="button" onClick={startNewRecord} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
             </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
