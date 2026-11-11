@@ -2096,10 +2096,42 @@ export default function App() {
     unsavedRef.current = true;
     alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다. 기온과 기압은 현장에서 잰 값을 적어 주세요.`);
   };
+  // 관측 지점 고르기: 이름을 치면 목록이 좁혀지는 검색 칸 (예: "부" → 부산·부안·부여)
+  const weatherStationName = (KMA_STATIONS.find(([id]) => id === weatherStation) || ['', ''])[1];
+  const [weatherStationQuery, setWeatherStationQuery] = useState(null); // null이면 고른 지점 이름을 보여 준다
+  const commitWeatherStationQuery = (text) => {
+    const query = String(text || '').trim();
+    const exact = KMA_STATIONS.find(([, name]) => name === query);
+    const partial = query ? KMA_STATIONS.filter(([, name]) => name.includes(query)) : [];
+    const found = exact || (partial.length === 1 ? partial[0] : null);
+    if (found) changeWeatherStation(found[0]);
+    setWeatherStationQuery(null);
+    return Boolean(found);
+  };
   const weatherStationSelect = (
-    <select value={weatherStation} onChange={(e) => changeWeatherStation(e.target.value)} title="기상청 관측 지점" className="p-1.5 border border-slate-300 rounded text-xs bg-white outline-none">
-      {KMA_STATIONS.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </select>
+    <>
+      <input
+        type="text"
+        list="kma-station-list"
+        value={weatherStationQuery === null ? weatherStationName : weatherStationQuery}
+        onFocus={(e) => { setWeatherStationQuery(''); e.target.select(); }}
+        onChange={(e) => {
+          const text = e.target.value;
+          // 목록에서 고르면 바로 확정
+          if (KMA_STATIONS.some(([, name]) => name === text)) commitWeatherStationQuery(text);
+          else setWeatherStationQuery(text);
+        }}
+        onBlur={(e) => commitWeatherStationQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitWeatherStationQuery(e.target.value); e.target.blur(); } }}
+        placeholder={`${weatherStationName} (지점 이름 검색)`}
+        title="기상청 관측 지점 (이름을 치면 검색됩니다)"
+        aria-label="기상청 관측 지점"
+        className="w-40 p-1.5 border border-slate-300 rounded text-xs bg-white outline-none"
+      />
+      <datalist id="kma-station-list">
+        {KMA_STATIONS.map(([id, name]) => <option key={id} value={name} />)}
+      </datalist>
+    </>
   );
 
   const changePalette = (next) => {
