@@ -529,12 +529,12 @@ const MOISTURE_METHODS = [
     guide: '흡습관(U자관) 2개에 입자상 무수염화칼슘을 넣고, 채취 전(ma1)·후(ma2) 무게 차를 흡습 수분의 질량 ma로 씁니다. 흡습된 수분이 0.1 g~1.0 g이 되도록 흡입합니다.',
     maRange: [0.1, 1.0],
   },
-  { id: 'auto', label: '자동측정법', standard: 'ES 01321.3' },
   {
     id: 'impinger', label: '임핀저법 (4구)', stages: 4, standard: 'ES 01321.2',
     items: ['임핀저 1 (물 100 g)', '임핀저 2 (물 100 g)', '임핀저 3 (빈 것)', '임핀저 4 (실리카젤 200 g)'], unitTitle: '임핀저',
     guide: '임핀저 4개 중 1·2번에 물 100 g씩, 4번에 실리카젤 200 g을 넣고, 채취 전(ma1)·후(ma2) 총무게 차를 흡습 수분의 질량 ma로 씁니다.',
   },
+  { id: 'auto', label: '자동측정법', standard: 'ES 01321.3' },
 ];
 const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
@@ -6576,7 +6576,7 @@ export default function App() {
       //  - 임핀저법: C5=2, 예비 임핀저(C20~D23)·가스미터(A28~G28)
       const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
       // 측정방법 표를 화면과 같은 1·2·3번으로 적고, 선택번호(C5)도 화면의 번호를 쓴다
-      //   1 흡습관법 / 2 자동측정법 / 3 임핀저법. 양식 수식(노즐산정 C15)은 2번일 때 자동측정기 평균, 1·3번일 때 무게법 결과(H28)를 보게 바꾼다
+      //   1 흡습관법 / 2 임핀저법 / 3 자동측정법 (기준 ES 01321.1~.3 순서). 양식 수식(노즐산정 C15)은 자동측정법일 때 자동측정기 평균, 그 밖엔 무게법 결과(H28)를 보게 바꾼다
       MOISTURE_METHODS.forEach((item, i) => {
         addUpdate('수분량', `A${5 + i}`, i + 1, 'A6');
         addUpdate('수분량', `B${5 + i}`, `${item.label.replace(/\s*\(.*\)$/, '')} (${item.standard})`, 'B6');
