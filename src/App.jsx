@@ -6711,26 +6711,22 @@ export default function App() {
       addUpdate('수분량', 'C7', null, 'C5');
       addUpdate('수분량', 'C5', MOISTURE_METHODS.indexOf(exportMoistureMethod) + 1);
       addUpdate('노즐산정', 'C15', { formula: `IF(수분량!C5=${MOISTURE_METHODS.findIndex((item) => item.id === 'auto') + 1},수분량!B15,수분량!H28)` });
-      if (!isImpingerMoistureMethod(exportMoistureMethod)) {
-        // 자동측정법을 골랐을 때도 무게법 표의 말은 아래 표·화면과 같게 맞춘다 (표는 비워 둠)
-        addUpdate('수분량', 'A18', '▶ 흡습관법 · 임핀저법');
+      // 무게법 표의 제목·항목 이름·압력 칸 이름은 선택번호(C5)를 보는 수식으로 적는다
+      // → 엑셀에서 번호를 바꿔도 이름이 같이 바뀐다 (1 흡습관법 / 2 임핀저법 / 3 자동측정법)
+      {
+        const tubeNo = MOISTURE_METHODS.findIndex((m) => m.id === 'imp2') + 1;
+        const impNo = MOISTURE_METHODS.findIndex((m) => m.id === 'impinger') + 1;
+        const tube = MOISTURE_METHODS[tubeNo - 1];
+        const imp = MOISTURE_METHODS[impNo - 1];
+        const q = (text) => `"${String(text).replace(/"/g, '""')}"`;
+        const pick = (tubeText, impText, otherText) => ({ formula: `IF($C$5=${tubeNo},${q(tubeText)},IF($C$5=${impNo},${q(impText)},${q(otherText)}))` });
+        addUpdate('수분량', 'A18', pick(`▶ 흡습관법 (${tube.standard})`, `▶ 임핀저법 (${imp.standard})`, '▶ 흡습관법 · 임핀저법'));
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
-        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, `${i + 1}`);
+        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, pick(tube.items[i] || '-', imp.items[i] || '-', String(i + 1)));
         addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
-      }
-      if (isImpingerMoistureMethod(exportMoistureMethod)) {
-        // 공정시험기준의 방법 이름과 기구 이름으로 적는다 (ES 01321.1 흡습관법 / ES 01321.2 임핀저법)
-        const methodName = exportMoistureMethod.label.replace(/\s*\(.*\)$/, '');
-        addUpdate('수분량', 'A18', `▶ ${methodName} (${exportMoistureMethod.standard})`);
-        addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
-        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, exportMoistureMethod.items[i] || '-');
-        addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
-        // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 칸의 이름을 오리피스압으로 적는다
-        if (exportMoistureMethod.id === 'impinger') {
-          // 칸이 좁아 이름만 적는다 (단위는 아랫줄의 mmH₂O / mmHg 그대로)
-          addUpdate('수분량', 'F26', '오리피스압');
-          addUpdate('수분량', 'G26', '오리피스압');
-        }
+        // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 = 오리피스압. 흡습관법은 가스 샘플러의 가스미터압
+        addUpdate('수분량', 'F26', pick('가스미터압', '오리피스압', '가스미터압'));
+        addUpdate('수분량', 'G26', pick('가스미터압', '오리피스압', '가스미터압'));
       }
       // 사후 수분량(본 측정)은 항상 입자 샘플러: 가스미터압 칸은 평균 오리피스압이다
       // 사후 수분량 표의 이름도 위 표와 같은 말로
