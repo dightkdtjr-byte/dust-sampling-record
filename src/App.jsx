@@ -2147,7 +2147,7 @@ export default function App() {
     unsavedRef.current = true;
     const sheetNote = fromSheets.temp || fromSheets.pressure
       ? `기온·기압은 그날 저장한 기록부 값(${[fromSheets.temp ? `${fromSheets.temp} ℃` : '', fromSheets.pressure ? `${fromSheets.pressure} mmHg` : ''].filter(Boolean).join(', ')})으로 채웠습니다.`
-      : '기온과 기압은 그날 저장한 기록부가 없어 비워 두었습니다. 기록부를 저장하면 자동으로 들어옵니다.';
+      : '기온과 기압은 사업장·배출구·날짜가 같은 저장 기록부가 없어 그대로 두었습니다.';
     alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다.\n${sheetNote}`);
   };
   // 관측 지점 고르기: 이름을 치면 목록이 좁혀지는 검색 칸 (예: "부" → 부산·부안·부여)
@@ -6825,11 +6825,15 @@ export default function App() {
     if (text(report?.atmPressure)) patch.pressure = text(report.atmPressure);
     return patch;
   };
-  // 그 날짜에 저장된 기록부(같은 사업장이면 우선) 가운데 가장 최근 것의 현장 값
+  // 사업장·배출구(스택)·날짜가 모두 같은 저장 기록부 가운데 가장 최근 것의 현장 값
   const findSiteWeatherFromSavedReports = (date) => {
     const logCompany = normalizeSiteName(samplingLogData.company);
-    const candidates = savedData.filter((report) => LOG_SOURCE_SHEETS.includes(resolveReportSheetId(report)) && String(report?.date || '').trim() === date
-      && (!logCompany || normalizeSiteName(report?.company) === logCompany));
+    const logStack = normalizeSiteName(samplingLogData.stackName);
+    if (!logCompany || !logStack || !date) return {};
+    const candidates = savedData.filter((report) => LOG_SOURCE_SHEETS.includes(resolveReportSheetId(report))
+      && String(report?.date || '').trim() === date
+      && normalizeSiteName(report?.company) === logCompany
+      && normalizeSiteName(report?.location) === logStack);
     const merged = {};
     // savedData는 최근 저장 순이므로, 앞의 것(최근)이 우선
     candidates.forEach((report) => { Object.entries(pickSiteWeatherFromReport(report)).forEach(([key, value]) => { if (!(key in merged)) merged[key] = value; }); });
