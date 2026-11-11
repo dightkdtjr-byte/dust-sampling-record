@@ -1843,6 +1843,8 @@ const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
 
 // 기상청 종관(ASOS) 관측 지점: [지점번호, 이름] (가나다순). 기상청 날씨누리 "도시별관측"에 나오는 지점
 const KMA_STATIONS = [['105', '강릉'], ['259', '강진군'], ['201', '강화'], ['294', '거제'], ['284', '거창'], ['283', '경주시'], ['185', '고산'], ['172', '고창'], ['251', '고창군'], ['262', '고흥'], ['266', '광양시'], ['156', '광주'], ['279', '구미'], ['140', '군산'], ['238', '금산'], ['253', '김해시'], ['247', '남원'], ['295', '남해'], ['100', '대관령'], ['143', '대구'], ['133', '대전'], ['98', '동두천'], ['106', '동해'], ['165', '목포'], ['273', '문경'], ['288', '밀양'], ['102', '백령도'], ['235', '보령'], ['258', '보성군'], ['226', '보은'], ['271', '봉화'], ['159', '부산'], ['243', '부안'], ['236', '부여'], ['104', '북강릉'], ['296', '북부산'], ['255', '북창원'], ['93', '북춘천'], ['289', '산청'], ['137', '상주'], ['189', '서귀포'], ['129', '서산'], ['108', '서울'], ['181', '서청주'], ['188', '성산'], ['239', '세종'], ['90', '속초'], ['119', '수원'], ['254', '순창군'], ['174', '순천'], ['136', '안동'], ['257', '양산시'], ['202', '양평'], ['168', '여수'], ['252', '영광군'], ['277', '영덕'], ['121', '영월'], ['272', '영주'], ['281', '영천'], ['170', '완도'], ['115', '울릉도'], ['152', '울산'], ['130', '울진'], ['114', '원주'], ['263', '의령군'], ['278', '의성'], ['203', '이천'], ['211', '인제'], ['112', '인천'], ['244', '임실'], ['248', '장수'], ['260', '장흥'], ['146', '전주'], ['217', '정선군'], ['245', '정읍'], ['184', '제주'], ['221', '제천'], ['268', '진도군'], ['192', '진주'], ['155', '창원'], ['232', '천안'], ['95', '철원'], ['276', '청송군'], ['131', '청주'], ['135', '추풍령'], ['101', '춘천'], ['127', '충주'], ['216', '태백'], ['162', '통영'], ['99', '파주'], ['138', '포항'], ['264', '함양군'], ['285', '합천'], ['261', '해남'], ['177', '홍성'], ['212', '홍천'], ['169', '흑산도']];
+// 관측 지점이 없는 시·군과 공단: [이름, 가장 가까운 관측 지점 번호]. 검색하면 가까운 지점으로 이어 준다
+const KMA_NEARBY_PLACES = [['가평', '101'], ['경산', '143'], ['계룡', '133'], ['고령', '285'], ['고성(강원)', '90'], ['고성(경남)', '162'], ['고양', '108'], ['곡성', '247'], ['공주', '239'], ['과천', '108'], ['광명', '108'], ['광주(경기)', '202'], ['괴산', '127'], ['구례', '174'], ['구리', '108'], ['군위', '278'], ['군포', '119'], ['김제', '243'], ['김천', '135'], ['김포', '112'], ['나주', '156'], ['남양주', '108'], ['논산', '236'], ['단양', '272'], ['담양', '254'], ['당진', '129'], ['대산', '129'], ['마산', '155'], ['무안', '165'], ['무주', '238'], ['반월', '119'], ['부천', '112'], ['사천', '192'], ['삼척', '106'], ['서천', '140'], ['성남', '119'], ['성주', '279'], ['시화', '112'], ['시흥', '112'], ['신안', '165'], ['아산', '232'], ['안산', '119'], ['안성', '232'], ['안양', '119'], ['양구', '211'], ['양양', '90'], ['양주', '98'], ['여주', '203'], ['여천', '168'], ['연천', '95'], ['영동', '135'], ['영암', '259'], ['영양', '276'], ['예산', '177'], ['예천', '272'], ['오산', '119'], ['옥천', '133'], ['온산', '152'], ['완주', '146'], ['용인', '119'], ['음성', '127'], ['의왕', '119'], ['의정부', '98'], ['익산', '140'], ['장성', '251'], ['증평', '131'], ['진안', '248'], ['진천', '232'], ['진해', '155'], ['창녕', '288'], ['청도', '288'], ['청양', '236'], ['칠곡', '279'], ['태안', '129'], ['평창', '121'], ['평택', '232'], ['포천', '98'], ['하남', '108'], ['하동', '266'], ['함안', '263'], ['함평', '252'], ['화성', '119'], ['화순', '156'], ['화천', '93'], ['횡성', '114']];
 const WEATHER_STATION_STORAGE_KEY = 'dust-sampling.weather-station.v1';
 // 날짜(YYYY-MM-DD)와 시각(HH:MM)으로 조회할 정시를 정한다. 시각이 없으면 오늘은 지금 시각, 지난 날은 12시
 const buildKmaObservationTime = (date, timeText) => {
@@ -2099,12 +2101,24 @@ export default function App() {
   // 관측 지점 고르기: 이름을 치면 목록이 좁혀지는 검색 칸 (예: "부" → 부산·부안·부여)
   const weatherStationName = (KMA_STATIONS.find(([id]) => id === weatherStation) || ['', ''])[1];
   const [weatherStationQuery, setWeatherStationQuery] = useState(null); // null이면 고른 지점 이름을 보여 준다
+  // 관측 지점이 없는 곳(안산 등)을 고르면 어느 지점으로 이었는지 옆에 적어 준다
+  const [weatherStationNote, setWeatherStationNote] = useState('');
+  const stationNameOf = (id) => (KMA_STATIONS.find(([stn]) => stn === id) || ['', ''])[1];
+  const nearbyLabel = ([place, id]) => `${place} (가까운 지점: ${stationNameOf(id)})`;
   const commitWeatherStationQuery = (text) => {
     const query = String(text || '').trim();
-    const exact = KMA_STATIONS.find(([, name]) => name === query);
-    const partial = query ? KMA_STATIONS.filter(([, name]) => name.includes(query)) : [];
+    // 고를 수 있는 것: 관측 지점 이름, 지점이 없는 시·군 이름(가까운 지점으로 이어 줌)
+    const choices = [
+      ...KMA_STATIONS.map(([id, name]) => ({ id, name, label: name, place: '' })),
+      ...KMA_NEARBY_PLACES.map((item) => ({ id: item[1], name: item[0], label: nearbyLabel(item), place: item[0] })),
+    ];
+    const exact = choices.find((item) => item.name === query || item.label === query);
+    const partial = query ? choices.filter((item) => item.name.includes(query)) : [];
     const found = exact || (partial.length === 1 ? partial[0] : null);
-    if (found) changeWeatherStation(found[0]);
+    if (found) {
+      changeWeatherStation(found.id);
+      setWeatherStationNote(found.place ? `${found.place}에는 관측 지점이 없어 가까운 ${stationNameOf(found.id)} 지점을 씁니다` : '');
+    }
     setWeatherStationQuery(null);
     return Boolean(found);
   };
@@ -2118,19 +2132,21 @@ export default function App() {
         onChange={(e) => {
           const text = e.target.value;
           // 목록에서 고르면 바로 확정
-          if (KMA_STATIONS.some(([, name]) => name === text)) commitWeatherStationQuery(text);
+          if (KMA_STATIONS.some(([, name]) => name === text) || KMA_NEARBY_PLACES.some((item) => nearbyLabel(item) === text)) commitWeatherStationQuery(text);
           else setWeatherStationQuery(text);
         }}
         onBlur={(e) => commitWeatherStationQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitWeatherStationQuery(e.target.value); e.target.blur(); } }}
         placeholder={`${weatherStationName} (지점 이름 검색)`}
-        title="기상청 관측 지점 (이름을 치면 검색됩니다)"
+        title="기상청 관측 지점 (시·군 이름을 치면 검색됩니다)"
         aria-label="기상청 관측 지점"
-        className="w-40 p-1.5 border border-slate-300 rounded text-xs bg-white outline-none"
+        className="w-44 p-1.5 border border-slate-300 rounded text-xs bg-white outline-none"
       />
       <datalist id="kma-station-list">
         {KMA_STATIONS.map(([id, name]) => <option key={id} value={name} />)}
+        {KMA_NEARBY_PLACES.map((item) => <option key={`near-${item[0]}`} value={nearbyLabel(item)} />)}
       </datalist>
+      {weatherStationNote && <span className="text-slate-500">{weatherStationNote}</span>}
     </>
   );
 
