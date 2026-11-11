@@ -6254,6 +6254,23 @@ export default function App() {
         mergeCellsNode.setAttribute('count', String(getChildElementsByLocalName(mergeCellsNode, 'mergeCell').length));
       }
     }
+    // 새 병합 범위 추가 (예: 선택번호 칸을 세 줄로)
+    if (Array.isArray(options.addMerges) && options.addMerges.length > 0) {
+      let mergeCellsNode = worksheet.getElementsByTagNameNS('*', 'mergeCells')[0];
+      if (!mergeCellsNode) {
+        mergeCellsNode = doc.createElementNS(ns, 'mergeCells');
+        if (sheetData.nextSibling) worksheet.insertBefore(mergeCellsNode, sheetData.nextSibling);
+        else worksheet.appendChild(mergeCellsNode);
+      }
+      const existing = getChildElementsByLocalName(mergeCellsNode, 'mergeCell').map((node) => node.getAttribute('ref'));
+      options.addMerges.forEach((ref) => {
+        if (existing.includes(ref)) return;
+        const node = doc.createElementNS(ns, 'mergeCell');
+        node.setAttribute('ref', ref);
+        mergeCellsNode.appendChild(node);
+      });
+      mergeCellsNode.setAttribute('count', String(getChildElementsByLocalName(mergeCellsNode, 'mergeCell').length));
+    }
 
     if (options.shiftRefsToSheet && Number.isFinite(options.shiftRefsFromRow) && options.shiftRefsDelta) {
       shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
@@ -6605,20 +6622,24 @@ export default function App() {
         // 공정시험기준의 방법 이름과 기구 이름으로 적는다 (ES 01321.1 흡습관법 / ES 01321.2 임핀저법)
         const methodName = exportMoistureMethod.label.replace(/\s*\(.*\)$/, '');
         addUpdate('수분량', 'A18', `▶ ${methodName} (${exportMoistureMethod.standard})`);
-        addUpdate('수분량', 'C19', '측정전 무게 ma1');
-        addUpdate('수분량', 'D19', '측정후 무게 ma2');
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
         for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, exportMoistureMethod.items[i] || '-');
         addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
         // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 칸의 이름을 오리피스압으로 적는다
         if (exportMoistureMethod.id === 'impinger') {
-          addUpdate('수분량', 'F26', '오리피스압 ΔH');
-          addUpdate('수분량', 'G26', 'ΔH ÷ 13.6 (Pm)');
+          // 칸이 좁아 이름만 적는다 (단위는 아랫줄의 mmH₂O / mmHg 그대로)
+          addUpdate('수분량', 'F26', '오리피스압');
+          addUpdate('수분량', 'G26', '오리피스압');
         }
       }
       // 사후 수분량(본 측정)은 항상 입자 샘플러: 가스미터압 칸은 평균 오리피스압이다
-      addUpdate('수분량', 'F41', '오리피스압 ΔH');
-      addUpdate('수분량', 'G41', 'ΔH ÷ 13.6 (Pm)');
+      // 사후 수분량 표의 이름도 위 표와 같은 말로
+      for (let i = 0; i < layout.impingerRows; i++) addUpdate('수분량', `A${33 + i}`, `임핀저 ${i + 1}`);
+      addUpdate('수분량', 'E32', '흡습 수분량(전후차)');
+      // 본 측정 가스흡인량 표의 머리줄: 임핀저가 4개인 양식은 41행, 6개인 PAHs 양식은 43행
+      const postMeterHeadRow = 41 + (layout.impingerRows - 4);
+      addUpdate('수분량', `F${postMeterHeadRow}`, '오리피스압');
+      addUpdate('수분량', `G${postMeterHeadRow}`, '오리피스압');
       if (exportMoistureMethod.id === 'auto') {
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       } else {
@@ -6770,14 +6791,18 @@ export default function App() {
                 meterRowColors,
                 rowStyler,
               }
-            : (meterExtraRows !== 0
-              ? {
-                  shiftRefsToSheet: recordSheet,
-                  shiftRefsFromRow: layout.meterTemplateEndRow + 1,
-                  shiftRefsDelta: meterExtraRows,
-                  extendRangeEndFrom: layout.meterTemplateEndRow,
-                }
-              : {})
+            : {
+                ...(meterExtraRows !== 0
+                  ? {
+                      shiftRefsToSheet: recordSheet,
+                      shiftRefsFromRow: layout.meterTemplateEndRow + 1,
+                      shiftRefsDelta: meterExtraRows,
+                      extendRangeEndFrom: layout.meterTemplateEndRow,
+                    }
+                  : {}),
+                // 수분량 시트: 측정방법이 세 줄이 되었으므로 선택번호 칸도 세 줄로 합친다
+                ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'] } : {}),
+              }
         );
         zip.file(sheetPath, patched);
       }
