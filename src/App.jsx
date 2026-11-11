@@ -540,7 +540,26 @@ const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
   impingers: [1, 2, 3, 4].map((id) => ({ id, initial: '', final: '' })),
   meterStart: '', meterEnd: '', meterTemp: '', pressure: '', orifice: '',
+  // 흡습관법은 가스 샘플러로 흡입한다: 그 샘플러의 보정계수, 습식 가스미터 여부
+  gasSamplerId: '', yd: '', wetMeter: false,
 });
+// 사전 수분량 계산에 쓰는 가스미터 보정계수: 흡습관법은 가스 샘플러의 Yd(적어 둔 값), 임핀저법은 입자 샘플러의 Yd
+const getPreMoistureYd = (method, data) => {
+  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : NaN; };
+  if (method && method.id === 'imp2') {
+    const own = num(data?.preImpinger?.yd);
+    return Number.isFinite(own) ? own : 1;
+  }
+  const main = num(data?.gasMeterFactor);
+  return Number.isFinite(main) ? main : 1;
+};
+// θ(℃)에서 물의 포화수증기압(mmHg). 습식 가스미터를 쓸 때 빼 주는 값 (ES 01114.c 식 9의 Pv)
+const saturationVaporMmHg = (tempC) => (Number.isFinite(tempC) ? 4.5812 * Math.pow(10, (7.5 * tempC) / (237.3 + tempC)) : NaN);
+const getPreMoisturePv = (method, data) => {
+  if (!method || method.id !== 'imp2' || !data?.preImpinger?.wetMeter) return 0;
+  const pv = saturationVaporMmHg(parseFloat(data.preImpinger.meterTemp));
+  return Number.isFinite(pv) ? pv : 0;
+};
 // 실제로 측정값이 들어간 마지막 기록표 행 (표 자동 생성으로 미리 채워지는 채취점·시간은 측정값으로 보지 않음)
 const METER_MEASURED_FIELDS = ['stackTemp', 'dp', 'sp', 'pressure', 'volume', 'tmIn', 'tmOut', 'vacuum', 'impingerTemp'];
 const getLastMeasuredMeterIdx = (rows) => (rows || []).reduce((lastIdx, row, idx) => (
@@ -4751,7 +4770,8 @@ export default function App() {
         return Number.isFinite(a) && Number.isFinite(b) ? sum + (b - a) : sum;
       }, 0);
       const vm = num(pre.meterEnd) - num(pre.meterStart);
-      const yd = num(data.gasMeterFactor) || 1;
+      const yd = getPreMoistureYd(impMethod, data);
+      const pv = getPreMoisturePv(impMethod, data);
       const tm = num(pre.meterTemp);
       // 측정공에서 기압(E28), 비어 있으면 대기압
       const holeP = Number.isFinite(num(pre.pressure)) ? num(pre.pressure) : Pa;
@@ -4761,7 +4781,8 @@ export default function App() {
       }
       // 엑셀 수분량!H28 = 22.4/18*E24/(C28*(273/(273+D28))*((E28+G28)/760)+22.4/18*E24)*100, C28=(B28-A28)*Yd, G28=F28/13.6
       const vw = (22.4 / 18) * vlc;
-      const vmStd = vm * yd * (273 / (273 + tm)) * ((holeP + orifice / 13.6) / 760);
+      // 건식 가스미터: (Pa+Pm)/760, 습식 가스미터: (Pa+Pm−Pv)/760 (ES 01114.c 식 9·10)
+      const vmStd = vm * yd * (273 / (273 + tm)) * ((holeP + orifice / 13.6 - pv) / 760);
       const value = (vw / (vmStd + vw)) * 100;
       return { ready: Number.isFinite(value), value, detail: `흡습 수분 ${vlc.toFixed(2)} g · 흡입 ${vm.toFixed(2)} L` };
     }
@@ -6401,7 +6422,7 @@ export default function App() {
           rows: method.items.map((label, i) => ({ label, initial: report.preImpinger?.impingers?.[i]?.initial, final: report.preImpinger?.impingers?.[i]?.final })),
           meterStart: report.preImpinger?.meterStart, meterEnd: report.preImpinger?.meterEnd, meterTemp: report.preImpinger?.meterTemp,
           pressure: String(report.preImpinger?.pressure ?? '').trim() !== '' ? report.preImpinger.pressure : report.atmPressure,
-          orifice: report.preImpinger?.orifice, yd: report.gasMeterFactor,
+          orifice: report.preImpinger?.orifice, yd: getPreMoistureYd(method, report), pv: getPreMoisturePv(method, report),
         } : null,
         probeLengthM: Number.isFinite(pitotLength) && pitotLength > 0 ? Math.round(pitotLength) / 100 : null,
       });
@@ -6620,6 +6641,13 @@ export default function App() {
         addUpdate('수분량', 'E28', toNumber(preImp.pressure) ?? toNumber(sourceData.atmPressure));
         addUpdate('수분량', 'F28', preOrifice);
         addUpdate('수분량', 'G28', preOrifice !== null ? preOrifice / 13.6 : 0);
+        if (exportMoistureMethod.id === 'imp2') {
+          // 흡습관법은 가스 샘플러로 흡입: 가스채취량에 그 샘플러의 보정계수를 쓰고, 습식 가스미터면 포화수증기압을 뺀다
+          const tubeYd = getPreMoistureYd(exportMoistureMethod, sourceData);
+          const tubePv = Math.round(getPreMoisturePv(exportMoistureMethod, sourceData) * 100) / 100;
+          addUpdate('수분량', 'C28', { formula: `(B28-A28)*${tubeYd}` });
+          addUpdate('수분량', 'H28', { formula: `22.4/18*E24/(C28*(273/(273+D28))*((E28+G28-${tubePv})/760)+22.4/18*E24)*100` });
+        }
       } else {
         addUpdate('수분량', 'A28', toNumber(firstVolume));
         addUpdate('수분량', 'B28', toNumber(lastVolume));
@@ -9030,7 +9058,8 @@ export default function App() {
                   const n = (v) => { const x = parseFloat(v); return Number.isFinite(x) ? x : NaN; };
                   const stages = activeMoistureMethod.stages;
                   const vlc = (pre.impingers || []).slice(0, stages).reduce((sum, imp) => { const d = n(imp.final) - n(imp.initial); return Number.isFinite(d) ? sum + d : sum; }, 0);
-                  const yd = n(formData.gasMeterFactor) || 1;
+                  const yd = getPreMoistureYd(activeMoistureMethod, formData);
+                  const pv = getPreMoisturePv(activeMoistureMethod, formData);
                   const vol = (n(pre.meterEnd) - n(pre.meterStart)) * yd;
                   const gaugeMmHg = n(pre.orifice) / 13.6;
                   const result = getMoistureByMethod(activeMoistureMethod.id);
@@ -9040,6 +9069,30 @@ export default function App() {
                   return (
                     <div className="space-y-3">
                       <p className="text-[11px] text-slate-600"><b>{activeMoistureMethod.standard} {activeMoistureMethod.label.replace(/\s*\(.*\)$/, '')}</b> · {activeMoistureMethod.guide}</p>
+                      {activeMoistureMethod.id === 'imp2' && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+                          <span className="font-bold">가스 샘플러</span>
+                          <select
+                            value={pre.gasSamplerId || ''}
+                            onChange={(e) => {
+                              const found = gasSamplers.find((item) => String(item.id) === String(e.target.value));
+                              setPre({ gasSamplerId: e.target.value, ...(found ? { yd: String(found.yd) } : {}) });
+                            }}
+                            className="p-1.5 border border-slate-300 rounded bg-white outline-none"
+                            title="흡습관법에 쓴 가스 샘플러"
+                          >
+                            <option value="">직접 입력</option>
+                            {gasSamplers.map((item) => <option key={item.id} value={item.id}>{`가스샘플러 ${item.id}${item.sn ? ` (${item.sn})` : ''}`}</option>)}
+                          </select>
+                          <span className="font-bold">보정계수 Y<sub>d</sub></span>
+                          <input type="number" step="0.0001" value={pre.yd || ''} onChange={(e) => setPre({ yd: e.target.value, gasSamplerId: '' })} placeholder="1" title="가스 샘플러 보정계수" className="w-24 p-1.5 border border-slate-300 rounded text-center outline-none" />
+                          <label className="inline-flex items-center gap-1">
+                            <input type="checkbox" checked={Boolean(pre.wetMeter)} onChange={(e) => setPre({ wetMeter: e.target.checked })} className="w-3.5 h-3.5" />
+                            습식 가스미터 (포화수증기압 P<sub>v</sub> 차감)
+                          </label>
+                          {pv > 0 && <span className="text-slate-500">P<sub>v</sub> = {pv.toFixed(1)} mmHg</span>}
+                        </div>
+                      )}
                       <table className="w-full text-sm text-center border-collapse">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700">
@@ -9103,7 +9156,7 @@ export default function App() {
                       {activeMoistureMethod.maRange && vlc > 0 && (vlc < activeMoistureMethod.maRange[0] || vlc > activeMoistureMethod.maRange[1]) && (
                         <p className="text-[11px] font-bold text-red-600">흡습 수분의 질량이 {vlc.toFixed(2)} g입니다. 기준은 {activeMoistureMethod.maRange[0]} g~{activeMoistureMethod.maRange[1].toFixed(1)} g이 되도록 흡입하라고 정하고 있습니다.</p>
                       )}
-                      <p className="text-[11px] text-slate-500">X<sub>w</sub> = (22.4/18 × m<sub>a</sub>) ÷ [V<sub>m</sub> × 273/(273+θ<sub>m</sub>) × (P<sub>a</sub>+P<sub>m</sub>)/760 + 22.4/18 × m<sub>a</sub>] × 100. 가스채취량 V<sub>m</sub> = (측정후 − 측정전) × 보정계수(Y<sub>d</sub>), P<sub>m</sub> = 가스미터압(mmH₂O) ÷ 13.6. 측정공에서 기압을 비워 두면 대기압을 씁니다.{result.ready ? ` 결과 표기(소수 첫째 자리): ${result.value.toFixed(1)} %` : ''}</p>
+                      <p className="text-[11px] text-slate-500">X<sub>w</sub> = (22.4/18 × m<sub>a</sub>) ÷ [V<sub>m</sub> × 273/(273+θ<sub>m</sub>) × (P<sub>a</sub>+P<sub>m</sub>)/760 + 22.4/18 × m<sub>a</sub>] × 100. 가스채취량 V<sub>m</sub> = (측정후 − 측정전) × {activeMoistureMethod.id === 'imp2' ? '가스 샘플러 보정계수' : '입자 샘플러 보정계수'}(Y<sub>d</sub> = {yd}), P<sub>m</sub> = 가스미터압(mmH₂O) ÷ 13.6.{pv > 0 ? ' 습식 가스미터라 (Pa+Pm−Pv)로 계산합니다.' : ''} 측정공에서 기압을 비워 두면 대기압을 씁니다.{result.ready ? ` 결과 표기(소수 첫째 자리): ${result.value.toFixed(1)} %` : ''}</p>
                     </div>
                   );
                 })()}
