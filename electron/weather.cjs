@@ -51,4 +51,64 @@ const fetchCityObservations = async (tm, fetchImpl = fetch) => {
   return { tm: shown ? shown[1] : tm, stations: parseCityObservations(html) };
 };
 
-module.exports = { parseCityObservations, fetchCityObservations };
+// ── 동네(읍·면·동) 단위: 기상청 날씨누리의 장소 검색과 "현재 날씨" ──
+const SITE = 'https://www.weather.go.kr';
+const HEADERS = { 'User-Agent': 'Mozilla/5.0', Referer: `${SITE}/w/index.do` };
+
+// 장소 검색: 시·군·구와 읍·면·동을 먼저, 모자라면 시설·지명까지. 결과: [{ title, address, dongCode, lat, lon }]
+const searchPlaces = async (query, fetchImpl = fetch) => {
+  const text = String(query || '').trim();
+  if (!text) return [];
+  const results = [];
+  // A3: 시·군·구, A1: 읍·면·동, A2: 시설·지명 순으로 모은다
+  for (const src of ['A3', 'A1', 'A2']) {
+    const url = `${SITE}/w/renew2021/rest/main/place-search.do?query=${encodeURIComponent(text)}&start=1&src=${src}`;
+    try {
+      const response = await fetchImpl(url, { headers: HEADERS });
+      if (!response.ok) continue;
+      const list = JSON.parse(await response.text());
+      (Array.isArray(list) ? list : []).forEach((item) => {
+        const lat = Number(item.latitude); const lon = Number(item.longitude);
+        if (!item.dongCode || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        results.push({ title: String(item.title || '').trim(), address: String(item.address || '').trim(), dongCode: String(item.dongCode), lat, lon });
+      });
+    } catch (error) { /* 다음 종류로 */ }
+    if (src !== 'A3' && results.length >= 6) break;
+  }
+  const seen = new Set();
+  return results.filter((item) => { const key = `${item.title}|${item.address}`; if (seen.has(key)) return false; seen.add(key); return true; }).slice(0, 12);
+};
+
+const parseCurrentWeather = (html) => {
+  const pick = (pattern) => { const m = pattern.exec(html); return m ? stripTags(m[1]) : ''; };
+  const wind = pick(/ic-wind[\s\S]*?<span class="val">([\s\S]*?)<\/span>\s*<\/li>/);
+  const windMatch = /^(\S+)\s+(-?\d+(?:\.\d+)?)/.exec(wind);
+  return {
+    updated: pick(/class="updated-at"[^>]*>\s*<span>([^<]*)<\/span>/),
+    temp: toNumber(pick(/class="tmp">\s*(-?\d+(?:\.\d+)?)/)),
+    humidity: toNumber(pick(/ic-hm[\s\S]*?<span class="val">([\s\S]*?)<\/span>\s*<\/li>/)),
+    windDir: windMatch ? windMatch[1] : '',
+    windSpeed: windMatch ? Number(windMatch[2]) : null,
+  };
+};
+// 동네예보 시간별 표의 첫 칸(지금 시각대) 하늘 상태
+const parseForecastSky = (html) => {
+  const m = /<ul class="item[^"]*"[^>]*data-time="[^"]*"[\s\S]*?class="wic[^"]*"\s+title="([^"]*)"/.exec(html);
+  return m ? m[1].replace(/\s+/g, '') : '';
+};
+// 동(행정동 코드)의 현재 날씨: 가까운 관측값(습도·바람)과 동네예보의 지금 하늘 상태
+const fetchLocalWeather = async (dongCode, fetchImpl = fetch) => {
+  const code = String(dongCode || '');
+  if (!/^\d{10}$/.test(code)) throw new Error('위치 코드가 올바르지 않습니다.');
+  const current = await fetchImpl(`${SITE}/w/wnuri-fct2021/main/current-weather.do?code=${code}&unit=m%2Fs&aws=N`, { headers: HEADERS });
+  if (!current.ok) throw new Error(`기상청 응답 오류 (${current.status})`);
+  const result = parseCurrentWeather(await current.text());
+  let sky = '';
+  try {
+    const forecast = await fetchImpl(`${SITE}/w/wnuri-fct2021/main/digital-forecast.do?code=${code}&unit=m%2Fs&hr1=Y`, { headers: HEADERS });
+    if (forecast.ok) sky = parseForecastSky(await forecast.text());
+  } catch (error) { /* 하늘 상태 없이 진행 */ }
+  return { ...result, sky };
+};
+
+module.exports = { parseCityObservations, fetchCityObservations, searchPlaces, fetchLocalWeather, parseCurrentWeather, parseForecastSky };

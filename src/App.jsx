@@ -1845,7 +1845,18 @@ const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
 const KMA_STATIONS = [['105', '강릉'], ['259', '강진군'], ['201', '강화'], ['294', '거제'], ['284', '거창'], ['283', '경주시'], ['185', '고산'], ['172', '고창'], ['251', '고창군'], ['262', '고흥'], ['266', '광양시'], ['156', '광주'], ['279', '구미'], ['140', '군산'], ['238', '금산'], ['253', '김해시'], ['247', '남원'], ['295', '남해'], ['100', '대관령'], ['143', '대구'], ['133', '대전'], ['98', '동두천'], ['106', '동해'], ['165', '목포'], ['273', '문경'], ['288', '밀양'], ['102', '백령도'], ['235', '보령'], ['258', '보성군'], ['226', '보은'], ['271', '봉화'], ['159', '부산'], ['243', '부안'], ['236', '부여'], ['104', '북강릉'], ['296', '북부산'], ['255', '북창원'], ['93', '북춘천'], ['289', '산청'], ['137', '상주'], ['189', '서귀포'], ['129', '서산'], ['108', '서울'], ['181', '서청주'], ['188', '성산'], ['239', '세종'], ['90', '속초'], ['119', '수원'], ['254', '순창군'], ['174', '순천'], ['136', '안동'], ['257', '양산시'], ['202', '양평'], ['168', '여수'], ['252', '영광군'], ['277', '영덕'], ['121', '영월'], ['272', '영주'], ['281', '영천'], ['170', '완도'], ['115', '울릉도'], ['152', '울산'], ['130', '울진'], ['114', '원주'], ['263', '의령군'], ['278', '의성'], ['203', '이천'], ['211', '인제'], ['112', '인천'], ['244', '임실'], ['248', '장수'], ['260', '장흥'], ['146', '전주'], ['217', '정선군'], ['245', '정읍'], ['184', '제주'], ['221', '제천'], ['268', '진도군'], ['192', '진주'], ['155', '창원'], ['232', '천안'], ['95', '철원'], ['276', '청송군'], ['131', '청주'], ['135', '추풍령'], ['101', '춘천'], ['127', '충주'], ['216', '태백'], ['162', '통영'], ['99', '파주'], ['138', '포항'], ['264', '함양군'], ['285', '합천'], ['261', '해남'], ['177', '홍성'], ['212', '홍천'], ['169', '흑산도']];
 // 관측 지점이 없는 시·군과 공단: [이름, 가장 가까운 관측 지점 번호]. 검색하면 가까운 지점으로 이어 준다
 const KMA_NEARBY_PLACES = [['가평', '101'], ['경산', '143'], ['계룡', '133'], ['고령', '285'], ['고성(강원)', '90'], ['고성(경남)', '162'], ['고양', '108'], ['곡성', '247'], ['공주', '239'], ['과천', '108'], ['광명', '108'], ['광주(경기)', '202'], ['괴산', '127'], ['구례', '174'], ['구리', '108'], ['군위', '278'], ['군포', '119'], ['김제', '243'], ['김천', '135'], ['김포', '112'], ['나주', '156'], ['남양주', '108'], ['논산', '236'], ['단양', '272'], ['담양', '254'], ['당진', '129'], ['대산', '129'], ['마산', '155'], ['무안', '165'], ['무주', '238'], ['반월', '119'], ['부천', '112'], ['사천', '192'], ['삼척', '106'], ['서천', '140'], ['성남', '119'], ['성주', '279'], ['시화', '112'], ['시흥', '112'], ['신안', '165'], ['아산', '232'], ['안산', '119'], ['안성', '232'], ['안양', '119'], ['양구', '211'], ['양양', '90'], ['양주', '98'], ['여주', '203'], ['여천', '168'], ['연천', '95'], ['영동', '135'], ['영암', '259'], ['영양', '276'], ['예산', '177'], ['예천', '272'], ['오산', '119'], ['옥천', '133'], ['온산', '152'], ['완주', '146'], ['용인', '119'], ['음성', '127'], ['의왕', '119'], ['의정부', '98'], ['익산', '140'], ['장성', '251'], ['증평', '131'], ['진안', '248'], ['진천', '232'], ['진해', '155'], ['창녕', '288'], ['청도', '288'], ['청양', '236'], ['칠곡', '279'], ['태안', '129'], ['평창', '121'], ['평택', '232'], ['포천', '98'], ['하남', '108'], ['하동', '266'], ['함안', '263'], ['함평', '252'], ['화성', '119'], ['화순', '156'], ['화천', '93'], ['횡성', '114']];
+// 관측 지점의 대략 위치 [위도, 경도]: 검색한 장소에서 가장 가까운 지점을 고르는 데 쓴다
+const KMA_STATION_COORDS = { 90: [38.25, 128.56], 93: [37.95, 127.75], 95: [38.15, 127.30], 98: [37.90, 127.06], 99: [37.89, 126.77], 100: [37.68, 128.72], 101: [37.90, 127.74], 102: [37.97, 124.71], 104: [37.80, 128.86], 105: [37.75, 128.89], 106: [37.51, 129.12], 108: [37.57, 126.97], 112: [37.48, 126.62], 114: [37.34, 127.95], 115: [37.48, 130.90], 119: [37.27, 126.99], 121: [37.18, 128.46], 127: [36.97, 127.95], 129: [36.78, 126.49], 130: [36.99, 129.41], 131: [36.64, 127.44], 133: [36.37, 127.37], 135: [36.22, 127.99], 136: [36.57, 128.71], 137: [36.41, 128.16], 138: [36.03, 129.38], 140: [36.00, 126.76], 143: [35.88, 128.65], 146: [35.84, 127.12], 152: [35.58, 129.33], 155: [35.17, 128.57], 156: [35.17, 126.89], 159: [35.10, 129.03], 162: [34.85, 128.44], 165: [34.82, 126.38], 168: [34.74, 127.74], 169: [34.69, 125.45], 170: [34.40, 126.70], 172: [35.35, 126.60], 174: [35.02, 127.37], 177: [36.66, 126.69], 181: [36.64, 127.38], 184: [33.51, 126.53], 185: [33.29, 126.16], 188: [33.39, 126.88], 189: [33.25, 126.57], 192: [35.16, 128.04], 201: [37.71, 126.45], 202: [37.49, 127.49], 203: [37.26, 127.48], 211: [38.06, 128.17], 212: [37.68, 127.88], 216: [37.17, 128.99], 217: [37.38, 128.65], 221: [37.16, 128.19], 226: [36.49, 127.73], 232: [36.76, 127.29], 235: [36.33, 126.56], 236: [36.27, 126.92], 238: [36.11, 127.48], 239: [36.49, 127.24], 243: [35.73, 126.72], 244: [35.61, 127.29], 245: [35.56, 126.87], 247: [35.41, 127.33], 248: [35.66, 127.52], 251: [35.43, 126.70], 252: [35.28, 126.48], 253: [35.23, 128.89], 254: [35.37, 127.13], 255: [35.23, 128.67], 257: [35.31, 129.02], 258: [34.76, 127.21], 259: [34.63, 126.77], 260: [34.69, 126.92], 261: [34.55, 126.57], 262: [34.62, 127.28], 263: [35.32, 128.29], 264: [35.51, 127.75], 266: [34.94, 127.69], 268: [34.47, 126.26], 271: [36.94, 128.91], 272: [36.87, 128.52], 273: [36.63, 128.15], 276: [36.44, 129.04], 277: [36.53, 129.41], 278: [36.36, 128.69], 279: [36.13, 128.32], 281: [35.98, 128.95], 283: [35.82, 129.20], 284: [35.67, 127.91], 285: [35.57, 128.17], 288: [35.49, 128.74], 289: [35.41, 127.88], 294: [34.89, 128.60], 295: [34.82, 127.93], 296: [35.22, 128.96] };
+const findNearestKmaStation = (lat, lon) => {
+  let best = null;
+  Object.entries(KMA_STATION_COORDS).forEach(([id, [sLat, sLon]]) => {
+    const km = Math.hypot((lat - sLat) * 111, (lon - sLon) * 111 * Math.cos((lat * Math.PI) / 180));
+    if (!best || km < best.km) best = { id, km };
+  });
+  return best;
+};
 const WEATHER_STATION_STORAGE_KEY = 'dust-sampling.weather-station.v1';
+const WEATHER_PLACE_STORAGE_KEY = 'dust-sampling.weather-place.v1';
 // 날짜(YYYY-MM-DD)와 시각(HH:MM)으로 조회할 정시를 정한다. 시각이 없으면 오늘은 지금 시각, 지난 날은 12시
 const buildKmaObservationTime = (date, timeText) => {
   const now = new Date();
@@ -2032,8 +2043,25 @@ export default function App() {
     try { const saved = localStorage.getItem(WEATHER_STATION_STORAGE_KEY); return KMA_STATIONS.some(([id]) => id === saved) ? saved : '108'; } catch { return '108'; }
   });
   const [weatherBusy, setWeatherBusy] = useState(false);
-  const changeWeatherStation = (stn) => {
+  // 검색해서 고른 장소(동 단위). 있으면 오늘 날씨는 그 동네 값으로 가져온다: { label, dongCode, lat, lon }
+  const [weatherPlace, setWeatherPlace] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(WEATHER_PLACE_STORAGE_KEY) || 'null');
+      return saved && /^\d{10}$/.test(String(saved.dongCode || '')) ? saved : null;
+    } catch { return null; }
+  });
+  const [weatherPlaceResults, setWeatherPlaceResults] = useState(null); // null: 검색 전, []: 결과 없음
+  const saveWeatherPlace = (place) => {
+    setWeatherPlace(place);
+    try {
+      if (place) localStorage.setItem(WEATHER_PLACE_STORAGE_KEY, JSON.stringify(place));
+      else localStorage.removeItem(WEATHER_PLACE_STORAGE_KEY);
+    } catch (error) { console.error(error); }
+  };
+  const changeWeatherStation = (stn, { keepPlace = false } = {}) => {
     setWeatherStation(stn);
+    // 관측 지점을 직접 고르면 검색해 둔 장소는 지운다
+    if (!keepPlace) { saveWeatherPlace(null); setWeatherPlaceResults(null); }
     try { localStorage.setItem(WEATHER_STATION_STORAGE_KEY, stn); } catch (error) { console.error(error); }
   };
   // 고른 지점의 정시 관측값을 받아 온다. 실패하면 알리고 null
@@ -2046,6 +2074,19 @@ export default function App() {
     if (!when) { alert('측정 일자가 오늘보다 뒤라서 관측 자료가 없습니다.'); return null; }
     setWeatherBusy(true);
     try {
+      // 장소를 검색해 두었고 측정일이 오늘이면: 그 동네의 현재 날씨(가까운 관측값 + 동네예보의 지금 하늘 상태)
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      if (weatherPlace && when.day === today && window.stackpilotDesktop.fetchLocalWeather) {
+        try {
+          const local = await window.stackpilotDesktop.fetchLocalWeather(weatherPlace.dongCode);
+          if (local && (local.sky || local.humidity !== null || local.windDir)) {
+            return { name: weatherPlace.label, stn: '', weather: local.sky || '', weatherText: local.sky || '', cloud: null, temp: local.temp, humidity: local.humidity, windDir: local.windDir, windSpeed: local.windSpeed, shownTime: `${local.updated} 현재`, local: true };
+          }
+        } catch (error) {
+          console.error('동네 날씨 가져오기 실패, 관측 지점 자료로 대신합니다:', error);
+        }
+      }
       const result = await window.stackpilotDesktop.fetchWeather(when.tm);
       const obs = (result?.stations || []).find((item) => item.stn === weatherStation);
       if (!obs) {
@@ -2063,7 +2104,7 @@ export default function App() {
   };
   // 기온·기압은 현장에서 직접 잰 값을 적으므로 기상청 값으로 채우지 않는다
   const describeKmaObservation = (obs) => [
-    `기상청 ${obs.name} 지점 · ${obs.shownTime} 관측`,
+    obs.local ? `기상청 ${obs.name} · ${obs.shownTime}` : `기상청 ${obs.name} 지점 · ${obs.shownTime} 관측`,
     `날씨 ${obs.weatherText || '(관측값 없음)'} · 습도 ${obs.humidity ?? '-'} % · 풍향 ${obs.windDir || '-'} · 풍속 ${obs.windSpeed ?? '-'} m/s`,
   ].join('\n');
   // 기록부: 날씨만 채운다
@@ -2122,12 +2163,38 @@ export default function App() {
     setWeatherStationQuery(null);
     return Boolean(found);
   };
+  const weatherSearchInputRef = useRef(null);
+  // 기상청 장소 검색: 동 이름·주소·지명으로 찾아 목록을 띄운다
+  const searchWeatherPlaces = async () => {
+    const text = String(weatherSearchInputRef.current?.value || '').trim();
+    if (!text) { alert('찾을 곳의 이름을 적어 주세요. (예: 안산, 고잔동, 온산읍)'); return; }
+    if (!window.stackpilotDesktop?.searchPlaces) { alert('장소 검색은 설치형 프로그램(exe)에서만 쓸 수 있습니다.'); return; }
+    setWeatherBusy(true);
+    try {
+      const list = await window.stackpilotDesktop.searchPlaces(text);
+      setWeatherPlaceResults(Array.isArray(list) ? list : []);
+    } catch (error) {
+      console.error('장소 검색 실패:', error);
+      alert('장소를 찾지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+    } finally {
+      setWeatherBusy(false);
+    }
+  };
+  const chooseWeatherPlace = (item) => {
+    const nearest = findNearestKmaStation(item.lat, item.lon);
+    if (nearest) changeWeatherStation(nearest.id, { keepPlace: true });
+    saveWeatherPlace({ label: item.address || item.title, dongCode: item.dongCode, lat: item.lat, lon: item.lon });
+    setWeatherPlaceResults(null);
+    setWeatherStationQuery(null);
+    setWeatherStationNote('');
+  };
   const weatherStationSelect = (
     <>
       <input
+        ref={weatherSearchInputRef}
         type="text"
         list="kma-station-list"
-        value={weatherStationQuery === null ? weatherStationName : weatherStationQuery}
+        value={weatherStationQuery === null ? (weatherPlace ? weatherPlace.label : weatherStationName) : weatherStationQuery}
         onFocus={(e) => { setWeatherStationQuery(''); e.target.select(); }}
         onChange={(e) => {
           const text = e.target.value;
@@ -2136,8 +2203,14 @@ export default function App() {
           else setWeatherStationQuery(text);
         }}
         onBlur={(e) => commitWeatherStationQuery(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitWeatherStationQuery(e.target.value); e.target.blur(); } }}
-        placeholder={`${weatherStationName} (지점 이름 검색)`}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          // 관측 지점 이름이면 바로 정하고, 아니면 기상청에서 장소를 찾는다
+          const text = e.target.value;
+          if (KMA_STATIONS.some(([, name]) => name === String(text).trim())) { commitWeatherStationQuery(text); e.target.blur(); } else if (String(text).trim()) searchWeatherPlaces();
+        }}
+        placeholder={`${weatherPlace ? weatherPlace.label : weatherStationName} (이름 검색)`}
         title="기상청 관측 지점 (시·군 이름을 치면 검색됩니다)"
         aria-label="기상청 관측 지점"
         className="w-44 p-1.5 border border-slate-300 rounded text-xs bg-white outline-none"
@@ -2146,7 +2219,20 @@ export default function App() {
         {KMA_STATIONS.map(([id, name]) => <option key={id} value={name} />)}
         {KMA_NEARBY_PLACES.map((item) => <option key={`near-${item[0]}`} value={nearbyLabel(item)} />)}
       </datalist>
-      {weatherStationNote && <span className="text-slate-500">{weatherStationNote}</span>}
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={searchWeatherPlaces} disabled={weatherBusy} className="px-2 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs disabled:opacity-50">장소 검색</button>
+      {weatherPlace && <span className="text-slate-700">위치: <b>{weatherPlace.label}</b> · 지난 날짜는 {stationNameOf(weatherStation)} 지점</span>}
+      {!weatherPlace && weatherStationNote && <span className="text-slate-500">{weatherStationNote}</span>}
+      {weatherPlaceResults !== null && (
+        <span className="basis-full flex flex-wrap items-center gap-1">
+          {weatherPlaceResults.length === 0 && <span className="text-slate-500">찾은 곳이 없습니다. 동 이름이나 시·군 이름으로 다시 찾아 보세요.</span>}
+          {weatherPlaceResults.map((item) => (
+            <button key={`${item.title}-${item.address}`} type="button" onClick={() => chooseWeatherPlace(item)} className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-[11px]">
+              {item.address && item.address !== item.title ? `${item.title} · ${item.address}` : item.title}
+            </button>
+          ))}
+          <button type="button" onClick={() => setWeatherPlaceResults(null)} className="px-2 py-1 text-[11px] text-slate-500 underline">닫기</button>
+        </span>
+      )}
     </>
   );
 

@@ -176,6 +176,16 @@ ipcMain.handle('desktop:fetch-weather', async (event, tm) => {
   return fetchCityObservations(text, (url, options) => net.fetch(url, options));
 });
 
+// 기상청 장소 검색(동·주소·지명)과 그 동네의 현재 날씨
+ipcMain.handle('desktop:search-places', async (event, query) => {
+  const { searchPlaces } = require('./weather.cjs');
+  return searchPlaces(String(query || '').slice(0, 60), (url, options) => net.fetch(url, options));
+});
+ipcMain.handle('desktop:fetch-local-weather', async (event, dongCode) => {
+  const { fetchLocalWeather } = require('./weather.cjs');
+  return fetchLocalWeather(String(dongCode || ''), (url, options) => net.fetch(url, options));
+});
+
 // 화면 안의 "창 닫기" 버튼: 창의 close 이벤트를 거치게 해서 저장 확인이 뜨도록 한다
 ipcMain.on('desktop:close-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
