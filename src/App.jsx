@@ -7252,6 +7252,45 @@ export default function App() {
         }
       }
 
+      // 쓰지 않는 2일차 시트는 지운다 (양식에 들어 있던 예시 날짜 이름의 시트가 그대로 남지 않게)
+      const templateDayNames = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)).map((m) => m[1]).filter((name) => name !== inputSheet);
+      const isDayUsed = (dayIdx) => Boolean(log.days[dayIdx]?.date)
+        || SAMPLING_LOG_SUBSTANCES.some((sub) => { const row = log.rows[String(sub.row)]; return row && row.requested && Number(row.dayIndex) === dayIdx; });
+      // 시트 이름 → 일차 번호: 양식의 두 시트는 1·2일차, 새로 만든 시트는 "N일차"
+      const dayIndexOfSheet = (name) => {
+        const added = /^(\d+)일차$/.exec(name);
+        if (added) return parseInt(added[1], 10) - 1;
+        return templateDayNames.indexOf(name);
+      };
+      if (templateDayNames.length >= 2 && !isDayUsed(1)) {
+        const unusedName = templateDayNames[1];
+        const sheetTags = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\/>/g)).map((m) => m[0]);
+        const position = sheetTags.findIndex((tag) => tag.includes(`name="${unusedName}"`));
+        const relId = position >= 0 ? (/r:id="([^"]+)"/.exec(sheetTags[position]) || [])[1] : '';
+        if (position >= 0 && relId) {
+          workbookXml = workbookXml.replace(sheetTags[position], '');
+          // 그 시트의 인쇄 영역 등 이름 정의를 지우고, 뒤 시트들의 번호를 하나씩 당긴다
+          workbookXml = workbookXml.replace(/<definedName\b[^>]*\blocalSheetId="(\d+)"[^>]*>[^<]*<\/definedName>/g, (full, idText) => {
+            const id = parseInt(idText, 10);
+            if (id === position) return '';
+            return id > position ? full.replace(`localSheetId="${id}"`, `localSheetId="${id - 1}"`) : full;
+          });
+          workbookXml = workbookXml.replace(/(<workbookView\b[^>]*\bactiveTab=")(\d+)(")/, (full, head, tab, tail) => `${head}${parseInt(tab, 10) >= position ? 0 : tab}${tail}`);
+          let relsNow = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+          const relTag = new RegExp(`<Relationship\\b[^>]*\\bId="${relId}"[^>]*/>`).exec(relsNow);
+          const target = relTag ? (/Target="([^"]+)"/.exec(relTag[0]) || [])[1] : '';
+          if (relTag) relsNow = relsNow.replace(relTag[0], '');
+          zip.file('xl/_rels/workbook.xml.rels', relsNow);
+          if (target) {
+            const partPath = `xl/${target.replace(/^\//, '').replace(/^xl\//, '')}`;
+            zip.remove(partPath);
+            zip.remove(partPath.replace(/worksheets\/([^/]+)$/, 'worksheets/_rels/$1.rels'));
+            const ctNow = zip.file('[Content_Types].xml');
+            if (ctNow) zip.file('[Content_Types].xml', (await ctNow.async('string')).replace(new RegExp(`<Override\\b[^>]*PartName="/${partPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*/>`), ''));
+          }
+        }
+      }
+
       // 날짜별 시트 이름을 실제 채취일(yyyymmdd)로 변경 (인쇄 영역 이름도 함께)
       const sheetNames = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)).map((m) => m[1]);
       const dayNames = log.days.map((day) => {
@@ -7261,8 +7300,9 @@ export default function App() {
           : '';
       });
       const used = new Set(sheetNames);
-      sheetNames.filter((name) => name !== inputSheet).forEach((oldName, idx) => {
-        const nextName = dayNames[idx];
+      sheetNames.filter((name) => name !== inputSheet).forEach((oldName) => {
+        // 순서가 아니라 그 시트가 맡은 일차의 날짜로 이름을 붙인다 (중간 일차를 건너뛴 경우에도 맞게)
+        const nextName = dayNames[dayIndexOfSheet(oldName)];
         if (!nextName || nextName === oldName || used.has(nextName)) return;
         used.add(nextName);
         workbookXml = workbookXml
