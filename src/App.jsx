@@ -516,8 +516,7 @@ const TABLE_PLAN_MAX_POINTS = 5; // 반경당 측정점 최대 개수
 const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 
 // ── 사전 수분량 측정 방법 ──
-// excelChoice: 양식 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표)
-// 사전 수분량 측정방법. excelChoice = 엑셀 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표 20~23행)
+// 사전 수분량 측정방법. 엑셀 수분량!C5 선택번호는 이 목록의 순서(1·2·3)를 그대로 쓴다
 // 사후 수분량(채취 후 임핀저 전후 무게)은 방법이 아니라 아래쪽 칸에 따로 적는다
 // 이름·기구·기록 항목은 「대기오염공정시험기준」 ES 01321(배출가스 중 수분량)을 따른다
 //  - 흡습관법 ES 01321.1 (시료채취장치 1형): 흡습관 2개에 입자상 무수염화칼슘, 채취 전후 무게 차가 흡습 수분의 질량 ma
@@ -525,14 +524,14 @@ const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 // 계산식(두 방법 공통): Xw = (22.4/18·ma) ÷ [Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18·ma] × 100
 const MOISTURE_METHODS = [
   {
-    id: 'imp2', label: '흡습관법 (2구)', excelChoice: 2, stages: 2, standard: 'ES 01321.1',
+    id: 'imp2', label: '흡습관법 (2구)', stages: 2, standard: 'ES 01321.1',
     items: ['흡습관 1', '흡습관 2'], unitTitle: '흡습관',
     guide: '흡습관(U자관) 2개에 입자상 무수염화칼슘을 넣고, 채취 전(ma1)·후(ma2) 무게 차를 흡습 수분의 질량 ma로 씁니다. 흡습된 수분이 0.1 g~1.0 g이 되도록 흡입합니다.',
     maRange: [0.1, 1.0],
   },
-  { id: 'auto', label: '자동측정법', excelChoice: 1, standard: 'ES 01321.3' },
+  { id: 'auto', label: '자동측정법', standard: 'ES 01321.3' },
   {
-    id: 'impinger', label: '임핀저법 (4구)', excelChoice: 2, stages: 4, standard: 'ES 01321.2',
+    id: 'impinger', label: '임핀저법 (4구)', stages: 4, standard: 'ES 01321.2',
     items: ['임핀저 1 (물 100 g)', '임핀저 2 (물 100 g)', '임핀저 3 (빈 것)', '임핀저 4 (실리카젤 200 g)'], unitTitle: '임핀저',
     guide: '임핀저 4개 중 1·2번에 물 100 g씩, 4번에 실리카젤 200 g을 넣고, 채취 전(ma1)·후(ma2) 총무게 차를 흡습 수분의 질량 ma로 씁니다.',
   },
@@ -6245,12 +6244,21 @@ export default function App() {
       shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
     }
 
-    updates.forEach(({ ref, value }) => {
+    updates.forEach(({ ref, value, styleFrom }) => {
       const parsed = parseCellRef(ref);
       if (!parsed) return;
       const row = ensureRow(sheetData, parsed.row, ns);
       const cell = ensureCell(row, parsed, ns);
       setXmlCellValue(cell, value, ns);
+      // 새로 만든 칸에 다른 칸의 서식(테두리·글꼴)을 입힌다
+      if (styleFrom) {
+        const src = parseCellRef(styleFrom);
+        const srcRow = src ? findExistingRow(sheetData, src.row) : null;
+        const srcCell = srcRow ? findExistingCell(srcRow, src.ref) : null;
+        const style = srcCell ? srcCell.getAttribute('s') : null;
+        if (style !== null) cell.setAttribute('s', style);
+        if (srcRow && srcRow.getAttribute('ht') && !row.getAttribute('ht')) { row.setAttribute('ht', srcRow.getAttribute('ht')); row.setAttribute('customHeight', '1'); }
+      }
     });
 
     if (options.meterRowColors && options.rowStyler) {
@@ -6472,9 +6480,9 @@ export default function App() {
       });
 
       const updatesBySheet = new Map();
-      const addUpdate = (sheetName, ref, value) => {
+      const addUpdate = (sheetName, ref, value, styleFrom = null) => {
         if (!updatesBySheet.has(sheetName)) updatesBySheet.set(sheetName, []);
-        updatesBySheet.get(sheetName).push({ ref, value });
+        updatesBySheet.get(sheetName).push({ ref, value, styleFrom });
       };
       // 측정값이 들어간 행까지만 내보낸다 (조기 종료 시 계획만 채워진 빈 행이 엑셀 시간 MAX·평균에 섞이지 않게)
       const lastMeasuredIdx = getLastMeasuredMeterIdx(sourceGasMeters);
@@ -6567,11 +6575,18 @@ export default function App() {
       //  - 자동측정기: C5=1, B10~B14에 5회값
       //  - 임핀저법: C5=2, 예비 임핀저(C20~D23)·가스미터(A28~G28)
       const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
-      addUpdate('수분량', 'C5', exportMoistureMethod.excelChoice);
+      // 측정방법 표를 화면과 같은 1·2·3번으로 적고, 선택번호(C5)도 화면의 번호를 쓴다
+      //   1 흡습관법 / 2 자동측정법 / 3 임핀저법. 양식 수식(노즐산정 C15)은 2번일 때 자동측정기 평균, 1·3번일 때 무게법 결과(H28)를 보게 바꾼다
+      MOISTURE_METHODS.forEach((item, i) => {
+        addUpdate('수분량', `A${5 + i}`, i + 1, 'A6');
+        addUpdate('수분량', `B${5 + i}`, `${item.label.replace(/\s*\(.*\)$/, '')} (${item.standard})`, 'B6');
+      });
+      addUpdate('수분량', 'C7', null, 'C5');
+      addUpdate('수분량', 'C5', MOISTURE_METHODS.indexOf(exportMoistureMethod) + 1);
+      addUpdate('노즐산정', 'C15', { formula: `IF(수분량!C5=${MOISTURE_METHODS.findIndex((item) => item.id === 'auto') + 1},수분량!B15,수분량!H28)` });
       if (isImpingerMoistureMethod(exportMoistureMethod)) {
         // 공정시험기준의 방법 이름과 기구 이름으로 적는다 (ES 01321.1 흡습관법 / ES 01321.2 임핀저법)
         const methodName = exportMoistureMethod.label.replace(/\s*\(.*\)$/, '');
-        addUpdate('수분량', 'B6', `${methodName} (${exportMoistureMethod.standard})`);
         addUpdate('수분량', 'A18', `▶ ${methodName} (${exportMoistureMethod.standard})`);
         addUpdate('수분량', 'C19', '측정전 무게 ma1');
         addUpdate('수분량', 'D19', '측정후 무게 ma2');
