@@ -6656,8 +6656,9 @@ export default function App() {
       if (isImpingerMoistureMethod(exportMoistureMethod)) {
         for (let i = 0; i < 4; i++) {
           const imp = i < exportMoistureMethod.stages ? ((preImp.impingers || [])[i] || {}) : {};
-          addUpdate('수분량', `C${20 + i}`, toNumber(imp.initial));
-          addUpdate('수분량', `D${20 + i}`, toNumber(imp.final));
+          // 아래 사후 수분량 표의 무게 칸과 같은 서식(가운데 정렬)으로 적는다
+          addUpdate('수분량', `C${20 + i}`, toNumber(imp.initial), 'C33');
+          addUpdate('수분량', `D${20 + i}`, toNumber(imp.final), 'D33');
         }
         const preOrifice = toNumber(preImp.orifice);
         addUpdate('수분량', 'A28', toNumber(preImp.meterStart));
