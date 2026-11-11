@@ -155,7 +155,7 @@ let lastDownloadFolder = '';
 ipcMain.on('desktop:download-folder', (event, name) => {
   lastDownloadFolder = String(name || '').replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '').trim();
 });
-// 묶음 폴더를 만들 상위 위치: 처음엔 다운로드 폴더, 이후엔 마지막으로 저장한 위치를 기억
+// 묶음 폴더를 만들 상위 위치: 설정 창에서 고른 폴더, 고르지 않았으면 다운로드 폴더
 const exportBaseFile = () => path.join(app.getPath('userData'), 'export-base.json');
 const readExportBase = () => {
   try {
@@ -167,6 +167,24 @@ const readExportBase = () => {
 const writeExportBase = (dir) => {
   try { fs.writeFileSync(exportBaseFile(), JSON.stringify({ dir })); } catch (error) { console.error('export base save failed', error); }
 };
+
+// 엑셀 저장 위치(묶음 폴더를 만들 상위 폴더): 설정 창에서 보고, 고르고, 기본값(다운로드)으로 되돌린다
+ipcMain.handle('desktop:get-export-base', () => readExportBase());
+ipcMain.handle('desktop:choose-export-base', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title: '엑셀 저장 위치 선택',
+    defaultPath: readExportBase(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths || !result.filePaths[0]) return readExportBase();
+  writeExportBase(result.filePaths[0]);
+  return readExportBase();
+});
+ipcMain.handle('desktop:reset-export-base', () => {
+  try { fs.unlinkSync(exportBaseFile()); } catch (error) { /* 이미 기본값 */ }
+  return readExportBase();
+});
 
 // 기상청 날씨누리 도시별관측 자료 가져오기 (인증키 없이 볼 수 있는 공식 페이지). 화면에서는 CORS로 막히므로 여기서 받는다
 ipcMain.handle('desktop:fetch-weather', async (event, tm) => {
@@ -237,10 +255,6 @@ app.whenReady().then(() => {
             try { if (fs.readdirSync(createdDir).length === 0) fs.rmdirSync(createdDir); } catch (error) { /* 비어 있지 않으면 둔다 */ }
           }
           if (!savedPath) return;
-          if (folderName) {
-            const savedDir = path.dirname(savedPath);
-            writeExportBase(path.basename(savedDir) === folderName ? path.dirname(savedDir) : savedDir);
-          }
           shell.showItemInFolder(savedPath);
         } catch (error) {
           console.error('open folder failed', error);

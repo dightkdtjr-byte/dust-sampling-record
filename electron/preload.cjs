@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('stackpilotDesktop', {
   noteDownloadFolder: (name) => ipcRenderer.send('desktop:download-folder', String(name || '')),
   // 기상청 도시별관측 자료 (tm: 'YYYY.MM.DD.HH:00', 한국 시각)
   fetchWeather: (tm) => ipcRenderer.invoke('desktop:fetch-weather', String(tm || '')),
+  // 엑셀 저장 위치: 지금 위치 보기, 폴더 고르기, 다운로드 폴더로 되돌리기
+  getExportBase: () => ipcRenderer.invoke('desktop:get-export-base'),
+  chooseExportBase: () => ipcRenderer.invoke('desktop:choose-export-base'),
+  resetExportBase: () => ipcRenderer.invoke('desktop:reset-export-base'),
   // 기상청 장소 검색과 동네 현재 날씨
   searchPlaces: (query) => ipcRenderer.invoke('desktop:search-places', String(query || '')),
   fetchLocalWeather: (dongCode) => ipcRenderer.invoke('desktop:fetch-local-weather', String(dongCode || '')),

@@ -2362,6 +2362,20 @@ export default function App() {
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [profileNickname, setProfileNickname] = useState('');
   const [authModal, setAuthModal] = useState('');
+  // ── 엑셀 저장 위치 (설치형 프로그램에서만): 이 폴더 아래에 "날짜_사업장명_#배출구" 폴더를 만들어 저장한다 ──
+  const [exportBase, setExportBase] = useState('');
+  const canSetExportBase = typeof window !== 'undefined' && Boolean(window.stackpilotDesktop?.getExportBase);
+  useEffect(() => {
+    if (authModal !== 'settings' || !canSetExportBase) return;
+    window.stackpilotDesktop.getExportBase().then((dir) => setExportBase(String(dir || ''))).catch((error) => console.error(error));
+  }, [authModal, canSetExportBase]);
+  const chooseExportBase = async () => {
+    try { setExportBase(String(await window.stackpilotDesktop.chooseExportBase() || '')); } catch (error) { console.error(error); alert('저장 위치를 바꾸지 못했습니다.'); }
+  };
+  const resetExportBase = async () => {
+    try { setExportBase(String(await window.stackpilotDesktop.resetExportBase() || '')); } catch (error) { console.error(error); }
+  };
+
   const [cloudSyncConfig, setCloudSyncConfig] = useState({ token: '', gistId: '' });
   const [cloudSyncBusy, setCloudSyncBusy] = useState(false);
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
@@ -8152,6 +8166,17 @@ export default function App() {
                           ))}
                         </div>
                       </div>
+                      {canSetExportBase && (
+                        <div className="mb-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-xs font-black text-slate-800">엑셀 저장 위치</p>
+                          <p className="text-[11px] text-slate-600 mt-1">이 폴더 아래에 "날짜_사업장명_#배출구" 폴더를 만들어 엑셀을 저장합니다.</p>
+                          <p className="mt-2 px-2 py-1.5 rounded border border-slate-300 bg-white text-[11px] text-slate-800 break-all" title={exportBase}>{exportBase || '불러오는 중…'}</p>
+                          <div className="mt-2 flex gap-2">
+                            <button type="button" onClick={chooseExportBase} className="flex-1 px-3 py-2 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs">폴더 선택</button>
+                            <button type="button" onClick={resetExportBase} className="flex-1 px-3 py-2 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs">다운로드 폴더로 되돌리기</button>
+                          </div>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <button
                           type="button"
