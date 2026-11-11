@@ -6423,6 +6423,7 @@ export default function App() {
           meterStart: report.preImpinger?.meterStart, meterEnd: report.preImpinger?.meterEnd, meterTemp: report.preImpinger?.meterTemp,
           pressure: String(report.preImpinger?.pressure ?? '').trim() !== '' ? report.preImpinger.pressure : report.atmPressure,
           orifice: report.preImpinger?.orifice, yd: getPreMoistureYd(method, report), pv: getPreMoisturePv(method, report),
+          pressureLabel: method.id === 'impinger' ? '오리피스압 ΔH ÷ 13.6\nPm (mmHg)' : '가스미터압 Pm (mmHg)',
         } : null,
         probeLengthM: Number.isFinite(pitotLength) && pitotLength > 0 ? Math.round(pitotLength) / 100 : null,
       });
@@ -6614,7 +6615,15 @@ export default function App() {
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
         for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, exportMoistureMethod.items[i] || '-');
         addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
+        // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 칸의 이름을 오리피스압으로 적는다
+        if (exportMoistureMethod.id === 'impinger') {
+          addUpdate('수분량', 'F26', '오리피스압 ΔH');
+          addUpdate('수분량', 'G26', 'ΔH ÷ 13.6 (Pm)');
+        }
       }
+      // 사후 수분량(본 측정)은 항상 입자 샘플러: 가스미터압 칸은 평균 오리피스압이다
+      addUpdate('수분량', 'F41', '오리피스압 ΔH');
+      addUpdate('수분량', 'G41', 'ΔH ÷ 13.6 (Pm)');
       if (exportMoistureMethod.id === 'auto') {
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       } else {
@@ -9129,8 +9138,9 @@ export default function App() {
                               <th className="p-2 border border-slate-200 font-bold">가스채취량<br /><span className="text-[10px] font-normal">(L)</span></th>
                               <th className="p-2 border border-slate-200 font-bold">가스미터온도<br /><span className="text-[10px] font-normal">(℃)</span></th>
                               <th className="p-2 border border-slate-200 font-bold">측정공에서 기압<br /><span className="text-[10px] font-normal">(mm Hg)</span></th>
-                              <th className="p-2 border border-slate-200 font-bold">가스미터압<br /><span className="text-[10px] font-normal">(mm H₂O)</span></th>
-                              <th className="p-2 border border-slate-200 font-bold">가스미터압<br /><span className="text-[10px] font-normal">(mm Hg)</span></th>
+                              {/* 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 = 오리피스압(ΔH). 흡습관법은 가스 샘플러의 가스미터압 */}
+                              <th className="p-2 border border-slate-200 font-bold">{activeMoistureMethod.id === 'impinger' ? '오리피스압 ΔH' : '가스미터압'}<br /><span className="text-[10px] font-normal">(mm H₂O)</span></th>
+                              <th className="p-2 border border-slate-200 font-bold">{activeMoistureMethod.id === 'impinger' ? 'ΔH ÷ 13.6' : '가스미터압'}<br /><span className="text-[10px] font-normal">P<sub>m</sub> (mm Hg)</span></th>
                               <th className="p-2 border border-slate-200 font-bold">수분량<br /><span className="text-[10px] font-normal">(%)</span></th>
                             </tr>
                             <tr className="bg-slate-50 text-slate-600">
@@ -9156,7 +9166,7 @@ export default function App() {
                       {activeMoistureMethod.maRange && vlc > 0 && (vlc < activeMoistureMethod.maRange[0] || vlc > activeMoistureMethod.maRange[1]) && (
                         <p className="text-[11px] font-bold text-red-600">흡습 수분의 질량이 {vlc.toFixed(2)} g입니다. 기준은 {activeMoistureMethod.maRange[0]} g~{activeMoistureMethod.maRange[1].toFixed(1)} g이 되도록 흡입하라고 정하고 있습니다.</p>
                       )}
-                      <p className="text-[11px] text-slate-500">X<sub>w</sub> = (22.4/18 × m<sub>a</sub>) ÷ [V<sub>m</sub> × 273/(273+θ<sub>m</sub>) × (P<sub>a</sub>+P<sub>m</sub>)/760 + 22.4/18 × m<sub>a</sub>] × 100. 가스채취량 V<sub>m</sub> = (측정후 − 측정전) × {activeMoistureMethod.id === 'imp2' ? '가스 샘플러 보정계수' : '입자 샘플러 보정계수'}(Y<sub>d</sub> = {yd}), P<sub>m</sub> = 가스미터압(mmH₂O) ÷ 13.6.{pv > 0 ? ' 습식 가스미터라 (Pa+Pm−Pv)로 계산합니다.' : ''} 측정공에서 기압을 비워 두면 대기압을 씁니다.{result.ready ? ` 결과 표기(소수 첫째 자리): ${result.value.toFixed(1)} %` : ''}</p>
+                      <p className="text-[11px] text-slate-500">X<sub>w</sub> = (22.4/18 × m<sub>a</sub>) ÷ [V<sub>m</sub> × 273/(273+θ<sub>m</sub>) × (P<sub>a</sub>+P<sub>m</sub>)/760 + 22.4/18 × m<sub>a</sub>] × 100. 가스채취량 V<sub>m</sub> = (측정후 − 측정전) × {activeMoistureMethod.id === 'imp2' ? '가스 샘플러 보정계수' : '입자 샘플러 보정계수'}(Y<sub>d</sub> = {yd}), P<sub>m</sub> = {activeMoistureMethod.id === 'impinger' ? '오리피스압 ΔH' : '가스미터압'}(mmH₂O) ÷ 13.6.{pv > 0 ? ' 습식 가스미터라 (Pa+Pm−Pv)로 계산합니다.' : ''} 측정공에서 기압을 비워 두면 대기압을 씁니다.{result.ready ? ` 결과 표기(소수 첫째 자리): ${result.value.toFixed(1)} %` : ''}</p>
                     </div>
                   );
                 })()}

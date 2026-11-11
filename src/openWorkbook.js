@@ -350,7 +350,7 @@ export const buildRecordSheets = (report, meta) => {
     const start = toNum(pre.meterStart); const end = toNum(pre.meterEnd); const yd = toNum(pre.yd) || 1; const orifice = toNum(pre.orifice);
     const spans6 = [2, 2, 2, 2, 2, 2];
     s.height(r, 30);
-    tableRow(spans6, ['가스미터 측정전 (L)', '가스미터 측정후 (L)', `가스채취량 Vm (L, Yd ${yd})`, '가스미터 온도 θm (℃)', '측정공에서 기압 Pa (mmHg)', pre.pv > 0 ? `가스미터압 Pm (mmHg)\n습식: Pv ${round(pre.pv, 1)} 차감` : '가스미터압 Pm (mmHg)'], 'head');
+    tableRow(spans6, ['가스미터 측정전 (L)', '가스미터 측정후 (L)', `가스채취량 Vm (L, Yd ${yd})`, '가스미터 온도 θm (℃)', '측정공에서 기압 Pa (mmHg)', pre.pv > 0 ? `가스미터압 Pm (mmHg)\n습식: Pv ${round(pre.pv, 1)} 차감` : (pre.pressureLabel || '가스미터압 Pm (mmHg)')], 'head');
     tableRow(spans6, [numOrText(pre.meterStart), numOrText(pre.meterEnd), start !== null && end !== null ? round((end - start) * yd, 2) : '', numOrText(pre.meterTemp), numOrText(pre.pressure), orifice === null ? 0 : round(orifice / 13.6, 2)], 'num');
   }
   const autoValues = (Array.isArray(report.moistureValues) ? report.moistureValues : []).map(toNum).filter((v) => v !== null);
