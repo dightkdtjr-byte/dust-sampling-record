@@ -519,10 +519,23 @@ const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 // excelChoice: 양식 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표)
 // 사전 수분량 측정방법. excelChoice = 엑셀 수분량!C5 선택번호 (1=자동측정기 표, 2=임핀저 표 20~23행)
 // 사후 수분량(채취 후 임핀저 전후 무게)은 방법이 아니라 아래쪽 칸에 따로 적는다
+// 이름·기구·기록 항목은 「대기오염공정시험기준」 ES 01321(배출가스 중 수분량)을 따른다
+//  - 흡습관법 ES 01321.1 (시료채취장치 1형): 흡습관 2개에 입자상 무수염화칼슘, 채취 전후 무게 차가 흡습 수분의 질량 ma
+//  - 임핀저법 ES 01321.2 (시료채취장치 2형): 임핀저 4개(1·2번 물 100 g, 3번 빈 것, 4번 실리카젤 200 g), 전후 총무게 차가 ma
+// 계산식(두 방법 공통): Xw = (22.4/18·ma) ÷ [Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18·ma] × 100
 const MOISTURE_METHODS = [
-  { id: 'imp2', label: '임핀저(2구)', excelChoice: 2, stages: 2 },
-  { id: 'auto', label: '자동측정기', excelChoice: 1 },
-  { id: 'impinger', label: '임핀저(4구)', excelChoice: 2, stages: 4 },
+  {
+    id: 'imp2', label: '흡습관법 (2구)', excelChoice: 2, stages: 2, standard: 'ES 01321.1',
+    items: ['흡습관 1', '흡습관 2'], unitTitle: '흡습관',
+    guide: '흡습관(U자관) 2개에 입자상 무수염화칼슘을 넣고, 채취 전(ma1)·후(ma2) 무게 차를 흡습 수분의 질량 ma로 씁니다. 흡습된 수분이 0.1 g~1.0 g이 되도록 흡입합니다.',
+    maRange: [0.1, 1.0],
+  },
+  { id: 'auto', label: '자동측정법', excelChoice: 1, standard: 'ES 01321.3' },
+  {
+    id: 'impinger', label: '임핀저법 (4구)', excelChoice: 2, stages: 4, standard: 'ES 01321.2',
+    items: ['임핀저 1 (물 100 g)', '임핀저 2 (물 100 g)', '임핀저 3 (빈 것)', '임핀저 4 (실리카젤 200 g)'], unitTitle: '임핀저',
+    guide: '임핀저 4개 중 1·2번에 물 100 g씩, 4번에 실리카젤 200 g을 넣고, 채취 전(ma1)·후(ma2) 총무게 차를 흡습 수분의 질량 ma로 씁니다.',
+  },
 ];
 const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
@@ -4745,13 +4758,13 @@ export default function App() {
       const holeP = Number.isFinite(num(pre.pressure)) ? num(pre.pressure) : Pa;
       const orifice = Number.isFinite(num(pre.orifice)) ? num(pre.orifice) : 0;
       if (!(vlc > 0) || !(vm > 0) || !Number.isFinite(tm) || !Number.isFinite(holeP)) {
-        return { ready: false, value: NaN, detail: '임핀저 무게, 가스미터 측정전·후, 가스미터온도, 기압이 필요합니다' };
+        return { ready: false, value: NaN, detail: '측정전·후 무게, 가스미터 측정전·후, 가스미터온도, 기압이 필요합니다' };
       }
       // 엑셀 수분량!H28 = 22.4/18*E24/(C28*(273/(273+D28))*((E28+G28)/760)+22.4/18*E24)*100, C28=(B28-A28)*Yd, G28=F28/13.6
       const vw = (22.4 / 18) * vlc;
       const vmStd = vm * yd * (273 / (273 + tm)) * ((holeP + orifice / 13.6) / 760);
       const value = (vw / (vmStd + vw)) * 100;
-      return { ready: Number.isFinite(value), value, detail: `응축수 ${vlc.toFixed(2)} g · 흡인 ${vm.toFixed(2)} L` };
+      return { ready: Number.isFinite(value), value, detail: `흡습 수분 ${vlc.toFixed(2)} g · 흡입 ${vm.toFixed(2)} L` };
     }
     return { ready: false, value: NaN, detail: '' };
   };
@@ -6373,7 +6386,15 @@ export default function App() {
         console.error('측정점 그림 만들기 실패:', error);
       }
       const sheets = buildRecordSheets(report, {
-        title, isFlow: sheetId === 'flow', moistureLabel: method ? method.label : '', meterRows, sectionPng,
+        title, isFlow: sheetId === 'flow', moistureLabel: method ? `${method.label.replace(/\s*\(.*\)$/, '')} (${method.standard})` : '', meterRows, sectionPng,
+        // 사전 수분량을 흡습관법·임핀저법으로 잰 경우의 기록 (기준의 기구 이름으로)
+        preMoisture: isImpingerMoistureMethod(method) ? {
+          unitTitle: method.unitTitle,
+          rows: method.items.map((label, i) => ({ label, initial: report.preImpinger?.impingers?.[i]?.initial, final: report.preImpinger?.impingers?.[i]?.final })),
+          meterStart: report.preImpinger?.meterStart, meterEnd: report.preImpinger?.meterEnd, meterTemp: report.preImpinger?.meterTemp,
+          pressure: String(report.preImpinger?.pressure ?? '').trim() !== '' ? report.preImpinger.pressure : report.atmPressure,
+          orifice: report.preImpinger?.orifice, yd: report.gasMeterFactor,
+        } : null,
         probeLengthM: Number.isFinite(pitotLength) && pitotLength > 0 ? Math.round(pitotLength) / 100 : null,
       });
       const buffer = await buildWorkbook(sheets);
@@ -6548,7 +6569,15 @@ export default function App() {
       const exportMoistureMethod = MOISTURE_METHODS.find((m) => m.id === sourceData.moistureMethod) || MOISTURE_METHODS.find((m) => m.id === 'auto');
       addUpdate('수분량', 'C5', exportMoistureMethod.excelChoice);
       if (isImpingerMoistureMethod(exportMoistureMethod)) {
-        addUpdate('수분량', 'B6', exportMoistureMethod.label);
+        // 공정시험기준의 방법 이름과 기구 이름으로 적는다 (ES 01321.1 흡습관법 / ES 01321.2 임핀저법)
+        const methodName = exportMoistureMethod.label.replace(/\s*\(.*\)$/, '');
+        addUpdate('수분량', 'B6', `${methodName} (${exportMoistureMethod.standard})`);
+        addUpdate('수분량', 'A18', `▶ ${methodName} (${exportMoistureMethod.standard})`);
+        addUpdate('수분량', 'C19', '측정전 무게 ma1');
+        addUpdate('수분량', 'D19', '측정후 무게 ma2');
+        addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
+        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, exportMoistureMethod.items[i] || '-');
+        addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
       }
       if (exportMoistureMethod.id === 'auto') {
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
@@ -8995,13 +9024,14 @@ export default function App() {
                   );
                   return (
                     <div className="space-y-3">
+                      <p className="text-[11px] text-slate-600"><b>{activeMoistureMethod.standard} {activeMoistureMethod.label.replace(/\s*\(.*\)$/, '')}</b> · {activeMoistureMethod.guide}</p>
                       <table className="w-full text-sm text-center border-collapse">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700">
-                            <th className="p-2 border border-slate-200 font-bold">항목</th>
-                            <th className="p-2 border border-slate-200 font-bold">측정전 무게</th>
-                            <th className="p-2 border border-slate-200 font-bold">측정후 무게</th>
-                            <th className="p-2 border border-slate-200 font-bold">응축 수분량(전후차)</th>
+                            <th className="p-2 border border-slate-200 font-bold">{activeMoistureMethod.unitTitle}</th>
+                            <th className="p-2 border border-slate-200 font-bold">측정전 무게 m<sub>a1</sub> (g)</th>
+                            <th className="p-2 border border-slate-200 font-bold">측정후 무게 m<sub>a2</sub> (g)</th>
+                            <th className="p-2 border border-slate-200 font-bold">흡습 수분량 (g)</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -9009,7 +9039,7 @@ export default function App() {
                             const gain = n(imp.final) - n(imp.initial);
                             return (
                               <tr key={imp.id || idx}>
-                                <td className="p-1.5 border border-slate-200 font-bold text-slate-600">Impinger {idx + 1}</td>
+                                <td className="p-1.5 border border-slate-200 font-bold text-slate-600 whitespace-nowrap">{activeMoistureMethod.items[idx]}</td>
                                 <td className="p-1 border border-slate-200">{cellInput(imp.initial, (v) => setImp(idx, 'initial', v))}</td>
                                 <td className="p-1 border border-slate-200">{cellInput(imp.final, (v) => setImp(idx, 'final', v))}</td>
                                 <td className="p-1.5 border border-slate-200 font-bold text-slate-700">{Number.isFinite(gain) ? gain.toFixed(2) : '-'}</td>
@@ -9017,7 +9047,7 @@ export default function App() {
                             );
                           })}
                           <tr className="bg-slate-100 font-bold">
-                            <td className="p-1.5 border border-slate-200">합계 (Vlc)</td>
+                            <td className="p-1.5 border border-slate-200">흡습 수분의 질량 m<sub>a</sub></td>
                             <td className="p-1.5 border border-slate-200" colSpan="2"></td>
                             <td className="p-1.5 border border-slate-200">{vlc > 0 ? vlc.toFixed(2) : '-'}</td>
                           </tr>
@@ -9055,7 +9085,10 @@ export default function App() {
                           </tbody>
                         </table>
                       </div>
-                      <p className="text-[11px] text-slate-500">가스채취량 = (측정후 − 측정전) × 보정계수(Y<sub>d</sub>). 측정공에서 기압을 비워 두면 대기압을 씁니다.</p>
+                      {activeMoistureMethod.maRange && vlc > 0 && (vlc < activeMoistureMethod.maRange[0] || vlc > activeMoistureMethod.maRange[1]) && (
+                        <p className="text-[11px] font-bold text-red-600">흡습 수분의 질량이 {vlc.toFixed(2)} g입니다. 기준은 {activeMoistureMethod.maRange[0]} g~{activeMoistureMethod.maRange[1].toFixed(1)} g이 되도록 흡입하라고 정하고 있습니다.</p>
+                      )}
+                      <p className="text-[11px] text-slate-500">X<sub>w</sub> = (22.4/18 × m<sub>a</sub>) ÷ [V<sub>m</sub> × 273/(273+θ<sub>m</sub>) × (P<sub>a</sub>+P<sub>m</sub>)/760 + 22.4/18 × m<sub>a</sub>] × 100. 가스채취량 V<sub>m</sub> = (측정후 − 측정전) × 보정계수(Y<sub>d</sub>), P<sub>m</sub> = 가스미터압(mmH₂O) ÷ 13.6. 측정공에서 기압을 비워 두면 대기압을 씁니다.{result.ready ? ` 결과 표기(소수 첫째 자리): ${result.value.toFixed(1)} %` : ''}</p>
                     </div>
                   );
                 })()}

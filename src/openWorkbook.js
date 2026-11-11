@@ -334,6 +334,25 @@ export const buildRecordSheets = (report, meta) => {
 
   section('4. 배출가스 수분량');
   pairs([['측정 방법', meta.moistureLabel || ''], ['사전 수분량 Xw (%)', numOrText(report.moisturePre)], ['사후 수분량 Xw (%)', numOrText(report.moisturePost)], ['적용 수분량 Xw (%)', numOrText(report.moisturePercent), 'result']]);
+  // 사전 수분량(흡습관법·임핀저법): 측정전·후 무게와 가스미터 값
+  if (meta.preMoisture) {
+    const pre = meta.preMoisture;
+    const spans4 = [3, 3, 3, 3];
+    tableRow(spans4, [`${pre.unitTitle} (사전 수분량)`, '측정전 무게 ma1 (g)', '측정후 무게 ma2 (g)', '흡습 수분량 (g)'], 'head');
+    let ma = 0;
+    pre.rows.forEach((row) => {
+      const a = toNum(row.initial); const b = toNum(row.final);
+      const gain = a !== null && b !== null ? b - a : null;
+      if (gain !== null) ma += gain;
+      tableRow(spans4, [row.label, numOrText(row.initial), numOrText(row.final), gain === null ? '' : round(gain, 2)], 'num');
+    });
+    tableRow(spans4, ['흡습 수분의 질량 ma', '', '', round(ma, 2)], 'calc');
+    const start = toNum(pre.meterStart); const end = toNum(pre.meterEnd); const yd = toNum(pre.yd) || 1; const orifice = toNum(pre.orifice);
+    const spans6 = [2, 2, 2, 2, 2, 2];
+    s.height(r, 30);
+    tableRow(spans6, ['가스미터 측정전 (L)', '가스미터 측정후 (L)', '가스채취량 Vm (L)', '가스미터 온도 θm (℃)', '측정공에서 기압 Pa (mmHg)', '가스미터압 Pm (mmHg)'], 'head');
+    tableRow(spans6, [numOrText(pre.meterStart), numOrText(pre.meterEnd), start !== null && end !== null ? round((end - start) * yd, 2) : '', numOrText(pre.meterTemp), numOrText(pre.pressure), orifice === null ? 0 : round(orifice / 13.6, 2)], 'num');
+  }
   const autoValues = (Array.isArray(report.moistureValues) ? report.moistureValues : []).map(toNum).filter((v) => v !== null);
   if (autoValues.length > 0) {
     s.put(r, 0, '자동측정기 측정값 (%)', 'label', 3);
@@ -344,7 +363,7 @@ export const buildRecordSheets = (report, meta) => {
   const impingers = (Array.isArray(report.impingers) ? report.impingers : []).filter((imp) => toNum(imp.initial) !== null || toNum(imp.final) !== null);
   if (impingers.length > 0) {
     const impSpans = [3, 3, 3, 3];
-    tableRow(impSpans, ['임핀저 (채취 후 무게법)', '채취 전 (g)', '채취 후 (g)', '증가량 (g)'], 'head');
+    tableRow(impSpans, ['임핀저 (사후 수분량, ES 01321.2)', '채취 전 ma1 (g)', '채취 후 ma2 (g)', '흡습 수분량 (g)'], 'head');
     let total = 0;
     impingers.forEach((imp, i) => {
       const a = toNum(imp.initial); const b = toNum(imp.final);
@@ -352,7 +371,7 @@ export const buildRecordSheets = (report, meta) => {
       if (gain !== null) total += gain;
       tableRow(impSpans, [(meta.impingerLabels && meta.impingerLabels[i]) || `${i + 1}단`, numOrText(imp.initial), numOrText(imp.final), gain === null ? '' : round(gain, 2)], 'num');
     });
-    tableRow(impSpans, ['포집된 수분 총량', '', '', round(total, 2)], 'calc');
+    tableRow(impSpans, ['흡습 수분의 질량 ma', '', '', round(total, 2)], 'calc');
   }
 
   section('5. 측정점별 동압 및 온도');
