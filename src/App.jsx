@@ -6601,7 +6601,8 @@ export default function App() {
       //   1 흡습관법 / 2 임핀저법 / 3 자동측정법 (기준 ES 01321.1~.3 순서). 양식 수식(노즐산정 C15)은 자동측정법일 때 자동측정기 평균, 그 밖엔 무게법 결과(H28)를 보게 바꾼다
       MOISTURE_METHODS.forEach((item, i) => {
         addUpdate('수분량', `A${5 + i}`, i + 1, 'A6');
-        addUpdate('수분량', `B${5 + i}`, `${item.label.replace(/\s*\(.*\)$/, '')} (${item.standard})`, 'B6');
+        // 칸이 좁아 방법 이름만 적는다 (조항 번호는 아래 표 제목에)
+        addUpdate('수분량', `B${5 + i}`, item.label.replace(/\s*\(.*\)$/, ''), 'B6');
       });
       addUpdate('수분량', 'C7', null, 'C5');
       addUpdate('수분량', 'C5', MOISTURE_METHODS.indexOf(exportMoistureMethod) + 1);
