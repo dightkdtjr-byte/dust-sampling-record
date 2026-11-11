@@ -2181,20 +2181,10 @@ export default function App() {
       : '기온과 기압은 사업장·배출구·날짜가 같은 저장 기록부가 없어 그대로 두었습니다.';
     alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다.\n${sheetNote}`);
   };
-  // 관측 지점 고르기: 이름을 치면 목록이 좁혀지는 검색 칸 (예: "부" → 부산·부안·부여)
-  const weatherStationName = (KMA_STATIONS.find(([id]) => id === weatherStation) || ['', ''])[1];
-  const [weatherStationQuery, setWeatherStationQuery] = useState(null); // null이면 고른 지점 이름을 보여 준다
-  const commitWeatherStationQuery = (text) => {
-    const query = String(text || '').trim();
-    const exact = KMA_STATIONS.find(([, name]) => name === query);
-    const partial = query ? KMA_STATIONS.filter(([, name]) => name.includes(query)) : [];
-    const found = exact || (partial.length === 1 ? partial[0] : null);
-    if (found) changeWeatherStation(found[0]);
-    setWeatherStationQuery(null);
-    return Boolean(found);
-  };
+  // ── 날씨 위치 고르기: 지역 이름을 적어 기상청에서 찾고, 아래로 펼쳐지는 목록에서 고른다 ──
+  const [weatherQuery, setWeatherQuery] = useState(null); // null이면 고른 위치 이름을 보여 준다
   const weatherSearchInputRef = useRef(null);
-  // 기상청 장소 검색: 동 이름·주소·지명으로 찾아 목록을 띄운다
+  const weatherPickerRef = useRef(null);
   const searchWeatherPlaces = async () => {
     const text = String(weatherSearchInputRef.current?.value || '').trim();
     if (!text) { alert('찾을 곳의 이름을 적어 주세요. (예: 안산, 고잔동, 온산읍)'); return; }
@@ -2215,52 +2205,56 @@ export default function App() {
     if (nearest) changeWeatherStation(nearest.id, { keepPlace: true });
     saveWeatherPlace({ label: item.address || item.title, dongCode: item.dongCode, lat: item.lat, lon: item.lon });
     setWeatherPlaceResults(null);
-    setWeatherStationQuery(null);
+    setWeatherQuery(null);
   };
+  // 목록 바깥을 누르면 목록을 닫는다
+  useEffect(() => {
+    if (weatherPlaceResults === null) return undefined;
+    const onDown = (event) => {
+      if (weatherPickerRef.current && !weatherPickerRef.current.contains(event.target)) { setWeatherPlaceResults(null); setWeatherQuery(null); }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [weatherPlaceResults]);
   const weatherStationSelect = (
-    <>
+    <span ref={weatherPickerRef} className="weather-picker">
       <input
         ref={weatherSearchInputRef}
         type="text"
-        list="kma-station-list"
-        value={weatherStationQuery === null ? (weatherPlace ? weatherPlace.label : weatherStationName) : weatherStationQuery}
-        onFocus={(e) => { setWeatherStationQuery(''); e.target.select(); }}
-        onChange={(e) => {
-          const text = e.target.value;
-          // 목록에서 고르면 바로 확정
-          if (KMA_STATIONS.some(([, name]) => name === text)) commitWeatherStationQuery(text);
-          else setWeatherStationQuery(text);
-        }}
-        onBlur={(e) => commitWeatherStationQuery(e.target.value)}
+        value={weatherQuery === null ? (weatherPlace ? weatherPlace.label : '') : weatherQuery}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setWeatherQuery(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          // 관측 지점 이름이면 바로 정하고, 아니면 기상청에서 장소를 찾는다
-          const text = e.target.value;
-          if (KMA_STATIONS.some(([, name]) => name === String(text).trim())) { commitWeatherStationQuery(text); e.target.blur(); } else if (String(text).trim()) searchWeatherPlaces();
+          if (e.key === 'Enter') { e.preventDefault(); searchWeatherPlaces(); }
+          if (e.key === 'Escape') { setWeatherPlaceResults(null); setWeatherQuery(null); }
         }}
-        placeholder={`${weatherPlace ? weatherPlace.label : weatherStationName} (이름 검색)`}
-        title="기상청 관측 지점 (시·군 이름을 치면 검색됩니다)"
-        aria-label="기상청 관측 지점"
-        className="w-44 p-1.5 border border-slate-300 rounded text-xs bg-white outline-none"
+        placeholder="지역 이름 (예: 안산)"
+        title="날씨를 가져올 위치. 지역 이름을 적고 Enter를 누르면 찾습니다"
+        aria-label="날씨 위치"
+        className="weather-picker-input"
       />
-      <datalist id="kma-station-list">
-        {KMA_STATIONS.map(([id, name]) => <option key={id} value={name} />)}
-      </datalist>
-      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={searchWeatherPlaces} disabled={weatherBusy} className="px-2 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs disabled:opacity-50">장소 검색</button>
-      {weatherPlace && <span className="text-slate-700">위치: <b>{weatherPlace.label}</b></span>}
+      <button type="button" onClick={searchWeatherPlaces} disabled={weatherBusy} className="px-2 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs disabled:opacity-50">{weatherBusy ? '찾는 중…' : '검색'}</button>
+      {!weatherPlace && weatherPlaceResults === null && <span className="text-slate-500">위치를 정하지 않으면 서울 값을 가져옵니다</span>}
       {weatherPlaceResults !== null && (
-        <span className="basis-full flex flex-wrap items-center gap-1">
-          {weatherPlaceResults.length === 0 && <span className="text-slate-500">찾은 곳이 없습니다. 동 이름이나 시·군 이름으로 다시 찾아 보세요.</span>}
-          {weatherPlaceResults.map((item) => (
-            <button key={`${item.title}-${item.address}`} type="button" onClick={() => chooseWeatherPlace(item)} className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-[11px]">
-              {item.address && item.address !== item.title ? `${item.title} · ${item.address}` : item.title}
-            </button>
-          ))}
-          <button type="button" onClick={() => setWeatherPlaceResults(null)} className="px-2 py-1 text-[11px] text-slate-500 underline">닫기</button>
-        </span>
+        <div className="weather-picker-pop" role="listbox" aria-label="장소 검색 결과">
+          <div className="weather-picker-head">
+            <span>{weatherPlaceResults.length > 0 ? `검색 결과 ${weatherPlaceResults.length}곳` : '검색 결과 없음'}</span>
+            <span role="button" tabIndex={0} className="weather-picker-close" onClick={() => { setWeatherPlaceResults(null); setWeatherQuery(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { setWeatherPlaceResults(null); setWeatherQuery(null); } }}>닫기</span>
+          </div>
+          {weatherPlaceResults.length === 0 && <div className="weather-picker-empty">동 이름이나 시·군 이름으로 다시 찾아 보세요.</div>}
+          {weatherPlaceResults.map((item) => {
+            const title = String(item.title || '').trim();
+            const address = String(item.address || '').trim();
+            return (
+              <div key={`${title}-${address}-${item.dongCode}`} role="option" aria-selected="false" tabIndex={0} className="weather-picker-item" onClick={() => chooseWeatherPlace(item)} onKeyDown={(e) => { if (e.key === 'Enter') chooseWeatherPlace(item); }}>
+                <span className="weather-picker-title">{title || address}</span>
+                {address && address !== title && <span className="weather-picker-address">{address}</span>}
+              </div>
+            );
+          })}
+        </div>
       )}
-    </>
+    </span>
   );
 
   const changePalette = (next) => {
@@ -8414,7 +8408,7 @@ export default function App() {
               채취일 및 현장기상 <span className="text-xs font-normal text-slate-500">(최대 4일)</span>
             </h2>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <span className="font-bold">기상청 관측 지점</span>
+              <span className="font-bold">날씨 위치</span>
               {weatherStationSelect}
               <span className="text-slate-500">채취일을 적고 오른쪽 "가져오기"를 누르면 기상·습도·풍향·풍속을 채웁니다 (기온·기압은 현장 측정값)</span>
             </div>
@@ -8767,7 +8761,7 @@ export default function App() {
                 <input type="number" step="1" name="atmPressure" value={formData.atmPressure} onChange={handleChange} className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 outline-none" /></div>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <span className="font-bold">기상청 관측 지점</span>
+              <span className="font-bold">날씨 위치</span>
               {weatherStationSelect}
               <button type="button" onClick={applyKmaWeatherToSheet} disabled={weatherBusy} className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold disabled:opacity-50">
                 {weatherBusy ? '가져오는 중…' : '기상청 자료 가져오기'}

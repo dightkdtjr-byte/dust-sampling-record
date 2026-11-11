@@ -1041,3 +1041,26 @@ body.fill-dragging, body.fill-dragging * { cursor: crosshair !important; user-se
   box-shadow: inset 0 0 0 1.5px var(--ds-accent, #1f5f43) !important;
   background-color: rgba(31, 95, 67, 0.08) !important;
 }
+
+/* ── 날씨 위치 검색: 입력 칸 아래로 펼쳐지는 결과 목록 ── */
+.weather-picker { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.weather-picker-input { width: 15rem; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; font-size: 12px; outline: none; }
+.weather-picker-pop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+  width: max(100%, 22rem); max-height: 17rem; overflow-y: auto;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+  box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.35);
+  font-size: 12px; text-align: left;
+}
+.weather-picker-head {
+  position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+  font-size: 11px; font-weight: 600; color: #64748b;
+}
+.weather-picker-close { cursor: pointer; text-decoration: underline; }
+.weather-picker-empty { padding: 12px 10px; color: #64748b; }
+.weather-picker-item { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.weather-picker-item:last-child { border-bottom: none; }
+.weather-picker-item:hover, .weather-picker-item:focus { background: #f1f5f9; outline: none; }
+.weather-picker-title { font-weight: 600; color: #0f172a; }
+.weather-picker-address { font-size: 11px; color: #64748b; }
