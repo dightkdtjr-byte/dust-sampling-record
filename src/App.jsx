@@ -75,6 +75,12 @@ const EXPORT_TEMPLATE_LAYOUTS = {
   pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true } },
   flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, hideSheets: ['누출시험'] }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
 };
+// 양식에서 주변 칸은 가운데 정렬인데 혼자 왼쪽·오른쪽으로 붙어 있던 표 칸들. 내보낼 때 가운데로 맞춘다
+const EXPORT_CENTER_CELLS = (layout) => ({
+  수분량: ['A5:B7', 'A10:B15', 'C19', 'C32'],
+  노즐산정: ['D', 'F', 'H', 'I', 'J'].map((col) => `${col}39:${col}${38 + (layout.nozzleRows || 18)}`),
+});
+
 // 누출시험 기록 (양식 '누출시험' 시트): 구분별 유량계 멈춤 여부(O/X)와 가스미터 전·후 지시값
 const LEAK_TEST_PARTS = [
   { key: 'device', label: '시료채취장치' },
@@ -6150,7 +6156,48 @@ export default function App() {
       xfCache.set(key, newIndex);
       return newIndex;
     };
-    return { styleFor, serialize: () => new XMLSerializer().serializeToString(doc) };
+    // 같은 서식에서 가로 정렬만 가운데로 바꾼 서식 번호 (글꼴·테두리·바탕·표시 형식은 그대로)
+    const centeredStyle = (originalIndex) => {
+      const key = `center|${originalIndex}`;
+      if (xfCache.has(key)) return xfCache.get(key);
+      const xfs = getChildElementsByLocalName(cellXfsNode, 'xf');
+      const source = xfs[originalIndex] || xfs[0];
+      if (!source) return originalIndex;
+      const clone = source.cloneNode(true);
+      let alignment = getChildElementsByLocalName(clone, 'alignment')[0];
+      if (!alignment) {
+        alignment = doc.createElementNS(ns, 'alignment');
+        alignment.setAttribute('vertical', 'center');
+        clone.insertBefore(alignment, clone.firstChild);
+      }
+      alignment.setAttribute('horizontal', 'center');
+      alignment.removeAttribute('indent');
+      clone.setAttribute('applyAlignment', '1');
+      cellXfsNode.appendChild(clone);
+      const newIndex = getChildElementsByLocalName(cellXfsNode, 'xf').length - 1;
+      cellXfsNode.setAttribute('count', String(newIndex + 1));
+      xfCache.set(key, newIndex);
+      return newIndex;
+    };
+    // 같은 서식에서 세로 정렬만 아래로 바꾼 서식 번호 (줄을 높여 제목 위에 여백을 만들 때)
+    const bottomStyle = (originalIndex) => {
+      const key = `bottom|${originalIndex}`;
+      if (xfCache.has(key)) return xfCache.get(key);
+      const xfs = getChildElementsByLocalName(cellXfsNode, 'xf');
+      const source = xfs[originalIndex] || xfs[0];
+      if (!source) return originalIndex;
+      const clone = source.cloneNode(true);
+      let alignment = getChildElementsByLocalName(clone, 'alignment')[0];
+      if (!alignment) { alignment = doc.createElementNS(ns, 'alignment'); clone.insertBefore(alignment, clone.firstChild); }
+      alignment.setAttribute('vertical', 'bottom');
+      clone.setAttribute('applyAlignment', '1');
+      cellXfsNode.appendChild(clone);
+      const newIndex = getChildElementsByLocalName(cellXfsNode, 'xf').length - 1;
+      cellXfsNode.setAttribute('count', String(newIndex + 1));
+      xfCache.set(key, newIndex);
+      return newIndex;
+    };
+    return { styleFor, centeredStyle, bottomStyle, serialize: () => new XMLSerializer().serializeToString(doc) };
   };
 
   const applyMeterRowColors = (worksheet, rowColorList, styler) => {
@@ -6295,6 +6342,38 @@ export default function App() {
 
     if (options.meterRowColors && options.rowStyler) {
       applyMeterRowColors(worksheet, options.meterRowColors, options.rowStyler);
+    }
+    // 줄 높이를 바꾸고(제목 위 여백), 그 줄의 칸은 아래로 붙인다: { 8: 34 }
+    if (options.rowGaps && options.rowStyler?.bottomStyle) {
+      Object.entries(options.rowGaps).forEach(([rowText, height]) => {
+        const rowEl = findExistingRow(sheetData, parseInt(rowText, 10));
+        if (!rowEl) return;
+        rowEl.setAttribute('ht', String(height));
+        rowEl.setAttribute('customHeight', '1');
+        getChildElementsByLocalName(rowEl, 'c').forEach((cell) => {
+          const original = parseInt(cell.getAttribute('s') || '0', 10);
+          cell.setAttribute('s', String(options.rowStyler.bottomStyle(Number.isFinite(original) ? original : 0)));
+        });
+      });
+    }
+    // 가운데 정렬로 맞출 칸들 (예: 'A5:B7', 'C19'): 양식에서 주변 칸과 정렬이 어긋나 있던 곳
+    if (Array.isArray(options.centerCells) && options.centerCells.length > 0 && options.rowStyler?.centeredStyle) {
+      options.centerCells.forEach((range) => {
+        const [fromRef, toRef] = String(range).split(':');
+        const from = parseCellRef(fromRef);
+        const to = parseCellRef(toRef || fromRef);
+        if (!from || !to) return;
+        for (let r = Math.min(from.row, to.row); r <= Math.max(from.row, to.row); r++) {
+          const rowEl = findExistingRow(sheetData, r);
+          if (!rowEl) continue;
+          for (let c = Math.min(from.col, to.col); c <= Math.max(from.col, to.col); c++) {
+            const cell = getChildElementsByLocalName(rowEl, 'c').find((el) => { const p = parseCellRef(el.getAttribute('r')); return p && p.col === c; });
+            if (!cell) continue;
+            const original = parseInt(cell.getAttribute('s') || '0', 10);
+            cell.setAttribute('s', String(options.rowStyler.centeredStyle(Number.isFinite(original) ? original : 0)));
+          }
+        }
+      });
     }
 
     return new XMLSerializer().serializeToString(doc);
@@ -6618,6 +6697,13 @@ export default function App() {
       addUpdate('수분량', 'C7', null, 'C5');
       addUpdate('수분량', 'C5', MOISTURE_METHODS.indexOf(exportMoistureMethod) + 1);
       addUpdate('노즐산정', 'C15', { formula: `IF(수분량!C5=${MOISTURE_METHODS.findIndex((item) => item.id === 'auto') + 1},수분량!B15,수분량!H28)` });
+      if (!isImpingerMoistureMethod(exportMoistureMethod)) {
+        // 자동측정법을 골랐을 때도 무게법 표의 말은 아래 표·화면과 같게 맞춘다 (표는 비워 둠)
+        addUpdate('수분량', 'A18', '▶ 흡습관법 · 임핀저법');
+        addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
+        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, `${i + 1}`);
+        addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
+      }
       if (isImpingerMoistureMethod(exportMoistureMethod)) {
         // 공정시험기준의 방법 이름과 기구 이름으로 적는다 (ES 01321.1 흡습관법 / ES 01321.2 임핀저법)
         const methodName = exportMoistureMethod.label.replace(/\s*\(.*\)$/, '');
@@ -6802,7 +6888,10 @@ export default function App() {
                     }
                   : {}),
                 // 수분량 시트: 측정방법이 세 줄이 되었으므로 선택번호 칸도 세 줄로 합친다
-                ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'] } : {}),
+                // 측정방법 표가 한 줄 늘어 바로 아래 제목과 붙었으므로, 제목 줄을 높여 다른 제목들처럼 위에 여백을 둔다
+                ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
+                rowStyler,
+                centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
               }
         );
         zip.file(sheetPath, patched);
