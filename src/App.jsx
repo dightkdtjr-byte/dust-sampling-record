@@ -2122,12 +2122,22 @@ export default function App() {
     const day = samplingLogData.days[dayIdx];
     if (!day || !day.date) { alert('먼저 채취일을 적어 주세요.'); return; }
     const starts = Object.values(samplingLogData.rows || {}).filter((row) => row && row.requested && row.dayIndex === dayIdx && /^\d{1,2}:\d{2}$/.test(String(row.start || ''))).map((row) => String(row.start).padStart(5, '0')).sort();
+    // 기온·기압은 그날 저장한 기록부에 적어 둔 현장 측정값을 가져온다
+    const fromSheets = findSiteWeatherFromSavedReports(day.date);
     const obs = await fetchKmaObservation(day.date, starts[0] || '');
-    if (!obs) return;
+    if (!obs && !fromSheets.temp && !fromSheets.pressure) return;
+    if (!obs) {
+      setSamplingLogData((prev) => ({ ...prev, days: prev.days.map((item, i) => (i === dayIdx ? { ...item, ...(fromSheets.temp ? { temp: fromSheets.temp } : {}), ...(fromSheets.pressure ? { pressure: fromSheets.pressure } : {}) } : item)) }));
+      unsavedRef.current = true;
+      alert(`${dayIdx + 1}일차의 기온·기압을 그날 저장한 기록부 값으로 채웠습니다.`);
+      return;
+    }
     setSamplingLogData((prev) => ({
       ...prev,
       days: prev.days.map((item, i) => (i === dayIdx ? {
         ...item,
+        ...(fromSheets.temp ? { temp: fromSheets.temp } : {}),
+        ...(fromSheets.pressure ? { pressure: fromSheets.pressure } : {}),
         weather: obs.weatherText || item.weather,
         humidity: obs.humidity === null ? item.humidity : String(obs.humidity),
         windDir: obs.windDir || item.windDir,
@@ -2135,7 +2145,10 @@ export default function App() {
       } : item)),
     }));
     unsavedRef.current = true;
-    alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다. 기온과 기압은 현장에서 잰 값을 적어 주세요.`);
+    const sheetNote = fromSheets.temp || fromSheets.pressure
+      ? `기온·기압은 그날 저장한 기록부 값(${[fromSheets.temp ? `${fromSheets.temp} ℃` : '', fromSheets.pressure ? `${fromSheets.pressure} mmHg` : ''].filter(Boolean).join(', ')})으로 채웠습니다.`
+      : '기온과 기압은 그날 저장한 기록부가 없어 비워 두었습니다. 기록부를 저장하면 자동으로 들어옵니다.';
+    alert(`${describeKmaObservation(obs)}\n\n${dayIdx + 1}일차의 기상·습도·풍향·풍속을 채웠습니다.\n${sheetNote}`);
   };
   // 관측 지점 고르기: 이름을 치면 목록이 좁혀지는 검색 칸 (예: "부" → 부산·부안·부여)
   const weatherStationName = (KMA_STATIONS.find(([id]) => id === weatherStation) || ['', ''])[1];
@@ -6803,6 +6816,26 @@ export default function App() {
     });
   }, [isSamplingLogWindow, samplers, gasSamplers, samplingLogData.particleSamplerId, samplingLogData.gasSamplerId, samplingLogData.particleSamplerYd, samplingLogData.gasSamplerYd, samplingLogData.particleSamplerYdManual, samplingLogData.gasSamplerYdManual]);
 
+  // 기록부 한 건에서 통합기록부 일차 칸에 옮길 현장 값: 날씨, 기온(대기 온도), 기압(대기압). 빈 값은 빼서 통합기록부 값을 지우지 않는다
+  const pickSiteWeatherFromReport = (report) => {
+    const patch = {};
+    const text = (v) => String(v ?? '').trim();
+    if (text(report?.weather)) patch.weather = text(report.weather);
+    if (text(report?.atmTemp)) patch.temp = text(report.atmTemp);
+    if (text(report?.atmPressure)) patch.pressure = text(report.atmPressure);
+    return patch;
+  };
+  // 그 날짜에 저장된 기록부(같은 사업장이면 우선) 가운데 가장 최근 것의 현장 값
+  const findSiteWeatherFromSavedReports = (date) => {
+    const logCompany = normalizeSiteName(samplingLogData.company);
+    const candidates = savedData.filter((report) => LOG_SOURCE_SHEETS.includes(resolveReportSheetId(report)) && String(report?.date || '').trim() === date
+      && (!logCompany || normalizeSiteName(report?.company) === logCompany));
+    const merged = {};
+    // savedData는 최근 저장 순이므로, 앞의 것(최근)이 우선
+    candidates.forEach((report) => { Object.entries(pickSiteWeatherFromReport(report)).forEach(([key, value]) => { if (!(key in merged)) merged[key] = value; }); });
+    return merged;
+  };
+
   // 기록부 묶음(같은 사업장·배출구·날짜)을 통합기록부에 옮겨 적기: 사업장 정보, 입자 샘플러, 물질별 시각·가스미터 값
   const applySheetGroupToSamplingLog = (group, { silent = false } = {}) => {
     if (!group) return;
@@ -6849,6 +6882,8 @@ export default function App() {
         const filledValues = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== ''));
         const dayIndex = dayIndexFor(String(report?.date || '').trim());
         if (dayIndex < 0) return;
+        // 기록부에 적은 날씨·대기 온도·대기압을 그 일차의 현장기상에 옮긴다 (기록부에 값이 있는 것만)
+        next.days[dayIndex] = { ...next.days[dayIndex], ...pickSiteWeatherFromReport(report) };
         const targetRows = new Set();
         (SHEET_TO_LOG_ROWS[sheetId] || []).forEach((rowNum) => {
           targetRows.add(String(rowNum));
