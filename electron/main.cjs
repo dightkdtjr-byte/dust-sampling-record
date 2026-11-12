@@ -190,17 +190,17 @@ ipcMain.handle('desktop:reset-export-base', () => {
 ipcMain.handle('desktop:fetch-weather', async (event, tm) => {
   const text = String(tm || '');
   if (!/^\d{4}\.\d{2}\.\d{2}\.\d{2}:00$/.test(text)) throw new Error('시각 형식이 올바르지 않습니다.');
-  const { fetchCityObservations } = require('./weather.cjs');
+  const { fetchCityObservations } = await import(pathToFileURL(path.join(__dirname, 'weather.mjs')).href);
   return fetchCityObservations(text, (url, options) => net.fetch(url, options));
 });
 
 // 기상청 장소 검색(동·주소·지명)과 그 동네의 현재 날씨
 ipcMain.handle('desktop:search-places', async (event, query) => {
-  const { searchPlaces } = require('./weather.cjs');
+  const { searchPlaces } = await import(pathToFileURL(path.join(__dirname, 'weather.mjs')).href);
   return searchPlaces(String(query || '').slice(0, 60), (url, options) => net.fetch(url, options));
 });
 ipcMain.handle('desktop:fetch-local-weather', async (event, dongCode) => {
-  const { fetchLocalWeather } = require('./weather.cjs');
+  const { fetchLocalWeather } = await import(pathToFileURL(path.join(__dirname, 'weather.mjs')).href);
   return fetchLocalWeather(String(dongCode || ''), (url, options) => net.fetch(url, options));
 });
 

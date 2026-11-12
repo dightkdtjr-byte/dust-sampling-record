@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
+import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
@@ -1892,6 +1893,8 @@ const findNearestKmaStation = (lat, lon) => {
 };
 const WEATHER_STATION_STORAGE_KEY = 'dust-sampling.weather-station.v1';
 const WEATHER_PLACE_STORAGE_KEY = 'dust-sampling.weather-place.v1';
+// 모바일(웹)에서 기상청 자료를 받아 줄 중계 서버 주소 (relay/kma-relay.js 를 올린 Cloudflare Workers 주소)
+const WEATHER_RELAY_STORAGE_KEY = 'dust-sampling.weather-relay.v1';
 // 날짜(YYYY-MM-DD)와 시각(HH:MM)으로 조회할 정시를 정한다. 시각이 없으면 오늘은 지금 시각, 지난 날은 12시
 const buildKmaObservationTime = (date, timeText) => {
   const now = new Date();
@@ -2078,6 +2081,29 @@ export default function App() {
     try { const saved = localStorage.getItem(WEATHER_STATION_STORAGE_KEY); return KMA_STATIONS.some(([id]) => id === saved) ? saved : '108'; } catch { return '108'; }
   });
   const [weatherBusy, setWeatherBusy] = useState(false);
+  // 기상청 자료를 받는 길: 설치형은 프로그램이 직접, 웹(모바일)은 설정한 중계 서버를 거친다
+  const [weatherRelay, setWeatherRelay] = useState(() => { try { return localStorage.getItem(WEATHER_RELAY_STORAGE_KEY) || ''; } catch { return ''; } });
+  const [weatherRelayDraft, setWeatherRelayDraft] = useState(null);
+  const saveWeatherRelay = (value) => {
+    const text = String(value || '').trim().replace(/\/+$/, '');
+    if (text && !/^https:\/\/[^\s/]+(\/\S*)?$/.test(text)) { alert('https:// 로 시작하는 주소를 넣어 주세요.'); return; }
+    setWeatherRelay(text);
+    setWeatherRelayDraft(null);
+    try { if (text) localStorage.setItem(WEATHER_RELAY_STORAGE_KEY, text); else localStorage.removeItem(WEATHER_RELAY_STORAGE_KEY); } catch (error) { console.error(error); }
+  };
+  const isDesktopApp = typeof window !== 'undefined' && Boolean(window.stackpilotDesktop?.fetchWeather);
+  const weatherApi = (() => {
+    if (isDesktopApp) return window.stackpilotDesktop;
+    if (!weatherRelay) return null;
+    // 사용자 정의 헤더 없이 GET만 보내면 브라우저가 사전 확인(preflight) 없이 바로 보낸다
+    const relayFetch = (url) => fetch(`${weatherRelay}?u=${encodeURIComponent(url)}`);
+    return {
+      fetchWeather: (tm) => webFetchCityObservations(tm, relayFetch),
+      searchPlaces: (query) => webSearchPlaces(query, relayFetch),
+      fetchLocalWeather: (dongCode) => webFetchLocalWeather(dongCode, relayFetch),
+    };
+  })();
+  const weatherUnavailableMessage = '모바일에서 기상청 자료를 쓰려면 ⚙ 설정의 "날씨 중계 주소"를 먼저 넣어 주세요.';
   // 검색해서 고른 장소(동 단위). 있으면 오늘 날씨는 그 동네 값으로 가져온다: { label, dongCode, lat, lon }
   const [weatherPlace, setWeatherPlace] = useState(() => {
     try {
@@ -2101,10 +2127,7 @@ export default function App() {
   };
   // 고른 지점의 정시 관측값을 받아 온다. 실패하면 알리고 null
   const fetchKmaObservation = async (date, timeText) => {
-    if (!window.stackpilotDesktop?.fetchWeather) {
-      alert('기상청 자료 가져오기는 설치형 프로그램(exe)에서만 쓸 수 있습니다.');
-      return null;
-    }
+    if (!weatherApi) { alert(weatherUnavailableMessage); return null; }
     const when = buildKmaObservationTime(date, timeText);
     if (!when) { alert('측정 일자가 오늘보다 뒤라서 관측 자료가 없습니다.'); return null; }
     setWeatherBusy(true);
@@ -2112,9 +2135,9 @@ export default function App() {
       // 장소를 검색해 두었고 측정일이 오늘이면: 그 동네의 현재 날씨(가까운 관측값 + 동네예보의 지금 하늘 상태)
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      if (weatherPlace && when.day === today && window.stackpilotDesktop.fetchLocalWeather) {
+      if (weatherPlace && when.day === today && weatherApi.fetchLocalWeather) {
         try {
-          const local = await window.stackpilotDesktop.fetchLocalWeather(weatherPlace.dongCode);
+          const local = await weatherApi.fetchLocalWeather(weatherPlace.dongCode);
           if (local && (local.sky || local.humidity !== null || local.windDir)) {
             return { name: weatherPlace.label, stn: '', weather: local.sky || '', weatherText: local.sky || '', cloud: null, temp: local.temp, humidity: local.humidity, windDir: local.windDir, windSpeed: local.windSpeed, shownTime: `${local.updated} 현재`, local: true };
           }
@@ -2122,7 +2145,7 @@ export default function App() {
           console.error('동네 날씨 가져오기 실패, 관측 지점 자료로 대신합니다:', error);
         }
       }
-      const result = await window.stackpilotDesktop.fetchWeather(when.tm);
+      const result = await weatherApi.fetchWeather(when.tm);
       const obs = (result?.stations || []).find((item) => item.stn === weatherStation);
       if (!obs) {
         alert(`기상청에 ${when.day} ${when.hour}시 관측 자료가 없습니다. 날짜와 시각을 확인해 주세요.`);
@@ -2194,10 +2217,10 @@ export default function App() {
   const searchWeatherPlaces = async () => {
     const text = String(weatherSearchInputRef.current?.value || '').trim();
     if (!text) { alert('찾을 곳의 이름을 적어 주세요. (예: 안산, 고잔동, 온산읍)'); return; }
-    if (!window.stackpilotDesktop?.searchPlaces) { alert('장소 검색은 설치형 프로그램(exe)에서만 쓸 수 있습니다.'); return; }
+    if (!weatherApi) { alert(weatherUnavailableMessage); return; }
     setWeatherBusy(true);
     try {
-      const list = await window.stackpilotDesktop.searchPlaces(text);
+      const list = await weatherApi.searchPlaces(text);
       setWeatherPlaceResults(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('장소 검색 실패:', error);
@@ -3839,6 +3862,7 @@ export default function App() {
       nozzles: sanitizeNozzleSet(nozzleSet) || [],
       groupNozzles: sanitizeGroupNozzleSets(groupNozzleSets),
       samplers: sanitizeSamplers(samplers) || [],
+      gasSamplers: sanitizeGasSamplers(gasSamplers) || [],
       pitotPresets: sanitizePitotPresets(pitotPresets) || [],
     };
   };
@@ -3940,6 +3964,151 @@ export default function App() {
     }
   };
 
+  // 백업 내용(클라우드 또는 백업 파일)을 이 기기에 적용한다. 이 기기에만 있는 기록은 합쳐서 남긴다
+  const applySyncPayload = async (payload, { silent = false } = {}) => {
+    if (!payload || typeof payload !== 'object' || payload.app !== 'StackPilot') throw new Error('StackPilot 백업 형식이 아닙니다.');
+    if (String(payload.userId || '') !== activeUser) {
+      throw new Error(`현재 로그인(${activeUser})과 백업 계정(${payload.userId || '알수없음'})이 다릅니다.`);
+    }
+
+    const sanitizedUserMap = sanitizeSecureUsers({ [activeUser]: payload.secureUser });
+    const cloudUser = sanitizedUserMap ? sanitizedUserMap[activeUser] : null;
+    if (!cloudUser) throw new Error('클라우드 사용자 데이터가 올바르지 않습니다.');
+
+    const localKey = vaultKeyRef.current[activeUser];
+    if (!localKey) throw new Error('복원을 위해 다시 로그인해주세요.');
+    // 이 기기의 계정과 백업의 계정은 암호화 소금(salt)이 다를 수 있다 (캐시를 지우고 다시 만든 경우).
+    // 기본 계정은 비밀번호가 정해져 있으므로 백업의 salt로 열쇠를 다시 만들어 연다
+    let key = localKey;
+    if (cloudUser.salt !== secureUsers[activeUser]?.salt) {
+      if (activeUser === BETA_USER_ID) key = await deriveVaultKey(BETA_USER_PASSWORD, cloudUser.salt);
+      else throw new Error('이 기기의 계정과 백업의 계정 암호가 달라 열 수 없습니다. 백업을 만든 기기에서 같은 계정으로 로그인해 주세요.');
+    }
+    const decrypted = await decryptJsonWithKey(key, cloudUser.dataIv, cloudUser.dataCipher);
+    const cloudReports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
+
+    // 이 PC에만 있는 리포트(업로드 실패 중 저장한 것 등)를 잃지 않도록 클라우드 것과 합친다.
+    // 같은 리포트면 더 최근에 저장된 쪽을 남긴다.
+    let localReports = [];
+    try {
+      const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.secureUsers) || '{}');
+      const localUser = storedUsers?.[activeUser];
+      if (localUser?.dataIv && localUser?.dataCipher) {
+        const localDecrypted = await decryptJsonWithKey(localKey, localUser.dataIv, localUser.dataCipher);
+        if (Array.isArray(localDecrypted)) localReports = localDecrypted.filter(item => item && typeof item === 'object');
+      }
+    } catch (localError) {
+      console.warn('로컬 리포트 읽기 실패, 클라우드 데이터만 사용:', localError);
+    }
+    const mergedByKey = new Map();
+    [...cloudReports, ...localReports].forEach((report) => {
+      const reportKey = getReportKey(report);
+      if (!reportKey) return;
+      const existing = mergedByKey.get(reportKey);
+      const time = (item) => new Date(item?.savedAt || 0).getTime() || 0;
+      if (!existing || time(report) >= time(existing)) mergedByKey.set(reportKey, report);
+    });
+    const restoredReports = [...mergedByKey.values()];
+    const hasLocalOnly = restoredReports.length !== cloudReports.length
+      || localReports.some((report) => !cloudReports.some((c) => getReportKey(c) === getReportKey(report) && c.savedAt === report.savedAt));
+
+    const restoredNozzles = sanitizeNozzleSet(payload.nozzles);
+    const groupNozzleKey = getGroupNozzlesStorageKey(activeUser);
+    if (payload.groupNozzles && !(silent && localStorage.getItem(groupNozzleKey))) {
+      const restoredGroups = sanitizeGroupNozzleSets(payload.groupNozzles);
+      setGroupNozzleSets(restoredGroups);
+      localStorage.setItem(groupNozzleKey, JSON.stringify(restoredGroups));
+    }
+    const restoredSamplers = sanitizeSamplers(payload.samplers);
+    const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
+    const restoredGasSamplers = Array.isArray(payload.gasSamplers) ? sanitizeGasSamplers(payload.gasSamplers) : null;
+
+    if (hasLocalOnly) {
+      const mergedCipher = await encryptJsonWithKey(key, restoredReports);
+      setSecureUsers(prev => ({
+        ...prev,
+        [activeUser]: { ...cloudUser, dataIv: mergedCipher.iv, dataCipher: mergedCipher.cipher, updatedAt: new Date().toISOString() },
+      }));
+    } else {
+      setSecureUsers(prev => ({
+        ...prev,
+        [activeUser]: cloudUser,
+      }));
+    }
+    setActiveUserReports(restoredReports);
+    // 계정 기록을 백업 쪽으로 바꿨으므로 열쇠도 그에 맞춘다 (이후 저장이 같은 열쇠로 암호화되도록)
+    vaultKeyRef.current[activeUser] = key;
+
+    const nozzleTargetKey = canUseUserScopedPresets(activeUser)
+      ? getUserNozzlesStorageKey(activeUser)
+      : STORAGE_KEYS.nozzles;
+    const samplerTargetKey = canUseUserScopedPresets(activeUser)
+      ? getUserSamplersStorageKey(activeUser)
+      : STORAGE_KEYS.samplers;
+    const pitotTargetKey = canUseUserScopedPresets(activeUser)
+      ? getUserPitotStorageKey(activeUser)
+      : STORAGE_KEYS.pitotPresets;
+
+    const hasLocalPreset = (storageKey) => {
+      try { const v = JSON.parse(localStorage.getItem(storageKey) || 'null'); return Array.isArray(v) && v.length > 0; } catch { return false; }
+    };
+    if (restoredNozzles && restoredNozzles.length > 0 && !(silent && hasLocalPreset(nozzleTargetKey))) {
+      setNozzleSet(restoredNozzles);
+      localStorage.setItem(nozzleTargetKey, JSON.stringify(restoredNozzles));
+    }
+    if (restoredSamplers && restoredSamplers.length > 0 && !(silent && hasLocalPreset(samplerTargetKey))) {
+      setSamplers(restoredSamplers);
+      localStorage.setItem(samplerTargetKey, JSON.stringify(restoredSamplers));
+    }
+    const gasSamplerTargetKey = canUseUserScopedPresets(activeUser) ? getUserGasSamplersStorageKey(activeUser) : STORAGE_KEYS.gasSamplers;
+    if (restoredGasSamplers && restoredGasSamplers.length > 0 && !(silent && hasLocalPreset(gasSamplerTargetKey))) {
+      setGasSamplers(restoredGasSamplers);
+      localStorage.setItem(gasSamplerTargetKey, JSON.stringify(restoredGasSamplers));
+    }
+    if (restoredPitot && restoredPitot.length > 0 && !(silent && hasLocalPreset(pitotTargetKey))) {
+      setPitotPresets(restoredPitot);
+      localStorage.setItem(pitotTargetKey, JSON.stringify(restoredPitot));
+    }
+
+    return restoredReports;
+  };
+
+  // ── 백업 파일: 설정 없이 쓰는 백업. 휴대폰이면 '파일' 앱(iCloud Drive 등)에 저장해 두면 캐시를 지워도 되살릴 수 있다 ──
+  const backupFileInputRef = useRef(null);
+  const exportBackupFile = () => {
+    try {
+      const payload = buildCloudSyncPayload();
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `StackPilot_백업_${activeUser}_${stamp}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      try { localStorage.setItem(`dust-sampling.last-backup.${activeUser}`, new Date().toISOString()); } catch { /* 무시 */ }
+    } catch (error) {
+      console.error('백업 파일 만들기 실패:', error);
+      alert('백업 파일을 만들지 못했습니다.');
+    }
+  };
+  const importBackupFile = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!activeUser || !isUserUnlocked) { alert('로그인 후 불러올 수 있습니다.'); return; }
+    try {
+      const payload = JSON.parse(await file.text());
+      const restored = await applySyncPayload(payload, { silent: false });
+      alert(`백업을 불러왔습니다. 기록 ${restored.length}건`);
+    } catch (error) {
+      console.error('백업 파일 불러오기 실패:', error);
+      alert(`백업 파일을 불러오지 못했습니다: ${error?.message || '알 수 없는 오류'}`);
+    }
+  };
+
   const restoreCloudSyncFromGist = async ({ silent = false } = {}) => {
     if (!activeUser || !isUserUnlocked) {
       if (!silent) alert('로그인 후 복원 가능합니다.');
@@ -3993,94 +4162,7 @@ export default function App() {
       if (!rawContent) throw new Error('클라우드 파일 내용이 비어 있습니다.');
 
       const payload = JSON.parse(rawContent);
-      if (!payload || typeof payload !== 'object') throw new Error('클라우드 데이터 형식이 올바르지 않습니다.');
-      if (String(payload.userId || '') !== activeUser) {
-        throw new Error(`현재 로그인(${activeUser})과 백업 계정(${payload.userId || '알수없음'})이 다릅니다.`);
-      }
-
-      const sanitizedUserMap = sanitizeSecureUsers({ [activeUser]: payload.secureUser });
-      const cloudUser = sanitizedUserMap ? sanitizedUserMap[activeUser] : null;
-      if (!cloudUser) throw new Error('클라우드 사용자 데이터가 올바르지 않습니다.');
-
-      const key = vaultKeyRef.current[activeUser];
-      if (!key) throw new Error('복원을 위해 다시 로그인해주세요.');
-      const decrypted = await decryptJsonWithKey(key, cloudUser.dataIv, cloudUser.dataCipher);
-      const cloudReports = Array.isArray(decrypted) ? decrypted.filter(item => item && typeof item === 'object') : [];
-
-      // 이 PC에만 있는 리포트(업로드 실패 중 저장한 것 등)를 잃지 않도록 클라우드 것과 합친다.
-      // 같은 리포트면 더 최근에 저장된 쪽을 남긴다.
-      let localReports = [];
-      try {
-        const storedUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.secureUsers) || '{}');
-        const localUser = storedUsers?.[activeUser];
-        if (localUser?.dataIv && localUser?.dataCipher) {
-          const localDecrypted = await decryptJsonWithKey(key, localUser.dataIv, localUser.dataCipher);
-          if (Array.isArray(localDecrypted)) localReports = localDecrypted.filter(item => item && typeof item === 'object');
-        }
-      } catch (localError) {
-        console.warn('로컬 리포트 읽기 실패, 클라우드 데이터만 사용:', localError);
-      }
-      const mergedByKey = new Map();
-      [...cloudReports, ...localReports].forEach((report) => {
-        const reportKey = getReportKey(report);
-        if (!reportKey) return;
-        const existing = mergedByKey.get(reportKey);
-        const time = (item) => new Date(item?.savedAt || 0).getTime() || 0;
-        if (!existing || time(report) >= time(existing)) mergedByKey.set(reportKey, report);
-      });
-      const restoredReports = [...mergedByKey.values()];
-      const hasLocalOnly = restoredReports.length !== cloudReports.length
-        || localReports.some((report) => !cloudReports.some((c) => getReportKey(c) === getReportKey(report) && c.savedAt === report.savedAt));
-
-      const restoredNozzles = sanitizeNozzleSet(payload.nozzles);
-      const groupNozzleKey = getGroupNozzlesStorageKey(activeUser);
-      if (payload.groupNozzles && !(silent && localStorage.getItem(groupNozzleKey))) {
-        const restoredGroups = sanitizeGroupNozzleSets(payload.groupNozzles);
-        setGroupNozzleSets(restoredGroups);
-        localStorage.setItem(groupNozzleKey, JSON.stringify(restoredGroups));
-      }
-      const restoredSamplers = sanitizeSamplers(payload.samplers);
-      const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
-
-      if (hasLocalOnly) {
-        const mergedCipher = await encryptJsonWithKey(key, restoredReports);
-        setSecureUsers(prev => ({
-          ...prev,
-          [activeUser]: { ...cloudUser, dataIv: mergedCipher.iv, dataCipher: mergedCipher.cipher, updatedAt: new Date().toISOString() },
-        }));
-      } else {
-        setSecureUsers(prev => ({
-          ...prev,
-          [activeUser]: cloudUser,
-        }));
-      }
-      setActiveUserReports(restoredReports);
-
-      const nozzleTargetKey = canUseUserScopedPresets(activeUser)
-        ? getUserNozzlesStorageKey(activeUser)
-        : STORAGE_KEYS.nozzles;
-      const samplerTargetKey = canUseUserScopedPresets(activeUser)
-        ? getUserSamplersStorageKey(activeUser)
-        : STORAGE_KEYS.samplers;
-      const pitotTargetKey = canUseUserScopedPresets(activeUser)
-        ? getUserPitotStorageKey(activeUser)
-        : STORAGE_KEYS.pitotPresets;
-
-      const hasLocalPreset = (storageKey) => {
-        try { const v = JSON.parse(localStorage.getItem(storageKey) || 'null'); return Array.isArray(v) && v.length > 0; } catch { return false; }
-      };
-      if (restoredNozzles && restoredNozzles.length > 0 && !(silent && hasLocalPreset(nozzleTargetKey))) {
-        setNozzleSet(restoredNozzles);
-        localStorage.setItem(nozzleTargetKey, JSON.stringify(restoredNozzles));
-      }
-      if (restoredSamplers && restoredSamplers.length > 0 && !(silent && hasLocalPreset(samplerTargetKey))) {
-        setSamplers(restoredSamplers);
-        localStorage.setItem(samplerTargetKey, JSON.stringify(restoredSamplers));
-      }
-      if (restoredPitot && restoredPitot.length > 0 && !(silent && hasLocalPreset(pitotTargetKey))) {
-        setPitotPresets(restoredPitot);
-        localStorage.setItem(pitotTargetKey, JSON.stringify(restoredPitot));
-      }
+      const restoredReports = await applySyncPayload(payload, { silent });
 
       persistCloudSyncConfig({ token, gistId });
       setMenuCheckedReportKeys([]);
@@ -8240,9 +8322,35 @@ export default function App() {
                             })}
                           </div>
                         </div>
+                        {!isDesktopApp && (
+                          <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                            <p className="text-xs font-black text-slate-800">날씨 중계 주소 (모바일)</p>
+                            <p className="text-[11px] text-slate-600 mt-1">모바일에서 기상청 자료 가져오기·장소 검색을 쓰려면 중계 주소가 필요합니다. 만드는 방법은 저장소의 relay/README.md에 있습니다.</p>
+                            <div className="mt-2 flex gap-2">
+                              <input
+                                type="url"
+                                value={weatherRelayDraft === null ? weatherRelay : weatherRelayDraft}
+                                onChange={(e) => setWeatherRelayDraft(e.target.value)}
+                                placeholder="https://stackpilot-weather.○○○.workers.dev"
+                                className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg bg-white outline-none text-xs"
+                              />
+                              <button type="button" onClick={() => saveWeatherRelay(weatherRelayDraft === null ? weatherRelay : weatherRelayDraft)} className="px-3 py-2 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-[11px]">저장</button>
+                            </div>
+                            <p className="text-[11px] mt-1 text-slate-500">{weatherRelay ? '저장됨 · 날씨 가져오기를 쓸 수 있습니다' : '아직 설정하지 않았습니다'}</p>
+                          </div>
+                        )}
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
-                          <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist)</p>
-                          <p className="text-[11px] text-slate-600 mt-1">다른 기기에서도 같은 계정 리포트를 복원할 수 있습니다.</p>
+                          <p className="text-xs font-black text-slate-800">백업 파일</p>
+                          <p className="text-[11px] text-slate-600 mt-1">기록과 장비 프리셋을 파일 하나로 저장합니다. 휴대폰에서는 '파일' 앱(iCloud Drive)에 저장해 두면, 사파리 데이터를 지워도 불러와서 되살릴 수 있습니다.</p>
+                          <input ref={backupFileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importBackupFile} />
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button type="button" onClick={exportBackupFile} className="px-2 py-2 rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px]">백업 파일 저장</button>
+                            <button type="button" onClick={() => backupFileInputRef.current && backupFileInputRef.current.click()} className="px-2 py-2 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 font-bold text-[11px]">백업 파일 불러오기</button>
+                          </div>
+                        </div>
+                        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <p className="text-xs font-black text-slate-800">클라우드 동기화 (GitHub Gist) · 자동 백업</p>
+                          <p className="text-[11px] text-slate-600 mt-1">한 번 설정하면 저장할 때마다 자동으로 깃허브에 백업됩니다. 데이터를 지운 뒤에는 같은 PAT와 Gist ID를 다시 넣고 "클라우드 복원"을 누르세요. Gist ID는 따로 적어 두세요.</p>
                           <div className="mt-2 space-y-2">
                             <input
                               type="password"

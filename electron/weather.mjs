@@ -1,3 +1,4 @@
+// 설치형(electron 메인 프로세스)과 웹(브라우저, 중계 서버 경유)이 함께 쓰는 기상청 자료 읽기
 // 기상청 날씨누리 "도시별관측" 표를 읽어 지점별 관측값으로 바꾼다.
 // 인증키가 필요 없는 공식 웹 페이지이며, 전국 종관(ASOS) 지점의 매 정시 관측값을 준다.
 // 주의: 기압은 해면기압만 나온다(현지기압 아님).
@@ -111,4 +112,4 @@ const fetchLocalWeather = async (dongCode, fetchImpl = fetch) => {
   return { ...result, sky };
 };
 
-module.exports = { parseCityObservations, fetchCityObservations, searchPlaces, fetchLocalWeather, parseCurrentWeather, parseForecastSky };
+export { parseCityObservations, fetchCityObservations, searchPlaces, fetchLocalWeather, parseCurrentWeather, parseForecastSky };
