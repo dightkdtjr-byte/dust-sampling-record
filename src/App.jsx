@@ -4514,6 +4514,14 @@ export default function App() {
     if (sheetId === 'pahs') return u.toUpperCase().includes('PAH');
     return u.includes('입자') || u.includes('먼지') || u.includes('금속');
   };
+  // 이 기록부에 고를 수 있는 피토관: 용도가 맞는 것만 (수은=수은, PAHs=PAHs, 먼지·금속·유량=입자).
+  // 용도를 적어 둔 피토관이 하나도 없으면(직접 등록한 경우 등) 전체를 보여 준다. 지금 골라 둔 것은 용도가 달라도 목록에 남긴다
+  const sheetPitotPresets = (() => {
+    const matched = pitotPresets.filter((preset) => isPitotUsageForSheet(preset.usage));
+    if (matched.length === 0) return pitotPresets;
+    const current = pitotPresets.find((preset) => String(preset.id) === String(formData.pitotPresetId));
+    return current && !matched.includes(current) ? [...matched, current] : matched;
+  })();
   const activePitotPreset = pitotPresets.find(item => String(item.id) === String(formData.pitotPresetId)) || null;
   const activePitotVelocityRows = activePitotPreset ? getPitotVelocityRows(activePitotPreset) : [];
   const isPitotCpAutoApplied = activePitotVelocityRows.length > 0;
@@ -7610,9 +7618,8 @@ export default function App() {
     };
     const alternative = inRange
       ? null
-      : (pitotPresets.find((preset) => preset.id !== activePitotPreset.id && isPitotUsageForSheet(preset.usage) && coversVelocity(preset))
-        || pitotPresets.find((preset) => preset.id !== activePitotPreset.id && coversVelocity(preset))
-        || null);
+      // 다른 피토관을 권할 때도 이 기록부 용도의 피토관 중에서만
+      : (sheetPitotPresets.find((preset) => preset.id !== activePitotPreset.id && coversVelocity(preset)) || null);
     return { ready: true, source, steps, finalCp: cp, finalVelocity: velocity, converged, inRange, minV, maxV, alternative };
   };
   const pitotAutoSelection = buildPitotAutoSelection();
@@ -9392,8 +9399,7 @@ export default function App() {
                       title="피토 프리셋 선택"
                     >
                       <option value="">피토 프리셋</option>
-                      {[...pitotPresets]
-                        .sort((a, b) => Number(isPitotUsageForSheet(b.usage)) - Number(isPitotUsageForSheet(a.usage)))
+                      {sheetPitotPresets
                         .map((preset) => (
                           <option key={preset.id} value={preset.id}>
                             {(preset.sn ? `S/N ${preset.sn}` : `S/N 미입력 (${preset.id})`)
