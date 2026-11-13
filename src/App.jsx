@@ -272,7 +272,8 @@ const normalizeSiteName = (value) => String(value || '').trim().replace(/\s+/g, 
 const SAMPLING_LOG_DAY_SLOTS = 4;
 // 통합기록부 엑셀: 날짜별 시트 열 → 입력 시트('시료채취 작성') 열
 const DAY_SHEET_INPUT_COLUMNS = { B: 'D', C: 'E', D: 'G', E: 'H', F: 'I', G: 'J', H: 'K', I: 'L', J: 'M', K: 'N' };
-const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS) => {
+// includeBlank: 사업장·배출구·날짜를 하나도 안 적은 기록도 "정보 없음" 묶음으로 보여 준다 (저장 목록용)
+const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS, { includeBlank = false } = {}) => {
   const sites = new Map();
   (reports || []).forEach((report) => {
     const sheetId = resolveSheetId(report);
@@ -280,7 +281,7 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
     const company = String(report?.company || '').trim();
     const location = String(report?.location || report?.stackName || '').trim();
     const date = String(report?.date || '').trim();
-    if (!company && !location && !date) return;
+    if (!company && !location && !date && !includeBlank) return;
     const key = `${normalizeSiteName(company)}|${normalizeSiteName(location)}`;
     if (!sites.has(key)) sites.set(key, { company, location, items: [] });
     sites.get(key).items.push({ report, sheetId, date });
@@ -2955,7 +2956,7 @@ export default function App() {
     };
   });
   // 메뉴 목록: 사업장·스택명이 같은 리포트를 한 묶음으로 (날짜는 기간으로 표시)
-  const profileReportGroups = groupSheetReportsForLog(profileCombinedReports, resolveReportSheetId, null);
+  const profileReportGroups = groupSheetReportsForLog(profileCombinedReports, resolveReportSheetId, null, { includeBlank: true });
   const toggleReportGroup = (key) => setExpandedReportGroups((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   // 저장 리포트 묶음 표 (메뉴와 기록부 창이 같은 양식 사용)
@@ -3017,7 +3018,7 @@ export default function App() {
                     <td className="p-2 text-center">
                       <input type="checkbox" checked={groupAllChecked} onClick={(e) => e.stopPropagation()} onChange={(e) => groupKeys.forEach((k) => toggleCheck(k, e.target.checked))} title="이 묶음 전체 선택" />
                     </td>
-                    <td className="p-2 font-bold text-slate-900 whitespace-nowrap">{group.company || '-'}</td>
+                    <td className="p-2 font-bold text-slate-900 whitespace-nowrap">{group.company || (group.location || group.dates.length ? '-' : '(정보 없음)')}</td>
                     <td className="p-2 whitespace-nowrap">{group.location || '-'}</td>
                     <td className="p-2 whitespace-nowrap">{group.dateLabel}</td>
                     <td className="p-2">
@@ -8839,7 +8840,7 @@ export default function App() {
               </div>
             </div>
             {renderReportGroupTable({
-              groups: groupSheetReportsForLog(savedLogs, resolveReportSheetId, null),
+              groups: groupSheetReportsForLog(savedLogs, resolveReportSheetId, null, { includeBlank: true }),
               checkedSet: sheetCheckedReportKeySet,
               toggleCheck: toggleSheetReportCheck,
               allChecked: savedLogs.length > 0 && savedLogs.every((item) => sheetCheckedReportKeySet.has(getReportKey(item))),
@@ -10502,7 +10503,7 @@ export default function App() {
           </div>
 
           {renderReportGroupTable({
-            groups: groupSheetReportsForLog(savedData, resolveReportSheetId, null),
+            groups: groupSheetReportsForLog(savedData, resolveReportSheetId, null, { includeBlank: true }),
             checkedSet: sheetCheckedReportKeySet,
             toggleCheck: toggleSheetReportCheck,
             allChecked: isAllSheetReportsChecked,
