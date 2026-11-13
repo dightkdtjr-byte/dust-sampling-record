@@ -7025,16 +7025,31 @@ export default function App() {
         // 자동측정기 값이 있으면 참고로 남긴다 (선택은 C5=2라 임핀저 값이 적용됨)
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       }
-      if (exportMoistureMethod.id !== 'auto') {
-        // 양식의 가스 밀도(노즐산정 F26)와 유량 양식의 수분량(계산식 O75)이 자동측정기 평균(B15)만 보던 것을
-        // 선택한 방법의 사전 수분량(노즐산정 C15)을 보도록 바꿔 화면 값과 맞춘다
-        addUpdate('노즐산정', 'F26', { formula: 'C15' });
-        if (exportSheetId === 'flow') addUpdate('계산식', 'O75', { formula: '노즐산정!C15' });
-      }
+      // 양식의 가스 밀도(노즐산정 F26), 습윤 밀도(노즐산정 A34), 유량 양식의 수분량(계산식 O75)이
+      // 자동측정기 평균(B15)이나 빈 칸(H29)만 보던 것을, 선택번호(C5)를 따르는 사전 수분량(노즐산정 C15)을 보게 한다
+      // → 엑셀에서 1·2·3을 바꿔도 밀도·유속·노즐 계산이 같이 바뀐다
+      addUpdate('노즐산정', 'F26', { formula: 'C15' });
+      addUpdate('노즐산정', 'A34', { formula: '(C34*(100-$C$15)/100)+18/(22.4*100)*$C$15' });
+      if (exportSheetId === 'flow') addUpdate('계산식', 'O75', { formula: '노즐산정!C15' });
       const preImp = sourceData.preImpinger || createEmptyPreImpinger();
-      if (isImpingerMoistureMethod(exportMoistureMethod)) {
+      // 무게법(흡습관·임핀저) 입력이 있으면 지금 고른 방법과 상관없이 적어 둔다 → 엑셀에서 1·2로 바꿔도 값이 있다
+      const preImpHasData = [preImp.meterStart, preImp.meterEnd, preImp.meterTemp, preImp.orifice]
+        .concat((preImp.impingers || []).flatMap((imp) => [imp?.initial, imp?.final]))
+        .some((value) => String(value ?? '').trim() !== '');
+      {
+        // 흡습관법(1)은 흡습관 2개와 가스 샘플러(보정계수·습식이면 포화수증기압), 임핀저법(2)은 임핀저 4개와 입자 샘플러(노즐산정 G8)
+        const tubeMethod = MOISTURE_METHODS.find((m) => m.id === 'imp2');
+        const tubeNo = MOISTURE_METHODS.indexOf(tubeMethod) + 1;
+        const tubeYd = getPreMoistureYd(tubeMethod, sourceData);
+        const tubePv = Math.round(getPreMoisturePv(tubeMethod, sourceData) * 100) / 100;
+        addUpdate('수분량', 'E24', { formula: `IF($C$5=${tubeNo},SUM(E20:F21),SUM(E20:F23))` });
+        addUpdate('수분량', 'C28', { formula: `IF($C$5=${tubeNo},(B28-A28)*${Number.isFinite(tubeYd) ? tubeYd : 1},(B28-A28)*노즐산정!G8)` });
+        // 자료가 없으면 0으로 (#DIV/0!이 노즐산정·계산식 전체로 번지지 않게)
+        addUpdate('수분량', 'H28', { formula: `IF(OR(N(C28)=0,N(E24)=0),0,22.4/18*E24/(C28*(273/(273+D28))*((E28+G28-IF($C$5=${tubeNo},${tubePv},0))/760)+22.4/18*E24)*100)` });
+      }
+      if (preImpHasData) {
         for (let i = 0; i < 4; i++) {
-          const imp = i < exportMoistureMethod.stages ? ((preImp.impingers || [])[i] || {}) : {};
+          const imp = (preImp.impingers || [])[i] || {};
           // 아래 사후 수분량 표의 무게 칸과 같은 서식(가운데 정렬)으로 적는다
           addUpdate('수분량', `C${20 + i}`, toNumber(imp.initial), 'C33');
           addUpdate('수분량', `D${20 + i}`, toNumber(imp.final), 'D33');
@@ -7046,13 +7061,6 @@ export default function App() {
         addUpdate('수분량', 'E28', toNumber(preImp.pressure) ?? toNumber(sourceData.atmPressure));
         addUpdate('수분량', 'F28', preOrifice);
         addUpdate('수분량', 'G28', preOrifice !== null ? preOrifice / 13.6 : 0);
-        if (exportMoistureMethod.id === 'imp2') {
-          // 흡습관법은 가스 샘플러로 흡입: 가스채취량에 그 샘플러의 보정계수를 쓰고, 습식 가스미터면 포화수증기압을 뺀다
-          const tubeYd = getPreMoistureYd(exportMoistureMethod, sourceData);
-          const tubePv = Math.round(getPreMoisturePv(exportMoistureMethod, sourceData) * 100) / 100;
-          addUpdate('수분량', 'C28', { formula: `(B28-A28)*${tubeYd}` });
-          addUpdate('수분량', 'H28', { formula: `22.4/18*E24/(C28*(273/(273+D28))*((E28+G28-${tubePv})/760)+22.4/18*E24)*100` });
-        }
       } else {
         addUpdate('수분량', 'A28', toNumber(firstVolume));
         addUpdate('수분량', 'B28', toNumber(lastVolume));
