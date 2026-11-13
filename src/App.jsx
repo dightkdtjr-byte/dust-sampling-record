@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
+import { recalcWorkbookCaches } from './xlsxRecalc.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
@@ -7195,7 +7196,7 @@ export default function App() {
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
-                ...(sheetName === '노즐산정' ? { numberFormats: [{ range: `J15:J${16 + Math.max(5, sourcePoints.length)}`, code: '0.0' }] } : {}),
+                ...(sheetName === '노즐산정' ? { numberFormats: [{ range: `J15:J${16 + Math.max(5, sourcePoints.length)}`, code: '0.0' }, { range: 'A34:A34', code: '0.000' }] } : {}),
               }
         );
         zip.file(sheetPath, patched);
@@ -7250,6 +7251,9 @@ export default function App() {
         zip.file('xl/workbook.xml', wbXml);
       }
 
+      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
+      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
+      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
@@ -7676,6 +7680,8 @@ export default function App() {
         add(`P${r}`, numOrText(row.targetVolume));
         add(`Q${r}`, numOrText(row.duration));
         add(`S${r}`, numOrText(row.testPeriod));
+        // 표준 채취량(V): 게이지압(N)이 비면 양식 수식이 #VALUE!를 내므로 빈 압력은 0으로 본다
+        if (r >= 14) add(`V${r}`, { formula: `IF(K${r}="","",K${r}*(273/(273+$L${r}))*($I$6+N($N${r}))/760)` });
       });
 
       const inputPath = sheetPathMap.get(inputSheet);
@@ -7812,6 +7818,9 @@ export default function App() {
       zip.file('xl/workbook.xml', workbookXml);
       await removeCalcChainFromZip(zip);
 
+      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
+      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
+      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);

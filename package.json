@@ -14,6 +14,7 @@
     "electron:build:personal": "npm run build && electron-builder --win portable --config electron-builder.personal.json"
   },
   "dependencies": {
+    "fast-formula-parser": "^1.0.19",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
     "react": "^19.2.0",
