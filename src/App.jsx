@@ -4,6 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
+import { tidyWorkbook, rowsAt } from './xlsxTidy.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
@@ -7003,10 +7004,10 @@ export default function App() {
         const tube = MOISTURE_METHODS[tubeNo - 1];
         const imp = MOISTURE_METHODS[impNo - 1];
         const q = (text) => `"${String(text).replace(/"/g, '""')}"`;
-        const pick = (tubeText, impText, otherText) => ({ formula: `IF($C$5=${tubeNo},${q(tubeText)},IF($C$5=${impNo},${q(impText)},${q(otherText)}))` });
+        const pick = (tubeText, impText, otherText) => ({ formula: `IF($C$5=${tubeNo},${q(tubeText)},IF($C$5=${impNo},${q(impText)},${typeof otherText === 'number' ? otherText : q(otherText)}))` });
         addUpdate('수분량', 'A18', pick(`▶ 흡습관법 (${tube.standard})`, `▶ 임핀저법 (${imp.standard})`, '▶ 흡습관법 · 임핀저법'));
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
-        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, pick(tube.items[i] || '-', imp.items[i] || '-', String(i + 1)));
+        for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, pick(tube.items[i] || '-', imp.items[i] || '-', i + 1));
         addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
         // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 = 오리피스압. 흡습관법은 가스 샘플러의 가스미터압
         addUpdate('수분량', 'F26', pick('가스미터압', '오리피스압', '가스미터압'));
@@ -7107,7 +7108,8 @@ export default function App() {
           runningMinutes = Math.round((runningMinutes + rawMinutes) * 100) / 100;
           cellMinutes = runningMinutes;
         }
-        addUpdate(recordSheet, `A${row}`, meter.pointNum || (idx === 0 ? '시작' : ''));
+        // 채취점 번호는 숫자로 (글자로 넣으면 엑셀에서 '텍스트 형식의 숫자'로 표시된다)
+        addUpdate(recordSheet, `A${row}`, /^\d+$/.test(String(meter.pointNum || '').trim()) ? Number(meter.pointNum) : (meter.pointNum || (idx === 0 ? '시작' : '')));
         addUpdate(recordSheet, `B${row}`, idx === 0 ? 0 : cellMinutes);
         addUpdate(recordSheet, `C${row}`, toNumber(meter.vacuum));
         addUpdate(recordSheet, `D${row}`, toNumber(meter.stackTemp));
@@ -7251,6 +7253,45 @@ export default function App() {
         zip.file('xl/workbook.xml', wbXml);
       }
 
+      // 서식 정리: 같은 표는 같은 행 높이, 같은 열은 같은 소수 자릿수, 숫자 서식의 꼬리 공백 제거, 한 장 너비 인쇄
+      try {
+        const meterFirst = layout.meterStartRow;
+        const meterLast = layout.meterStartRow + meterRowsForTemplate; // 평균 행까지
+        const postHead = 41 + (layout.impingerRows - 4);
+        await tidyWorkbook(zip, {
+          // 양식의 시트는 모두 한 장짜리 서식이므로 한 장에 맞춰 인쇄한다
+          onePageSheets: 'all',
+          rules: {
+            연소가스자료: {
+              rowHeights: rowsAt(4, 41, 16.5),
+              // % 성분은 소수 둘째 자리, ppm 성분은 소수 첫째 자리
+              numberFormats: [{ range: 'B5:C41', code: '0.00' }, { range: 'D5:F41', code: '0.0' }],
+            },
+            시료측정위치: {
+              rowHeights: { ...rowsAt(34, 38, 18), ...rowsAt(42, 48, 17.25) },
+              numberFormats: [{ range: 'B34', code: '0.00' }, { range: 'A37:C37', code: '0.00' }, { range: 'B44:B48', code: '0.00' }, { range: 'F44:H48', code: '0.00' }],
+            },
+            수분량: {
+              rowHeights: { ...rowsAt(26, 28, 20.1), ...rowsAt(postHead, postHead + 2, 20.1) },
+            },
+            노즐산정: {
+              rowHeights: { ...rowsAt(37, 38, 15), ...rowsAt(39, 56, 18) },
+              // 밀도는 모두 소수 셋째 자리, 샘플러 ΔH@·Yd는 넷째 자리
+              numberFormats: [{ range: 'H26', code: '0.000' }, { range: 'C34', code: '0.000' }, { range: 'A34', code: '0.000' }, { range: 'O39:P43', code: '0.0000' }],
+            },
+            [recordSheet]: {
+              // 측정 표: 시간·진공은 정수, 온도는 모두 소수 첫째 자리 (측정 행과 평균 행을 같게)
+              numberFormats: [
+                { range: `B${meterFirst}:C${meterLast}`, code: '0' },
+                { range: `D${meterFirst}:D${meterLast}`, code: '0.0' },
+                { range: `K${meterFirst}:K${meterLast}`, code: '0.0' },
+              ],
+            },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }] },
+            먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
+          },
+        });
+      } catch (error) { console.error('서식 정리 실패:', error); }
       // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
       // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
       try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
@@ -7651,7 +7692,8 @@ export default function App() {
         add(`Q${r}`, ps ? toNumber(ps.yd) : null);
         const gs = gasSamplers[i];
         add(`R${r}`, gs ? `#${i + 1}` : null);
-        add(`S${r}`, gs ? gs.sn : null);
+        // 가스 샘플러 일련번호가 숫자뿐이면 숫자로 (엑셀의 '텍스트 형식 숫자' 표시 방지)
+        add(`S${r}`, gs ? (/^\d+$/.test(String(gs.sn || '').trim()) ? Number(gs.sn) : gs.sn) : null);
         add(`T${r}`, gs ? toNumber(gs.yd) : null);
       }
 
@@ -7818,6 +7860,25 @@ export default function App() {
       zip.file('xl/workbook.xml', workbookXml);
       await removeCalcChainFromZip(zip);
 
+      // 서식 정리: 날짜별 시트는 한 장에, 입력 시트의 기상 숫자는 가운데, 샘플러 Yd 자릿수 통일, 물질 행 높이 통일
+      try {
+        await tidyWorkbook(zip, {
+          onePageSheets: 'all',
+          // 숫자 열은 자릿수를 하나로: 가스미터·채취유량 소수 둘째, 온도·게이지압(mmH2O) 소수 첫째, 압력(mmHg) 소수 둘째
+          rules: (name) => (name === inputSheet
+            ? {
+                rowHeights: rowsAt(13, 57, 17.25),
+                numberFormats: [
+                  { range: 'Q6:Q10', code: '0.0000' }, { range: 'T6:T10', code: '0.0000' },
+                  { range: 'I13:K57', code: '0.00' }, { range: 'L13:M57', code: '0.0' }, { range: 'N13:N57', code: '0.00' },
+                ],
+                center: ['E6:M9'],
+              }
+            : {
+                numberFormats: [{ range: 'F12:H56', code: '0.00' }, { range: 'I12:J56', code: '0.0' }, { range: 'K12:K56', code: '0.00' }],
+              }),
+        });
+      } catch (error) { console.error('서식 정리 실패:', error); }
       // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
       // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
       try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
