@@ -154,7 +154,7 @@ const SHEET_MENU = [
   },
   {
     id: 'samplinglog',
-    title: '시료채취기록부(종합)',
+    title: '통합시료채취기록부',
     desc: '사업장별 물질 채취 현황 (가스·입자·VOCs)',
     toneClass: 'from-orange-200/70 to-amber-200/20',
     swatchClass: 'bg-orange-500',
@@ -162,7 +162,7 @@ const SHEET_MENU = [
   },
 ];
 
-// 시료채취기록부(종합): 가스 샘플러 목록 (양식 '시료채취 작성' S6:T10 기준)
+// 통합시료채취기록부: 가스 샘플러 목록 (양식 '시료채취 작성' S6:T10 기준)
 const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
   { id: 1, sn: '1910122', yd: '0.9857' },
   { id: 2, sn: '1910123', yd: '1.0036' },
@@ -171,7 +171,7 @@ const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
   { id: 5, sn: 'A2304264', yd: '1' },
 ];
 
-// 시료채취기록부(종합) 물질 목록: 양식 '시료채취 작성' 13~57행 순서 그대로
+// 통합시료채취기록부 물질 목록: 양식 '시료채취 작성' 13~57행 순서 그대로
 // kind: particle(입자 샘플러) / gas(가스 샘플러) / analyzer(가스분석기) / thc(총탄화수소측정기) / box(음압상자) / plain(시작·종료값 차이)
 const SAMPLING_LOG_SUBSTANCES = [
   { row: 13, code: 'P', name: '먼지', kind: 'particle', targetVolume: '1000', testPeriod: '2' },
@@ -221,7 +221,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 57, code: 'OX', name: '옥사이드', species: '에틸렌옥사이드 · 프로필렌옥사이드', options: ['에틸렌옥사이드', '프로필렌옥사이드'], kind: 'box', testPeriod: '9' },
 ];
 
-// 기록부(먼지·금속·수은·PAHs) 저장본을 통합기록부 행에 옮길 때의 대응표
+// 기록부(먼지·금속·수은·PAHs) 저장본을 통합시료채취기록부 행에 옮길 때의 대응표
 const SHEET_TO_LOG_ROWS = { dust: [13], metal: [25, 26, 27, 28, 29, 30, 31, 32], mercury: [34], pahs: [41] };
 const LOG_SOURCE_SHEETS = ['dust', 'metal', 'mercury', 'pahs', 'flow'];
 
@@ -232,7 +232,7 @@ const addMinutesToClock = (hhmm, minutes) => {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 };
 
-// 저장된 기록부 한 건에서 통합기록부 행에 넣을 값(시각, 가스미터 시작·종료, 미터 온도, 오리피스압)을 뽑는다
+// 저장된 기록부 한 건에서 통합시료채취기록부 행에 넣을 값(시각, 가스미터 시작·종료, 미터 온도, 오리피스압)을 뽑는다
 const buildSamplingLogValuesFromReport = (report) => {
   const meters = Array.isArray(report?.gasMeters) ? report.gasMeters : [];
   const volumes = meters.map((m) => parseFloat(m?.volume)).filter((v) => Number.isFinite(v));
@@ -268,9 +268,9 @@ const daysBetween = (a, b) => {
 };
 // 사업장·배출구 이름 비교용: 앞뒤·중간 공백과 대소문자 차이는 같은 곳으로 본다
 const normalizeSiteName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-// 통합기록부 일차 칸 수
+// 통합시료채취기록부 일차 칸 수
 const SAMPLING_LOG_DAY_SLOTS = 4;
-// 통합기록부 엑셀: 날짜별 시트 열 → 입력 시트('시료채취 작성') 열
+// 통합시료채취기록부 엑셀: 날짜별 시트 열 → 입력 시트('시료채취 작성') 열
 const DAY_SHEET_INPUT_COLUMNS = { B: 'D', C: 'E', D: 'G', E: 'H', F: 'I', G: 'J', H: 'K', I: 'L', J: 'M', K: 'N' };
 // includeBlank: 사업장·배출구·날짜를 하나도 안 적은 기록도 "정보 없음" 묶음으로 보여 준다 (저장 목록용)
 const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS, { includeBlank = false } = {}) => {
@@ -2229,7 +2229,7 @@ export default function App() {
     unsavedRef.current = true;
     alert(`${describeKmaObservation(obs)}\n\n날씨 칸을 채웠습니다. 대기 온도와 대기압은 현장에서 잰 값을 적어 주세요.`);
   };
-  // 통합기록부: 그 일차의 기상·습도·풍향·풍속을 채운다 (시각은 그날 가장 이른 채취 시작 시각, 없으면 12시)
+  // 통합시료채취기록부: 그 일차의 기상·습도·풍향·풍속을 채운다 (시각은 그날 가장 이른 채취 시작 시각, 없으면 12시)
   const applyKmaWeatherToLogDay = async (dayIdx) => {
     const day = samplingLogData.days[dayIdx];
     if (!day || !day.date) { alert('먼저 채취일을 적어 주세요.'); return; }
@@ -3035,6 +3035,7 @@ export default function App() {
     const byTitle = String(report?.sheetTitle || '').trim();
     const matched = SHEET_MENU.find(item => item.title === byTitle);
     if (matched) return matched.id;
+    if (byTitle === '시료채취기록부(종합)') return 'samplinglog'; // 예전 이름으로 저장된 리포트
 
     return 'dust';
   };
@@ -3061,7 +3062,7 @@ export default function App() {
     }
     const summaryOf = (data) => {
       const sheetId = resolveReportSheetId(data);
-      if (sheetId === 'samplinglog') return '시료채취기록부(종합)';
+      if (sheetId === 'samplinglog') return '통합시료채취기록부';
       if (sheetId === 'flow') return `유속 ${data.avgVelocity || '-'} m/s · 건조유량 ${data.dryFlowRate || '-'} Sm³/hr`;
       return `등속 ${data.isokineticRate || '-'}% · 실측 ${data.actualConcentration || '-'} · 보정 ${data.correctedConcentration || '-'}`;
     };
@@ -4655,7 +4656,7 @@ export default function App() {
       setSamplingLogData(sanitizeSamplingLog(report.samplingLog));
       unsavedRef.current = false;
       if (selectedSheet !== 'samplinglog') window.location.hash = 'sheet=samplinglog&popup=1';
-      if (!silent) alert('시료채취기록부(종합) 리포트를 불러왔습니다.');
+      if (!silent) alert('통합시료채취기록부 리포트를 불러왔습니다.');
       return;
     }
     const targetImpingerCount = getImpingerStageCount(targetSheet);
@@ -5877,7 +5878,7 @@ export default function App() {
       setActiveUserReports(nextReports);
       const synced = syncSamplingLogFromSavedReport(result);
       unsavedRef.current = false;
-      if (!silent) alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합기록부에도 반영했습니다.' : ''}`);
+      if (!silent) alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합시료채취기록부에도 반영했습니다.' : ''}`);
       return true;
     } catch (error) {
       console.error(error);
@@ -7261,10 +7262,10 @@ export default function App() {
     }
   };
 
-  // ===== 시료채취기록부(종합) =====
+  // ===== 통합시료채취기록부 =====
   const updateSamplingLogField = (key, value) => setSamplingLogData(prev => ({ ...prev, [key]: value }));
 
-  // ── 샘플러 프리셋의 Yd·ΔH@를 고치면, 그 샘플러를 골라 둔 열린 기록부와 통합기록부 칸도 따라 바꾼다 ──
+  // ── 샘플러 프리셋의 Yd·ΔH@를 고치면, 그 샘플러를 골라 둔 열린 기록부와 통합시료채취기록부 칸도 따라 바꾼다 ──
   // (다른 창에서 고친 프리셋도 storage 동기화로 들어와 같은 규칙이 적용됨. 저장된 기록은 그대로)
   const prevSamplersRef = useRef(null);
   useEffect(() => {
@@ -7281,7 +7282,7 @@ export default function App() {
       return { ...form, gasMeterFactor: String(hit.cur.yd ?? ''), deltaHAt: String(hit.cur.dHAt ?? '') };
     });
   }, [samplers]);
-  // 통합기록부 Yd는 통합기록부 창에서만 맞춘다 (여러 창이 임시본을 동시에 쓰면 서로 덮어쓰므로).
+  // 통합시료채취기록부 Yd는 통합시료채취기록부 창에서만 맞춘다 (여러 창이 임시본을 동시에 쓰면 서로 덮어쓰므로).
   // 직접 고친 칸(…YdManual)이 아니면 고른 샘플러 프리셋의 Yd를 늘 따라간다.
   const isSamplingLogWindow = selectedSheet === 'samplinglog';
   useEffect(() => {
@@ -7302,7 +7303,7 @@ export default function App() {
     });
   }, [isSamplingLogWindow, samplers, gasSamplers, samplingLogData.particleSamplerId, samplingLogData.gasSamplerId, samplingLogData.particleSamplerYd, samplingLogData.gasSamplerYd, samplingLogData.particleSamplerYdManual, samplingLogData.gasSamplerYdManual]);
 
-  // 기록부 한 건에서 통합기록부 일차 칸에 옮길 현장 값: 날씨, 기온(대기 온도), 기압(대기압). 빈 값은 빼서 통합기록부 값을 지우지 않는다
+  // 기록부 한 건에서 통합시료채취기록부 일차 칸에 옮길 현장 값: 날씨, 기온(대기 온도), 기압(대기압). 빈 값은 빼서 통합시료채취기록부 값을 지우지 않는다
   const pickSiteWeatherFromReport = (report) => {
     const patch = {};
     const text = (v) => String(v ?? '').trim();
@@ -7326,7 +7327,7 @@ export default function App() {
     return merged;
   };
 
-  // 기록부 묶음(같은 사업장·배출구·날짜)을 통합기록부에 옮겨 적기: 사업장 정보, 입자 샘플러, 물질별 시각·가스미터 값
+  // 기록부 묶음(같은 사업장·배출구·날짜)을 통합시료채취기록부에 옮겨 적기: 사업장 정보, 입자 샘플러, 물질별 시각·가스미터 값
   const applySheetGroupToSamplingLog = (group, { silent = false } = {}) => {
     if (!group) return;
     const reports = Object.entries(group.bySheet);
@@ -7368,7 +7369,7 @@ export default function App() {
       }
       reports.forEach(([sheetId, report]) => {
         const values = buildSamplingLogValuesFromReport(report);
-        // 기록부에 없는 값(빈칸)으로 통합기록부에 직접 적은 값을 지우지 않는다
+        // 기록부에 없는 값(빈칸)으로 통합시료채취기록부에 직접 적은 값을 지우지 않는다
         const filledValues = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== ''));
         const dayIndex = dayIndexFor(String(report?.date || '').trim());
         if (dayIndex < 0) return;
@@ -7391,15 +7392,15 @@ export default function App() {
       return next;
     });
     if (overflowDates.length > 0) {
-      alert(`통합기록부 일차 칸(${SAMPLING_LOG_DAY_SLOTS}일)이 모두 차서 ${overflowDates.join(', ')} 기록은 옮기지 못했습니다.\n새 통합기록부에서 옮겨 주세요.`);
+      alert(`통합시료채취기록부 일차 칸(${SAMPLING_LOG_DAY_SLOTS}일)이 모두 차서 ${overflowDates.join(', ')} 기록은 옮기지 못했습니다.\n새 통합시료채취기록부에서 옮겨 주세요.`);
     }
     if (!silent && overflowDates.length === 0) {
       const names = reports.map(([sheetId]) => SHEET_MENU.find((m) => m.id === sheetId)?.title || sheetId).join(', ');
-      alert(`${group.company || '사업장'} 기록(${names})을 통합기록부에 옮겨 적었습니다.`);
+      alert(`${group.company || '사업장'} 기록(${names})을 통합시료채취기록부에 옮겨 적었습니다.`);
     }
   };
 
-  // 기록부 저장 시: 통합기록부가 비어 있거나 같은 사업장·배출구면 그 물질 행을 자동으로 채운다
+  // 기록부 저장 시: 통합시료채취기록부가 비어 있거나 같은 사업장·배출구면 그 물질 행을 자동으로 채운다
   const syncSamplingLogFromSavedReport = (report) => {
     const sheetId = resolveReportSheetId(report);
     if (!LOG_SOURCE_SHEETS.includes(sheetId)) return false;
@@ -7411,7 +7412,7 @@ export default function App() {
       && (!logStack || !location || normalizeSiteName(logStack) === normalizeSiteName(location));
     if (logCompany && !sameSite) return false;
     const date = String(report?.date || '').trim();
-    // 같은 사업장이라도 지금 통합기록부의 측정일과 멀리 떨어진 날(다른 회차)이면 섞지 않는다
+    // 같은 사업장이라도 지금 통합시료채취기록부의 측정일과 멀리 떨어진 날(다른 회차)이면 섞지 않는다
     const logDates = (samplingLogData.days || []).map((d) => d.date).filter(Boolean);
     if (date && logDates.length > 0 && !logDates.includes(date)) {
       const nearest = Math.min(...logDates.map((d) => Math.abs(daysBetween(d, date))));
@@ -7445,7 +7446,7 @@ export default function App() {
     setSamplingLogData(prev => ({ ...prev, gasSamplerId: id, gasSamplerYd: found ? String(found.yd) : prev.gasSamplerYd, gasSamplerYdManual: false }));
   };
   const resetSamplingLogForm = () => {
-    if (!window.confirm('입력 중인 시료채취기록부 내용을 모두 지울까요?')) return;
+    if (!window.confirm('입력 중인 통합시료채취기록부 내용을 모두 지울까요?')) return;
     setSamplingLogData(createEmptySamplingLog());
     unsavedRef.current = false;
   };
@@ -7472,7 +7473,7 @@ export default function App() {
       savedAt: new Date().toISOString(),
       user: activeUser,
       sheetId: 'samplinglog',
-      sheetTitle: '시료채취기록부(종합)',
+      sheetTitle: '통합시료채취기록부',
       date: firstDay,
       company: log.company,
       location: log.stackName,
@@ -7493,7 +7494,7 @@ export default function App() {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
       unsavedRef.current = false;
-      if (!silent) alert(`[${displayUserNameWithFallback}] 시료채취기록부가 저장되었습니다.`);
+      if (!silent) alert(`[${displayUserNameWithFallback}] 통합시료채취기록부가 저장되었습니다.`);
       return true;
     } catch (error) {
       console.error(error);
@@ -7542,7 +7543,7 @@ export default function App() {
   };
 
   // '시료채취 작성' 시트를 채우면 날짜별 시트는 양식 수식으로 자동 완성됨
-  // 공개 양식으로 시료채취기록부(종합) 내보내기 — 배포용 빌드에서 사용. 의뢰 표시한 항목만 적는다
+  // 공개 양식으로 통합시료채취기록부 내보내기 — 배포용 빌드에서 사용. 의뢰 표시한 항목만 적는다
   const exportOpenSamplingLogExcel = async (sourceReport = null) => {
     try {
       const log = resolveSamplingLogYds(sanitizeSamplingLog(sourceReport && sourceReport.samplingLog ? sourceReport.samplingLog : samplingLogData));
@@ -7579,10 +7580,10 @@ export default function App() {
       const buffer = await buildWorkbook(sheets);
       const firstDay = log.days.find((day) => day.date)?.date || new Date().toISOString().slice(0, 10);
       downloadExportFile(buffer, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        buildExportNames({ date: firstDay, title: '시료채취기록부(종합)', company: log.company, location: log.stackName, ext: 'xlsx' }));
+        buildExportNames({ date: firstDay, title: '통합시료채취기록부', company: log.company, location: log.stackName, ext: 'xlsx' }));
     } catch (error) {
       console.error(error);
-      alert('시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 입력값을 확인해주세요.');
+      alert('통합시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 입력값을 확인해주세요.');
     }
   };
 
@@ -7809,7 +7810,7 @@ export default function App() {
       const link = document.createElement('a');
       link.href = url;
       const firstDay = log.days.find((day) => day.date)?.date || new Date().toISOString().slice(0, 10);
-      const exportNames = buildExportNames({ date: firstDay, title: '시료채취기록부(종합)', company: log.company, location: log.stackName, ext: 'xlsx' });
+      const exportNames = buildExportNames({ date: firstDay, title: '통합시료채취기록부', company: log.company, location: log.stackName, ext: 'xlsx' });
       try { if (window.stackpilotDesktop?.noteDownloadFolder) window.stackpilotDesktop.noteDownloadFolder(exportNames.folder); } catch (error) { console.error(error); }
       link.setAttribute('download', exportNames.file);
       document.body.appendChild(link);
@@ -7818,7 +7819,7 @@ export default function App() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error(error);
-      alert('시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 템플릿 파일 또는 입력값을 확인해주세요.');
+      alert('통합시료채취기록부 엑셀 저장 중 오류가 발생했습니다. 템플릿 파일 또는 입력값을 확인해주세요.');
     }
   };
 
@@ -8645,7 +8646,7 @@ export default function App() {
           {isUserUnlocked && (
             <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/시료채취)</h3>
+                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/통합시료채취)</h3>
                 <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
               </div>
 
@@ -8862,7 +8863,7 @@ export default function App() {
                             ))}
                           </td>
                           <td className="p-2 text-right">
-                            <button type="button" onClick={() => applySheetGroupToSamplingLog(group)} className="px-2.5 py-1 text-[11px] font-bold rounded bg-orange-600 text-white border border-orange-700 hover:bg-orange-700">통합기록부에 옮기기</button>
+                            <button type="button" onClick={() => applySheetGroupToSamplingLog(group)} className="px-2.5 py-1 text-[11px] font-bold rounded bg-orange-600 text-white border border-orange-700 hover:bg-orange-700">통합시료채취기록부에 옮기기</button>
                           </td>
                         </tr>
                       ))}
@@ -9064,7 +9065,7 @@ export default function App() {
               toggleCheck: toggleSheetReportCheck,
               allChecked: savedLogs.length > 0 && savedLogs.every((item) => sheetCheckedReportKeySet.has(getReportKey(item))),
               toggleAll: (checked) => savedLogs.forEach((item) => toggleSheetReportCheck(getReportKey(item), checked)),
-              emptyText: '저장된 시료채취기록부가 없습니다.',
+              emptyText: '저장된 통합시료채취기록부가 없습니다.',
             })}
           </div>
       </>
@@ -9134,7 +9135,7 @@ export default function App() {
               <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
             </h1>
             <p className="ds-sheet-title">
-              <span>시료채취기록부(종합)</span>
+              <span>통합시료채취기록부</span>
               <span className="ds-sheet-title-sub">사업장별 채취 물질과 가스미터 지시값 · 날짜별 시트로 추출</span>
             </p>
             <div className="mt-3 md:mt-0 md:absolute md:right-4 md:top-4 flex flex-wrap justify-center gap-2">
@@ -10352,7 +10353,7 @@ export default function App() {
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
                 <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계 적산유량계 기록표'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합기록부의 시작·종료 시각에 쓰입니다 (종료 = 시작 + 총 시간)">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합시료채취기록부의 시작·종료 시각에 쓰입니다 (종료 = 시작 + 총 시간)">
                       채취 시작
                       <input
                         type="time"

@@ -570,17 +570,17 @@ const buildFormulaSheet = (isFlow) => {
   return s;
 };
 
-// ── 시료채취기록부(종합) 공개 양식 ──
+// ── 통합시료채취기록부 공개 양식 ──
 // 「환경분야 시험·검사 업무처리규정」 별표 1의 시료채취기록부 기록 사항(시료채취일시, 시료채취자, 시료명·시료번호,
 // 관리분야, 시험항목, 시료채취량, 현장측정결과, 기타 참고사항)과 측정기록부(별지 제21호서식)의 현장기상 항목을 담는다.
 // data: { company, industry, facility, stackName, samplers: [{ label, name, yd }], days: [...], rows: [...], requestedCount }
 export const buildSamplingLogSheets = (data) => {
   const widths = [25, 21, 11.5, 7.5, 7.5, 10.5, 10.5, 10.5, 9, 8, 9, 22];
-  const s = createSheet('시료채취기록부', { columns: widths, landscape: true });
+  const s = createSheet('통합시료채취기록부', { columns: widths, landscape: true });
   const N = widths.length;
   let r = 1;
   const section = (title) => { r += 1; s.put(r, 0, title, 'section', N).height(r, 21); r += 1; };
-  s.put(r, 0, '시료채취기록부', 'title', N).height(r, 32); r += 1;
+  s.put(r, 0, '통합시료채취기록부', 'title', N).height(r, 32); r += 1;
   s.put(r, 0, '관리분야: 대기 · 「환경분야 시험·검사 업무처리규정」 별표 1의 시료채취기록부 기록 사항을 따름 (작성 후 3년 보관)', 'subtitle', N); r += 1;
 
   section('1. 일반 사항');
