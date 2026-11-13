@@ -530,6 +530,8 @@ const RECOMMENDED_ROWS_PER_POINT = { 1: 6, 2: 4, 3: 4, 4: 3, 5: 3 };
 //  - 흡습관법 ES 01321.1 (시료채취장치 1형): 흡습관 2개에 입자상 무수염화칼슘, 채취 전후 무게 차가 흡습 수분의 질량 ma
 //  - 임핀저법 ES 01321.2 (시료채취장치 2형): 임핀저 4개(1·2번 물 100 g, 3번 빈 것, 4번 실리카젤 200 g), 전후 총무게 차가 ma
 // 계산식(두 방법 공통): Xw = (22.4/18·ma) ÷ [Vm × 273/(273+θm) × (Pa+Pm)/760 + 22.4/18·ma] × 100
+const DH_TARGETS_STORAGE_KEY = 'dust-sampling.dh-targets.v1';
+const DEFAULT_DH_TARGETS = { max: 50, standard: 25, stable: 10 };
 const MOISTURE_METHODS = [
   {
     id: 'imp2', label: '흡습관법 (2구)', stages: 2, standard: 'ES 01321.1',
@@ -2531,6 +2533,22 @@ export default function App() {
   const [expandedReportGroups, setExpandedReportGroups] = useState([]);
   const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
+  // 노즐 추천에 쓰는 오리피스압(ΔH) 기준: 빠른 채취의 상한, 표준·안정 채취의 목표값. 이 기기에 기억한다
+  const [dhTargets, setDhTargets] = useState(() => {
+    try { return { ...DEFAULT_DH_TARGETS, ...(JSON.parse(localStorage.getItem(DH_TARGETS_STORAGE_KEY)) || {}) }; } catch { return { ...DEFAULT_DH_TARGETS }; }
+  });
+  const getDhTargets = () => {
+    const pick = (key) => { const v = parseFloat(dhTargets[key]); return Number.isFinite(v) && v > 0 ? v : DEFAULT_DH_TARGETS[key]; };
+    return { max: pick('max'), standard: pick('standard'), stable: pick('stable') };
+  };
+  const changeDhTarget = (key, value) => {
+    setDhTargets((prev) => {
+      const next = { ...prev, [key]: value };
+      try { localStorage.setItem(DH_TARGETS_STORAGE_KEY, JSON.stringify(next)); } catch { /* 저장 못 해도 이번 계산엔 쓴다 */ }
+      return next;
+    });
+    setRecommendations(null);
+  };
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
   const [skyPreviewMode, setSkyPreviewMode] = useState(() => {
     try {
@@ -5395,6 +5413,7 @@ export default function App() {
     const Yd = parseFloat(formData.gasMeterFactor) || 1.0;
     const dHAt = parseFloat(formData.deltaHAt);
 
+    const dhLimit = getDhTargets();
     let bestNozzle = null, maxDH = 0, closestDiffStandard = Infinity, closestDiffStable = Infinity;
 
     for (let n of configuredNozzles) {
@@ -5403,14 +5422,14 @@ export default function App() {
         const expectedDHRaw = tempK * dpAvg;
         if (!Number.isFinite(expectedDHRaw)) continue;
 
-        if (expectedDHRaw <= 50) {
+        if (expectedDHRaw <= dhLimit.max) {
             if (mode === 'fast') {
                 if (expectedDHRaw > maxDH) { maxDH = expectedDHRaw; bestNozzle = n; }
             } else if (mode === 'standard') {
-                const diff = Math.abs(expectedDHRaw - 25);
+                const diff = Math.abs(expectedDHRaw - dhLimit.standard);
                 if (diff < closestDiffStandard) { closestDiffStandard = diff; bestNozzle = n; }
             } else if (mode === 'stable') {
-                const diff = Math.abs(expectedDHRaw - 10);
+                const diff = Math.abs(expectedDHRaw - dhLimit.stable);
                 if (diff < closestDiffStable) { closestDiffStable = diff; bestNozzle = n; }
             }
         }
@@ -5454,7 +5473,8 @@ export default function App() {
     setRecommendations({ fast, standard, stable });
   };
 
-  const applyRecommendation = (opt) => {
+  // manual: 예측표에서 직접 고른 노즐 — 추천 표시는 그대로 두고 사용 노즐만 바꾼다
+  const applyRecommendation = (opt, manual = false) => {
     const appliedK = parseFloat(opt.calculatedK);
     setFormData(prev => {
         const newMeters = prev.gasMeters.map((meter, idx) => {
@@ -5470,8 +5490,7 @@ export default function App() {
           nozzleDiameter: opt.finalDn, 
           kFactor: Number.isFinite(appliedK) ? String(opt.calculatedK) : '', 
           planSamplingTime: String(opt.fastestTime), 
-          recommendedNozzleNum: String(opt.bestNozzleNum), 
-          recommendedNozzleDia: opt.finalDn, 
+          ...(manual ? {} : { recommendedNozzleNum: String(opt.bestNozzleNum), recommendedNozzleDia: opt.finalDn }),
           gasMeters: newMeters 
         };
     });
@@ -9943,12 +9962,21 @@ export default function App() {
                   <button type="button" onClick={handleCalculateOptions} className="ds-btn-primary w-full text-center">
                     K-Factor와 예상 채취시간 계산
                   </button>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-bold text-slate-600">
+                    <span>추천 기준 오리피스압 ΔH (mmH₂O)</span>
+                    {[['max', '빠른 채취 상한'], ['standard', '표준 채취 목표'], ['stable', '안정/장시간 목표']].map(([key, label]) => (
+                      <label key={key} className="inline-flex items-center gap-1">
+                        {label}
+                        <input type="number" step="1" min="1" value={dhTargets[key]} onChange={(e) => changeDhTarget(key, e.target.value)} placeholder={String(DEFAULT_DH_TARGETS[key])} className="w-16 p-1 border border-emerald-300 rounded text-center text-xs bg-white outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </label>
+                    ))}
+                  </div>
                </div>
                
                {recommendations && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div className="bg-white border-2 border-emerald-300 p-4 rounded-lg shadow-sm hover:border-emerald-500 transition-colors">
-                       <h4 className="font-bold text-emerald-800 mb-3 flex items-center gap-1 border-b border-emerald-100 pb-2">빠른 채취 <span className="text-[10px] font-bold text-emerald-600 ml-auto">(최대치, 50 이하)</span></h4>
+                       <h4 className="font-bold text-emerald-800 mb-3 flex items-center gap-1 border-b border-emerald-100 pb-2">빠른 채취 <span className="text-[10px] font-bold text-emerald-600 ml-auto">(최대치, {getDhTargets().max} 이하)</span></h4>
                        <ul className="text-sm text-slate-700 space-y-2 mb-4">
                           <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.fast.bestNozzleNum} <span className="text-sm font-medium">({recommendations.fast.finalDn}mm)</span></span></li>
                           <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-emerald-700">{recommendations.fast.fastestTime} 분</span></li>
@@ -9958,7 +9986,7 @@ export default function App() {
                        <button type="button" onClick={() => applyRecommendation(recommendations.fast)} className="w-full py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm">적용하기</button>
                     </div>
                     <div className="bg-teal-50 border-2 border-teal-400 p-4 rounded-lg shadow-sm hover:border-teal-500 transition-colors">
-                       <h4 className="font-bold text-teal-900 mb-3 flex items-center gap-1 border-b border-teal-200 pb-2">표준 채취 <span className="text-[10px] font-bold text-teal-600 ml-auto">(ΔH 25 내외)</span></h4>
+                       <h4 className="font-bold text-teal-900 mb-3 flex items-center gap-1 border-b border-teal-200 pb-2">표준 채취 <span className="text-[10px] font-bold text-teal-600 ml-auto">(ΔH {getDhTargets().standard} 내외)</span></h4>
                        <ul className="text-sm text-slate-700 space-y-2 mb-4">
                           <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.standard.bestNozzleNum} <span className="text-sm font-medium">({recommendations.standard.finalDn}mm)</span></span></li>
                           <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-teal-700">{recommendations.standard.fastestTime} 분</span></li>
@@ -9968,7 +9996,7 @@ export default function App() {
                        <button type="button" onClick={() => applyRecommendation(recommendations.standard)} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700 shadow-sm">적용하기</button>
                     </div>
                     <div className="bg-cyan-50 border-2 border-cyan-300 p-4 rounded-lg shadow-sm hover:border-cyan-500 transition-colors">
-                       <h4 className="font-bold text-cyan-900 mb-3 flex items-center gap-1 border-b border-cyan-200 pb-2">안정/장시간 <span className="text-[10px] font-bold text-cyan-600 ml-auto">(ΔH 10 내외)</span></h4>
+                       <h4 className="font-bold text-cyan-900 mb-3 flex items-center gap-1 border-b border-cyan-200 pb-2">안정/장시간 <span className="text-[10px] font-bold text-cyan-600 ml-auto">(ΔH {getDhTargets().stable} 내외)</span></h4>
                        <ul className="text-sm text-slate-700 space-y-2 mb-4">
                           <li className="flex justify-between font-bold"><span>추천 노즐:</span> <span className="font-black text-lg text-slate-900">No.{recommendations.stable.bestNozzleNum} <span className="text-sm font-medium">({recommendations.stable.finalDn}mm)</span></span></li>
                           <li className="flex justify-between font-bold"><span>예상 시간:</span> <span className="font-black text-cyan-700">{recommendations.stable.fastestTime} 분</span></li>
@@ -9986,7 +10014,7 @@ export default function App() {
                <details className="mt-4 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-2 shadow-sm">
                   <summary className="cursor-pointer text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center justify-between gap-2">
                      <span>노즐 예측표</span>
-                     <span className="text-[10px] text-slate-500">번호와 직경 편집</span>
+                     <span className="text-[10px] text-slate-500">원하는 노즐 직접 선택 · 번호와 직경 편집</span>
                   </summary>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">{NOZZLE_GROUP_LABELS[activeNozzleGroup]} 노즐 세트</span>
@@ -10009,12 +10037,13 @@ export default function App() {
                              <th className="border border-emerald-200 p-1 font-bold">(L)</th>
                              <th className="border border-emerald-200 p-1 font-bold">(SL)</th>
                              <th className="border border-emerald-200 p-1 font-bold">(Sm³)</th>
+                             <th className="border border-emerald-200 p-1 font-bold">사용</th>
                              <th className="border border-emerald-200 p-1 font-bold">삭제</th>
                           </tr>
                        </thead>
                        <tbody className="bg-white">
                           {activeNozzleSet.map((n, idx) => {
-                             let k='-', dh='-', vl='-', vsl='-', vsm='-', reqTime='-';
+                             let k='-', dh='-', vl='-', vsl='-', vsm='-', reqTime='-', choice=null;
                              const nozzleNum = parseInt(n.num, 10);
                              const Dn = parseFloat(n.d);
                              const vs = getRawGasVelocity(), cP = parseFloat(formData.pitotFactor)||0.84, ts = getRawAvgTs(), pm = parseFloat(formData.atmPressure), ps = getRawStackPressure();
@@ -10040,6 +10069,7 @@ export default function App() {
                                 let time = Math.ceil((parseFloat(formData.targetVolume) || 1000) / q_sl);
                                 if (!isFinite(time) || time <= 0) time = 0;
                                 reqTime = time;
+                                if (Number.isFinite(k_val) && time > 0) choice = { bestNozzleNum: nozzleNum, finalDn: Dn.toFixed(2), fastestTime: time, calculatedK: k_val };
                                 
                                 const v_val = q_m * time;
                                 vl = v_val.toFixed(2);
@@ -10081,6 +10111,11 @@ export default function App() {
                                  <td className="border border-emerald-200 p-1">{vsl}</td>
                                  <td className="border border-emerald-200 p-1">{vsm}</td>
                                  <td className="border border-emerald-200 p-1">
+                                   {isSelected
+                                     ? <span className="text-[11px] font-black text-emerald-700">사용 중</span>
+                                     : <button type="button" disabled={!choice} onClick={() => applyRecommendation(choice, true)} className="px-2 py-1 text-[11px] font-bold rounded border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">선택</button>}
+                                 </td>
+                                 <td className="border border-emerald-200 p-1">
                                    <button type="button" onClick={() => removeNozzleConfig(idx)} className="text-red-500 hover:text-red-700 text-[11px] font-bold p-1">
                                      삭제
                                    </button>
@@ -10090,7 +10125,7 @@ export default function App() {
                           })}
                           {activeNozzleSet.length === 0 && (
                             <tr>
-                              <td className="border border-emerald-200 p-2 text-slate-500" colSpan={9}>
+                              <td className="border border-emerald-200 p-2 text-slate-500" colSpan={10}>
                                 노즐이 없습니다. "행 추가"로 입력하세요.
                               </td>
                             </tr>
