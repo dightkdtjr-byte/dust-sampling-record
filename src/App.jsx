@@ -1460,6 +1460,7 @@ const sanitizeGasSamplers = (value) => {
         id: Number.isFinite(parsedId) ? parsedId : idx + 1,
         sn: item.sn === undefined || item.sn === null ? '' : String(item.sn),
         yd: item.yd === undefined || item.yd === null ? '' : String(item.yd),
+        calDate: item.calDate === undefined || item.calDate === null ? '' : String(item.calDate).trim(),
       };
     });
 };
@@ -1486,6 +1487,47 @@ const getStoredGasSamplersForUser = (userId) => {
 };
 const cloneDefaultPitotPresets = () => DEFAULT_PITOT_PRESETS.map(item => ({ ...item }));
 
+// ── 교정 이력: 샘플러·가스 샘플러·피토관의 교정값이 바뀌어 저장될 때마다 한 줄씩 쌓는다 (지우지 않는다) ──
+const PRESET_HISTORY_STORAGE_KEY = 'dust-sampling.preset-history.v1';
+const PRESET_HISTORY_KINDS = {
+  sampler: { label: '샘플러', name: (item) => item.name || `샘플러 ${item.id}`, detail: (item) => `Yd ${item.yd || '-'} / ΔH@ ${item.dHAt || '-'}`, filled: (item) => !!(item.yd || item.dHAt) },
+  gas: { label: '가스 샘플러', name: (item) => `가스 샘플러 ${item.id}${item.sn ? ` (${item.sn})` : ''}`, detail: (item) => `Yd ${item.yd || '-'}`, filled: (item) => !!item.yd },
+  pitot: {
+    label: '피토관', name: (item) => item.sn || `피토관 ${item.id}`,
+    detail: (item) => `Cp ${item.factor || '-'}${(item.cpByVelocity || []).length ? ` / 유속별 ${(item.cpByVelocity || []).map((row) => `${row.v}:${row.cp}`).join(', ')}` : ''}`,
+    filled: (item) => !!(item.sn && item.factor),
+  },
+};
+const readPresetHistory = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem(PRESET_HISTORY_STORAGE_KEY));
+    return Array.isArray(list) ? list.filter((row) => row && typeof row === 'object') : [];
+  } catch { return []; }
+};
+const presetHistoryRow = (kind, item, at, note = '') => {
+  const def = PRESET_HISTORY_KINDS[kind];
+  return { at, kind, id: item.id, name: def.name(item), calDate: item.calDate || '', detail: def.detail(item), note };
+};
+// 장비마다 이력의 마지막 줄과 견줘, 처음 보는 장비이거나 교정일·교정값이 달라진 장비만 이력에 더한다
+const appendPresetHistory = (kind, _prevList, nextList, user = '', note = '') => {
+  const def = PRESET_HISTORY_KINDS[kind];
+  const history = readPresetHistory();
+  const now = new Date().toISOString();
+  const added = [];
+  (nextList || []).forEach((item) => {
+    if (!def.filled(item)) return;
+    const last = history.filter((row) => row.kind === kind && String(row.id) === String(item.id)).pop();
+    const row = presetHistoryRow(kind, item, now, last ? '' : note);
+    if (last && last.name === row.name && last.calDate === row.calDate && last.detail === row.detail) return;
+    added.push({ ...row, user });
+  });
+  if (added.length === 0) return history;
+  const next = [...history, ...added];
+  try { localStorage.setItem(PRESET_HISTORY_STORAGE_KEY, JSON.stringify(next)); } catch { /* 이력 저장 실패는 프리셋 저장을 막지 않는다 */ }
+  return next;
+};
+const readStoredList = (key) => { try { const v = JSON.parse(localStorage.getItem(key)); return Array.isArray(v) ? v : []; } catch { return []; } };
+
 const sanitizeNozzleSet = (value) => {
   if (!Array.isArray(value)) return null;
   return value
@@ -1507,6 +1549,7 @@ const sanitizeSamplers = (value) => {
         name: typeof item.name === 'string' && item.name.trim() ? item.name : `샘플러 ${idx + 1}호기`,
         yd: item.yd === undefined || item.yd === null ? '' : String(item.yd),
         dHAt: item.dHAt === undefined || item.dHAt === null ? '' : String(item.dHAt),
+        calDate: item.calDate === undefined || item.calDate === null ? '' : String(item.calDate).trim(),
       };
     });
 };
@@ -2533,6 +2576,7 @@ export default function App() {
   const [expandedReportGroups, setExpandedReportGroups] = useState([]);
   const [sheetCheckedReportKeys, setSheetCheckedReportKeys] = useState([]);
   const [recommendations, setRecommendations] = useState(null);
+  const [presetHistory, setPresetHistory] = useState(readPresetHistory);
   // 노즐 추천에 쓰는 오리피스압(ΔH) 기준: 빠른 채취의 상한, 표준·안정 채취의 목표값. 이 기기에 기억한다
   const [dhTargets, setDhTargets] = useState(() => {
     try { return { ...DEFAULT_DH_TARGETS, ...(JSON.parse(localStorage.getItem(DH_TARGETS_STORAGE_KEY)) || {}) }; } catch { return { ...DEFAULT_DH_TARGETS }; }
@@ -2574,6 +2618,22 @@ export default function App() {
       console.error('하늘 시간대 설정 저장 실패:', error);
     }
   }, [skyPreviewMode]);
+
+  // 로그인하면 지금 저장돼 있는 교정값을 이력의 첫 줄로 남긴다 (이미 이력이 있는 장비는 건너뛴다)
+  useEffect(() => {
+    if (!isUserUnlocked || !activeUser) return undefined;
+    const timer = setTimeout(() => {
+      const pick = (userKey, globalKey, fallback, sanitize) => {
+        const own = readStoredList(userKey);
+        const list = own.length > 0 ? own : readStoredList(globalKey);
+        return sanitize(list.length > 0 ? list : fallback) || [];
+      };
+      appendPresetHistory('sampler', null, pick(getUserSamplersStorageKey(activeUser), STORAGE_KEYS.samplers, cloneDefaultSamplers(), sanitizeSamplers), activeUser, '처음 등록값');
+      appendPresetHistory('gas', null, pick(getUserGasSamplersStorageKey(activeUser), STORAGE_KEYS.gasSamplers, cloneDefaultGasSamplers(), sanitizeGasSamplers), activeUser, '처음 등록값');
+      setPresetHistory(appendPresetHistory('pitot', null, pick(getUserPitotStorageKey(activeUser), STORAGE_KEYS.pitotPresets, cloneDefaultPitotPresets(), sanitizePitotPresets), activeUser, '처음 등록값'));
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [isUserUnlocked, activeUser]);
 
   const canUseUserScopedPresets = (userId) => {
     const normalizedId = String(userId || '').trim().toLowerCase();
@@ -3171,6 +3231,7 @@ export default function App() {
       const targetKey = canUseUserScopedPresets(activeUser)
         ? getUserSamplersStorageKey(activeUser)
         : STORAGE_KEYS.samplers;
+      setPresetHistory(appendPresetHistory('sampler', readStoredList(targetKey), sanitized, activeUser));
       localStorage.setItem(targetKey, JSON.stringify(sanitized));
       setSamplers(sanitized);
       alert('샘플러 프리셋을 저장했습니다.');
@@ -3186,6 +3247,7 @@ export default function App() {
       const targetKey = canUseUserScopedPresets(activeUser)
         ? getUserGasSamplersStorageKey(activeUser)
         : STORAGE_KEYS.gasSamplers;
+      setPresetHistory(appendPresetHistory('gas', readStoredList(targetKey), sanitized, activeUser));
       localStorage.setItem(targetKey, JSON.stringify(sanitized));
       setGasSamplers(sanitized);
       alert('가스 샘플러 프리셋을 저장했습니다.');
@@ -3197,7 +3259,7 @@ export default function App() {
   const addGasSamplerPreset = () => {
     setGasSamplers(prev => {
       const nextId = prev.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
-      return [...prev, { id: nextId, sn: '', yd: '' }];
+      return [...prev, { id: nextId, sn: '', yd: '', calDate: '' }];
     });
   };
   const removeGasSamplerPreset = (index) => {
@@ -3279,6 +3341,7 @@ export default function App() {
       const targetKey = canUseUserScopedPresets(activeUser)
         ? getUserPitotStorageKey(activeUser)
         : STORAGE_KEYS.pitotPresets;
+      setPresetHistory(appendPresetHistory('pitot', readStoredList(targetKey), sanitized, activeUser));
       localStorage.setItem(targetKey, JSON.stringify(sanitized));
       setPitotPresets(sanitized);
       alert('피토 프리셋을 저장했습니다.');
@@ -3326,6 +3389,12 @@ export default function App() {
     const pitotList = sanitizePitotPresets(pitotPresets) || [];
     const gasList = sanitizeGasSamplers(gasSamplers) || [];
     try {
+      {
+        const scoped = canUseUserScopedPresets(activeUser);
+        appendPresetHistory('sampler', readStoredList(scoped ? getUserSamplersStorageKey(activeUser) : STORAGE_KEYS.samplers), samplerList, activeUser);
+        appendPresetHistory('gas', readStoredList(scoped ? getUserGasSamplersStorageKey(activeUser) : STORAGE_KEYS.gasSamplers), gasList, activeUser);
+        setPresetHistory(appendPresetHistory('pitot', readStoredList(scoped ? getUserPitotStorageKey(activeUser) : STORAGE_KEYS.pitotPresets), pitotList, activeUser));
+      }
       persistAllEquipmentPresets(nozzles, samplerList, pitotList, gasList);
       const groupSets = sanitizeGroupNozzleSets(groupNozzleSets);
       localStorage.setItem(getGroupNozzlesStorageKey(activeUser), JSON.stringify(groupSets));
@@ -3883,6 +3952,7 @@ export default function App() {
       samplers: sanitizeSamplers(samplers) || [],
       gasSamplers: sanitizeGasSamplers(gasSamplers) || [],
       pitotPresets: sanitizePitotPresets(pitotPresets) || [],
+      presetHistory: readPresetHistory(),
     };
   };
 
@@ -3896,7 +3966,9 @@ export default function App() {
         nozzles: sanitizeNozzleSet(nozzleSet) || [],
         groupNozzles: sanitizeGroupNozzleSets(groupNozzleSets),
         samplers: sanitizeSamplers(samplers) || [],
+        gasSamplers: sanitizeGasSamplers(gasSamplers) || [],
         pitotPresets: sanitizePitotPresets(pitotPresets) || [],
+        presetHistory: presetHistory.length,
       });
     } catch (error) {
       console.error('클라우드 시그니처 생성 실패:', error);
@@ -4041,6 +4113,16 @@ export default function App() {
     const restoredSamplers = sanitizeSamplers(payload.samplers);
     const restoredPitot = sanitizePitotPresets(payload.pitotPresets);
     const restoredGasSamplers = Array.isArray(payload.gasSamplers) ? sanitizeGasSamplers(payload.gasSamplers) : null;
+    // 교정 이력은 백업의 것과 이 기기의 것을 합친다 (같은 줄은 한 번만)
+    if (Array.isArray(payload.presetHistory)) {
+      const seen = new Set();
+      const merged = [...payload.presetHistory, ...readPresetHistory()]
+        .filter((row) => row && typeof row === 'object')
+        .filter((row) => { const key = `${row.at}|${row.kind}|${row.id}|${row.calDate}|${row.detail}|${row.note || ''}`; if (seen.has(key)) return false; seen.add(key); return true; })
+        .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+      try { localStorage.setItem(PRESET_HISTORY_STORAGE_KEY, JSON.stringify(merged)); } catch { /* 이력만 못 살려도 나머지는 복원한다 */ }
+      setPresetHistory(merged);
+    }
 
     if (hasLocalOnly) {
       const mergedCipher = await encryptJsonWithKey(key, restoredReports);
@@ -4098,6 +4180,7 @@ export default function App() {
       const sheets = buildPresetSheets({
         nozzles: { '먼지·금속': nozzleSet || [], 수은: groupNozzleSets?.mercury || [], PAHs: groupNozzleSets?.pahs || [] },
         samplers, gasSamplers, pitotPresets,
+        history: presetHistory.map((row) => ({ ...row, kindLabel: PRESET_HISTORY_KINDS[row.kind]?.label || row.kind })),
       });
       const buffer = await buildWorkbook(sheets);
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -8386,6 +8469,28 @@ export default function App() {
                             장비 프리셋 초기화
                           </button>
                           <button type="button" onClick={exportPresetsExcel} className="mt-2 w-full px-3 py-2 rounded border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-sm">프리셋 엑셀 추출</button>
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-[11px] font-bold text-slate-700">교정 이력 {presetHistory.length}건</summary>
+                            <p className="text-[11px] text-slate-500 mt-1">샘플러·가스 샘플러·피토관의 교정일이나 교정값을 바꿔 저장할 때마다 한 줄씩 남습니다. 엑셀 추출 파일의 "교정 이력" 시트에도 들어갑니다.</p>
+                            {presetHistory.length > 0 && (
+                              <div className="mt-2 max-h-56 overflow-auto border border-slate-200 rounded bg-white">
+                                <table className="w-full text-[11px] text-center">
+                                  <thead className="bg-slate-100 text-slate-700 sticky top-0"><tr><th className="p-1">저장일</th><th className="p-1">구분</th><th className="p-1">장비</th><th className="p-1">교정일</th><th className="p-1">교정값</th></tr></thead>
+                                  <tbody>
+                                    {[...presetHistory].reverse().map((row, i) => (
+                                      <tr key={i} className="border-t border-slate-100">
+                                        <td className="p-1 whitespace-nowrap">{String(row.at || '').slice(0, 10)}</td>
+                                        <td className="p-1 whitespace-nowrap">{PRESET_HISTORY_KINDS[row.kind]?.label || row.kind}</td>
+                                        <td className="p-1">{row.name}</td>
+                                        <td className="p-1 whitespace-nowrap">{row.calDate || '-'}</td>
+                                        <td className="p-1 text-left">{row.detail}{row.note ? ` (${row.note})` : ''}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </details>
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
                           <p className="text-xs font-black text-red-800">전체 초기화</p>
@@ -8685,18 +8790,20 @@ export default function App() {
                         <th className="p-1 w-16">번호</th>
                         <th className="p-1">S/N</th>
                         <th className="p-1 w-32">Yd</th>
+                        <th className="p-1 w-36">교정일</th>
                         <th className="p-1 w-14">삭제</th>
                       </tr>
                     </thead>
                     <tbody>
                       {gasSamplers.length === 0 && (
-                        <tr><td colSpan="4" className="p-3 text-slate-400">가스 샘플러가 없습니다. 행 추가로 입력하세요.</td></tr>
+                        <tr><td colSpan="5" className="p-3 text-slate-400">가스 샘플러가 없습니다. 행 추가로 입력하세요.</td></tr>
                       )}
                       {gasSamplers.map((item, idx) => (
                         <tr key={`${item.id}-${idx}`}>
                           <td className="p-1 font-bold text-slate-700">#{item.id}</td>
                           <td className="p-1"><input type="text" value={item.sn} onChange={(e) => handleGasSamplerPresetChange(idx, 'sn', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" placeholder="S/N" /></td>
                           <td className="p-1"><input type="number" step="0.0001" value={item.yd} onChange={(e) => handleGasSamplerPresetChange(idx, 'yd', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" placeholder="Yd" /></td>
+                          <td className="p-1"><input type="date" value={item.calDate || ''} onChange={(e) => handleGasSamplerPresetChange(idx, 'calDate', e.target.value)} className="w-full p-1 border border-slate-300 rounded text-center" title="검교정일" /></td>
                           <td className="p-1"><button type="button" onClick={() => removeGasSamplerPreset(idx)} className="text-red-600 font-bold text-[11px]">삭제</button></td>
                         </tr>
                       ))}
@@ -9884,6 +9991,7 @@ export default function App() {
                          <th className="border border-emerald-200 p-1">샘플러명</th>
                          <th className="border border-emerald-200 p-1">Yd</th>
                          <th className="border border-emerald-200 p-1">ΔH@</th>
+                         <th className="border border-emerald-200 p-1">교정일</th>
                          <th className="border border-emerald-200 p-1">삭제</th>
                        </tr>
                      </thead>
@@ -9914,6 +10022,15 @@ export default function App() {
                                value={s.dHAt}
                                onChange={(e) => handleSamplerPresetChange(idx, 'dHAt', e.target.value)}
                                className="w-full p-1 border border-emerald-300 rounded text-center"
+                             />
+                           </td>
+                           <td className="border border-emerald-200 p-1">
+                             <input
+                               type="date"
+                               value={s.calDate || ''}
+                               onChange={(e) => handleSamplerPresetChange(idx, 'calDate', e.target.value)}
+                               className="w-full p-1 border border-emerald-300 rounded text-center"
+                               title="검교정일"
                              />
                            </td>
                            <td className="border border-emerald-200 p-1">

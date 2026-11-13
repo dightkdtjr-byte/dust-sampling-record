@@ -656,13 +656,16 @@ export const buildPresetSheets = (data) => {
     for (let i = 0; i < longest + 2; i++) s.height(r + i, 20);
     sheets.push(s);
   }
-  sheets.push(table('샘플러', '입자 샘플러 프리셋', ['번호', '이름', '보정계수 Yd', '오리피스 계수 ΔH@'], [8, 28, 14, 18],
-    (data.samplers || []).map((item) => [item.id, item.name, item.yd, item.dHAt])));
-  sheets.push(table('가스 샘플러', '가스 샘플러 프리셋', ['번호', '일련번호', '보정계수 Yd'], [8, 20, 14],
-    (data.gasSamplers || []).map((item) => [item.id, item.sn, item.yd])));
+  sheets.push(table('샘플러', '입자 샘플러 프리셋', ['번호', '이름', '보정계수 Yd', '오리피스 계수 ΔH@', '교정일'], [8, 28, 14, 18, 13],
+    (data.samplers || []).map((item) => [item.id, item.name, item.yd, item.dHAt, item.calDate || ''])));
+  sheets.push(table('가스 샘플러', '가스 샘플러 프리셋', ['번호', '일련번호', '보정계수 Yd', '교정일'], [8, 20, 14, 13],
+    (data.gasSamplers || []).map((item) => [item.id, item.sn, item.yd, item.calDate || ''])));
   // 피토관: 유속별 Cp 표는 "유속:Cp" 쌍을 한 칸에 이어 적는다
   sheets.push(table('피토관', '피토관 프리셋', ['번호', '일련번호', '용도', '길이 (cm)', '교정일', '피토계수 Cp', '유속별 Cp (m/s : Cp)'], [7, 16, 9, 10, 12, 11, 60],
     (data.pitotPresets || []).map((item) => [item.id, item.sn, item.usage, item.length, item.calDate, item.factor,
       (Array.isArray(item.cpByVelocity) ? item.cpByVelocity : []).filter((row) => String(row.v ?? '').trim() !== '').map((row) => `${row.v} : ${row.cp}`).join('   ')])));
+  // 교정 이력: 교정일·교정값을 바꿔 저장할 때마다 쌓인 줄 (오래된 것부터)
+  sheets.push(table('교정 이력', '장비 교정 이력', ['저장일', '구분', '장비', '교정일', '교정값', '비고'], [13, 12, 26, 13, 70, 12],
+    (data.history || []).map((row) => [String(row.at || '').slice(0, 10), row.kindLabel || row.kind, row.name, row.calDate || '', row.detail, row.note || ''])));
   return sheets;
 };
