@@ -1379,6 +1379,12 @@ const STORAGE_KEYS = {
 const IS_POPUP_WINDOW = typeof window !== 'undefined'
   && new URLSearchParams(window.location.hash.replace(/^#/, '')).get('popup') === '1';
 
+// 메뉴에서 새로 연 종합 기록부 창 (불러오기 아님): 다른 기록부처럼 빈 기록지로 시작한다
+const OPENED_SAMPLING_LOG_FRESH = IS_POPUP_WINDOW && (() => {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return params.get('sheet') === 'samplinglog' && !params.get('load');
+})();
+
 const getSamplingLogDraftStorageKey = (userId) => (
   `${STORAGE_KEYS.samplingLogDraftPrefix}${encodeURIComponent(String(userId || '').trim().toLowerCase())}`
 );
@@ -2836,9 +2842,17 @@ export default function App() {
   // 다른 창에서 받아 온 임시본(문자열). 받은 그대로라면 다시 써 보내지 않는다 —
   // 늦게 도착한 옛 이벤트를 받아 놓고 되쓰면 더 새 값을 덮어쓰기 때문
   const samplingLogReceivedRef = useRef('');
+  const samplingLogFreshRef = useRef(OPENED_SAMPLING_LOG_FRESH);
   useEffect(() => {
     if (!samplingLogDraftKey) {
       setSamplingLogDraftReadyKey('');
+      return;
+    }
+    // 새로 연 창은 지난 임시본을 불러오지 않고 빈 기록지로 시작한다 (빈 임시본이 다른 창에도 전해진다)
+    if (samplingLogFreshRef.current) {
+      samplingLogFreshRef.current = false;
+      setSamplingLogData(createEmptySamplingLog());
+      setSamplingLogDraftReadyKey(samplingLogDraftKey);
       return;
     }
     try {
