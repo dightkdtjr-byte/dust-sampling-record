@@ -8358,7 +8358,7 @@ export default function App() {
                         </button>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">장비 프리셋</p>
-                          <p className="text-[11px] text-slate-600 mt-1">이 PC에 저장된 노즐·샘플러·피토관 프리셋을 모두 지웁니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">노즐·샘플러·가스 샘플러·피토관 프리셋을 엑셀 파일로 뽑거나, 이 PC에 저장된 프리셋을 모두 지웁니다.</p>
                           <button
                             type="button"
                             onClick={resetAllEquipmentPresets}
@@ -8366,7 +8366,7 @@ export default function App() {
                           >
                             장비 프리셋 초기화
                           </button>
-                          <button type="button" onClick={exportPresetsExcel} className="mt-2 w-full px-3 py-2 rounded border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-sm">장비 프리셋 엑셀로 저장</button>
+                          <button type="button" onClick={exportPresetsExcel} className="mt-2 w-full px-3 py-2 rounded border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-sm">프리셋 엑셀 추출</button>
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
                           <p className="text-xs font-black text-red-800">전체 초기화</p>
