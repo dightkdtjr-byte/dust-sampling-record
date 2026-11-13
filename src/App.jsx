@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
-import { buildRecordSheets, buildSamplingLogSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
+import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
 // 배포용(데스크톱 exe) 빌드 여부. `vite build --mode desktop` 에서 .env.desktop 으로 켜지며,
 // 빌드 시점 상수라서 아래 분기의 회사 장비 값은 배포용 번들에 포함되지 않습니다.
@@ -68,7 +68,7 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
   { id: 15, sn: 'YNJ1374', usage: 'PAHs', length: '315', calDate: '2026-01-21', factor: '0.818', cpByVelocity: [{ v: '4.96', cp: '0.808' }, { v: '6.91', cp: '0.814' }, { v: '8.91', cp: '0.817' }, { v: '11.9', cp: '0.818' }, { v: '14.92', cp: '0.818' }, { v: '19.93', cp: '0.818' }, { v: '29.89', cp: '0.817' }, { v: '37.41', cp: '0.819' }] },
 ];
 
-// 엑셀 양식(A00)별 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
+// 기록부 종류별 엑셀 양식 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
 const EXPORT_TEMPLATE_LAYOUTS = {
   dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지', leak: { firstRow: 14, hasMeter: true } },
   metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속', leak: { firstRow: 14, hasMeter: true } },
@@ -542,7 +542,7 @@ const MOISTURE_METHODS = [
     items: ['임핀저 1 (물 100 g)', '임핀저 2 (물 100 g)', '임핀저 3 (빈 것)', '임핀저 4 (실리카젤 200 g)'], unitTitle: '임핀저',
     guide: '임핀저 4개 중 1·2번에 물 100 g씩, 4번에 실리카젤 200 g을 넣고, 채취 전(ma1)·후(ma2) 총무게 차를 흡습 수분의 질량 ma로 씁니다.',
   },
-  { id: 'auto', label: '자동측정법', standard: 'ES 01321.3' },
+  { id: 'auto', label: '자동측정법', standard: 'ES 01321.3', guide: '수분량 자동측정기로 5회 측정한 값의 평균을 씁니다.' },
 ];
 const isImpingerMoistureMethod = (method) => Boolean(method && method.stages);
 const createEmptyPreImpinger = () => ({
@@ -4074,6 +4074,29 @@ export default function App() {
     return restoredReports;
   };
 
+  // 장비 프리셋(노즐·샘플러·가스 샘플러·피토관)을 엑셀 한 파일로 내보낸다
+  const exportPresetsExcel = async () => {
+    try {
+      const sheets = buildPresetSheets({
+        nozzles: { '먼지·금속': nozzleSet || [], 수은: groupNozzleSets?.mercury || [], PAHs: groupNozzleSets?.pahs || [] },
+        samplers, gasSamplers, pitotPresets,
+      });
+      const buffer = await buildWorkbook(sheets);
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const url = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${stamp}_장비프리셋.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('프리셋 엑셀 만들기 실패:', error);
+      alert('프리셋 엑셀을 만들지 못했습니다.');
+    }
+  };
+
   // ── 백업 파일: 설정 없이 쓰는 백업. 휴대폰이면 '파일' 앱(iCloud Drive 등)에 저장해 두면 캐시를 지워도 되살릴 수 있다 ──
   const backupFileInputRef = useRef(null);
   const exportBackupFile = () => {
@@ -4643,7 +4666,8 @@ export default function App() {
         if (field === 'tp' || field === 'sp') {
           const tp = parseFloat(newItem.tp);
           const sp = parseFloat(newItem.sp);
-          if (!isNaN(tp) && !isNaN(sp)) newItem.dp = (tp - sp).toFixed(2);
+          // 동압은 소수 첫째 자리까지 (기준: 0.1 mmH₂O 단위로 읽는다)
+          if (!isNaN(tp) && !isNaN(sp)) newItem.dp = (tp - sp).toFixed(1);
         }
         return newItem;
       });
@@ -6302,7 +6326,39 @@ export default function App() {
       xfCache.set(key, newIndex);
       return newIndex;
     };
-    return { styleFor, centeredStyle, bottomStyle, serialize: () => new XMLSerializer().serializeToString(doc) };
+    // 같은 서식에서 표시 형식만 바꾼 서식 번호 (예: 동압을 소수 첫째 자리로)
+    const numFmtsNode = (() => {
+      let node = root.getElementsByTagNameNS('*', 'numFmts')[0];
+      if (!node) { node = doc.createElementNS(ns, 'numFmts'); node.setAttribute('count', '0'); root.insertBefore(node, root.firstChild); }
+      return node;
+    })();
+    const numFmtIdFor = (code) => {
+      const existing = getChildElementsByLocalName(numFmtsNode, 'numFmt').find((n) => n.getAttribute('formatCode') === code);
+      if (existing) return existing.getAttribute('numFmtId');
+      const used = getChildElementsByLocalName(numFmtsNode, 'numFmt').map((n) => parseInt(n.getAttribute('numFmtId'), 10));
+      const id = String(Math.max(300, ...used) + 1);
+      const node = doc.createElementNS(ns, 'numFmt');
+      node.setAttribute('numFmtId', id); node.setAttribute('formatCode', code);
+      numFmtsNode.appendChild(node);
+      numFmtsNode.setAttribute('count', String(getChildElementsByLocalName(numFmtsNode, 'numFmt').length));
+      return id;
+    };
+    const formatStyle = (originalIndex, code) => {
+      const key = `fmt|${code}|${originalIndex}`;
+      if (xfCache.has(key)) return xfCache.get(key);
+      const xfs = getChildElementsByLocalName(cellXfsNode, 'xf');
+      const source = xfs[originalIndex] || xfs[0];
+      if (!source) return originalIndex;
+      const clone = source.cloneNode(true);
+      clone.setAttribute('numFmtId', numFmtIdFor(code));
+      clone.setAttribute('applyNumberFormat', '1');
+      cellXfsNode.appendChild(clone);
+      const newIndex = getChildElementsByLocalName(cellXfsNode, 'xf').length - 1;
+      cellXfsNode.setAttribute('count', String(newIndex + 1));
+      xfCache.set(key, newIndex);
+      return newIndex;
+    };
+    return { styleFor, centeredStyle, bottomStyle, formatStyle, serialize: () => new XMLSerializer().serializeToString(doc) };
   };
 
   const applyMeterRowColors = (worksheet, rowColorList, styler) => {
@@ -6459,6 +6515,24 @@ export default function App() {
           const original = parseInt(cell.getAttribute('s') || '0', 10);
           cell.setAttribute('s', String(options.rowStyler.bottomStyle(Number.isFinite(original) ? original : 0)));
         });
+      });
+    }
+    // 표시 형식을 바꿀 칸들: [{ range: 'E17:E30', code: '0.0' }]
+    if (Array.isArray(options.numberFormats) && options.rowStyler?.formatStyle) {
+      options.numberFormats.forEach(({ range, code }) => {
+        const [fromRef, toRef] = String(range).split(':');
+        const from = parseCellRef(fromRef); const to = parseCellRef(toRef || fromRef);
+        if (!from || !to) return;
+        for (let r = from.row; r <= to.row; r++) {
+          const rowEl = findExistingRow(sheetData, r);
+          if (!rowEl) continue;
+          for (let c = from.col; c <= to.col; c++) {
+            const cell = getChildElementsByLocalName(rowEl, 'c').find((el) => { const p = parseCellRef(el.getAttribute('r')); return p && p.col === c; });
+            if (!cell) continue;
+            const original = parseInt(cell.getAttribute('s') || '0', 10);
+            cell.setAttribute('s', String(options.rowStyler.formatStyle(Number.isFinite(original) ? original : 0, code)));
+          }
+        }
       });
     }
     // 가운데 정렬로 맞출 칸들 (예: 'A5:B7', 'C19'): 양식에서 주변 칸과 정렬이 어긋나 있던 곳
@@ -6800,6 +6874,7 @@ export default function App() {
         addUpdate('수분량', `B${5 + i}`, item.label.replace(/\s*\(.*\)$/, ''), 'B6');
       });
       addUpdate('수분량', 'C7', null, 'C5');
+      addUpdate('수분량', 'A8', `▶ 자동측정법 (${MOISTURE_METHODS.find((item) => item.id === 'auto').standard})`);
       addUpdate('수분량', 'C5', MOISTURE_METHODS.indexOf(exportMoistureMethod) + 1);
       addUpdate('노즐산정', 'C15', { formula: `IF(수분량!C5=${MOISTURE_METHODS.findIndex((item) => item.id === 'auto') + 1},수분량!B15,수분량!H28)` });
       // 무게법 표의 제목·항목 이름·압력 칸 이름은 선택번호(C5)를 보는 수식으로 적는다
@@ -6978,6 +7053,8 @@ export default function App() {
                 layout,
                 meterRowColors,
                 rowStyler,
+                // 동압은 소수 첫째 자리로 (측정 행과 평균)
+                numberFormats: [{ range: `E${layout.meterStartRow}:E${layout.meterStartRow + meterRowsForTemplate}`, code: '0.0' }],
               }
             : {
                 ...(meterExtraRows !== 0
@@ -6993,6 +7070,7 @@ export default function App() {
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
+                ...(sheetName === '노즐산정' ? { numberFormats: [{ range: `J15:J${16 + Math.max(5, sourcePoints.length)}`, code: '0.0' }] } : {}),
               }
         );
         zip.file(sheetPath, patched);
@@ -7827,7 +7905,7 @@ export default function App() {
     return {
       time: fmt(totalTime, 1),
       stackTemp: fmt(tsAvg, 1),
-      dp: fmt(dpAvg, 2),
+      dp: fmt(dpAvg, 1),
       sp: fmt(spAvg, 2),
       pressure: fmt(pressureAvg, 2),
       volume: fmt(totalVolume, 2),
@@ -8288,6 +8366,7 @@ export default function App() {
                           >
                             장비 프리셋 초기화
                           </button>
+                          <button type="button" onClick={exportPresetsExcel} className="mt-2 w-full px-3 py-2 rounded border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-sm">장비 프리셋 엑셀로 저장</button>
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-red-200 bg-red-50">
                           <p className="text-xs font-black text-red-800">전체 초기화</p>
@@ -8954,7 +9033,7 @@ export default function App() {
             </h1>
             <p className="ds-sheet-title">
               <span>{activeSheet?.title || '먼지시료채취기록부'}</span>
-              <span className="ds-sheet-title-sub">대기오염공정시험기준 · 양식 A00</span>
+              <span className="ds-sheet-title-sub">대기오염공정시험기준</span>
             </p>
           </div>
           <button
@@ -9291,6 +9370,7 @@ export default function App() {
 
                 {activeMoistureMethod.id === 'auto' && (
                   <div>
+                    <p className="text-[11px] text-slate-600 mb-3"><b>{activeMoistureMethod.standard} {activeMoistureMethod.label}</b> · {activeMoistureMethod.guide}</p>
                     <label className="block text-xs font-bold text-slate-600 mb-2">수분량 자동측정기 (%)</label>
                     <div className="grid grid-cols-5 gap-2">
                       {formData.moistureValues.map((val, idx) => (
@@ -9712,7 +9792,7 @@ export default function App() {
                         <td className="py-1.5">평균</td>
                         <td className="py-1.5">{calcAvgTp() !== 0 ? calcAvgTp().toFixed(2) : '-'}</td>
                         <td className="py-1.5">{calcAvgSp() !== 0 ? calcAvgSp().toFixed(2) : '-'}</td>
-                        <td className="py-1.5 text-emerald-700">{calcAvgDp() !== 0 ? calcAvgDp().toFixed(2) : '-'}</td>
+                        <td className="py-1.5 text-emerald-700">{calcAvgDp() !== 0 ? calcAvgDp().toFixed(1) : '-'}</td>
                         <td className="py-1.5">{calcAvgTs() !== 0 ? calcAvgTs().toFixed(2) : '-'}</td>
                         {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 ? getRawGasVelocity().toFixed(2) : '-'}</td>}
                         {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 && Number.isFinite(getStackAreaM2()) ? (getRawGasVelocity() * getStackAreaM2() * 60).toFixed(2) : '-'}</td>}
@@ -9860,7 +9940,7 @@ export default function App() {
                </div>
 
                <div className="mb-4">
-                  <button type="button" onClick={handleCalculateOptions} className="ds-btn-primary">
+                  <button type="button" onClick={handleCalculateOptions} className="ds-btn-primary w-full text-center">
                     K-Factor와 예상 채취시간 계산
                   </button>
                </div>

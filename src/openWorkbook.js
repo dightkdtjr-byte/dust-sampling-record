@@ -379,7 +379,7 @@ export const buildRecordSheets = (report, meta) => {
   const pointSpans = [2, 2, 2, 3, 3];
   tableRow(pointSpans, ['측정점', '전압 (mmH₂O)', '정압 (mmH₂O)', '동압 Δp (mmH₂O)', '배출가스 온도 Ts (℃)'], 'head');
   points.forEach((p, i) => tableRow(pointSpans, [i + 1, numOrText(p.tp), numOrText(p.sp), numOrText(p.dp), numOrText(p.ts)], 'num'));
-  tableRow(pointSpans, ['평균', round(average(points.map((p) => p.tp)), 2), round(average(points.map((p) => p.sp)), 2), round(average(points.map((p) => p.dp)), 2), round(average(points.map((p) => p.ts)), 1)], 'calc');
+  tableRow(pointSpans, ['평균', round(average(points.map((p) => p.tp)), 2), round(average(points.map((p) => p.sp)), 2), round(average(points.map((p) => p.dp)), 1), round(average(points.map((p) => p.ts)), 1)], 'calc');
 
   // 기록표: 누적 시간으로 적는다. 화면 입력이 구간(5,5,5…)이면 누적으로 바꾸고, 이미 누적(5,10,15…)이면 그대로
   const meters = (Array.isArray(meta.meterRows) ? meta.meterRows : (Array.isArray(report.gasMeters) ? report.gasMeters : [])).map((m) => ({ ...m }));
@@ -397,7 +397,7 @@ export const buildRecordSheets = (report, meta) => {
     const spans = [2, 2, 2, 3, 3];
     tableRow(spans, ['채취점 번호', '측정 시간 (분)', '배출가스 온도 (℃)', '배출가스 동압 (mmH₂O)', '배출가스 정압 (mmH₂O)'], 'head');
     meters.forEach((m, i) => tableRow(spans, [m.pointNum || (i === 0 ? '시작' : ''), numOrText(m.time), numOrText(m.stackTemp), numOrText(m.dp), numOrText(m.sp)], 'num'));
-    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.sp)), 2)], 'calc');
+    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 1), round(average(measured.map((m) => m.sp)), 2)], 'calc');
   } else {
     const spans = Array(COLS).fill(1);
     s.height(r, 54);
@@ -407,7 +407,7 @@ export const buildRecordSheets = (report, meta) => {
     const sampled = volumes.length >= 2 ? Math.round((volumes[volumes.length - 1] - volumes[0]) * 100) / 100 : '';
     const times = measured.map((m) => toNum(m.time)).filter((v) => v !== null);
     tableRow(spans, ['합계', times.length ? Math.max(...times) : '', '', '', '', '', '', sampled, '', '', '', ''], 'calc');
-    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.sp)), 2), round(average(measured.map((m) => m.pressure)), 2), '', round(average(measured.map((m) => m.tmIn)), 1), round(average(measured.map((m) => m.tmOut)), 1), round(average(measured.map((m) => m.filterTemp)), 1), round(average(measured.map((m) => m.impingerTemp)), 1)], 'calc');
+    tableRow(spans, ['평균', '', round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 1), round(average(measured.map((m) => m.sp)), 2), round(average(measured.map((m) => m.pressure)), 2), '', round(average(measured.map((m) => m.tmIn)), 1), round(average(measured.map((m) => m.tmOut)), 1), round(average(measured.map((m) => m.filterTemp)), 1), round(average(measured.map((m) => m.impingerTemp)), 1)], 'calc');
     s.put(r, 0, '※ 시료채취 시간은 누적 분, 합계의 가스미터 지시값은 채취 종료값 − 시작값(보정계수 적용 전). 평균은 시작 행을 뺀 값. 여과지홀더 온도는 현장에서 직접 적는 칸입니다.', 'note', COLS); r += 1;
   }
 
@@ -497,7 +497,7 @@ const buildTable3Sheet = (report, meta, meters) => {
   s.height(r, 20); r += 1;
   // 평균 줄: 원문처럼 앞 두 칸과 가스미터 온도 두 칸이 합쳐져 있다
   s.put(r, 0, '평    균', 'formCell', 2);
-  [round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 2), round(average(measured.map((m) => m.pressure)), 2), '']
+  [round(average(measured.map((m) => m.vacuum)), 1), round(average(measured.map((m) => m.stackTemp)), 1), round(average(measured.map((m) => m.dp)), 1), round(average(measured.map((m) => m.pressure)), 2), '']
     .forEach((value, i) => s.put(r, 2 + i, value, 'formCell'));
   s.put(r, 7, withLabel('평  균', bothTemps.length ? round(bothTemps.reduce((a, b) => a + b, 0) / bothTemps.length, 1) : ''), 'formCell', 2);
   s.put(r, 9, round(average(measured.map((m) => m.filterTemp)), 1), 'formCell'); s.put(r, 10, round(average(measured.map((m) => m.impingerTemp)), 1), 'formCell');
@@ -535,7 +535,7 @@ const buildFlowTableSheet = (report, meta, meters) => {
     s.height(r, 20); r += 1;
   });
   const avgSp = average(rows.map((m) => m.sp));
-  ['평균', '', round(average(rows.map((m) => m.dp)), 2), round(average(rows.map((m) => m.stackTemp)), 1), avgSp === null ? '' : round(avgSp / 13.6, 3), roots.length ? round(roots.reduce((a, b) => a + b, 0) / roots.length, 3) : '']
+  ['평균', '', round(average(rows.map((m) => m.dp)), 1), round(average(rows.map((m) => m.stackTemp)), 1), avgSp === null ? '' : round(avgSp / 13.6, 3), roots.length ? round(roots.reduce((a, b) => a + b, 0) / roots.length, 3) : '']
     .forEach((value, c) => s.put(r, c, value, 'num'));
   s.height(r, 20); r += 1;
   s.put(r, 0, '※ 배출시설의 조업 및 가동상태는 별지에 기록한다. 수분량·배출가스 조성·유량 산출 결과는 "세부 기록" 시트에 있습니다.', 'note', N).height(r, 28);
@@ -626,4 +626,43 @@ export const buildSamplingLogSheets = (data) => {
   s.put(r, 10, '', 'text', 2);
   s.height(r, 28);
   return [s];
+};
+
+// ── 장비 프리셋 목록 (노즐·샘플러·가스 샘플러·피토관) ──
+// data: { nozzles: { 먼지·금속: [...], 수은: [...], PAHs: [...] }, samplers, gasSamplers, pitotPresets }
+export const buildPresetSheets = (data) => {
+  const table = (name, title, heads, widths, rows) => {
+    const s = createSheet(name, { columns: widths });
+    let r = 1;
+    s.put(r, 0, title, 'title', heads.length).height(r, 30); r += 2;
+    heads.forEach((head, c) => s.put(r, c, head, 'head')); s.height(r, 22); r += 1;
+    if (rows.length === 0) { s.put(r, 0, '등록된 항목이 없습니다.', 'text', heads.length); return s; }
+    rows.forEach((row) => { row.forEach((value, c) => s.put(r, c, value === undefined || value === null ? '' : numOrText(value), String(value ?? '').length > 24 ? 'textLeft' : 'num')); s.height(r, 20); r += 1; });
+    return s;
+  };
+  const sheets = [];
+  const nozzleGroups = Object.entries(data.nozzles || {});
+  {
+    const s = createSheet('노즐', { columns: nozzleGroups.flatMap(() => [10, 14, 3]) });
+    let r = 1;
+    s.put(r, 0, '노즐 프리셋', 'title', Math.max(2, nozzleGroups.length * 3 - 1)).height(r, 30); r += 2;
+    const longest = Math.max(0, ...nozzleGroups.map(([, list]) => list.length));
+    nozzleGroups.forEach(([label, list], g) => {
+      const c = g * 3;
+      s.put(r, c, label, 'section', 2);
+      s.put(r + 1, c, '번호', 'head'); s.put(r + 1, c + 1, '직경 (mm)', 'head');
+      list.forEach((item, i) => { s.put(r + 2 + i, c, numOrText(item.num), 'num'); s.put(r + 2 + i, c + 1, numOrText(item.d), 'num2'); });
+    });
+    for (let i = 0; i < longest + 2; i++) s.height(r + i, 20);
+    sheets.push(s);
+  }
+  sheets.push(table('샘플러', '입자 샘플러 프리셋', ['번호', '이름', '보정계수 Yd', '오리피스 계수 ΔH@'], [8, 28, 14, 18],
+    (data.samplers || []).map((item) => [item.id, item.name, item.yd, item.dHAt])));
+  sheets.push(table('가스 샘플러', '가스 샘플러 프리셋', ['번호', '일련번호', '보정계수 Yd'], [8, 20, 14],
+    (data.gasSamplers || []).map((item) => [item.id, item.sn, item.yd])));
+  // 피토관: 유속별 Cp 표는 "유속:Cp" 쌍을 한 칸에 이어 적는다
+  sheets.push(table('피토관', '피토관 프리셋', ['번호', '일련번호', '용도', '길이 (cm)', '교정일', '피토계수 Cp', '유속별 Cp (m/s : Cp)'], [7, 16, 9, 10, 12, 11, 60],
+    (data.pitotPresets || []).map((item) => [item.id, item.sn, item.usage, item.length, item.calDate, item.factor,
+      (Array.isArray(item.cpByVelocity) ? item.cpByVelocity : []).filter((row) => String(row.v ?? '').trim() !== '').map((row) => `${row.v} : ${row.cp}`).join('   ')])));
+  return sheets;
 };
