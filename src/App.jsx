@@ -7261,6 +7261,8 @@ export default function App() {
         await tidyWorkbook(zip, {
           // 양식의 시트는 모두 한 장짜리 서식이므로 한 장에 맞춰 인쇄한다
           onePageSheets: 'all',
+          // 시트마다 인쇄 폭이 같게 (여백 같게, 가로 가운데)
+          equalWidth: true,
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),

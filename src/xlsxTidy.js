@@ -248,14 +248,19 @@ const cellKind = (attrs, inner) => {
   return /<v>[^<]/.test(inner) ? 'number' : 'empty';
 };
 
-export const normalizeTableBorders = (xml, styles) => {
+const SUMMARY_LABEL = /^(평균|합계|계|avg\.?|average|mean|total)$/i;
+export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
   const cells = new Map(); // "r,c" → s
   const kinds = new Map(); // "r,c" → 'text' | 'number' | 'formula' | 'empty'
+  const texts = new Map(); // "r,c" → 글자 (평균 줄 찾기용)
   for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
     const ref = parseRef(attr(m[1], 'r') || '');
     if (!ref) continue;
     cells.set(`${ref.row},${ref.col}`, Number(attr(m[1], 's') || 0));
     kinds.set(`${ref.row},${ref.col}`, cellKind(m[1], m[2]));
+    const inner = m[2] || '';
+    if (attr(m[1], 't') === 's') { const v = /<v>(\d+)<\/v>/.exec(inner); if (v) texts.set(`${ref.row},${ref.col}`, sharedStrings[Number(v[1])] || ''); }
+    else if (attr(m[1], 't') === 'inlineStr') texts.set(`${ref.row},${ref.col}`, [...inner.matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((x) => decodeXml(x[1])).join(''));
   }
   const mergeOf = new Map(); // "r,c" → 병합 영역 번호
   const merges = [];
@@ -417,6 +422,19 @@ export const normalizeTableBorders = (xml, styles) => {
         if (comp.has(up) && comp.has(down) && !sameMerge(up, down) && hLine(row + 1, col)) headerEdges.add(down);
       }
     }
+    // 평균·합계 줄 바로 위 선도 강조선으로 굵게
+    for (let row = r0 + 1; row <= r1; row++) {
+      let summary = false;
+      for (let col = c0; col <= c1 && !summary; col++) {
+        const key = K(row, col);
+        if (comp.has(key) && SUMMARY_LABEL.test(String(texts.get(key) || '').replace(/\s+/g, ''))) summary = true;
+      }
+      if (!summary) continue;
+      for (let col = c0; col <= c1; col++) {
+        const up = K(row - 1, col); const down = K(row, col);
+        if (comp.has(up) && comp.has(down) && !sameMerge(up, down) && hLine(row, col)) headerEdges.add(down);
+      }
+    }
     for (const key of comp) {
       const [row, col] = key.split(',').map(Number);
       for (const [side, [dr, dc]] of Object.entries(DIRS)) {
@@ -559,7 +577,72 @@ const readDrawingRows = async (zip, sheetPath) => {
   return rowsSet;
 };
 
-export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {}) {
+// ── 인쇄 크기 통일: 한 파일의 모든 시트가 같은 폭으로 인쇄되게, 시트마다 배율을 정한다 ──
+// 공통 폭 = 용지 인쇄 가능 폭과, 시트마다 '세로가 한 장에 들어가는 폭' 중 가장 작은 값
+const A4 = { width: 595.3, height: 841.9 };
+const measurePrintArea = (xml, range, mdw, styles) => {
+  const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+  const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
+  const baseCol = Number((fmt && attr(fmt[1], 'baseColWidth')) || 8);
+  const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || baseCol + 0.71);
+  const colPt = (chars) => Math.trunc(chars * mdw + 5) * 0.75;
+  const cols = [];
+  for (const m of xml.matchAll(/<col\b([^>]*)\/?>/g)) {
+    cols.push({ min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')), width: Number(attr(m[1], 'width') || defaultCol), hidden: attr(m[1], 'hidden') === '1' });
+  }
+  let r = range;
+  if (!r) {
+    // 인쇄 범위가 없으면 값이나 테두리가 있는 칸까지 (기록 범위 dimension은 빈 서식 칸까지 넓게 잡혀 있을 수 있다)
+    let maxRow = 0; let maxCol = 0;
+    for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const ref = parseRef(attr(m[1], 'r') || '');
+      if (!ref) continue;
+      const x = styles.sidesOf(Number(attr(m[1], 's') || 0));
+      if (cellKind(m[1], m[2]) === 'empty' && !(x.left || x.right || x.top || x.bottom)) continue;
+      maxRow = Math.max(maxRow, ref.row); maxCol = Math.max(maxCol, ref.col);
+    }
+    for (const m of xml.matchAll(/<mergeCell\b[^>]*ref="([^"]+)"/g)) {
+      const mr = parseRange(m[1]);
+      if (mr && mr.from.row <= maxRow) { maxRow = Math.max(maxRow, mr.to.row); maxCol = Math.max(maxCol, mr.to.col); }
+    }
+    r = maxRow ? { from: { row: 1, col: 1 }, to: { row: maxRow, col: maxCol } } : null;
+  }
+  if (!r) return null;
+  let width = 0;
+  for (let col = r.from.col; col <= r.to.col; col++) {
+    const def = cols.find((c) => col >= c.min && col <= c.max);
+    if (def && def.hidden) continue;
+    width += colPt(def ? def.width : defaultCol);
+  }
+  const rowHeights = new Map();
+  for (const m of xml.matchAll(/<row\b([^>]*?)\/?>/g)) {
+    const row = Number(attr(m[1], 'r'));
+    rowHeights.set(row, attr(m[1], 'hidden') === '1' ? 0 : Number(attr(m[1], 'ht') || defaultRow));
+  }
+  let height = 0;
+  for (let row = r.from.row; row <= r.to.row; row++) height += rowHeights.has(row) ? rowHeights.get(row) : defaultRow;
+  return { width, height };
+};
+const setPrintScale = (xml, scale, margins) => {
+  let out = xml;
+  // '한 장에 맞춤'을 끄고 배율로 인쇄
+  out = out.replace(/<pageSetUpPr\b([^>]*)\/>/, (w, a) => `<pageSetUpPr${a.replace(/\s*fitToPage="[^"]*"/, '')}/>`);
+  // 양식의 수동 페이지 나누기는 지운다 (한 시트 = 한 장)
+  out = out.replace(/<rowBreaks\b[^>]*(?:\/>|>[\s\S]*?<\/rowBreaks>)/, '').replace(/<colBreaks\b[^>]*(?:\/>|>[\s\S]*?<\/colBreaks>)/, '');
+  const page = `paperSize="9" scale="${scale}" orientation="portrait"`;
+  if (/<pageSetup\b[^>]*\/>/.test(out)) {
+    out = out.replace(/<pageSetup\b([^>]*)\/>/, (w, a) => `<pageSetup ${page}${a.replace(/\s*(?:paperSize|scale|orientation|fitToWidth|fitToHeight)="[^"]*"/g, '')}/>`);
+  }
+  const m = margins;
+  const marginTag = `<pageMargins left="${m.left}" right="${m.right}" top="${m.top}" bottom="${m.bottom}" header="${m.header}" footer="${m.footer}"/>`;
+  out = /<pageMargins\b[^>]*\/>/.test(out) ? out.replace(/<pageMargins\b[^>]*\/>/, marginTag) : out;
+  // 가로 가운데
+  if (/<printOptions\b[^>]*\/>/.test(out)) out = out.replace(/<printOptions\b([^>]*)\/>/, (w, a) => `<printOptions${a.replace(/\s*horizontalCentered="[^"]*"/, '')} horizontalCentered="1"/>`);
+  else out = out.replace(/<pageMargins\b/, '<printOptions horizontalCentered="1"/><pageMargins');
+  return out;
+};
+
+export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalWidth = false } = {}) {
   const read = async (path) => { const f = zip.file(path); return f ? f.async('string') : null; };
   const workbookXml = await read('xl/workbook.xml');
   const relsXml = await read('xl/_rels/workbook.xml.rels');
@@ -575,11 +658,15 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {})
     : [];
   // 시트별 인쇄 범위의 열 (간격은 인쇄되는 부분만 본다)
   const printCols = new Map();
+  const printRanges = new Map();
   for (const m of workbookXml.matchAll(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g)) {
     if (attr(m[1], 'name') !== '_xlnm.Print_Area' || attr(m[1], 'localSheetId') === null) continue;
-    const range = /!\$?([A-Z]{1,3})\$?\d+:\$?([A-Z]{1,3})\$?\d+/.exec(decodeXml(m[2]));
-    if (range) printCols.set(Number(attr(m[1], 'localSheetId')), { from: colToNum(range[1]), to: colToNum(range[2]) });
+    const range = /!\$?([A-Z]{1,3})\$?(\d+):\$?([A-Z]{1,3})\$?(\d+)/.exec(decodeXml(m[2]));
+    if (!range) continue;
+    printCols.set(Number(attr(m[1], 'localSheetId')), { from: colToNum(range[1]), to: colToNum(range[3]) });
+    printRanges.set(Number(attr(m[1], 'localSheetId')), { from: { col: colToNum(range[1]), row: Number(range[2]) }, to: { col: colToNum(range[3]), row: Number(range[4]) } });
   }
+  const sheetsForWidth = []; // 인쇄 크기 통일에 쓸 시트들
   let sheetIndex = -1;
   const printAreaUpdates = new Map(); // 시트 순서 → { name, range }
   for (const m of workbookXml.matchAll(/<sheet\b([^>]*)\/>/g)) {
@@ -597,11 +684,35 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {})
     if (rule?.rowHeights) xml = setRowHeights(xml, rule.rowHeights);
     if (rule?.numberFormats) xml = setNumberFormats(xml, styles, rule.numberFormats);
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
-    if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles);
+    if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles, sharedStrings);
+    if (equalWidth) sheetsForWidth.push({ path, index: sheetIndex, name });
     if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
   zip.file('xl/styles.xml', styles.serialize());
+  // 인쇄 크기 통일 (여백 같게, 가로 가운데, 같은 폭)
+  if (equalWidth && sheetsForWidth.length) {
+    const margins = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 };
+    const printableW = A4.width - (margins.left + margins.right) * 72;
+    const printableH = A4.height - (margins.top + margins.bottom) * 72;
+    const baseFont = /<font\b[^>]*>[\s\S]*?<sz val="([\d.]+)"/.exec(stylesXml);
+    // 기본 글꼴의 숫자 폭(px). 11pt 기준 7~9px로 환경마다 다르므로 넓은 쪽(9px)으로 잡아 넘치지 않게 한다
+    const mdw = 9 * (baseFont ? Number(baseFont[1]) / 11 : 1);
+    const measured = [];
+    for (const item of sheetsForWidth) {
+      const xml = await read(item.path);
+      const range = printAreaUpdates.has(item.index) ? parseRange(printAreaUpdates.get(item.index).range) : printRanges.get(item.index) || null;
+      const size = xml ? measurePrintArea(xml, range, mdw, styles) : null;
+      if (size && size.width > 0 && size.height > 0) measured.push({ ...item, ...size });
+    }
+    // 가로는 글꼴 폭 어림 오차로 3%, 세로는 머리글·바닥글 공간으로 5% 여유
+    const common = Math.min(printableW * 0.97, ...measured.map((x) => ((printableH * 0.95) / x.height) * x.width));
+    for (const item of measured) {
+      const scale = Math.max(10, Math.min(400, Math.floor((common / item.width) * 100)));
+      const xml = await read(item.path);
+      zip.file(item.path, setPrintScale(xml, scale, margins));
+    }
+  }
   // 인쇄 범위 바꾸기 (프로그램이 표를 넓혀 그린 시트)
   if (printAreaUpdates.size) {
     let wb = workbookXml;
