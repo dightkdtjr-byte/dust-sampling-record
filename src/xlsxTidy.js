@@ -42,6 +42,98 @@ class StyleBook {
     this.fills = fillsMatch ? [...fillsMatch[1].matchAll(/<fill\b[^>]*?(?:\/>|>[\s\S]*?<\/fill>)/g)].map((m) => m[0]) : [];
     const fontsMatch = /<fonts\b[^>]*>([\s\S]*?)<\/fonts>/.exec(xml);
     this.fonts = fontsMatch ? [...fontsMatch[1].matchAll(/<font\b[^>]*?(?:\/>|>[\s\S]*?<\/font>)/g)].map((m) => m[0]) : [];
+    this.fontsChanged = false;
+  }
+
+  numFmtIdOf(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    return Number(attr(xf, 'numFmtId') || 0);
+  }
+
+  // 표시 형식 번호의 종류: 'general' | 'number' | 'date' | 'text' | 'other'
+  formatKind(id) {
+    if (id === 0) return 'general';
+    if (id === 49) return 'text';
+    if ((id >= 14 && id <= 22) || (id >= 27 && id <= 36) || (id >= 45 && id <= 47) || (id >= 50 && id <= 58)) return 'date';
+    if (id >= 1 && id <= 13) return 'number';
+    const code = this.numFmts.get(id);
+    if (code === undefined) return 'other';
+    if (code === '@') return 'text';
+    if (/[ymdhs]/i.test(code.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, ''))) return 'date';
+    if (/[0#]/.test(code)) return 'number';
+    return 'other';
+  }
+
+  fontOf(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    const font = this.fonts[Number(attr(xf, 'fontId') || 0)] || '';
+    const name = /<name\b[^>]*val="([^"]*)"/.exec(font);
+    const sz = /<sz\b[^>]*val="([\d.]+)"/.exec(font);
+    return { name: name ? decodeXml(name[1]) : '', sz: sz ? Number(sz[1]) : 11 };
+  }
+
+  isWrapped(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    return /wrapText="(?:1|true)"/.test(xf);
+  }
+
+  alignmentOf(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    const a = /<alignment\b([^>]*)\/>/.exec(xf);
+    return { horizontal: (a && attr(a[1], 'horizontal')) || 'general', vertical: (a && attr(a[1], 'vertical')) || 'bottom' };
+  }
+
+  // 원래 스타일을 복사해 글꼴 이름·크기만 바꾼 스타일 번호
+  withFontChange(s, change) {
+    const key = `${s}|f|${change.name || ''}|${change.sz || ''}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const xf = this.xfs[s] || this.xfs[0];
+    let font = this.fonts[Number(attr(xf, 'fontId') || 0)] || '<font/>';
+    if (change.name) font = /<name\b/.test(font) ? font.replace(/<name\b[^>]*\/>/, `<name val="${encodeAttr(change.name)}"/>`) : font.replace(/<\/font>$/, `<name val="${encodeAttr(change.name)}"/></font>`);
+    if (change.sz) font = /<sz\b/.test(font) ? font.replace(/<sz\b[^>]*\/>/, `<sz val="${change.sz}"/>`) : font.replace(/^<font\b([^>]*)>/, `<font$1><sz val="${change.sz}"/>`);
+    // 한글 글꼴은 charset 129 (없으면 그대로)
+    this.fonts.push(font);
+    this.fontsChanged = true;
+    const fontId = this.fonts.length - 1;
+    const next = xf.replace(/\s*fontId="\d+"/, '').replace(/\s*applyFont="\d+"/, '').replace(/^<xf\b/, `<xf fontId="${fontId}" applyFont="1"`);
+    this.xfs.push(next);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
+
+  // 원래 스타일을 복사해 가로·세로 정렬을 바꾼 스타일 번호 (줄바꿈 등 다른 정렬 속성은 그대로)
+  withAlignment(s, change) {
+    const key = `${s}|a|${change.horizontal || ''}|${change.vertical || ''}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const base = this.xfs[s] || this.xfs[0];
+    const set = (a) => {
+      let out = a;
+      if (change.horizontal) out = `${out.replace(/\s*horizontal="[^"]*"/, '')} horizontal="${change.horizontal}"`;
+      if (change.vertical) out = `${out.replace(/\s*vertical="[^"]*"/, '')} vertical="${change.vertical}"`;
+      return out;
+    };
+    let xf;
+    if (/<alignment\b[^>]*\/>/.test(base)) xf = base.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${set(a)}/>`);
+    else if (/\/>$/.test(base)) xf = base.replace(/\s*\/>$/, `><alignment${set('')}/></xf>`);
+    else xf = base.replace(/<\/xf>$/, `<alignment${set('')}/></xf>`);
+    xf = xf.replace(/\s*applyAlignment="\d+"/, '').replace(/^<xf\b/, '<xf applyAlignment="1"');
+    this.xfs.push(xf);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
+
+  // 원래 스타일을 복사해 표시 형식 번호만 바꾼 스타일 번호
+  withNumFmtId(s, id) {
+    const key = `${s}|n|${id}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const base = this.xfs[s] || this.xfs[0];
+    const xf = base.replace(/\s*numFmtId="\d+"/, '').replace(/\s*applyNumberFormat="\d+"/, '').replace(/^<xf\b/, `<xf numFmtId="${id}" applyNumberFormat="1"`);
+    this.xfs.push(xf);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
   }
 
   // 칸에 단색 채우기가 있는지 (머리줄 판단용)
@@ -172,6 +264,7 @@ class StyleBook {
 
   serialize() {
     let out = this.xml;
+    if (this.fontsChanged) out = out.replace(/<fonts\b[^>]*>[\s\S]*?<\/fonts>/, `<fonts count="${this.fonts.length}">${this.fonts.join('')}</fonts>`);
     if (this.bordersChanged) out = out.replace(/<borders\b[^>]*>[\s\S]*?<\/borders>/, `<borders count="${this.borders.length}">${this.borders.join('')}</borders>`);
     if (this.added.size === 0) return out;
     return out.replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/, `<cellXfs count="${this.xfs.length}">${this.xfs.join('')}</cellXfs>`);
@@ -248,11 +341,14 @@ const cellKind = (attrs, inner) => {
   return /<v>[^<]/.test(inner) ? 'number' : 'empty';
 };
 
-const SUMMARY_LABEL = /^(평균|합계|계|avg\.?|average|mean|total)$/i;
-export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
+// 시트의 표 분석: 칸 스타일·값 종류·글자, 병합, 선, 표 칸(member), 표 덩어리(tables)
+export const analyzeTables = (xml, styles, sharedStrings = []) => {
   const cells = new Map(); // "r,c" → s
   const kinds = new Map(); // "r,c" → 'text' | 'number' | 'formula' | 'empty'
   const texts = new Map(); // "r,c" → 글자 (평균 줄 찾기용)
+  const vtypes = new Map(); // "r,c" → 계산값까지 본 값 종류 'number' | 'text' | 'bool' | 'error' | 'empty'
+  const raws = new Map(); // "r,c" → <v> 원문 (숫자 자릿수 판단용)
+  const formulas = new Map(); // "r,c" → 수식 글
   for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
     const ref = parseRef(attr(m[1], 'r') || '');
     if (!ref) continue;
@@ -261,6 +357,18 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
     const inner = m[2] || '';
     if (attr(m[1], 't') === 's') { const v = /<v>(\d+)<\/v>/.exec(inner); if (v) texts.set(`${ref.row},${ref.col}`, sharedStrings[Number(v[1])] || ''); }
     else if (attr(m[1], 't') === 'inlineStr') texts.set(`${ref.row},${ref.col}`, [...inner.matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((x) => decodeXml(x[1])).join(''));
+    const t = attr(m[1], 't');
+    const v = /<v>([^<]*)<\/v>/.exec(inner);
+    const f = /<f\b[^>]*>([^<]*)<\/f>/.exec(inner) || (/<f\b[^>]*\/>/.test(inner) ? ['', ''] : null);
+    if (f) formulas.set(`${ref.row},${ref.col}`, decodeXml(f[1]));
+    let vt = 'empty';
+    if (t === 's' || t === 'inlineStr') vt = texts.get(`${ref.row},${ref.col}`) ? 'text' : 'empty';
+    else if (t === 'str') vt = v && v[1] !== '' ? 'text' : 'empty';
+    else if (t === 'b') vt = 'bool';
+    else if (t === 'e') vt = 'error';
+    else if (v && v[1] !== '') { vt = 'number'; raws.set(`${ref.row},${ref.col}`, v[1]); }
+    if (t === 'str' && v) texts.set(`${ref.row},${ref.col}`, decodeXml(v[1]));
+    vtypes.set(`${ref.row},${ref.col}`, vt);
   }
   const mergeOf = new Map(); // "r,c" → 병합 영역 번호
   const merges = [];
@@ -341,14 +449,8 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
   }
 
   const DIRS = { left: [0, -1], right: [0, 1], top: [-1, 0], bottom: [1, 0] };
-  const OPP = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
   const seen = new Set();
-  const changes = new Map(); // "r,c" → { side: style }
-  const setChange = (key, side, style) => {
-    const current = own(key)[side];
-    if (!current || current === style) return;
-    changes.set(key, { ...(changes.get(key) || {}), [side]: style });
-  };
+  const tables = [];
   for (const start of member) {
     if (seen.has(start)) continue;
     const comp = new Set([start]); const queue = [start]; seen.add(start);
@@ -389,13 +491,30 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
       if (innerV && innerH) break;
     }
     if (!innerV || !innerH) continue;
+    tables.push({ comp, r0, r1, c0, c1 });
+  }
+  const topLeft = (key) => {
+    if (!mergeOf.has(key)) return key;
+    const r = merges[mergeOf.get(key)];
+    return K(r.from.row, r.from.col);
+  };
+  return { cells, kinds, texts, vtypes, raws, formulas, mergeOf, merges, K, sameMerge, own, hLine, vLine, member, tables, topLeft, DIRS };
+};
+
+const SUMMARY_LABEL = /^(평균|합계|계|avg\.?|average|mean|total)$/i;
+export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
+  const { cells, kinds, texts, merges, K, sameMerge, own, hLine, vLine, member, tables, topLeft, DIRS } = analyzeTables(xml, styles, sharedStrings);
+  void merges;
+  const OPP = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
+  const changes = new Map(); // "r,c" → { side: style }
+  const setChange = (key, side, style) => {
+    const current = own(key)[side];
+    if (!current || current === style) return;
+    changes.set(key, { ...(changes.get(key) || {}), [side]: style });
+  };
+  for (const { comp, r0, r1, c0, c1 } of tables) {
     // 머리줄: 숫자·수식이 없고, 칸마다 채우기나 굵은 글씨가 있는 줄 (병합 칸은 왼쪽 위 칸으로 본다)
     // 머리줄 바로 아래(첫 자료줄 위) 선은 강조선으로 굵게 둔다
-    const topLeft = (key) => {
-      if (!mergeOf.has(key)) return key;
-      const r = merges[mergeOf.get(key)];
-      return K(r.from.row, r.from.col);
-    };
     const headerCache = new Map();
     const isHeaderRow = (row) => {
       if (headerCache.has(row)) return headerCache.get(row);
@@ -460,6 +579,177 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
     const change = changes.get(K(ref.row, ref.col));
     if (!change) return whole;
     const next = styles.withBorderStyles(Number(attr(attrs, 's') || 0), change);
+    return `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${close}>`;
+  });
+};
+
+// 칸 정리: 글꼴 이름 통일, 표 칸 가운데 정렬(가로·세로), 표 글자 크기 통일, 숫자 칸은 숫자 서식·글자 칸은 일반 서식
+//  - 가운데로 바꾸지 않는 칸: 양식번호(■…), 표 안쪽 세로선이 없는 줄(캡션·제목·양식번호 줄),
+//    '이름 + (인)'·'값 + 단위'처럼 오른쪽·왼쪽으로 붙여 짝지어 둔 칸
+//  - 글자 크기: 시트의 표에서 가장 많이 쓴 크기로. 큰 글자는 줄이고, 작은 글자는 칸에 들어갈 때만 키운다 (18pt 이상 제목은 그대로)
+//  - 숫자 칸이 '일반' 서식이면 같은 열에서 이어지는 숫자 칸의 서식을 따르고, 없으면 값에 맞춘다 (정수 '0', 소수는 자릿수만큼)
+const DATE_FUNCS = /\b(?:WORKDAY|DATE|TODAY|EDATE|EOMONTH|NOW)\s*\(/i;
+const charWidth = (ch, sz) => {
+  const code = ch.codePointAt(0);
+  if (code >= 0x1100) return sz; // 한글·한자 등 전각
+  if (ch === ' ') return sz * 0.3;
+  return sz * 0.6;
+};
+const decimalsOf = (raw, isFormula) => {
+  const x = Number(raw);
+  if (!Number.isFinite(x)) return 0;
+  for (let d = 0; d <= 10; d++) {
+    if (Math.abs(Math.round(x * 10 ** d) / 10 ** d - x) <= 1e-9 * Math.max(1, Math.abs(x))) {
+      if (isFormula && d > 4) return 2;
+      return Math.min(d, 4);
+    }
+  }
+  return isFormula ? 2 : 4;
+};
+export const normalizeCellStyles = (xml, styles, { sharedStrings = [], cols = null, align = true, fontName = '맑은 고딕', sizes = true, formats = true } = {}) => {
+  const A = analyzeTables(xml, styles, sharedStrings);
+  const { cells, kinds, texts, vtypes, raws, formulas, K, sameMerge, vLine, tables, mergeOf, merges } = A;
+  const inCols = (col) => !cols || (col >= cols.from && col <= cols.to);
+  // 열 너비(pt) — 글자가 칸에 들어가는지 볼 때 쓴다 (좁게 어림해 넘치지 않게)
+  const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+  const baseCol = Number((fmt && attr(fmt[1], 'baseColWidth')) || 8);
+  const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || baseCol + 0.71);
+  const colDefs = [...xml.matchAll(/<col\b([^>]*)\/?>/g)].map((m) => ({ min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')), width: Number(attr(m[1], 'width') || defaultCol) }));
+  const colPt = (col) => { const d = colDefs.find((c) => col >= c.min && col <= c.max); return Math.trunc((d ? d.width : defaultCol) * 7 + 5) * 0.75; };
+  const cellWidthPt = (key) => {
+    const [row, col] = key.split(',').map(Number);
+    if (mergeOf.has(key)) { const r = merges[mergeOf.get(key)]; let w = 0; for (let c = r.from.col; c <= r.to.col; c++) w += colPt(c); return w; }
+    void row;
+    return colPt(col);
+  };
+  const textOf = (key) => (texts.has(key) ? texts.get(key) : raws.get(key) || '');
+  const isFooter = (key) => /^\s*■/.test(textOf(key));
+
+  // 표 칸 가운데 정렬 대상
+  const alignKeys = new Set();
+  const sizeKeys = new Set();
+  for (const { comp, r0, r1, c0, c1 } of tables) {
+    for (let row = r0; row <= r1; row++) {
+      let inner = false;
+      for (let col = c0; col < c1 && !inner; col++) {
+        if (comp.has(K(row, col)) && comp.has(K(row, col + 1)) && vLine(row, col + 1)) inner = true;
+      }
+      if (!inner) continue; // 캡션·제목·양식번호 줄
+      for (let col = c0; col <= c1; col++) {
+        const key = K(row, col);
+        if (!comp.has(key) || !cells.has(key) || !inCols(col) || isFooter(key)) continue;
+        if (mergeOf.has(key) && A.topLeft(key) !== key) continue;
+        alignKeys.add(key);
+        if (vtypes.get(key) && vtypes.get(key) !== 'empty') sizeKeys.add(key);
+      }
+    }
+  }
+  // '이름 + (인)'·'값 + 단위'처럼 짝지어 붙여 둔 칸은 정렬을 그대로 둔다
+  for (const key of [...alignKeys]) {
+    const [row, col] = key.split(',').map(Number);
+    const right = K(row, col + 1);
+    const here = styles.alignmentOf(cells.get(key)).horizontal;
+    if (here === 'right' && vtypes.get(key) !== 'empty' && cells.has(right) && vtypes.get(right) && vtypes.get(right) !== 'empty'
+      && ['general', 'left'].includes(styles.alignmentOf(cells.get(right)).horizontal) && !sameMerge(key, right)) {
+      alignKeys.delete(key); alignKeys.delete(right); sizeKeys.delete(key); sizeKeys.delete(right);
+    }
+  }
+  // 표 글자 크기: 가장 많이 쓴 크기
+  const sizeCount = new Map();
+  for (const key of sizeKeys) { const sz = styles.fontOf(cells.get(key)).sz; if (sz < 18) sizeCount.set(sz, (sizeCount.get(sz) || 0) + 1); }
+  const majority = [...sizeCount].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0];
+
+  const changes = new Map(); // key → { font: {name, sz}, align: {h, v}, numFmt }
+  const change = (key) => { if (!changes.has(key)) changes.set(key, {}); return changes.get(key); };
+  // 1) 글꼴 이름 통일 (값이 있는 칸)
+  if (fontName) {
+    for (const [key, s] of cells) {
+      const col = Number(key.split(',')[1]);
+      if (!inCols(col) || !vtypes.get(key) || vtypes.get(key) === 'empty') continue;
+      if (styles.fontOf(s).name !== fontName) change(key).font = { ...(change(key).font || {}), name: fontName };
+    }
+  }
+  // 2) 가운데 정렬
+  if (align) {
+    for (const key of alignKeys) {
+      const a = styles.alignmentOf(cells.get(key));
+      const want = {};
+      if (!['center', 'centerContinuous'].includes(a.horizontal)) want.horizontal = 'center';
+      if (a.vertical !== 'center') want.vertical = 'center';
+      if (Object.keys(want).length) change(key).align = want;
+    }
+  }
+  // 3) 글자 크기
+  if (sizes && align && majority) {
+    for (const key of sizeKeys) {
+      const s = cells.get(key);
+      const sz = styles.fontOf(s).sz;
+      if (sz >= 18 || sz === majority) continue;
+      if (sz < majority) {
+        if (styles.isWrapped(s)) continue;
+        const text = String(textOf(key));
+        const width = [...text].reduce((sum, ch) => sum + charWidth(ch, majority), 0);
+        if (width > cellWidthPt(key) - 6) continue; // 키우면 칸을 넘친다
+      }
+      change(key).font = { ...(change(key).font || {}), sz: majority };
+    }
+  }
+  // 4) 숫자 서식
+  if (formats) {
+    // (숫자 서식은 화면에서도 보이므로 인쇄 범위 밖 칸까지 맞춘다)
+    for (const [key, s] of cells) {
+      const id = styles.numFmtIdOf(s);
+      const kind = styles.formatKind(id);
+      // 글자(수식 아님) 칸에 붙은 숫자·날짜 서식은 일반으로
+      if (kinds.get(key) === 'text' && !['general', 'text'].includes(kind)) change(key).numFmt = 0;
+      // 글자를 가져오는 수식 칸에 붙은 날짜 서식도 일반으로 (숫자 서식은 다른 줄에서 숫자가 나올 수 있어 둔다)
+      else if (kinds.get(key) === 'formula' && vtypes.get(key) === 'text' && kind === 'date') change(key).numFmt = 0;
+    }
+    // 숫자 칸의 '일반' 서식
+    const byCol = new Map();
+    for (const [key] of cells) {
+      if (vtypes.get(key) !== 'number') continue;
+      const [row, col] = key.split(',').map(Number);
+      if (!byCol.has(col)) byCol.set(col, []);
+      byCol.get(col).push(row);
+    }
+    for (const [col, rowsList] of byCol) {
+      rowsList.sort((a, b) => a - b);
+      const segments = [];
+      for (const row of rowsList) {
+        const last = segments[segments.length - 1];
+        if (last && row - last[last.length - 1] === 1) last.push(row); else segments.push([row]);
+      }
+      for (const seg of segments) {
+        const keys = seg.map((row) => K(row, col));
+        const generals = keys.filter((key) => styles.numFmtIdOf(cells.get(key)) === 0);
+        if (!generals.length) continue;
+        const explicit = new Map();
+        keys.forEach((key) => {
+          const id = styles.numFmtIdOf(cells.get(key));
+          if (id !== 0 && ['number', 'date'].includes(styles.formatKind(id))) explicit.set(id, (explicit.get(id) || 0) + 1);
+        });
+        let target = null;
+        if (explicit.size) target = { id: [...explicit].sort((a, b) => b[1] - a[1])[0][0] };
+        else if (keys.some((key) => DATE_FUNCS.test(formulas.get(key) || ''))) target = { code: 'yyyy-mm-dd' };
+        else {
+          const decimals = Math.max(...keys.map((key) => decimalsOf(raws.get(key), formulas.has(key))));
+          target = { code: decimals === 0 ? '0' : `0.${'0'.repeat(decimals)}` };
+        }
+        for (const key of generals) change(key).numFmt = target.id !== undefined ? target.id : styles.fmtId(target.code);
+      }
+    }
+  }
+  if (changes.size === 0) return xml;
+  return xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
+    const ref = parseRef(attr(attrs, 'r') || '');
+    if (!ref) return whole;
+    const c = changes.get(K(ref.row, ref.col));
+    if (!c) return whole;
+    let next = Number(attr(attrs, 's') || 0);
+    if (c.font) next = styles.withFontChange(next, c.font);
+    if (c.align) next = styles.withAlignment(next, c.align);
+    if (c.numFmt !== undefined) next = styles.withNumFmtId(next, c.numFmt);
     return `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${close}>`;
   });
 };
@@ -688,6 +978,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     if (rule?.numberFormats) xml = setNumberFormats(xml, styles, rule.numberFormats);
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
     if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles, sharedStrings);
+    if (rule?.cellStyles !== false) xml = normalizeCellStyles(xml, styles, { sharedStrings, cols: printCols.get(sheetIndex) || null, align: rule?.align !== false });
     if (equalWidth) sheetsForWidth.push({ path, index: sheetIndex, name });
     if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);

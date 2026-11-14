@@ -7253,6 +7253,10 @@ export default function App() {
         zip.file('xl/workbook.xml', wbXml);
       }
 
+      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
+      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다).
+      // 서식 정리가 계산값(숫자인지 글자인지)을 보고 서식을 정하므로 먼저 계산한다
+      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       // 서식 정리: 같은 표는 같은 행 높이, 같은 열은 같은 소수 자릿수, 숫자 서식의 꼬리 공백 제거, 한 장 너비 인쇄
       try {
         const meterFirst = layout.meterStartRow;
@@ -7289,16 +7293,14 @@ export default function App() {
                 { range: `K${meterFirst}:K${meterLast}`, code: '0.0' },
               ],
             },
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }] },
+            // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }], align: false },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             누출시험: { printArea: 'A1:F18' },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
           },
         });
       } catch (error) { console.error('서식 정리 실패:', error); }
-      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
-      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
-      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
@@ -7864,6 +7866,10 @@ export default function App() {
       zip.file('xl/workbook.xml', workbookXml);
       await removeCalcChainFromZip(zip);
 
+      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
+      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다).
+      // 서식 정리가 계산값(숫자인지 글자인지)을 보고 서식을 정하므로 먼저 계산한다
+      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       // 서식 정리: 날짜별 시트는 한 장에, 입력 시트의 기상 숫자는 가운데, 샘플러 Yd 자릿수 통일, 물질 행 높이 통일
       try {
         await tidyWorkbook(zip, {
@@ -7883,9 +7889,6 @@ export default function App() {
               }),
         });
       } catch (error) { console.error('서식 정리 실패:', error); }
-      // 계산식 결과를 파일에 미리 채워 둔다: 휴대폰 미리보기·엑셀 보호된 보기처럼 다시 계산하지 않는 화면에서도
-      // 밀도·수분량 등 계산값이 바로 보이게 (엑셀은 열 때 다시 계산한다)
-      try { await recalcWorkbookCaches(zip); } catch (error) { console.error('계산값 채우기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
