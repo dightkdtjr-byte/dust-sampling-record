@@ -8,6 +8,7 @@
 // 계산하지 못한 칸은 저장값을 지워(빈 칸) 옛 숫자가 보이지 않게 하고, 엑셀은 열 때 다시 계산한다.
 import FormulaParserModule from 'fast-formula-parser';
 import FormulaOperators from 'fast-formula-parser/formulas/operators.js';
+import FormulaHelperModule from 'fast-formula-parser/formulas/helpers.js';
 
 // 엑셀처럼 빈 칸은 글자와 비교할 땐 ""로, 숫자와 비교할 땐 0으로 본다 (계산 도구는 늘 0으로 봐서 IF(A1="",...)가 틀렸다)
 {
@@ -22,6 +23,27 @@ import FormulaOperators from 'fast-formula-parser/formulas/operators.js';
       return original(value1, infix, value2, isArray1, isArray2);
     };
     Infix.__blankAware = true;
+  }
+  // 함수 인자로 빈칸이 오면 계산 도구가 {value: null} 객체를 글자로 바꿔 "[object Object]"가 되던 것:
+  // 엑셀처럼 글자 자리엔 "", 숫자 자리엔 0, 논리값 자리엔 FALSE로 받는다 (TRIM·LEFT·LEN·TEXT 등)
+  const helperRoot = FormulaHelperModule && (FormulaHelperModule.FormulaHelpers ? FormulaHelperModule : FormulaHelperModule.default);
+  const H = helperRoot && helperRoot.FormulaHelpers;
+  const Types = helperRoot && helperRoot.Types;
+  if (H && Types && !H.__blankAware) {
+    const originalAccept = H.accept.bind(H);
+    H.accept = (param, type = null, defValue, flat = true, allowSingleValue = false) => {
+      if (param && typeof param === 'object' && !Array.isArray(param) && 'value' in param && param.value === null && !param.isArray) {
+        const types = Array.isArray(type) ? type : [type]; // TRIM 등은 [Types.STRING]처럼 목록으로 넘긴다
+        if (types.includes(Types.STRING)) return '';
+        if (types.includes(Types.NUMBER) || types.includes(Types.NUMBER_NO_BOOLEAN)) return 0;
+        if (types.includes(Types.BOOLEAN)) return false;
+      }
+      return originalAccept(param, type, defValue, flat, allowSingleValue);
+    };
+    // 함수가 빈칸(null)을 돌려주면 #NULL! 대신 0 (엑셀에서 INDEX·VLOOKUP이 빈칸을 가리키면 0)
+    const originalCheck = H.checkFunctionResult.bind(H);
+    H.checkFunctionResult = (result) => (result === null || result === undefined ? 0 : originalCheck(result));
+    H.__blankAware = true;
   }
 }
 
@@ -399,6 +421,15 @@ export async function recalcWorkbookCaches(zip, { today = new Date() } = {}) {
       },
     },
     functions: {
+      // 계산 도구에 없는 글자 함수
+      UPPER: (text) => { const v = scalar(text); return isErr(v) ? v : String(v ?? '').toUpperCase(); },
+      VALUE: (text) => {
+        const v = scalar(text);
+        if (isErr(v)) return v;
+        if (typeof v === 'number') return v;
+        const t = String(v ?? '').trim().replace(/,/g, '');
+        return t !== '' && Number.isFinite(Number(t)) ? Number(t) : FormulaError.VALUE;
+      },
       MAX: (...params) => { const n = numbersFrom(params); return n.length ? Math.max(...n) : 0; },
       MIN: (...params) => { const n = numbersFrom(params); return n.length ? Math.min(...n) : 0; },
       COUNTA: (...params) => params.reduce((sum, param) => sum + argValues(param).values.filter((v) => v !== null && v !== undefined).length, 0),

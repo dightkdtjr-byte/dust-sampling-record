@@ -7286,7 +7286,9 @@ export default function App() {
               rowHeights: { ...rowsAt(26, 28, 20.1), ...rowsAt(postHead, postHead + 2, 20.1) },
             },
             노즐산정: {
-              rowHeights: { ...rowsAt(37, 38, 15), ...rowsAt(39, 56, 18) },
+              rowHeights: rowsAt(37, 38, 15),
+              // 노즐표 줄: 양식마다 노즐 수가 달라(먼지·유량 18, 수은 15, PAHs 19) 채취시간 병합 칸(A39~)의 길이를 따른다
+              rowHeightsByMerge: [{ cell: 'A39', ht: 18 }],
               // 밀도는 모두 소수 셋째 자리, 샘플러 ΔH@·Yd는 넷째 자리
               numberFormats: [{ range: 'H26', code: '0.000' }, { range: 'C34', code: '0.000' }, { range: 'A34', code: '0.000' }, { range: 'O39:P43', code: '0.0000' }],
             },
@@ -7798,8 +7800,9 @@ export default function App() {
             workbookXml = workbookXml.replace('</sheets>', `<sheet name="${tempName}" sheetId="${Math.max(0, ...sheetIds) + 1}" r:id="${relId}"/></sheets>`);
             const printArea = `<definedName name="_xlnm.Print_Area" localSheetId="${position}">'${tempName}'!$A$2:$K$59</definedName>`;
             workbookXml = workbookXml.includes('</definedNames>')
-              ? workbookXml.replace('</definedNames>', `${printArea}</definedNames>`)
-              : workbookXml.replace('</sheets>', `</sheets><definedNames>${printArea}</definedNames>`);
+              // 인쇄 범위 글에 '$'가 들어 있어 함수로 넘긴다 (문자열이면 '$' 기호가 특수하게 해석될 수 있다)
+              ? workbookXml.replace('</definedNames>', () => `${printArea}</definedNames>`)
+              : workbookXml.replace('</sheets>', () => `</sheets><definedNames>${printArea}</definedNames>`);
           }
           zip.file('xl/_rels/workbook.xml.rels', relsXml);
           if (ctFile) zip.file('[Content_Types].xml', ctXml);
