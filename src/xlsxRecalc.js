@@ -350,6 +350,9 @@ export async function recalcWorkbookCaches(zip, { today = new Date() } = {}) {
     try {
       result = parser.parse(expr, position, cell.isArray);
       if (Array.isArray(result)) result = flatten(result)[0];
+      if (result && typeof result === 'object' && !isErr(result) && 'value' in result) result = result.value;
+      // 엑셀: 빈 칸을 가리키는 수식의 결과는 빈칸이 아니라 0 (그래서 =A1 결과는 ""와 같지 않다)
+      if (result === null || result === undefined) result = 0;
     } catch (error) {
       result = isErr(error) ? error : { error: '#VALUE!', failed: true };
     }

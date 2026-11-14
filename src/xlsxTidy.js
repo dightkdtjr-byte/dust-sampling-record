@@ -10,6 +10,11 @@ const attr = (attrs, name) => {
 const decodeXml = (text) => String(text).replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const encodeAttr = (text) => String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const colToNum = (letters) => [...letters].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+const numToColName = (n) => {
+  let out = '';
+  while (n > 0) { const m = (n - 1) % 26; out = String.fromCharCode(65 + m) + out; n = Math.floor((n - 1) / 26); }
+  return out;
+};
 const parseRef = (ref) => {
   const m = /^\$?([A-Z]{1,3})\$?(\d+)$/.exec(String(ref).trim());
   return m ? { col: colToNum(m[1]), row: Number(m[2]) } : null;
@@ -273,7 +278,7 @@ class StyleBook {
 
 // 한 장 너비에 맞춤: <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr> + <pageSetup fitToWidth="1" fitToHeight="0">
 const fitToPageWidth = (xml, { onePage = false } = {}) => {
-  let out = xml;
+  let out = ensurePageElements(xml);
   if (/<sheetPr\b[^>]*\/>/.test(out)) out = out.replace(/<sheetPr\b([^>]*)\/>/, '<sheetPr$1><pageSetUpPr fitToPage="1"/></sheetPr>');
   else if (/<sheetPr\b[^>]*>/.test(out)) {
     if (/<pageSetUpPr\b[^>]*\/>/.test(out)) out = out.replace(/<pageSetUpPr\b([^>]*)\/>/, (w, a) => `<pageSetUpPr${a.replace(/\s*fitToPage="[^"]*"/, '')} fitToPage="1"/>`);
@@ -615,7 +620,7 @@ export const normalizeCellStyles = (xml, styles, { sharedStrings = [], cols = nu
   const baseCol = Number((fmt && attr(fmt[1], 'baseColWidth')) || 8);
   const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || baseCol + 0.71);
   const colDefs = [...xml.matchAll(/<col\b([^>]*)\/?>/g)].map((m) => ({ min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')), width: Number(attr(m[1], 'width') || defaultCol) }));
-  const colPt = (col) => { const d = colDefs.find((c) => col >= c.min && col <= c.max); return Math.trunc((d ? d.width : defaultCol) * 7 + 5) * 0.75; };
+  const colPt = (col) => { const d = colDefs.find((c) => col >= c.min && col <= c.max); return Math.trunc(((256 * (d ? d.width : defaultCol) + Math.trunc(128 / 7)) / 256) * 7) * 0.75; };
   const cellWidthPt = (key) => {
     const [row, col] = key.split(',').map(Number);
     if (mergeOf.has(key)) { const r = merges[mergeOf.get(key)]; let w = 0; for (let c = r.from.col; c <= r.to.col; c++) w += colPt(c); return w; }
@@ -779,12 +784,14 @@ const ensureRowHeight = (xml, row, ht) => {
 export const normalizeSectionSpacing = (xml, styles, { sharedStrings = [], drawingRows = new Set(), gap = 18, titleHeight = 21, afterTitle = 4, cols = null } = {}) => {
   const inCols = (col) => !cols || (col >= cols.from && col <= cols.to);
   const rows = new Map(); // row → { value, side, title, styles: [[ref, s]] }
+  const valueRowsAnywhere = new Set(); // 인쇄 범위 밖까지 포함해 값이 있는 줄 (이런 줄은 빈 줄로 보지 않는다)
   const info = (row) => {
     if (!rows.has(row)) rows.set(row, { value: false, side: false, title: false, cells: [] });
     return rows.get(row);
   };
   for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
     const ref = parseRef(attr(m[1], 'r') || '');
+    if (ref && cellKind(m[1], m[2] || '') !== 'empty') valueRowsAnywhere.add(ref.row);
     if (!ref || !inCols(ref.col)) continue;
     const row = info(ref.row);
     const s = Number(attr(m[1], 's') || 0);
@@ -811,15 +818,18 @@ export const normalizeSectionSpacing = (xml, styles, { sharedStrings = [], drawi
   const content = (row) => drawingRows.has(row) || (rows.has(row) && (rows.get(row).value || rows.get(row).side));
   const isTable = (row) => rows.has(row) && rows.get(row).side;
   const isTitle = (row) => rows.has(row) && rows.get(row).title;
+  if (drawingRows.unknown) return xml; // 위치를 줄로 알 수 없는 그림이 있으면 줄 높이를 바꾸지 않는다
   const contentRows = [...new Set([...rows.keys(), ...drawingRows])].filter(content).sort((a, b) => a - b);
   if (contentRows.length < 2) return xml;
+  const MAX_GAP_ROWS = 3; // 이보다 긴 빈 구간은 일부러 비워 둔 자리로 보고 그대로 둔다
   const heights = new Map(); // row → ht
   const bottomRows = new Set();
   for (let i = 1; i < contentRows.length; i++) {
     const prev = contentRows[i - 1]; const next = contentRows[i];
     const blanks = [];
-    for (let row = prev + 1; row < next; row++) if (!drawingRows.has(row)) blanks.push(row);
+    for (let row = prev + 1; row < next; row++) if (!drawingRows.has(row) && !valueRowsAnywhere.has(row)) blanks.push(row);
     if (blanks.length !== next - prev - 1) continue; // 그림이 걸친 구간은 그대로
+    if (blanks.length > MAX_GAP_ROWS) continue;
     if (isTitle(next) && !isTitle(prev)) {
       if (blanks.length) blanks.forEach((row) => heights.set(row, Math.round((gap / blanks.length) * 100) / 100));
       else { heights.set(next, titleHeight + gap); bottomRows.add(next); }
@@ -844,14 +854,26 @@ export const normalizeSectionSpacing = (xml, styles, { sharedStrings = [], drawi
 };
 
 // 시트에 붙은 그림·도형이 걸친 줄 (1부터)
-const readDrawingRows = async (zip, sheetPath) => {
+// 결과: 줄 번호 Set. 위치를 줄로 알 수 없는 그림(절대 위치)이 있으면 rowsSet.unknown = true
+const anchorRows = (text, rowsSet) => {
+  // <xdr:from>…<xdr:row>n</xdr:row> 또는 OLE 개체의 <from>…<xdr:row>n</xdr:row> (0부터)
+  const from = /<(?:xdr:)?from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(text);
+  const to = /<(?:xdr:)?to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(text);
+  if (!from) return;
+  const start = Number(from[1]) + 1; const end = to ? Number(to[1]) + 1 : start;
+  for (let row = start; row <= end; row++) rowsSet.add(row);
+};
+const readDrawingRows = async (zip, sheetPath, sheetXml = '') => {
   const rowsSet = new Set();
+  // 시트 XML 안의 OLE 개체·컨트롤 위치 (예: 시료측정위치의 원형굴뚝 표 개체)
+  for (const a of sheetXml.matchAll(/<anchor\b[\s\S]*?<\/anchor>/g)) anchorRows(a[0], rowsSet);
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return rowsSet;
   const rels = await relsFile.async('string');
   for (const m of rels.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
-    if (!/\/drawing"/.test(attr(m[1], 'Type') || '')) continue;
+    // attr()는 따옴표를 뺀 값을 돌려주므로 값이 '/drawing'으로 끝나는지 본다 (vmlDrawing은 메모·옛 도형이라 제외)
+    if (!/\/drawing$/.test(attr(m[1], 'Type') || '')) continue;
     const target = attr(m[1], 'Target') || '';
     const parts = (dir + target).split('/');
     const stack = [];
@@ -859,13 +881,8 @@ const readDrawingRows = async (zip, sheetPath) => {
     const file = zip.file(stack.join('/'));
     if (!file) continue;
     const drawing = await file.async('string');
-    for (const a of drawing.matchAll(/<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g)) {
-      const from = /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(a[0]);
-      const to = /<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(a[0]);
-      if (!from) continue;
-      const start = Number(from[1]) + 1; const end = to ? Number(to[1]) + 1 : start;
-      for (let row = start; row <= end; row++) rowsSet.add(row);
-    }
+    for (const a of drawing.matchAll(/<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g)) anchorRows(a[0], rowsSet);
+    if (/<xdr:absoluteAnchor\b/.test(drawing)) rowsSet.unknown = true;
   }
   return rowsSet;
 };
@@ -873,17 +890,24 @@ const readDrawingRows = async (zip, sheetPath) => {
 // ── 인쇄 크기 통일: 한 파일의 모든 시트가 같은 폭으로 인쇄되게, 시트마다 배율을 정한다 ──
 // 공통 폭 = 용지 인쇄 가능 폭과, 시트마다 '세로가 한 장에 들어가는 폭' 중 가장 작은 값
 const A4 = { width: 595.3, height: 841.9 };
+// ECMA-376 18.3.1.13: 픽셀 = Truncate(((256*width + Truncate(128/MDW)) / 256) * MDW)
+const colWidthPt = (chars, mdw) => Math.trunc(((256 * chars + Math.trunc(128 / mdw)) / 256) * mdw) * 0.75;
+const isTrue = (v) => v === '1' || v === 'true';
 const measurePrintArea = (xml, range, mdw, styles) => {
   const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
   const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
   const baseCol = Number((fmt && attr(fmt[1], 'baseColWidth')) || 8);
   const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || baseCol + 0.71);
-  const colPt = (chars) => Math.trunc(chars * mdw + 5) * 0.75;
+  const colPt = (chars) => colWidthPt(chars, mdw);
   const cols = [];
   for (const m of xml.matchAll(/<col\b([^>]*)\/?>/g)) {
-    cols.push({ min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')), width: Number(attr(m[1], 'width') || defaultCol), hidden: attr(m[1], 'hidden') === '1' });
+    cols.push({ min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')), width: Number(attr(m[1], 'width') || defaultCol), hidden: isTrue(attr(m[1], 'hidden')) });
   }
   let r = range;
+  if (r && (!r.from.row || !r.to.row)) {
+    const rowsWithContent = [...xml.matchAll(/<c\b[^>]*\br="[A-Z]+(\d+)"[^>]*>(?:<f|<v|<is)/g)].map((m) => Number(m[1]));
+    r = { from: { col: r.from.col, row: 1 }, to: { col: r.to.col, row: Math.max(1, ...rowsWithContent) } };
+  }
   if (!r) {
     // 인쇄 범위가 없으면 값이나 테두리가 있는 칸까지 (기록 범위 dimension은 빈 서식 칸까지 넓게 잡혀 있을 수 있다)
     let maxRow = 0; let maxCol = 0;
@@ -910,21 +934,39 @@ const measurePrintArea = (xml, range, mdw, styles) => {
   const rowHeights = new Map();
   for (const m of xml.matchAll(/<row\b([^>]*?)\/?>/g)) {
     const row = Number(attr(m[1], 'r'));
-    rowHeights.set(row, attr(m[1], 'hidden') === '1' ? 0 : Number(attr(m[1], 'ht') || defaultRow));
+    rowHeights.set(row, isTrue(attr(m[1], 'hidden')) ? 0 : Number(attr(m[1], 'ht') || defaultRow));
   }
   let height = 0;
   for (let row = r.from.row; row <= r.to.row; row++) height += rowHeights.has(row) ? rowHeights.get(row) : defaultRow;
-  return { width, height };
+  return { width, height, range: r, fromContent: !range };
 };
-const setPrintScale = (xml, scale, margins) => {
+// pageMargins·pageSetup이 없으면 규격 순서에 맞는 자리에 넣는다
+const AFTER_PAGE_SETUP = /<(?:headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|drawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b|<\/worksheet>/;
+const ensurePageElements = (xml) => {
   let out = xml;
+  if (!/<pageMargins\b/.test(out)) {
+    const at = out.search(/<pageSetup\b/) >= 0 ? out.search(/<pageSetup\b/) : out.search(AFTER_PAGE_SETUP);
+    if (at >= 0) out = `${out.slice(0, at)}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>${out.slice(at)}`;
+  }
+  if (!/<pageSetup\b/.test(out)) {
+    out = out.replace(/(<pageMargins\b[^>]*\/>)/, '$1<pageSetup paperSize="9" orientation="portrait"/>');
+  }
+  // <pageSetup …></pageSetup> → 스스로 닫는 태그로 (안의 확장 정보는 버린다)
+  out = out.replace(/<pageSetup\b([^>]*?)>[\s\S]*?<\/pageSetup>/, '<pageSetup$1/>');
+  return out;
+};
+
+const setPrintScale = (xml, scale, margins) => {
+  let out = ensurePageElements(xml);
   // '한 장에 맞춤'을 끄고 배율로 인쇄
   out = out.replace(/<pageSetUpPr\b([^>]*)\/>/, (w, a) => `<pageSetUpPr${a.replace(/\s*fitToPage="[^"]*"/, '')}/>`);
   // 양식의 수동 페이지 나누기는 지운다 (한 시트 = 한 장)
   out = out.replace(/<rowBreaks\b[^>]*(?:\/>|>[\s\S]*?<\/rowBreaks>)/, '').replace(/<colBreaks\b[^>]*(?:\/>|>[\s\S]*?<\/colBreaks>)/, '');
-  const page = `paperSize="9" scale="${scale}" orientation="portrait"`;
   if (/<pageSetup\b[^>]*\/>/.test(out)) {
-    out = out.replace(/<pageSetup\b([^>]*)\/>/, (w, a) => `<pageSetup ${page}${a.replace(/\s*(?:paperSize|scale|orientation|fitToWidth|fitToHeight)="[^"]*"/g, '')}/>`);
+    out = out.replace(/<pageSetup\b([^>]*)\/>/, (w, a) => {
+      const orientation = attr(a, 'orientation') || 'portrait';
+      return `<pageSetup paperSize="9" scale="${scale}" orientation="${orientation}"${a.replace(/\s*(?:paperSize|scale|orientation|fitToWidth|fitToHeight)="[^"]*"/g, '')}/>`;
+    });
   }
   const m = margins;
   const marginTag = `<pageMargins left="${m.left}" right="${m.right}" top="${m.top}" bottom="${m.bottom}" header="${m.header}" footer="${m.footer}"/>`;
@@ -952,20 +994,27 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
   // 시트별 인쇄 범위의 열 (간격은 인쇄되는 부분만 본다)
   const printCols = new Map();
   const printRanges = new Map();
+  const multiAreaSheets = new Set();
   for (const m of workbookXml.matchAll(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g)) {
     if (attr(m[1], 'name') !== '_xlnm.Print_Area' || attr(m[1], 'localSheetId') === null) continue;
-    const range = /!\$?([A-Z]{1,3})\$?(\d+):\$?([A-Z]{1,3})\$?(\d+)/.exec(decodeXml(m[2]));
+    const text = decodeXml(m[2]);
+    const id = Number(attr(m[1], 'localSheetId'));
+    // 여러 구역(쉼표로 이은 범위)은 장을 나눠 인쇄하므로 폭 맞추기에서 뺀다
+    if (text.replace(/'(?:[^']|'')*'/g, '').includes(',')) { multiAreaSheets.add(id); continue; }
+    const range = /!\$?([A-Z]{1,3})\$?(\d*):\$?([A-Z]{1,3})\$?(\d*)$/.exec(text);
     if (!range) continue;
-    printCols.set(Number(attr(m[1], 'localSheetId')), { from: colToNum(range[1]), to: colToNum(range[3]) });
-    printRanges.set(Number(attr(m[1], 'localSheetId')), { from: { col: colToNum(range[1]), row: Number(range[2]) }, to: { col: colToNum(range[3]), row: Number(range[4]) } });
+    printCols.set(id, { from: colToNum(range[1]), to: colToNum(range[3]) });
+    printRanges.set(id, { from: { col: colToNum(range[1]), row: range[2] ? Number(range[2]) : null }, to: { col: colToNum(range[3]), row: range[4] ? Number(range[4]) : null } });
   }
   const sheetsForWidth = []; // 인쇄 크기 통일에 쓸 시트들
   let sheetIndex = -1;
   const printAreaUpdates = new Map(); // 시트 순서 → { name, range }
+  const hiddenSheets = new Set(); // 숨긴 시트 순서 (인쇄 범위를 지워 LibreOffice·한셀이 인쇄하지 않게)
   for (const m of workbookXml.matchAll(/<sheet\b([^>]*)\/>/g)) {
     sheetIndex += 1;
     const name = decodeXml(attr(m[1], 'name') || '');
-    if (attr(m[1], 'state')) continue; // 숨긴 시트는 그대로
+    const state = attr(m[1], 'state');
+    if (state === 'hidden' || state === 'veryHidden') { hiddenSheets.add(sheetIndex); continue; } // 숨긴 시트는 그대로
     const target = rels[attr(m[1], 'r:id')];
     if (!target) continue;
     const path = target.startsWith('/') ? target.slice(1) : `xl/${target}`;
@@ -979,8 +1028,9 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
     if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles, sharedStrings);
     if (rule?.cellStyles !== false) xml = normalizeCellStyles(xml, styles, { sharedStrings, cols: printCols.get(sheetIndex) || null, align: rule?.align !== false });
-    if (equalWidth) sheetsForWidth.push({ path, index: sheetIndex, name });
-    if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path), cols: printCols.get(sheetIndex) || null });
+    const landscape = /<pageSetup\b[^>]*orientation="landscape"/.test(xml);
+    if (equalWidth && !multiAreaSheets.has(sheetIndex) && !landscape) sheetsForWidth.push({ path, index: sheetIndex, name });
+    if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path, xml), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
   zip.file('xl/styles.xml', styles.serialize());
@@ -1000,16 +1050,47 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       if (size && size.width > 0 && size.height > 0) measured.push({ ...item, ...size });
     }
     // 가로는 글꼴 폭 어림 오차로 3%, 세로는 머리글·바닥글 공간으로 5% 여유
-    const common = Math.min(printableW * 0.97, ...measured.map((x) => ((printableH * 0.95) / x.height) * x.width));
-    for (const item of measured) {
-      const scale = Math.max(10, Math.min(400, Math.floor((common / item.width) * 100)));
-      const xml = await read(item.path);
-      zip.file(item.path, setPrintScale(xml, scale, margins));
+    const maxW = printableW * 0.97;
+    const maxH = printableH * 0.95;
+    const bound = Math.min(maxW, ...measured.map((x) => (maxH / x.height) * x.width));
+    // 인쇄 범위가 없는 시트는 잰 범위(값·테두리가 있는 칸)를 인쇄 범위로 지정한다 (엑셀이 빈 서식 칸까지 잡지 않게)
+    for (const x of measured) {
+      if (!x.fromContent || printAreaUpdates.has(x.index)) continue;
+      printAreaUpdates.set(x.index, { name: x.name, range: `A1:${numToColName(x.range.to.col)}${x.range.to.row}` });
+    }
+    const fixedWidth = typeof equalWidth === 'object' && equalWidth.width ? equalWidth.width : null;
+    // 배율은 정수(%)만 되므로, 배율이 작은 시트(계산식 등)는 반올림 오차로 폭이 어긋난다.
+    // 공통 폭을 상한에서 조금씩 낮춰 가며, 모든 시트가 들어가면서 장끼리 폭 차이가 가장 작은 값을 고른다
+    const scalesFor = (common, round) => measured.map((x) => Math.max(10, Math.min(400, round((common / x.width) * 100))));
+    let best = null;
+    for (let k = 0; k <= 120; k++) {
+      const common = bound * (1 - k * 0.001);
+      const scales = scalesFor(common, Math.round);
+      const widths = measured.map((x, i) => (x.width * scales[i]) / 100);
+      const fits = measured.every((x, i) => widths[i] <= maxW + 0.01 && (x.height * scales[i]) / 100 <= maxH + 0.01);
+      if (!fits) continue;
+      const spread = Math.max(...widths) / Math.min(...widths);
+      // 폭 차이가 0.3% 넘게 줄어들 때만 더 작은 공통 폭을 택한다 (괜히 작아지지 않게)
+      if (!best || spread < best.spread - 0.003) best = { spread, scales };
+    }
+    let scales = best ? best.scales : scalesFor(bound, Math.floor);
+    // 기록부 종류가 달라도 같은 폭이 되게 정해 둔 공통 폭이 있으면 그 폭으로 (이 파일 시트가 모두 들어갈 때만)
+    if (fixedWidth && fixedWidth <= bound) {
+      const fixed = scalesFor(fixedWidth, Math.round);
+      if (measured.every((x, i) => (x.width * fixed[i]) / 100 <= maxW + 0.01 && (x.height * fixed[i]) / 100 <= maxH + 0.01)) scales = fixed;
+    }
+    for (let i = 0; i < measured.length; i++) {
+      const xml = await read(measured[i].path);
+      zip.file(measured[i].path, setPrintScale(xml, scales[i], margins));
     }
   }
-  // 인쇄 범위 바꾸기 (프로그램이 표를 넓혀 그린 시트)
-  if (printAreaUpdates.size) {
+  // 인쇄 범위 바꾸기 (프로그램이 표를 넓혀 그린 시트), 숨긴 시트의 인쇄 범위 지우기
+  if (printAreaUpdates.size || hiddenSheets.size) {
     let wb = workbookXml;
+    for (const index of hiddenSheets) {
+      wb = wb.replace(new RegExp(`<definedName\\b(?=[^>]*name="_xlnm\\.Print_Area")(?=[^>]*localSheetId="${index}")[^>]*>[^<]*</definedName>`), '');
+    }
+    wb = wb.replace(/<definedNames>\s*<\/definedNames>/, '');
     for (const [index, { name, range }] of printAreaUpdates) {
       const [a, b] = range.split(':');
       const abs = (ref) => ref.replace(/^([A-Z]+)(\d+)$/, '$$$1$$$2');

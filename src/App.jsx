@@ -6948,6 +6948,9 @@ export default function App() {
       addUpdate('노즐산정', 'B8', toNumber(sourceData.atmPressure));
       // 피토관을 고르지 않았으면 양식에 들어 있던 예시 피토관 번호도 지운다
       addUpdate('노즐산정', 'C8', pitotSerial || null);
+      // 숨긴 '피토계산' 시트는 피토관 일련번호(노즐산정 C8)를 E2로 받아 찾는다. 피토관을 고르지 않아 C8이 비면
+      // 엑셀에서 E2가 0이 되어 유속별 Cp 찾기가 #N/A가 되므로, 비어 있으면 빈칸을 받게 한다
+      addUpdate('피토계산', 'E2', { formula: 'IF(노즐산정!$C$8="","",노즐산정!$C$8)' });
       addUpdate('노즐산정', 'C10', toNumber(sourceData.pitotFactor));
       addUpdate('노즐산정', 'F8', toNumber(sourceData.deltaHAt));
       addUpdate('노즐산정', 'G8', toNumber(sourceData.gasMeterFactor));
@@ -7265,8 +7268,10 @@ export default function App() {
         await tidyWorkbook(zip, {
           // 양식의 시트는 모두 한 장짜리 서식이므로 한 장에 맞춰 인쇄한다
           onePageSheets: 'all',
-          // 시트마다 인쇄 폭이 같게 (여백 같게, 가로 가운데)
-          equalWidth: true,
+          // 시트마다 인쇄 폭이 같게 (여백 같게, 가로 가운데). 475.6은 먼지·수은·PAHs·유량 양식의 모든 시트를 합쳐
+          // 가장 세로로 긴 시트(시료측정위치, 그림 자리 포함)도 한 장에 들어가면서 정수 배율 반올림 뒤 장끼리 폭 차이가
+          // 가장 작은 공통 폭(열 너비 어림 단위 pt) → 어느 기록부를 인쇄해도 같은 폭
+          equalWidth: { width: 475.6 },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
