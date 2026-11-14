@@ -238,8 +238,8 @@ const setNumberFormats = (xml, styles, formats) => {
 // 표 테두리 맞추기
 //  - 표 = 세 변 이상이 선으로 둘러싸인 칸이 상하좌우로 이어진 덩어리 (병합 칸은 통째로, 표 안에 갇힌 빈칸 포함).
 //    안쪽에 세로선과 가로선이 모두 있어야 표로 본다 (밑줄만 있는 서식 칸은 표가 아니다)
-//  - 표 바깥과 맞닿은 변은 medium, 표 안쪽 변은 thin. 이중선(double)은 일부러 쓴 것이라 그대로 둔다
-const RANK_KEEP = new Set(['double']);
+//  - 표 바깥과 맞닿은 변은 medium, 표 안쪽 변은 thin. 강조선(머리줄 아래, 평균 줄 위)과 양식의 이중선 자리도 medium으로 통일
+const EMPHASIS_STYLES = new Set(['double']);
 const cellKind = (attrs, inner) => {
   if (!inner) return 'empty';
   if (/<f\b/.test(inner)) return 'formula';
@@ -346,7 +346,7 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
   const changes = new Map(); // "r,c" → { side: style }
   const setChange = (key, side, style) => {
     const current = own(key)[side];
-    if (!current || current === style || RANK_KEEP.has(current)) return;
+    if (!current || current === style) return;
     changes.set(key, { ...(changes.get(key) || {}), [side]: style });
   };
   for (const start of member) {
@@ -443,7 +443,10 @@ export const normalizeTableBorders = (xml, styles, sharedStrings = []) => {
         const line = side === 'left' ? vLine(row, col) : side === 'right' ? vLine(row, col + 1) : side === 'top' ? hLine(row, col) : hLine(row + 1, col);
         if (!line) continue;
         const edgeKey = side === 'bottom' ? K(row + 1, col) : side === 'top' ? K(row, col) : null;
-        const want = !comp.has(next) || (edgeKey && headerEdges.has(edgeKey)) ? 'medium' : 'thin';
+        // 양식에서 이중선으로 그어 둔 강조선 자리도 굵은 선(medium)으로
+        const nextOwn = own(next)[OPP[side]];
+        const emphasis = EMPHASIS_STYLES.has(own(key)[side]) || EMPHASIS_STYLES.has(nextOwn);
+        const want = !comp.has(next) || emphasis || (edgeKey && headerEdges.has(edgeKey)) ? 'medium' : 'thin';
         setChange(key, side, want);
         // 표 밖 칸이 같은 선을 따로 가지고 있으면 그 칸도 같은 굵기로 (엑셀은 두 칸 중 굵은 쪽을 그린다)
         if (!comp.has(next) && cells.has(next)) setChange(next, OPP[side], want);
