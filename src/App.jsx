@@ -7288,6 +7288,8 @@ export default function App() {
               ],
             },
             계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }] },
+            // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
+            누출시험: { printArea: 'A1:F18' },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
           },
         });

@@ -38,6 +38,44 @@ class StyleBook {
     const bordersMatch = /<borders\b[^>]*>([\s\S]*?)<\/borders>/.exec(xml);
     this.borders = bordersMatch ? [...bordersMatch[1].matchAll(/<border\b[^>]*?(?:\/>|>[\s\S]*?<\/border>)/g)].map((m) => m[0]) : [];
     this.bordersChanged = false;
+    const fillsMatch = /<fills\b[^>]*>([\s\S]*?)<\/fills>/.exec(xml);
+    this.fills = fillsMatch ? [...fillsMatch[1].matchAll(/<fill\b[^>]*?(?:\/>|>[\s\S]*?<\/fill>)/g)].map((m) => m[0]) : [];
+    const fontsMatch = /<fonts\b[^>]*>([\s\S]*?)<\/fonts>/.exec(xml);
+    this.fonts = fontsMatch ? [...fontsMatch[1].matchAll(/<font\b[^>]*?(?:\/>|>[\s\S]*?<\/font>)/g)].map((m) => m[0]) : [];
+  }
+
+  // 칸에 단색 채우기가 있는지 (머리줄 판단용)
+  isFilled(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    const fill = this.fills[Number(attr(xf, 'fillId') || 0)] || '';
+    return /patternType="solid"/.test(fill);
+  }
+
+  // 글씨가 굵은지 (머리줄 판단용)
+  isBold(s) {
+    const xf = this.xfs[s] || this.xfs[0] || '';
+    const font = this.fonts[Number(attr(xf, 'fontId') || 0)] || '';
+    return /<b(?:\s*\/>|\s+val="(?:1|true)"\s*\/>)/.test(font);
+  }
+
+  // 원래 스타일을 복사해 세로 정렬만 바꾼 스타일 번호 (소제목 위에 여백을 줄 때 글자를 아래로 붙인다)
+  withVertical(s, vertical) {
+    const key = `${s}|v|${vertical}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const base = this.xfs[s] || this.xfs[0];
+    let xf;
+    if (/<alignment\b[^>]*\/>/.test(base)) {
+      xf = base.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${a.replace(/\s*vertical="[^"]*"/, '')} vertical="${vertical}"/>`);
+    } else if (/\/>$/.test(base)) {
+      xf = base.replace(/\s*\/>$/, `><alignment vertical="${vertical}"/></xf>`);
+    } else {
+      xf = base.replace(/<\/xf>$/, `<alignment vertical="${vertical}"/></xf>`);
+    }
+    xf = xf.replace(/\s*applyAlignment="\d+"/, '').replace(/^<xf\b/, '<xf applyAlignment="1"');
+    this.xfs.push(xf);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
   }
 
   // 칸 스타일(s)의 네 변 선 종류 { left, right, top, bottom } (선 없음은 null)
@@ -202,11 +240,22 @@ const setNumberFormats = (xml, styles, formats) => {
 //    안쪽에 세로선과 가로선이 모두 있어야 표로 본다 (밑줄만 있는 서식 칸은 표가 아니다)
 //  - 표 바깥과 맞닿은 변은 medium, 표 안쪽 변은 thin. 이중선(double)은 일부러 쓴 것이라 그대로 둔다
 const RANK_KEEP = new Set(['double']);
+const cellKind = (attrs, inner) => {
+  if (!inner) return 'empty';
+  if (/<f\b/.test(inner)) return 'formula';
+  const t = attr(attrs, 't');
+  if (t === 's' || t === 'inlineStr' || t === 'str') return /<(?:v|t)\b[^>]*>[^<]/.test(inner) ? 'text' : 'empty';
+  return /<v>[^<]/.test(inner) ? 'number' : 'empty';
+};
+
 export const normalizeTableBorders = (xml, styles) => {
   const cells = new Map(); // "r,c" → s
-  for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>)/g)) {
+  const kinds = new Map(); // "r,c" → 'text' | 'number' | 'formula' | 'empty'
+  for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
     const ref = parseRef(attr(m[1], 'r') || '');
-    if (ref) cells.set(`${ref.row},${ref.col}`, Number(attr(m[1], 's') || 0));
+    if (!ref) continue;
+    cells.set(`${ref.row},${ref.col}`, Number(attr(m[1], 's') || 0));
+    kinds.set(`${ref.row},${ref.col}`, cellKind(m[1], m[2]));
   }
   const mergeOf = new Map(); // "r,c" → 병합 영역 번호
   const merges = [];
@@ -260,6 +309,32 @@ export const normalizeTableBorders = (xml, styles) => {
     if (sideCount(row, col) >= 3) member.add(key);
   }
 
+  // 위아래가 선으로 닫히고 양 끝이 표 칸에 막힌 가로 줄 칸(병합 없이 이어 놓은 빈칸), 좌우가 닫히고 위아래 끝이 막힌 세로 칸도 표 칸
+  if (member.size) {
+    let minR = Infinity; let maxR = -Infinity; let minC = Infinity; let maxC = -Infinity;
+    for (const key of member) { const [row, col] = key.split(',').map(Number); minR = Math.min(minR, row); maxR = Math.max(maxR, row); minC = Math.min(minC, col); maxC = Math.max(maxC, col); }
+    const strips = [];
+    for (let row = minR; row <= maxR; row++) {
+      let col = minC;
+      while (col <= maxC) {
+        if (member.has(K(row, col)) || !(hLine(row, col) && hLine(row + 1, col))) { col += 1; continue; }
+        const start = col;
+        while (col <= maxC && !member.has(K(row, col)) && hLine(row, col) && hLine(row + 1, col)) col += 1;
+        if (member.has(K(row, start - 1)) && member.has(K(row, col))) for (let c = start; c < col; c++) strips.push(K(row, c));
+      }
+    }
+    for (let col = minC; col <= maxC; col++) {
+      let row = minR;
+      while (row <= maxR) {
+        if (member.has(K(row, col)) || !(vLine(row, col) && vLine(row, col + 1))) { row += 1; continue; }
+        const start = row;
+        while (row <= maxR && !member.has(K(row, col)) && vLine(row, col) && vLine(row, col + 1)) row += 1;
+        if (member.has(K(start - 1, col)) && member.has(K(row, col))) for (let r = start; r < row; r++) strips.push(K(r, col));
+      }
+    }
+    strips.forEach((key) => member.add(key));
+  }
+
   const DIRS = { left: [0, -1], right: [0, 1], top: [-1, 0], bottom: [1, 0] };
   const OPP = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
   const seen = new Set();
@@ -309,6 +384,39 @@ export const normalizeTableBorders = (xml, styles) => {
       if (innerV && innerH) break;
     }
     if (!innerV || !innerH) continue;
+    // 머리줄: 숫자·수식이 없고, 칸마다 채우기나 굵은 글씨가 있는 줄 (병합 칸은 왼쪽 위 칸으로 본다)
+    // 머리줄 바로 아래(첫 자료줄 위) 선은 강조선으로 굵게 둔다
+    const topLeft = (key) => {
+      if (!mergeOf.has(key)) return key;
+      const r = merges[mergeOf.get(key)];
+      return K(r.from.row, r.from.col);
+    };
+    const headerCache = new Map();
+    const isHeaderRow = (row) => {
+      if (headerCache.has(row)) return headerCache.get(row);
+      let any = false; let hasText = false; let ok = true;
+      for (let col = c0; col <= c1 && ok; col++) {
+        const key = K(row, col);
+        if (!member.has(key) || !comp.has(key)) continue;
+        any = true;
+        const head = topLeft(key);
+        const kind = kinds.get(head) || 'empty';
+        if (kind === 'number' || kind === 'formula') ok = false;
+        else if (!cells.has(head) || !(styles.isFilled(cells.get(head)) || styles.isBold(cells.get(head)))) ok = false;
+        if (kind === 'text') hasText = true;
+      }
+      const result = any && ok && hasText;
+      headerCache.set(row, result);
+      return result;
+    };
+    const headerEdges = new Set(); // 가로선 "r,c" = r행 위쪽 선
+    for (let row = r0; row < r1; row++) {
+      if (!isHeaderRow(row) || isHeaderRow(row + 1)) continue;
+      for (let col = c0; col <= c1; col++) {
+        const up = K(row, col); const down = K(row + 1, col);
+        if (comp.has(up) && comp.has(down) && !sameMerge(up, down) && hLine(row + 1, col)) headerEdges.add(down);
+      }
+    }
     for (const key of comp) {
       const [row, col] = key.split(',').map(Number);
       for (const [side, [dr, dc]] of Object.entries(DIRS)) {
@@ -316,7 +424,8 @@ export const normalizeTableBorders = (xml, styles) => {
         if (sameMerge(key, next)) continue; // 병합 칸 안쪽 변은 그려지지 않는다
         const line = side === 'left' ? vLine(row, col) : side === 'right' ? vLine(row, col + 1) : side === 'top' ? hLine(row, col) : hLine(row + 1, col);
         if (!line) continue;
-        const want = comp.has(next) ? 'thin' : 'medium';
+        const edgeKey = side === 'bottom' ? K(row + 1, col) : side === 'top' ? K(row, col) : null;
+        const want = !comp.has(next) || (edgeKey && headerEdges.has(edgeKey)) ? 'medium' : 'thin';
         setChange(key, side, want);
         // 표 밖 칸이 같은 선을 따로 가지고 있으면 그 칸도 같은 굵기로 (엑셀은 두 칸 중 굵은 쪽을 그린다)
         if (!comp.has(next) && cells.has(next)) setChange(next, OPP[side], want);
@@ -334,6 +443,122 @@ export const normalizeTableBorders = (xml, styles) => {
   });
 };
 
+// 간격 맞추기: 소제목(▶·◆) 앞, 표와 표 사이, 마지막 표와 양식번호 칸 사이의 빈 간격을 같게 하고,
+// 소제목 높이를 통일하며, 소제목과 그 아래 표 사이 빈 줄은 좁힌다. 줄을 지우지 않고 높이만 바꾼다
+// (계산식이 행 번호를 참조하므로). 그림이 걸친 줄은 건드리지 않는다
+const ensureRowHeight = (xml, row, ht) => {
+  const re = new RegExp(`<row\\b([^>]*?)\\br="${row}"([^>]*?)(/?)>`);
+  if (re.test(xml)) {
+    return xml.replace(re, (w, a, b, close) => {
+      const attrs = `${a}r="${row}"${b}`.replace(/\s*ht="[^"]*"/, '').replace(/\s*customHeight="[^"]*"/, '');
+      return `<row${attrs} ht="${ht}" customHeight="1"${close}>`;
+    });
+  }
+  const tag = `<row r="${row}" ht="${ht}" customHeight="1"/>`;
+  let placed = false;
+  const out = xml.replace(/<row\b[^>]*\br="(\d+)"/g, (w, n) => {
+    if (!placed && Number(n) > row) { placed = true; return `${tag}${w}`; }
+    return w;
+  });
+  if (placed) return out;
+  if (/<sheetData\s*\/>/.test(out)) return out.replace(/<sheetData\s*\/>/, `<sheetData>${tag}</sheetData>`);
+  return out.replace('</sheetData>', `${tag}</sheetData>`);
+};
+
+export const normalizeSectionSpacing = (xml, styles, { sharedStrings = [], drawingRows = new Set(), gap = 18, titleHeight = 21, afterTitle = 4, cols = null } = {}) => {
+  const inCols = (col) => !cols || (col >= cols.from && col <= cols.to);
+  const rows = new Map(); // row → { value, side, title, styles: [[ref, s]] }
+  const info = (row) => {
+    if (!rows.has(row)) rows.set(row, { value: false, side: false, title: false, cells: [] });
+    return rows.get(row);
+  };
+  for (const m of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const ref = parseRef(attr(m[1], 'r') || '');
+    if (!ref || !inCols(ref.col)) continue;
+    const row = info(ref.row);
+    const s = Number(attr(m[1], 's') || 0);
+    row.cells.push(s);
+    const inner = m[2] || '';
+    const kind = cellKind(m[1], inner);
+    if (kind !== 'empty') row.value = true;
+    let text = '';
+    if (attr(m[1], 't') === 's') { const v = /<v>(\d+)<\/v>/.exec(inner); text = v ? sharedStrings[Number(v[1])] || '' : ''; }
+    else if (attr(m[1], 't') === 'inlineStr') text = [...inner.matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((x) => decodeXml(x[1])).join('');
+    else if (kind === 'formula') { const f = /<f\b[^>]*>([^<]*)<\/f>/.exec(inner); text = f && /"▶/.test(decodeXml(f[1])) ? '▶' : ''; }
+    if (ref.col <= 3 && /^\s*[▶◆]/.test(text)) row.title = true;
+    const x = styles.sidesOf(s);
+    if (x.left || x.right) row.side = true;
+  }
+  // 병합 칸은 영역 전체가 내용 줄
+  for (const m of xml.matchAll(/<mergeCell\b[^>]*ref="([^"]+)"/g)) {
+    const r = parseRange(m[1]);
+    if (!r || r.from.row === r.to.row || !inCols(r.from.col)) continue;
+    const head = rows.get(r.from.row);
+    if (!head || !(head.value || head.side)) continue;
+    for (let row = r.from.row; row <= r.to.row; row++) { const x = info(row); x.value = x.value || head.value; x.side = x.side || head.side; }
+  }
+  const content = (row) => drawingRows.has(row) || (rows.has(row) && (rows.get(row).value || rows.get(row).side));
+  const isTable = (row) => rows.has(row) && rows.get(row).side;
+  const isTitle = (row) => rows.has(row) && rows.get(row).title;
+  const contentRows = [...new Set([...rows.keys(), ...drawingRows])].filter(content).sort((a, b) => a - b);
+  if (contentRows.length < 2) return xml;
+  const heights = new Map(); // row → ht
+  const bottomRows = new Set();
+  for (let i = 1; i < contentRows.length; i++) {
+    const prev = contentRows[i - 1]; const next = contentRows[i];
+    const blanks = [];
+    for (let row = prev + 1; row < next; row++) if (!drawingRows.has(row)) blanks.push(row);
+    if (blanks.length !== next - prev - 1) continue; // 그림이 걸친 구간은 그대로
+    if (isTitle(next) && !isTitle(prev)) {
+      if (blanks.length) blanks.forEach((row) => heights.set(row, Math.round((gap / blanks.length) * 100) / 100));
+      else { heights.set(next, titleHeight + gap); bottomRows.add(next); }
+    } else if (isTitle(prev) && !isTitle(next)) {
+      blanks.forEach((row) => heights.set(row, afterTitle));
+    } else if (isTable(prev) && isTable(next) && blanks.length) {
+      blanks.forEach((row) => heights.set(row, Math.round((gap / blanks.length) * 100) / 100));
+    }
+  }
+  for (const row of contentRows) if (isTitle(row) && !heights.has(row)) heights.set(row, titleHeight);
+  let out = xml;
+  for (const [row, ht] of [...heights].sort((a, b) => a[0] - b[0])) out = ensureRowHeight(out, row, ht);
+  if (bottomRows.size) {
+    out = out.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
+      const ref = parseRef(attr(attrs, 'r') || '');
+      if (!ref || !bottomRows.has(ref.row)) return whole;
+      const next = styles.withVertical(Number(attr(attrs, 's') || 0), 'bottom');
+      return `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${close}>`;
+    });
+  }
+  return out;
+};
+
+// 시트에 붙은 그림·도형이 걸친 줄 (1부터)
+const readDrawingRows = async (zip, sheetPath) => {
+  const rowsSet = new Set();
+  const dir = sheetPath.replace(/[^/]+$/, '');
+  const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
+  if (!relsFile) return rowsSet;
+  const rels = await relsFile.async('string');
+  for (const m of rels.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+    if (!/\/drawing"/.test(attr(m[1], 'Type') || '')) continue;
+    const target = attr(m[1], 'Target') || '';
+    const parts = (dir + target).split('/');
+    const stack = [];
+    for (const part of parts) { if (part === '..') stack.pop(); else if (part && part !== '.') stack.push(part); }
+    const file = zip.file(stack.join('/'));
+    if (!file) continue;
+    const drawing = await file.async('string');
+    for (const a of drawing.matchAll(/<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g)) {
+      const from = /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(a[0]);
+      const to = /<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(a[0]);
+      if (!from) continue;
+      const start = Number(from[1]) + 1; const end = to ? Number(to[1]) + 1 : start;
+      for (let row = start; row <= end; row++) rowsSet.add(row);
+    }
+  }
+  return rowsSet;
+};
+
 export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {}) {
   const read = async (path) => { const f = zip.file(path); return f ? f.async('string') : null; };
   const workbookXml = await read('xl/workbook.xml');
@@ -344,7 +569,21 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {})
   for (const m of relsXml.matchAll(/<Relationship\b([^>]*)\/?>/g)) rels[attr(m[1], 'Id')] = attr(m[1], 'Target');
   const styles = new StyleBook(stylesXml);
   styles.cleanAll();
+  const sharedXml = await read('xl/sharedStrings.xml');
+  const sharedStrings = sharedXml
+    ? [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1].matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((t) => decodeXml(t[1])).join(''))
+    : [];
+  // 시트별 인쇄 범위의 열 (간격은 인쇄되는 부분만 본다)
+  const printCols = new Map();
+  for (const m of workbookXml.matchAll(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g)) {
+    if (attr(m[1], 'name') !== '_xlnm.Print_Area' || attr(m[1], 'localSheetId') === null) continue;
+    const range = /!\$?([A-Z]{1,3})\$?\d+:\$?([A-Z]{1,3})\$?\d+/.exec(decodeXml(m[2]));
+    if (range) printCols.set(Number(attr(m[1], 'localSheetId')), { from: colToNum(range[1]), to: colToNum(range[2]) });
+  }
+  let sheetIndex = -1;
+  const printAreaUpdates = new Map(); // 시트 순서 → { name, range }
   for (const m of workbookXml.matchAll(/<sheet\b([^>]*)\/>/g)) {
+    sheetIndex += 1;
     const name = decodeXml(attr(m[1], 'name') || '');
     if (attr(m[1], 'state')) continue; // 숨긴 시트는 그대로
     const target = rels[attr(m[1], 'r:id')];
@@ -354,13 +593,30 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [] } = {})
     if (!xml) continue;
     xml = fitToPageWidth(xml, { onePage: onePageSheets === 'all' || onePageSheets.includes(name) });
     const rule = typeof rules === 'function' ? rules(name) : rules[name];
+    if (rule?.printArea) printAreaUpdates.set(sheetIndex, { name, range: rule.printArea });
     if (rule?.rowHeights) xml = setRowHeights(xml, rule.rowHeights);
     if (rule?.numberFormats) xml = setNumberFormats(xml, styles, rule.numberFormats);
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
     if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles);
+    if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
   zip.file('xl/styles.xml', styles.serialize());
+  // 인쇄 범위 바꾸기 (프로그램이 표를 넓혀 그린 시트)
+  if (printAreaUpdates.size) {
+    let wb = workbookXml;
+    for (const [index, { name, range }] of printAreaUpdates) {
+      const [a, b] = range.split(':');
+      const abs = (ref) => ref.replace(/^([A-Z]+)(\d+)$/, '$$$1$$$2');
+      const text = `'${name.replace(/'/g, "''")}'!${abs(a)}:${abs(b || a)}`.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const re = new RegExp(`<definedName\\b(?=[^>]*name="_xlnm\\.Print_Area")(?=[^>]*localSheetId="${index}")[^>]*>[^<]*</definedName>`);
+      const tag = `<definedName name="_xlnm.Print_Area" localSheetId="${index}">${text}</definedName>`;
+      if (re.test(wb)) wb = wb.replace(re, tag);
+      else if (/<definedNames\b[^>]*>/.test(wb)) wb = wb.replace(/<definedNames\b([^>]*)>/, `<definedNames$1>${tag}`);
+      else wb = wb.replace(/(<\/sheets>)/, `$1<definedNames>${tag}</definedNames>`);
+    }
+    zip.file('xl/workbook.xml', wb);
+  }
 }
 
 // 행 범위 [시작, 끝]을 같은 높이로
