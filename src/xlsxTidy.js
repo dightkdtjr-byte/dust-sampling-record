@@ -1277,7 +1277,10 @@ export async function readSheetCellText(zip, sheetPath, ref) {
 
 // ── 한 행의 칸(값·서식·가로 병합)을 다른 행으로 옮기고 원래 행은 숨긴다 ──
 // 예: 계산식의 꼬리말(■MAMO-QP-13-03)을 표준산소 환산 유량 묶음 아래로 옮겨, 그 묶음까지 한 장에 인쇄
-// 수식이 있는 행이나, 옮길 자리에 걸친 병합이 있으면 건드리지 않는다
+// 수식이 있는 행이나, 옮길 자리에 걸친 병합이 있으면 건드리지 않는다.
+// 옮길 자리(toRow)에 걸친 그림도 확인한다: 그 행 안에서 시작하는 그림은 다음 행 맨 위에서 시작하도록 내리고, 그만큼 다음 행을
+// 높여 그 아래 칸과의 간격은 그대로 둔다 (그대로 두면 엑셀에서 꼬리말 줄 위에 그림 윗부분이 겹쳐 인쇄된다).
+// 위에서 내려와 toRow에 걸치거나 toRow 안에서 끝나는 그림이 있으면 옮기지 않는다
 export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
   const file = zip.file(sheetPath);
   if (!file || fromRow === toRow) return false;
@@ -1285,6 +1288,30 @@ export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
   const rowRe = (r) => new RegExp(`<row\\b(?=[^>]*\\br="${r}")[^>]*?(?:/>|>[\\s\\S]*?</row>)`);
   const src = rowRe(fromRow).exec(xml);
   if (!src) return false;
+  const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+  const defaultHt = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
+  const heightOf = (text, r) => { const m = rowRe(r).exec(text); const ht = m ? attr(/^<row\b([^>]*?)\/?>/.exec(m[0])[1], 'ht') : null; return ht !== null ? Number(ht) : defaultHt; };
+  const oldTargetHt = heightOf(xml, toRow);
+  const anchorPos = (anchor, tag) => {
+    const m = new RegExp(`<xdr:${tag}>[\\s\\S]*?<xdr:row>(\\d+)</xdr:row>\\s*<xdr:rowOff>(\\d+)</xdr:rowOff>`).exec(anchor);
+    return m ? { row: Number(m[1]) + 1, off: Number(m[2]) } : null;
+  };
+  const drawings = [];
+  for (const path of await readSheetDrawingPaths(zip, sheetPath)) {
+    const drawingFile = zip.file(path);
+    if (drawingFile) drawings.push({ path, xml: await drawingFile.async('string') });
+  }
+  const ANCHOR_RE = /<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g;
+  for (const { xml: drawing } of drawings) {
+    for (const [anchor] of drawing.matchAll(ANCHOR_RE)) {
+      const from = anchorPos(anchor, 'from');
+      if (!from) continue;
+      const to = anchorPos(anchor, 'to');
+      const end = to ? (to.off > 0 ? to.row : to.row - 1) : from.row;
+      if (from.row < toRow && end >= toRow) return false;
+      if (from.row === toRow && end <= toRow) return false;
+    }
+  }
   const open = /^<row\b([^>]*?)\/?>/.exec(src[0]);
   const cells = src[0].endsWith('/>') && !src[0].includes('</row>') ? '' : src[0].replace(/^<row\b[^>]*>/, '').replace(/<\/row>$/, '');
   if (/<f\b/.test(cells)) return false;
@@ -1311,6 +1338,22 @@ export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
     });
   }
   xml = ensureRowHidden(xml, fromRow);
+  // toRow 안에서 시작하던 그림을 다음 행 맨 위로 내린다
+  const newTargetHt = heightOf(xml, toRow);
+  let grow = 0;
+  for (const drawing of drawings) {
+    const next = drawing.xml.replace(ANCHOR_RE, (anchor) => {
+      const from = anchorPos(anchor, 'from');
+      if (!from || from.row !== toRow) return anchor;
+      grow = Math.max(grow, oldTargetHt - from.off / 12700);
+      const shiftEmu = Math.round(newTargetHt * 12700 - from.off);
+      return anchor
+        .replace(/(<xdr:from>[\s\S]*?)<xdr:row>\d+<\/xdr:row>(\s*)<xdr:rowOff>\d+<\/xdr:rowOff>/, (w, head, gap) => `${head}<xdr:row>${toRow}</xdr:row>${gap}<xdr:rowOff>0</xdr:rowOff>`)
+        .replace(/(<xdr:spPr>[\s\S]*?<a:off\b[^>]*\by=")(\d+)(")/, (w, a, y, b) => `${a}${Number(y) + shiftEmu}${b}`);
+    });
+    if (next !== drawing.xml) zip.file(drawing.path, next);
+  }
+  if (grow > 0) xml = ensureRowHeight(xml, toRow + 1, Math.round((heightOf(xml, toRow + 1) + grow) * 100) / 100);
   zip.file(sheetPath, xml);
   return true;
 }

@@ -6429,8 +6429,10 @@ export default function App() {
       return newIndex;
     };
     // 같은 서식에서 가로 정렬만 가운데로 바꾼 서식 번호 (글꼴·테두리·바탕·표시 형식은 그대로)
-    const centeredStyle = (originalIndex) => {
-      const key = `center|${originalIndex}`;
+    const centeredStyle = (originalIndex) => alignedStyle(originalIndex, 'center');
+    // 같은 서식에서 가로 정렬만 바꾼 서식 번호 (center·right 등)
+    const alignedStyle = (originalIndex, horizontal) => {
+      const key = `${horizontal}|${originalIndex}`;
       if (xfCache.has(key)) return xfCache.get(key);
       const xfs = getChildElementsByLocalName(cellXfsNode, 'xf');
       const source = xfs[originalIndex] || xfs[0];
@@ -6442,7 +6444,7 @@ export default function App() {
         alignment.setAttribute('vertical', 'center');
         clone.insertBefore(alignment, clone.firstChild);
       }
-      alignment.setAttribute('horizontal', 'center');
+      alignment.setAttribute('horizontal', horizontal);
       alignment.removeAttribute('indent');
       clone.setAttribute('applyAlignment', '1');
       cellXfsNode.appendChild(clone);
@@ -6501,7 +6503,7 @@ export default function App() {
       xfCache.set(key, newIndex);
       return newIndex;
     };
-    return { styleFor, centeredStyle, bottomStyle, formatStyle, serialize: () => new XMLSerializer().serializeToString(doc) };
+    return { styleFor, centeredStyle, alignedStyle, bottomStyle, formatStyle, serialize: () => new XMLSerializer().serializeToString(doc) };
   };
 
   const applyMeterRowColors = (worksheet, rowColorList, styler) => {
@@ -6678,9 +6680,13 @@ export default function App() {
         }
       });
     }
-    // 가운데 정렬로 맞출 칸들 (예: 'A5:B7', 'C19'): 양식에서 주변 칸과 정렬이 어긋나 있던 곳
-    if (Array.isArray(options.centerCells) && options.centerCells.length > 0 && options.rowStyler?.centeredStyle) {
-      options.centerCells.forEach((range) => {
+    // 가운데(centerCells)·오른쪽(rightCells) 정렬로 맞출 칸들 (예: 'A5:B7', 'C19'): 양식에서 주변 칸과 정렬이 어긋나 있던 곳
+    const alignRanges = [
+      ...(Array.isArray(options.centerCells) ? options.centerCells.map((range) => ({ range, horizontal: 'center' })) : []),
+      ...(Array.isArray(options.rightCells) ? options.rightCells.map((range) => ({ range, horizontal: 'right' })) : []),
+    ];
+    if (alignRanges.length > 0 && options.rowStyler?.alignedStyle) {
+      alignRanges.forEach(({ range, horizontal }) => {
         const [fromRef, toRef] = String(range).split(':');
         const from = parseCellRef(fromRef);
         const to = parseCellRef(toRef || fromRef);
@@ -6692,7 +6698,7 @@ export default function App() {
             const cell = getChildElementsByLocalName(rowEl, 'c').find((el) => { const p = parseCellRef(el.getAttribute('r')); return p && p.col === c; });
             if (!cell) continue;
             const original = parseInt(cell.getAttribute('s') || '0', 10);
-            cell.setAttribute('s', String(options.rowStyler.centeredStyle(Number.isFinite(original) ? original : 0)));
+            cell.setAttribute('s', String(options.rowStyler.alignedStyle(Number.isFinite(original) ? original : 0, horizontal)));
           }
         }
       });
@@ -7173,6 +7179,9 @@ export default function App() {
       // 2) 가스분석기 O2·CO2가 없을 때: 양식은 평균(빈칸)·ROUND("")에서 #VALUE!/#DIV/0!가 나 밀도·유속·유량·노즐 계산 전체가
       //    오류가 된다 → 앱 화면과 같이 조성을 0%(나머지 N2)로 보고 계산한다. 연소가스자료의 평균 칸은 빈칸으로 둔다
       addUpdate('연소가스자료', 'B5', { formula: 'IF(COUNT(B8:B10)=0,"",ROUND(AVERAGE(B8:B10),2))' });
+      // C5:F5는 첫 측정값(8행)이 비면 나머지가 있어도 빈칸이 되어, 밀도 계산이 CO2 0%로 조용히 바뀌었다 → 값이 하나라도 있으면 평균.
+      // 양식에서는 C5를 주인으로 한 공유 수식 묶음이므로 네 칸을 모두 직접 써서 묶음이 깨지지 않게 한다
+      ['C', 'D', 'E', 'F'].forEach((col) => addUpdate('연소가스자료', `${col}5`, { formula: `IF(COUNT(${col}8:${col}10)=0,"",AVERAGE(${col}8:${col}10))` }));
       addUpdate('노즐산정', 'H8', { formula: '(0.32*N($A$15)+0.44*N($B$15)+0.28*(100-N($A$15)-N($B$15)))' });
       addUpdate('노즐산정', 'D26', { formula: 'IFERROR(AVERAGE(연소가스자료!B8:B10),0)' });
       addUpdate('노즐산정', 'D27', { formula: 'IFERROR(AVERAGE(연소가스자료!C8:C10),0)' });
@@ -7242,6 +7251,8 @@ export default function App() {
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
+                // 결과보고서의 산소 농도 칸: 값이 없으면 '-'(글자)가 왼쪽에 붙으므로, 숫자처럼 단위 '(%)' 옆에 오게 오른쪽 정렬
+                rightCells: sheetName === '먼지측정결과보고서' ? ['C10', 'G10'] : [],
                 ...(sheetName === '노즐산정' ? { numberFormats: [{ range: `J15:J${16 + Math.max(5, sourcePoints.length)}`, code: '0.0' }, { range: 'A34:A34', code: '0.000' }] } : {}),
               }
         );
