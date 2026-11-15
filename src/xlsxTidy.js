@@ -1185,3 +1185,187 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
 
 // 행 범위 [시작, 끝]을 같은 높이로
 export const rowsAt = (from, to, ht) => Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [from + i, ht]));
+
+// ── 시트에 딸린 그림(drawing) 파일 경로들 ──
+const resolveRelTarget = (dir, target) => {
+  const stack = [];
+  for (const part of (dir + target).split('/')) { if (part === '..') stack.pop(); else if (part && part !== '.') stack.push(part); }
+  return stack.join('/');
+};
+const readSheetDrawingPaths = async (zip, sheetPath) => {
+  const dir = sheetPath.replace(/[^/]+$/, '');
+  const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
+  if (!relsFile) return [];
+  const rels = await relsFile.async('string');
+  const out = [];
+  for (const m of rels.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+    if (/\/drawing$/.test(attr(m[1], 'Type') || '')) out.push(resolveRelTarget(dir, attr(m[1], 'Target') || ''));
+  }
+  return out;
+};
+const readSharedStringList = async (zip) => {
+  const file = zip.file('xl/sharedStrings.xml');
+  if (!file) return [];
+  const xml = await file.async('string');
+  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1].matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((t) => decodeXml(t[1])).join(''));
+};
+// 칸 하나의 글자 (공유 문자열·인라인 문자열·수식 결과 글자)
+const cellTextOf = (xml, ref, sharedStrings) => {
+  const m = new RegExp(`<c\\b(?=[^>]*\\br="${ref}")([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`).exec(xml);
+  if (!m || !m[2]) return '';
+  const t = attr(m[1], 't');
+  if (t === 's') { const v = /<v>([^<]*)<\/v>/.exec(m[2]); return v ? String(sharedStrings[Number(v[1])] ?? '') : ''; }
+  if (t === 'inlineStr') return [...m[2].matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((x) => decodeXml(x[1])).join('');
+  if (t === 'str') { const v = /<v>([^<]*)<\/v>/.exec(m[2]); return v ? decodeXml(v[1]) : ''; }
+  return '';
+};
+const ensureRowHidden = (xml, row) => {
+  const re = new RegExp(`<row\\b([^>]*?)\\br="${row}"([^>]*?)(/?)>`);
+  if (re.test(xml)) {
+    return xml.replace(re, (w, a, b, close) => `<row${`${a}r="${row}"${b}`.replace(/\s*\bhidden="[^"]*"/, '')} hidden="1"${close}>`);
+  }
+  const tag = `<row r="${row}" hidden="1"/>`;
+  let placed = false;
+  const out = xml.replace(/<row\b[^>]*\br="(\d+)"/g, (w, n) => {
+    if (!placed && Number(n) > row) { placed = true; return `${tag}${w}`; }
+    return w;
+  });
+  if (placed) return out;
+  if (/<sheetData\s*\/>/.test(out)) return out.replace(/<sheetData\s*\/>/, () => `<sheetData>${tag}</sheetData>`);
+  return out.replace('</sheetData>', () => `${tag}</sheetData>`);
+};
+
+// ── 해당 없는 계산 묶음 숨기기 (예: 표준산소농도가 없을 때의 '표준산소 환산 배출가스 유량') ──
+// blocks: [[첫 행, 끝 행], ...]. titleIncludes가 있으면 첫 행에 그 글자가 있는 묶음만 숨긴다 (양식이 바뀌어 엉뚱한 줄을 숨기지 않게)
+// 숨긴 행 안에만 걸친 그림·도형은 지운다: '셀과 함께 이동만' 하는 그림은 행을 숨겨도 그대로 보여 다른 칸 위에 떠 버리므로
+export async function hideRowBlocks(zip, sheetPath, blocks, { titleIncludes = '', titleCols = ['A', 'B', 'C'] } = {}) {
+  const file = zip.file(sheetPath);
+  if (!file || !Array.isArray(blocks) || blocks.length === 0) return [];
+  let xml = await file.async('string');
+  const sharedStrings = titleIncludes ? await readSharedStringList(zip) : [];
+  const chosen = blocks.filter(([from, to]) => Number.isFinite(from) && Number.isFinite(to) && to >= from
+    && (!titleIncludes || titleCols.some((col) => cellTextOf(xml, `${col}${from}`, sharedStrings).includes(titleIncludes))));
+  if (chosen.length === 0) return [];
+  const isHidden = (row) => chosen.some(([from, to]) => row >= from && row <= to);
+  for (const [from, to] of chosen) for (let row = from; row <= to; row++) xml = ensureRowHidden(xml, row);
+  zip.file(sheetPath, xml);
+  for (const path of await readSheetDrawingPaths(zip, sheetPath)) {
+    const drawingFile = zip.file(path);
+    if (!drawingFile) continue;
+    const drawing = await drawingFile.async('string');
+    const next = drawing.replace(/<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g, (anchor) => {
+      const from = /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(anchor);
+      if (!from) return anchor;
+      const to = /<xdr:to>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>\s*<xdr:rowOff>(\d+)<\/xdr:rowOff>/.exec(anchor);
+      const start = Number(from[1]) + 1;
+      // 끝 칸의 위쪽 경계(rowOff 0)에서 끝나는 그림은 그 행을 차지하지 않는다
+      const end = to ? Math.max(start, Number(to[1]) + (Number(to[2]) > 0 ? 1 : 0)) : start;
+      for (let row = start; row <= end; row++) if (!isHidden(row)) return anchor;
+      return '';
+    });
+    if (next !== drawing) zip.file(path, next);
+  }
+  return chosen;
+}
+
+// 칸 하나의 글자 읽기 (양식 확인용: 예상한 제목·꼬리말이 그 자리에 있을 때만 고친다)
+export async function readSheetCellText(zip, sheetPath, ref) {
+  const file = zip.file(sheetPath);
+  if (!file) return '';
+  return cellTextOf(await file.async('string'), ref, await readSharedStringList(zip));
+}
+
+// ── 한 행의 칸(값·서식·가로 병합)을 다른 행으로 옮기고 원래 행은 숨긴다 ──
+// 예: 계산식의 꼬리말(■MAMO-QP-13-03)을 표준산소 환산 유량 묶음 아래로 옮겨, 그 묶음까지 한 장에 인쇄
+// 수식이 있는 행이나, 옮길 자리에 걸친 병합이 있으면 건드리지 않는다
+export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
+  const file = zip.file(sheetPath);
+  if (!file || fromRow === toRow) return false;
+  let xml = await file.async('string');
+  const rowRe = (r) => new RegExp(`<row\\b(?=[^>]*\\br="${r}")[^>]*?(?:/>|>[\\s\\S]*?</row>)`);
+  const src = rowRe(fromRow).exec(xml);
+  if (!src) return false;
+  const open = /^<row\b([^>]*?)\/?>/.exec(src[0]);
+  const cells = src[0].endsWith('/>') && !src[0].includes('</row>') ? '' : src[0].replace(/^<row\b[^>]*>/, '').replace(/<\/row>$/, '');
+  if (/<f\b/.test(cells)) return false;
+  const merges = [...xml.matchAll(/<mergeCell\b[^>]*\bref="([A-Z]+)(\d+):([A-Z]+)(\d+)"[^>]*\/>/g)];
+  if (merges.some((m) => Number(m[2]) <= toRow && Number(m[4]) >= toRow)) return false;
+  const moved = cells.replace(/(<c\b[^>]*?\br=")([A-Z]+)\d+(")/g, (w, a, col, b) => `${a}${col}${toRow}${b}`);
+  const attrs = open[1].replace(/\s*\br="\d+"/, '').replace(/\s*\bhidden="[^"]*"/, '');
+  const newRow = `<row r="${toRow}"${attrs}>${moved}</row>`;
+  if (rowRe(toRow).test(xml)) {
+    xml = xml.replace(rowRe(toRow), () => newRow);
+  } else {
+    let placed = false;
+    xml = xml.replace(/<row\b[^>]*\br="(\d+)"/g, (w, n) => {
+      if (!placed && Number(n) > toRow) { placed = true; return `${newRow}${w}`; }
+      return w;
+    });
+    if (!placed) xml = xml.replace('</sheetData>', () => `${newRow}</sheetData>`);
+  }
+  const added = merges.filter((m) => Number(m[2]) === fromRow && Number(m[4]) === fromRow).map((m) => `<mergeCell ref="${m[1]}${toRow}:${m[3]}${toRow}"/>`);
+  if (added.length) {
+    xml = xml.replace(/<mergeCells\b([^>]*)>([\s\S]*?)<\/mergeCells>/, (w, a, body) => {
+      const nextBody = body + added.join('');
+      return `<mergeCells${a.replace(/\s*\bcount="\d+"/, '')} count="${(nextBody.match(/<mergeCell\b/g) || []).length}">${nextBody}</mergeCells>`;
+    });
+  }
+  xml = ensureRowHidden(xml, fromRow);
+  zip.file(sheetPath, xml);
+  return true;
+}
+
+// ── 그림을 인쇄 폭(firstCol~lastCol) 가로 가운데로 (표지 로고) ──
+// 크기는 그대로 두고 위치만 옮긴다. 열 폭은 양식을 만든 엑셀의 기준(맑은 고딕 11pt, 숫자 폭 9px, 기본 열 80px)으로 잰다:
+// 양식에 저장된 로고 위치(a:off)가 이 기준으로 'B열 + 여백'과 정확히 맞는다
+export async function centerSheetPictures(zip, sheetPath, { firstCol = 1, lastCol = 8, mdw = 9, defaultWidth = 8.88671875 } = {}) {
+  const file = zip.file(sheetPath);
+  if (!file || lastCol < firstCol) return 0;
+  const xml = await file.async('string');
+  const pxOf = (w) => Math.trunc(((256 * w + Math.trunc(128 / mdw)) / 256) * mdw);
+  const colsBody = /<cols>([\s\S]*?)<\/cols>/.exec(xml);
+  const colEls = colsBody ? [...colsBody[1].matchAll(/<col\b([^>]*?)\/>/g)].map((m) => ({ attrs: m[1], min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')) })) : [];
+  const colPx = (col) => {
+    const c = colEls.find((x) => col >= x.min && col <= x.max);
+    return pxOf(c && attr(c.attrs, 'width') !== null ? Number(attr(c.attrs, 'width')) : defaultWidth);
+  };
+  const EMU = 9525;
+  const leftOf = (col0) => { let x = 0; for (let c = 1; c <= col0; c++) x += colPx(c) * EMU; return x; }; // col0: 0부터 센 열 번호
+  const toAnchor = (x) => {
+    let col0 = 0; let rest = Math.max(0, x);
+    while (col0 < 16383 && rest >= colPx(col0 + 1) * EMU) { rest -= colPx(col0 + 1) * EMU; col0 += 1; }
+    return { col0, off: Math.round(rest) };
+  };
+  const spanLeft = leftOf(firstCol - 1);
+  const spanRight = leftOf(lastCol);
+  let count = 0;
+  for (const path of await readSheetDrawingPaths(zip, sheetPath)) {
+    const drawingFile = zip.file(path);
+    if (!drawingFile) continue;
+    const drawing = await drawingFile.async('string');
+    const next = drawing.replace(/<xdr:(twoCellAnchor|oneCellAnchor)\b([^>]*)>([\s\S]*?)<\/xdr:\1>/g, (whole, kind, attrs, body) => {
+      const read = (tag) => {
+        const m = new RegExp(`<xdr:${tag}>[\\s\\S]*?<xdr:col>(\\d+)</xdr:col>\\s*<xdr:colOff>(-?\\d+)</xdr:colOff>`).exec(body);
+        return m ? leftOf(Number(m[1])) + Number(m[2]) : null;
+      };
+      const from = read('from');
+      if (from === null) return whole;
+      const to = kind === 'twoCellAnchor' ? read('to') : null;
+      const ext = /<xdr:spPr>[\s\S]*?<a:ext\b[^>]*\bcx="(\d+)"/.exec(body);
+      const width = ext ? Number(ext[1]) : (to !== null ? to - from : 0);
+      if (!(width > 0) || width >= spanRight - spanLeft) return whole;
+      const left = Math.round(spanLeft + (spanRight - spanLeft - width) / 2);
+      const put = (text, tag, x) => text.replace(new RegExp(`(<xdr:${tag}>[\\s\\S]*?)<xdr:col>\\d+</xdr:col>(\\s*)<xdr:colOff>-?\\d+</xdr:colOff>`), (w, head, gap) => {
+        const a = toAnchor(x);
+        return `${head}<xdr:col>${a.col0}</xdr:col>${gap}<xdr:colOff>${a.off}</xdr:colOff>`;
+      });
+      let nextBody = put(body, 'from', left);
+      if (to !== null) nextBody = put(nextBody, 'to', left + width);
+      nextBody = nextBody.replace(/(<xdr:spPr>[\s\S]*?<a:off\b[^>]*\bx=")(\d+)(")/, (w, a, x, b) => `${a}${left}${b}`);
+      count += 1;
+      return `<xdr:${kind}${attrs}>${nextBody}</xdr:${kind}>`;
+    });
+    if (next !== drawing) zip.file(path, next);
+  }
+  return count;
+}

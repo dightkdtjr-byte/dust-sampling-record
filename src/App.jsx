@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures } from './xlsxTidy.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
@@ -71,12 +71,16 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
 ];
 
 // 기록부 종류별 엑셀 양식 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
+// o2: 계산식 시트의 표준산소 환산 칸 — 유량 Q(이름 Q가 가리키는 칸 포함), 농도 DC, '표준산소 환산 배출가스 유량' 묶음의 행 범위
+// footer: 표준산소가 있으면 꼬리말 줄(83행)을 묶음 아래(92행)로 옮겨 그 묶음까지 인쇄한다 (먼지·중금속·수은·PAHs 양식은 묶음이 인쇄 범위 밖에 있었다)
+const O2_CALC_CELLS_A = { qCells: ['M85'], dcCell: 'M107', flowBlocks: [[84, 91]], footer: { from: 83, to: 92 } };
 const EXPORT_TEMPLATE_LAYOUTS = {
-  dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지', leak: { firstRow: 14, hasMeter: true } },
-  metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속', leak: { firstRow: 14, hasMeter: true } },
-  mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은', leak: { firstRow: 14, hasMeter: true } },
-  pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true } },
-  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, hideSheets: ['누출시험'] }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
+  dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
+  metal: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '금속', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
+  mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
+  pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
+  // 유량 양식은 인쇄되는 83~90행과 인쇄 범위 밖 92~99행(이름 Q가 가리키는 M93)에 같은 묶음이 두 번 있다
+  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, hideSheets: ['누출시험'], o2: { qCells: ['M84', 'M93'], dcCell: 'M115', flowBlocks: [[83, 90], [92, 99]] } }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
 };
 // 양식에서 주변 칸은 가운데 정렬인데 혼자 왼쪽·오른쪽으로 붙어 있던 표 칸들. 내보낼 때 가운데로 맞춘다
 const EXPORT_CENTER_CELLS = (layout) => ({
@@ -1375,6 +1379,17 @@ const STORAGE_KEYS = {
   samplingLogDraftPrefix: 'dust-sampling.samplinglog-draft.v1.',
   sheetContext: 'dust-sampling.sheet-context.v1',
   pendingReport: 'dust-sampling.pending-report.v1',
+  samplingLogOpen: 'dust-sampling.samplinglog-open.v1',
+};
+
+// 통합시료채취기록부 창이 지금 열려 있는지 (그 창이 몇 초마다 남기는 표시로 판단)
+const isSamplingLogWindowOpen = () => {
+  try {
+    const current = JSON.parse(localStorage.getItem(STORAGE_KEYS.samplingLogOpen) || 'null');
+    return Boolean(current && Number.isFinite(current.at) && Date.now() - current.at < 12000);
+  } catch {
+    return false;
+  }
 };
 
 // 통합 시료채취기록부를 별도 창(window.open)으로 띄웠을 때 true (#sheet=samplinglog&popup=1)
@@ -2988,6 +3003,8 @@ export default function App() {
       return;
     }
     sheetWindowsRef.current[sheetId] = popup;
+    // 다른 창이 먼저 열어 둔 같은 이름의 창이면 그 창을 다시 쓰므로 앞으로 가져온다
+    try { popup.focus(); } catch (error) { console.error(error); }
   };
   // 이미 열린 기록부 창에 불러오기를 보내면 주소(#...&load=)만 바뀌므로, 주소 변경도 감지한다
   const [hashLoadTick, setHashLoadTick] = useState(0);
@@ -4651,6 +4668,13 @@ export default function App() {
     const targetSheet = resolveReportSheetId(report);
     // 메뉴(메인) 창에서는 해당 기록부 창을 열어 거기서 불러온다
     if (!IS_POPUP_WINDOW && !selectedSheet) {
+      openSheetWindow(targetSheet, report);
+      return;
+    }
+    // 기록부 창에서 다른 종류의 저장본(예: 먼지 기록부 창에서 통합시료채취기록부)을 고르면, 지금 창을 그 기록부로 바꾸지 않고
+    // 그 종류의 창(이미 열려 있으면 그 창)에서 연다. 바꿔 버리면 적던 기록부가 사라지고, 같은 종류의 창이 둘이 되어
+    // 통합시료채취기록부 임시본을 서로 덮어썼다
+    if (selectedSheet && targetSheet !== selectedSheet) {
       openSheetWindow(targetSheet, report);
       return;
     }
@@ -6860,7 +6884,7 @@ export default function App() {
 
       const hasO2 = sourceGasAnalyzer.some((g) => Number.isFinite(parseFloat(g?.o2)));
       if (!hasO2) {
-        alert('연소가스(가스분석기) O2 값이 없습니다. 양식의 노즐산정·기록지 계산은 O2/CO2 값이 있어야 하며, 없으면 Excel에서 #VALUE!/#DIV/0!로 표시됩니다. 추출은 계속 진행합니다.');
+        alert('연소가스(가스분석기) O2 값이 없습니다. 엑셀의 배출가스 밀도·유속·유량은 앱 화면과 같이 가스 조성을 0%(나머지 질소)로 보고 계산합니다. 추출은 계속 진행합니다.');
       }
       const exportSheetId = (sourceReport && typeof sourceReport === 'object')
         ? resolveReportSheetId(sourceReport)
@@ -7133,9 +7157,26 @@ export default function App() {
         addUpdate(recordSheet, `P${row}`, rowSp !== null ? rowSp : (Number.isFinite(avgSp) ? avgSp : null));
       });
       // ── 양식 자체의 수식 오류 보정 ──
-      // 1) 표준산소 환산 농도(계산식 DC): 양식에는 설명과 달리 (21-4)/(21-5)로 숫자가 박혀 있어
-      //    입력한 표준산소(Os)·실측산소(Oa)와 무관한 값이 나온다 → Os·Oa를 쓰도록 바꾼다 (표준산소가 없으면 보정 제외)
-      addUpdate('계산식', exportSheetId === 'flow' ? 'M115' : 'M107', { formula: 'IF(Os="",Ca,Ca*((21-Os)/(21-Oa)))' });
+      // 1) 표준산소 환산: 표준산소농도(Os)가 있으면 보정하고, 없으면 보정하지 않는다 (실측 산소 Oa가 없으면 계산할 수 없어 빈칸)
+      //    - 농도 DC: 양식에는 설명과 달리 (21-4)/(21-5)로 숫자가 박혀 있어 Os·Oa와 무관한 값이 나왔다
+      //    - 유량 Q = Qa ÷ (21-Os)/(21-Oa): 양식은 Os가 비면 0%로 보고 계산해 표준산소가 없는데도 유량이 줄어들었다
+      const o2Cells = layout.o2 || O2_CALC_CELLS_A;
+      addUpdate('계산식', o2Cells.dcCell, { formula: 'IF(Os="",Ca,IF(Oa="","",Ca*((21-Os)/(21-Oa))))' });
+      o2Cells.qCells.forEach((ref) => addUpdate('계산식', ref, { formula: 'IF(Os="",Qa,IF(Oa="","",Qa/((21-Os)/(21-Oa))))' }));
+      if (sheetPathMap.has('먼지측정결과보고서')) {
+        // 결과보고서: 표준산소가 없으면 '보정 제외'로 적고 표준산소농도는 '-' (빈 칸을 가리키면 엑셀은 0으로 보여 준다)
+        addUpdate('먼지측정결과보고서', 'C10', { formula: 'IF(Oa="","-",Oa)' });
+        addUpdate('먼지측정결과보고서', 'G10', { formula: 'IF(Os="","-",Os)' });
+        addUpdate('먼지측정결과보고서', 'E12', { formula: 'IF(Os="","바.먼지농도(보정 제외) :","바.표준산소환산먼지농도 :")' });
+        addUpdate('먼지측정결과보고서', 'A13', { formula: 'IF(Os="","사. 측정유량(표준산소 보정 제외) :","사. 표준산소환산 측정유량 :")' });
+      }
+      // 2) 가스분석기 O2·CO2가 없을 때: 양식은 평균(빈칸)·ROUND("")에서 #VALUE!/#DIV/0!가 나 밀도·유속·유량·노즐 계산 전체가
+      //    오류가 된다 → 앱 화면과 같이 조성을 0%(나머지 N2)로 보고 계산한다. 연소가스자료의 평균 칸은 빈칸으로 둔다
+      addUpdate('연소가스자료', 'B5', { formula: 'IF(COUNT(B8:B10)=0,"",ROUND(AVERAGE(B8:B10),2))' });
+      addUpdate('노즐산정', 'H8', { formula: '(0.32*N($A$15)+0.44*N($B$15)+0.28*(100-N($A$15)-N($B$15)))' });
+      addUpdate('노즐산정', 'D26', { formula: 'IFERROR(AVERAGE(연소가스자료!B8:B10),0)' });
+      addUpdate('노즐산정', 'D27', { formula: 'IFERROR(AVERAGE(연소가스자료!C8:C10),0)' });
+      addUpdate('노즐산정', 'D28', { formula: 'IFERROR(AVERAGE(연소가스자료!D8:D10)/1000,0)' });
       // 2) 여과지 홀더 온도(J열)는 입력 칸이 없어 평균이 #DIV/0!로 찍힌다 → 값이 없으면 빈칸
       {
         const firstRow = layout.meterStartRow;
@@ -7209,6 +7250,32 @@ export default function App() {
 
       if (rowStyler) zip.file('xl/styles.xml', rowStyler.serialize());
 
+      // 계산식의 '표준산소 환산 배출가스 유량' 묶음: 표준산소농도가 있을 때만 인쇄되게 한다 (모든 기록부 같은 방식)
+      //  - 없으면 해당이 없으므로 묶음을 숨긴다 → 계산식은 보정 없는 배출가스 유량 Qa까지만 (값은 위 수식이 Q = Qa로 계산)
+      //  - 있으면 먼지·중금속·수은·PAHs 양식은 묶음이 꼬리말 아래(인쇄 범위 밖)에 있으므로, 꼬리말을 묶음 아래로 옮기고
+      //    인쇄 범위를 늘려 유량 양식처럼 Qa 다음에 표준산소 환산 유량까지 한 장에 나오게 한다
+      let o2CalcPrintEndRow = null;
+      if (sheetPathMap.has('계산식')) {
+        const o2Layout = layout.o2 || O2_CALC_CELLS_A;
+        const calcPath = sheetPathMap.get('계산식');
+        const O2_FLOW_TITLE = '표준산소 환산 배출가스 유량';
+        try {
+          if (!String(sourceData.standardO2 ?? '').trim()) {
+            await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks, { titleIncludes: O2_FLOW_TITLE });
+          } else if (o2Layout.footer) {
+            const [blockFrom, blockTo] = o2Layout.flowBlocks[0];
+            const footerText = await readSheetCellText(zip, calcPath, `A${o2Layout.footer.from}`);
+            const titleText = await readSheetCellText(zip, calcPath, `A${blockFrom}`);
+            if (footerText.trim().startsWith('■') && titleText.includes(O2_FLOW_TITLE) && o2Layout.footer.to === blockTo + 1
+              && await moveRowCells(zip, calcPath, o2Layout.footer.from, o2Layout.footer.to)) {
+              o2CalcPrintEndRow = o2Layout.footer.to;
+            }
+          }
+        } catch (error) { console.error('표준산소 환산 유량 묶음 처리 실패:', error); }
+      }
+      // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
+      try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
+
       // 기록지 행 수가 바뀐 경우, 갱신되지 않은 다른 시트(계산식 등)의 기록지 참조도 함께 보정
       if (meterExtraRows !== 0) {
         for (const [sheetName, sheetPath] of sheetPathMap.entries()) {
@@ -7240,6 +7307,13 @@ export default function App() {
               return rowNum > layout.meterTemplateEndRow ? `${colPart}${Math.max(layout.meterStartRow, rowNum + meterExtraRows)}` : m;
             });
             return `${open}${nextBody}${close}`;
+          });
+        }
+        // 표준산소 환산 유량 묶음까지 인쇄할 때는 계산식 인쇄 범위의 끝 행을 옮긴 꼬리말 줄까지 늘린다
+        if (o2CalcPrintEndRow) {
+          wbXml = wbXml.replace(/(<definedName\b[^>]*name="_xlnm\.Print_Area"[^>]*>)([^<]*)(<\/definedName>)/g, (full, open, body, close) => {
+            if (!/^'?계산식'?!/.test(body)) return full;
+            return `${open}${body.replace(/(:\$?[A-Z]{1,3}\$?)(\d+)$/, (m, head) => `${head}${o2CalcPrintEndRow}`)}${close}`;
           });
         }
         // 이 기록부에 해당 없는 시트(유량의 누출시험)는 숨긴다
@@ -7351,6 +7425,24 @@ export default function App() {
   // 통합시료채취기록부 Yd는 통합시료채취기록부 창에서만 맞춘다 (여러 창이 임시본을 동시에 쓰면 서로 덮어쓰므로).
   // 직접 고친 칸(…YdManual)이 아니면 고른 샘플러 프리셋의 Yd를 늘 따라간다.
   const isSamplingLogWindow = selectedSheet === 'samplinglog';
+  // 통합시료채취기록부 창이 열려 있다는 표시를 몇 초마다 남긴다: 다른 창에서 기록부를 저장하면 열린 이 창에만 바로 반영한다
+  useEffect(() => {
+    if (!isSamplingLogWindow) return undefined;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const beat = () => {
+      try { localStorage.setItem(STORAGE_KEYS.samplingLogOpen, JSON.stringify({ id, at: Date.now() })); } catch (error) { console.error(error); }
+    };
+    const stop = () => {
+      try {
+        const current = JSON.parse(localStorage.getItem(STORAGE_KEYS.samplingLogOpen) || 'null');
+        if (current && current.id === id) localStorage.removeItem(STORAGE_KEYS.samplingLogOpen);
+      } catch (error) { console.error(error); }
+    };
+    beat();
+    const timer = window.setInterval(beat, 4000);
+    window.addEventListener('pagehide', stop);
+    return () => { window.clearInterval(timer); window.removeEventListener('pagehide', stop); stop(); };
+  }, [isSamplingLogWindow]);
   useEffect(() => {
     if (!isSamplingLogWindow) return;
     setSamplingLogData((log) => {
@@ -7470,6 +7562,9 @@ export default function App() {
   const syncSamplingLogFromSavedReport = (report) => {
     const sheetId = resolveReportSheetId(report);
     if (!LOG_SOURCE_SHEETS.includes(sheetId)) return false;
+    // 통합시료채취기록부 창이 열려 있을 때만 그 창에 바로 반영한다. 닫혀 있으면 다음에 열 때 빈 기록부로 시작하므로
+    // 반영해도 남지 않는다 (그때는 통합시료채취기록부의 '저장된 기록부에서 가져오기'로 날짜별 일차에 옮긴다)
+    if (!isSamplingLogWindowOpen()) return false;
     const company = String(report?.company || '').trim();
     const location = String(report?.location || '').trim();
     const logCompany = String(samplingLogData.company || '').trim();
@@ -8925,11 +9020,34 @@ export default function App() {
           {(() => {
             const groups = groupSheetReportsForLog(activeUserReports, resolveReportSheetId);
             if (groups.length === 0) return null;
+            const SHEET_SHORT = { dust: '먼지', metal: '중금속', mercury: '수은', pahs: 'PAHs', flow: '유량' };
+            // 옮길 때 들어갈 일차 미리보기: 옮기기(applySheetGroupToSamplingLog)와 같은 순서로 일차를 배정해 본다
+            // (이미 같은 날짜의 일차가 있으면 그 칸, 없으면 빈 일차에 날짜를 채움)
+            const previewDays = (group) => {
+              const days = (samplingLogData.days || []).map((d) => String(d?.date || ''));
+              const assign = (date) => {
+                if (!date) return 0;
+                let idx = days.indexOf(date);
+                if (idx < 0) { idx = days.indexOf(''); if (idx >= 0) days[idx] = date; }
+                return idx;
+              };
+              (group.dates || [group.date]).filter(Boolean).forEach((d) => assign(d));
+              const byDay = new Map();
+              LOG_SOURCE_SHEETS.forEach((sheetId) => {
+                const report = group.bySheet[sheetId];
+                if (!report) return;
+                const date = String(report?.date || '').trim();
+                const day = assign(date);
+                const key = `${day}|${date}`;
+                if (!byDay.has(key)) byDay.set(key, { day, date, names: [] });
+                byDay.get(key).names.push(SHEET_SHORT[sheetId] || sheetId);
+              });
+              return [...byDay.values()].sort((a, b) => (a.day < 0 ? 99 : a.day) - (b.day < 0 ? 99 : b.day) || a.date.localeCompare(b.date));
+            };
             return (
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택, 3일 이내 날짜끼리 한 묶음</span></h3>
-                  
+                  <h3 className="text-sm font-bold text-slate-800">저장된 기록부에서 가져오기 <span className="text-xs font-normal text-slate-500">같은 사업장·스택, 3일 이내 날짜끼리 한 묶음 · 날짜가 다른 기록부는 그 날짜의 일차로 들어갑니다 (예: 1일차 먼지, 2일차 수은)</span></h3>
                 </div>
                 <div className="overflow-x-auto border border-slate-200 rounded-lg">
                   <table className="w-full text-xs text-left">
@@ -8951,9 +9069,17 @@ export default function App() {
                           <td className="p-2">
                             {LOG_SOURCE_SHEETS.map((sheetId) => (
                               <span key={sheetId} className={`inline-block mr-1 px-1.5 py-0.5 rounded border text-[10px] font-bold ${group.bySheet[sheetId] ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-slate-200 text-slate-300'}`}>
-                                {{ dust: '먼지', metal: '중금속', mercury: '수은', pahs: 'PAHs', flow: '유량' }[sheetId]}
+                                {SHEET_SHORT[sheetId]}
                               </span>
                             ))}
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+                              {previewDays(group).map((item) => (
+                                <span key={`${item.day}|${item.date}`} className="whitespace-nowrap">
+                                  <span className={`font-bold ${item.day < 0 ? 'text-red-600' : 'text-slate-800'}`}>{item.day < 0 ? '일차 칸 부족' : `${item.day + 1}일차`}</span>
+                                  {item.date ? ` (${item.date.slice(5)})` : ''} {item.names.join('·')}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                           <td className="p-2 text-right">
                             <button type="button" onClick={() => applySheetGroupToSamplingLog(group)} className="px-2.5 py-1 text-[11px] font-bold rounded bg-orange-600 text-white border border-orange-700 hover:bg-orange-700">통합시료채취기록부에 옮기기</button>
@@ -9131,7 +9257,8 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
+          {/* 저장·새 기록지 버튼 줄: 화면 아래에 붙어 스크롤해도 따라온다 */}
+          <div className="ds-actionbar flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={resetSamplingLogForm} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
             </button>
@@ -10783,7 +10910,8 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
+          {/* 저장·새 기록지 버튼 줄: 화면 아래에 붙어 스크롤해도 따라온다 */}
+          <div className="ds-actionbar flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={startNewRecord} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
             </button>

@@ -1064,3 +1064,21 @@ body.fill-dragging, body.fill-dragging * { cursor: crosshair !important; user-se
 .weather-picker-item:hover, .weather-picker-item:focus { background: #f1f5f9; outline: none; }
 .weather-picker-title { font-weight: 600; color: #0f172a; }
 .weather-picker-address { font-size: 11px; color: #64748b; }
+
+/* ── 저장·새 기록지 버튼 줄: 화면 아래에 붙어 스크롤해도 따라온다 (기록지 끝에 오면 제자리) ── */
+.ds-actionbar { position: sticky; bottom: 0; z-index: 25; background: var(--ds-paper) !important; }
+.ds-page > form > div.flex.ds-actionbar, .ds-page > div.flex.items-center.justify-center.ds-actionbar {
+  margin-top: 0 !important; padding-top: 10px !important; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  border-top: 1px solid var(--ds-rule-strong) !important; border-bottom: none !important;
+  box-shadow: 0 -12px 18px -16px rgba(26, 36, 32, 0.45);
+}
+.ds-actionbar > button { padding: 10px 24px !important; }
+html[data-palette="earth"] .ds-actionbar { background: rgba(253, 251, 246, 0.98) !important; }
+@media (max-width: 640px) {
+  .ds-actionbar { gap: 8px !important; }
+  .ds-actionbar > button { flex: 1 1 0; min-width: 0; padding: 9px 8px !important; font-size: 13px; line-height: 1.25; }
+}
+/* 휴대폰에서 글자를 입력하는 동안은 키보드 위를 가리지 않게 제자리로 돌린다 */
+@media (pointer: coarse) {
+  .ds-page:has(input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus) .ds-actionbar { position: static; box-shadow: none; }
+}
