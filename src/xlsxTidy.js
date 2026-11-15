@@ -205,7 +205,7 @@ class StyleBook {
   recolorFills({ header, input } = {}) {
     const swap = (fill, rgb) => fill.replace(/<fgColor\b[^>]*\/>/, `<fgColor rgb="FF${rgb}"/>`);
     this.fills = this.fills.map((fill) => {
-      if (header && /<fgColor\b[^>]*(?:rgb="FFFFFF99"|indexed="43"|rgb="FFFFFF00"|indexed="13")/.test(fill)) { this.fillsChanged = true; return swap(fill, header); }
+      if (header && /<fgColor\b[^>]*(?:rgb="FFFFFF99"|indexed="43"|rgb="FFFFFF00"|indexed="13"|indexed="11"|rgb="FF00FF00"|rgb="FF00FFFF"|indexed="15")/.test(fill)) { this.fillsChanged = true; return swap(fill, header); }
       if (input && /<fgColor\b[^>]*(?:rgb="FFCCFFCC"|indexed="42"|rgb="FFE2EFDA")/.test(fill)) { this.fillsChanged = true; return swap(fill, input); }
       return fill;
     });
@@ -1105,11 +1105,10 @@ export const normalizePageFurniture = (xml, styles, {
   let boxed0 = xml;
   if (frame === 'box' || (frame === 'footer' && footerCol)) {
     const need = new Map(); // 행 → 필요한 열들
-    const want = (row, col, name) => { side(K(row, col))[name] = 'medium'; if (!need.has(row)) need.set(row, new Set()); need.get(row).add(col); };
+    const want = (row, col, name, style = 'medium') => { side(K(row, col))[name] = style; if (!need.has(row)) need.set(row, new Set()); need.get(row).add(col); };
     if (frame === 'footer') {
-      // 양식번호 줄만 굵은 테두리 상자로
-      want(to.row, from.col, 'left'); want(to.row, to.col, 'right');
-      for (let col = from.col; col <= to.col; col++) { want(to.row, col, 'top'); want(to.row, col, 'bottom'); }
+      // 양식번호 줄: 위쪽에 가는 선 한 줄만
+      for (let col = from.col; col <= to.col; col++) want(to.row, col, 'top', 'thin');
     } else {
       for (let row = from.row; row <= to.row; row++) { want(row, from.col, 'left'); want(row, to.col, 'right'); }
       for (let col = from.col; col <= to.col; col++) {

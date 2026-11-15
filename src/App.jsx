@@ -76,11 +76,12 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
 // footer: 표준산소가 있으면 꼬리말 줄(83행)을 묶음 아래(92행)로 옮겨 그 묶음까지 인쇄한다 (먼지·중금속·수은·PAHs 양식은 묶음이 인쇄 범위 밖에 있었다)
 // 엑셀 색: 프로그램의 기록부별 색 테마와 같은 계열 (dark: 머리줄, header: 머리칸, soft: 요약 줄·묶음 띠, input: 입력칸)
 const EXPORT_PALETTES = {
-  dust: { dark: '047857', header: 'A7F3D0', soft: 'D1FAE5', input: 'ECFDF5' },
-  metal: { dark: 'A16207', header: 'FEF08A', soft: 'FEF9C3', input: 'FEFCE8' },
-  mercury: { dark: '1D4ED8', header: 'BFDBFE', soft: 'DBEAFE', input: 'EFF6FF' },
-  pahs: { dark: '7E22CE', header: 'E9D5FF', soft: 'F3E8FF', input: 'FAF5FF' },
-  flow: { dark: '0E7490', header: 'A5F3FC', soft: 'CFFAFE', input: 'ECFEFF' },
+  // 형광 느낌이 나지 않게 채도를 낮춘 색
+  dust: { dark: '3F6B57', header: 'D5E5DC', soft: 'E6EFEA', input: 'F4F8F6' },
+  metal: { dark: '7A6A3A', header: 'EBE3C8', soft: 'F3EEDD', input: 'FAF8F0' },
+  mercury: { dark: '3F5F8A', header: 'D3DEEC', soft: 'E5ECF4', input: 'F3F6FA' },
+  pahs: { dark: '6A5587', header: 'DED6EA', soft: 'ECE7F2', input: 'F7F5FA' },
+  flow: { dark: '3B6F7A', header: 'D0E3E7', soft: 'E3EEF0', input: 'F3F8F9' },
 };
 const O2_CALC_CELLS_A = { qCells: ['M85'], dcCell: 'M107', flowBlocks: [[84, 91]], footer: { from: 83, to: 92 } };
 const EXPORT_TEMPLATE_LAYOUTS = {

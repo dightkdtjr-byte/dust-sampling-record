@@ -58,21 +58,23 @@ export const CALC_SHEET_EQUATIONS = {
 };
 
 // 그림 하나(xdr:pic)를 수식 글상자로 바꾼 XML. 원래 그림은 Fallback으로 남긴다
-const equationShape = (picXml, nodes, sz) => {
+const BESIDE_NUMBERS = new Set(['_x86843880', '_x86845240']);
+const ONE_ROW_DOWN = new Set(['_x83189624', '_x83201912', '_x134303384', '_x83433656']);
+const equationShape = (picXml, nodes, sz, vAnchor = 'ctr') => {
   const id = (/<xdr:cNvPr\b[^>]*\bid="(\d+)"/.exec(picXml) || [])[1] || '1';
   const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(picXml) || [])[1] || 'Equation';
   const xfrm = (/<a:xfrm\b[^>]*>[\s\S]*?<\/a:xfrm>/.exec(picXml) || [])[0] || '<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>';
   const math = `<m:oMathPara xmlns:m="${M}"><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr><m:oMath xmlns:m="${M}">${render(nodes, sz)}</m:oMath></m:oMathPara>`;
   const shape = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvSpPr txBox="1"/></xdr:nvSpPr>`
     + `<xdr:spPr>${xfrm}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>`
-    + `<xdr:txBody><a:bodyPr vertOverflow="overflow" horzOverflow="overflow" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>`
+    + `<xdr:txBody><a:bodyPr vertOverflow="overflow" horzOverflow="overflow" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="${vAnchor}"><a:noAutofit/></a:bodyPr><a:lstStyle/>`
     + `<a:p><a:pPr algn="l"/><a14:m>${math}</a14:m></a:p></xdr:txBody></xdr:sp>`;
   return `<mc:AlternateContent xmlns:mc="${MC}"><mc:Choice xmlns:a14="${A14}" Requires="a14">${shape}</mc:Choice><mc:Fallback>${picXml}</mc:Fallback></mc:AlternateContent>`;
 };
 
 // 시트에 딸린 그림 파일에서, 이름이 equations에 있는 그림을 수식 개체로 바꾼다. 바꾼 개수를 돌려준다
 // sizes: 그림 이름별 글자 크기 (분수가 겹친 큰 수식은 아래 숫자 줄을 덮지 않게 작게)
-export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 14, '그림 5': 15 }, startCol = 2 } = {}) {
+export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 13, '그림 5': 14, _x86843880: 13, _x86845240: 13, _x83201912: 16, _x134303384: 16, _x83433656: 16, _x133882184: 16 }, startCol = 5 } = {}) {
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return 0;
@@ -93,14 +95,22 @@ export async function replacePicturesWithEquations(zip, sheetPath, equations = C
       const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(pic[0]) || [])[1];
       if (!name || !Object.prototype.hasOwnProperty.call(equations, name)) return whole;
       count += 1;
-      // 수식 위치 정리: 모든 수식을 같은 열(C열)에서 시작하게 한다
+      // 수식 위치 정리: 묶음 제목 글자·숫자 줄과 겹치지 않게 놓는다
+      //  - 숫자 줄 위에 따로 놓이는 수식: 제목 줄 다음 행의 같은 열(startCol)에서 시작해 아래로 내려 쓴다
+      //  - 숫자 줄 왼쪽에 나란히 놓이는 수식(표준산소 환산 Q, C): 원래 자리에 두고 글자를 줄인다
+      const beside = BESIDE_NUMBERS.has(name);
       const fromCol = Number((/<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>/.exec(body) || [])[1]);
-      if (Number.isFinite(fromCol)) {
+      if (!beside && Number.isFinite(fromCol)) {
         const delta = startCol - fromCol;
-        body = body.replace(/(<xdr:from>\s*)<xdr:col>\d+<\/xdr:col>(\s*)<xdr:colOff>-?\d+<\/xdr:colOff>/, (w, a, gap) => `${a}<xdr:col>${startCol}</xdr:col>${gap}<xdr:colOff>0</xdr:colOff>`)
-          .replace(/(<xdr:to>\s*)<xdr:col>(\d+)<\/xdr:col>/, (w, a, c) => `${a}<xdr:col>${Math.max(startCol + 1, Number(c) + delta)}</xdr:col>`);
+        const hadOffset = Number((/<xdr:from>[\s\S]*?<xdr:rowOff>(\d+)<\/xdr:rowOff>/.exec(body) || [])[1]) > 0;
+        const down = name === '그림 5' ? (hadOffset ? 2 : 1) : (ONE_ROW_DOWN.has(name) ? 1 : 0);
+        const shiftRow = (tag) => { body = body.replace(new RegExp(`(<xdr:${tag}>[\\s\\S]*?<xdr:row>)(\\d+)(</xdr:row>)`), (w, a2, r, c2) => `${a2}${Number(r) + down}${c2}`); };
+        shiftRow('from'); shiftRow('to');
+        body = body.replace(/(<xdr:from>\s*)<xdr:col>\d+<\/xdr:col>(\s*)<xdr:colOff>-?\d+<\/xdr:colOff>/, (w, a2, gap) => `${a2}<xdr:col>${startCol}</xdr:col>${gap}<xdr:colOff>0</xdr:colOff>`)
+          .replace(/(<xdr:from>[\s\S]*?<xdr:rowOff>)\d+(<\/xdr:rowOff>)/, (w, a2, c2) => `${a2}0${c2}`)
+          .replace(/(<xdr:to>\s*)<xdr:col>(\d+)<\/xdr:col>/, (w, a2, c) => `${a2}<xdr:col>${Math.max(startCol + 1, Number(c) + delta)}</xdr:col>`);
       }
-      return `<xdr:${kind}${attrs}>${body.replace(pic[0], () => equationShape(pic[0], equations[name], Math.round((sizes[name] || fontPt) * 100)))}</xdr:${kind}>`;
+      return `<xdr:${kind}${attrs}>${body.replace(pic[0], () => equationShape(pic[0], equations[name], Math.round((sizes[name] || fontPt) * 100), beside ? 'ctr' : 't'))}</xdr:${kind}>`;
     });
     if (next !== drawing) zip.file(stack.join('/'), next);
   }
