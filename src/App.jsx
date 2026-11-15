@@ -146,6 +146,8 @@ const reorderWorkbookSheets = (wbXml, first) => {
     .replace(/\blocalSheetId="(\d+)"/g, (w, n) => `localSheetId="${newIndex.has(Number(n)) ? newIndex.get(Number(n)) : n}"`)
     .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
 };
+// 엑셀의 날짜 표시: 2026년 10월 29일
+const EXPORT_DATE_FORMAT = 'yyyy"년" m"월" d"일"';
 // 엑셀 색: 프로그램의 기록부별 색 테마와 같은 계열 (dark: 머리줄, header: 머리칸, soft: 요약 줄·묶음 띠, input: 입력칸)
 const EXPORT_PALETTES = {
   // 형광 느낌이 나지 않게 채도를 낮춘 색
@@ -7072,9 +7074,11 @@ export default function App() {
         r += 3;
         // 계산 방법 (원형·사각 모두): 엑셀에서 선택번호를 바꾸면 아래 표가 그 형태로 다시 계산된다
         L(`A${r}`, '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 r = R × 계수 위치에서 측정한다. 측정공이 수직 굴뚝에 있으면 단면의 1/4에 해당하는 반경상의 측정점으로 줄일 수 있고, 수평 굴뚝에 있으면 모든 측정점에서 측정한다.', 'A5');
-        blankRow(r, 'A5', ['A']); blankRow(r + 1, 'A5'); blankRow(r + 2, 'A5'); leakMerges.push(`A${r}:F${r + 2}`); r += 3;
+        const methodFirst = r;
+        blankRow(r, 'A5', ['A']); blankRow(r + 1, 'A5'); blankRow(r + 2, 'A5'); blankRow(r + 3, 'A5'); leakMerges.push(`A${r}:F${r + 3}`); r += 4;
         L(`A${r}`, '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 4개 이상 등면적 사각형으로 나누고 각 중심에서 측정한다. 단면적 0.25 ㎡ 이하는 형태와 관계없이 단면 중심 1점.', 'A5');
-        blankRow(r, 'A5', ['A']); blankRow(r + 1, 'A5'); leakMerges.push(`A${r}:F${r + 1}`); r += 3;
+        blankRow(r, 'A5', ['A']); blankRow(r + 1, 'A5'); blankRow(r + 2, 'A5'); leakMerges.push(`A${r}:F${r + 2}`);
+        const methodLast = r + 2; r += 4;
         // 형태 선택 표: 선택번호(1 원형 수직 / 2 원형 수평 / 3 사각)
         L(`A${r}`, '번호', 'A12'); L(`B${r}`, '굴뚝 형태', 'A12'); L(`C${r}`, '선택번호', 'A12');
         const selRow = r + 1; const S = `$C$${selRow}`;
@@ -7123,7 +7127,7 @@ export default function App() {
         r += 1;
         L(`A${r}`, { formula: `IF(${S}=3,"측정공: 다른 변 방향으로 "&${mCell}&"개, 간격 "&ROUND(${Wc}/${mCell}*100,1)&" cm (첫 측정공은 벽에서 "&ROUND(${Wc}/${mCell}*50,1)&" cm)","")` }, 'A5');
         blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
-        leakPositionCells = { area: `E${dimRow}`, dimRow, lastRow: r };
+        leakPositionCells = { area: `E${dimRow}`, dimRow, lastRow: r, methodFirst, methodLast };
         leakFooterRow = r + 1;
       }
 
@@ -7485,6 +7489,32 @@ export default function App() {
           zip.file(leakPath, /<cols>[\s\S]*?<\/cols>/.test(xml) ? xml.replace(/<cols>[\s\S]*?<\/cols>/, () => colsXml) : xml.replace(/<sheetData\b/, (w) => `${colsXml}${w}`));
         } catch (error) { console.error('측정위치 열 너비 맞추기 실패:', error); }
       }
+      // 기록지의 측정점 그림(ShowPic 연결 그림): 그림 칸(E5:G10, 약 179×144pt) 가운데에 놓고,
+      // '지점 사진' 시트의 원본 칸 비율(가로 159 : 세로 199.5)과 같게 해서 그림이 찌그러지지 않게 한다
+      try {
+        const recPath = sheetPathMap.get(recordSheet);
+        const relsFile = zip.file(recPath.replace(/([^/]+)$/, '_rels/$1.rels'));
+        const rels = relsFile ? await relsFile.async('string') : '';
+        const target = (/Type="[^"]*\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/drawing"/.exec(rels) || [])[1];
+        const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
+        const drawingFile = drawingPath ? zip.file(drawingPath) : null;
+        if (drawingFile) {
+          const PT = 12700;
+          const boxW = 179.3; const boxH = 144; const pad = 3; const colE = 45; const colF = 45; // E·F열 45pt, G열 89pt, 행 24pt
+          const h = boxH - pad * 2; const w = Math.min(boxW - pad * 2, (h * 159) / 199.5);
+          const left = (boxW - w) / 2; const right = left + w; const bottom = pad + h;
+          const at = (x) => (x < colE ? [4, x] : x < colE + colF ? [5, x - colE] : [6, x - colE - colF]);
+          const [c1, o1] = at(left); const [c2, o2] = at(right);
+          const drawing = await drawingFile.async('string');
+          const next = drawing.replace(/<xdr:twoCellAnchor\b[^>]*>\s*<xdr:from>\s*<xdr:col>4<\/xdr:col>[\s\S]*?<xdr:row>4<\/xdr:row>[\s\S]*?<\/xdr:to>/, (whole) => (
+            /<xdr:to>\s*<xdr:col>6<\/xdr:col>/.test(whole)
+              ? `<xdr:twoCellAnchor><xdr:from><xdr:col>${c1}</xdr:col><xdr:colOff>${Math.round(o1 * PT)}</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>${pad * PT}</xdr:rowOff></xdr:from>`
+                + `<xdr:to><xdr:col>${c2}</xdr:col><xdr:colOff>${Math.round(o2 * PT)}</xdr:colOff><xdr:row>${4 + Math.floor(bottom / 24)}</xdr:row><xdr:rowOff>${Math.round((bottom % 24) * PT)}</xdr:rowOff></xdr:to>`
+              : whole
+          ));
+          if (next !== drawing) zip.file(drawingPath, next);
+        }
+      } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
       try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
 
@@ -7569,7 +7599,7 @@ export default function App() {
           palette: exportPalette,
           // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
           // frame 'box': 모든 시트에 같은 굵은 전체 테두리(인쇄 범위 둘레·제목 아래·양식번호 줄 위)
-          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer' },
+          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer', footerAtBottom: true },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
@@ -7591,12 +7621,19 @@ export default function App() {
               rowHeights: rowsAt(37, 38, 15),
               // 노즐표 줄: 양식마다 노즐 수가 달라(먼지·유량 18, 수은 15, PAHs 19) 채취시간 병합 칸(A39~)의 길이를 따른다
               rowHeightsByMerge: [{ cell: 'A39', ht: 18 }],
+              // 진한 색 칸을 차분한 색으로: 흰 글씨 칸(수분·밀도 결과)은 짙은 테마색, 나머지는 옅은 테마색
+              fills: [
+                { range: 'F26:F29', fill: exportPalette.dark }, { range: 'H26:H29', fill: exportPalette.dark },
+                { range: 'A33:C33', fill: exportPalette.header },
+                { range: `F39:F${38 + layout.nozzleRows}`, fill: exportPalette.soft }, { range: `J39:J${38 + layout.nozzleRows}`, fill: exportPalette.soft },
+              ],
               // 밀도는 모두 소수 셋째 자리, 샘플러 ΔH@·Yd는 넷째 자리
               numberFormats: [{ range: 'H26', code: '0.000' }, { range: 'C34', code: '0.000' }, { range: 'A34', code: '0.000' }, { range: 'O39:P43', code: '0.0000' }],
             },
             [recordSheet]: {
               // 측정 표: 시간·진공은 정수, 온도는 모두 소수 첫째 자리 (측정 행과 평균 행을 같게)
               numberFormats: [
+                { range: 'C8', code: EXPORT_DATE_FORMAT },
                 { range: `B${meterFirst}:C${meterLast}`, code: '0' },
                 { range: `D${meterFirst}:D${meterLast}`, code: '0.0' },
                 { range: `K${meterFirst}:K${meterLast}`, code: '0.0' },
@@ -7606,8 +7643,9 @@ export default function App() {
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
             계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
-            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { numberFormats: [{ range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 5}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
-            먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
+            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 5}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
+            먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }, { range: 'G2', code: EXPORT_DATE_FORMAT }] },
+            표지: { numberFormats: [{ range: 'D21', code: EXPORT_DATE_FORMAT }] },
           },
         });
       } catch (error) { console.error('서식 정리 실패:', error); }

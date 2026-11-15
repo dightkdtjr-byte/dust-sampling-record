@@ -1470,6 +1470,28 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
           for (const [row, ht] of Object.entries(heights)) xml = ensureRowHeight(xml, Number(row), ht);
         }
       }
+      // 양식번호 줄을 A4 맨 아래로(furniture.footerAtBottom): 양식번호 줄 바로 위쪽의 빈 줄 하나를 늘려 쪽을 채운다
+      else if (furniture && furniture.footerAtBottom && rule?.furniture !== false && measured[i].range) {
+        const size = measurePrintArea(xml, measured[i].range, mdw, styles);
+        const extra = size ? maxH / (scales[i] / 100) - size.height : 0;
+        const { from, to } = measured[i].range;
+        const hasFooter = new RegExp(`<c\\b[^>]*\\br="[A-Z]+${to.row}"[^>]*>`).test(xml);
+        if (extra > 1 && hasFooter && to.row > from.row) {
+          const { kinds, K } = analyzeTables(xml, styles, sharedStrings);
+          const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+          const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
+          for (let row = to.row - 1; row >= Math.max(from.row + 1, to.row - 4); row--) {
+            const m = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)/?>`).exec(xml);
+            if (m && isTrue(attr(m[1], 'hidden'))) continue;
+            let blank = true;
+            for (let col = from.col; col <= to.col; col++) { const kind = kinds.get(K(row, col)); if (kind && kind !== 'empty') { blank = false; break; } }
+            if (!blank) continue;
+            const ht = m && attr(m[1], 'ht') !== null ? Number(attr(m[1], 'ht')) : defaultRow;
+            xml = ensureRowHeight(xml, row, Math.round((ht + extra) * 100) / 100);
+            break;
+          }
+        }
+      }
       zip.file(measured[i].path, setPrintScale(xml, scales[i], margins));
     }
   }
