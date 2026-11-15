@@ -74,6 +74,75 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
 // 기록부 종류별 엑셀 양식 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
 // o2: 계산식 시트의 표준산소 환산 칸 — 유량 Q(이름 Q가 가리키는 칸 포함), 농도 DC, '표준산소 환산 배출가스 유량' 묶음의 행 범위
 // footer: 표준산소가 있으면 꼬리말 줄(83행)을 묶음 아래(92행)로 옮겨 그 묶음까지 인쇄한다 (먼지·중금속·수은·PAHs 양식은 묶음이 인쇄 범위 밖에 있었다)
+// 굴뚝 단면적(㎡): 원형은 π(D/2)², 사각은 깊이(삽입 방향 안치수) × 다른 변
+const calcStackArea = (data) => {
+  const D = parseFloat(data?.stackDiameter);
+  if (!Number.isFinite(D) || D <= 0) return NaN;
+  if (data?.stackShape === 'rect') {
+    const side = parseFloat(data?.stackSide);
+    return Number.isFinite(side) && side > 0 ? D * side : NaN;
+  }
+  return Math.PI * Math.pow(D / 2, 2);
+};
+// 측정점 위치 (ES 01114 굴뚝 배출 시료채취방법)
+//  - 원형: 직경에 따라 반경을 등면적으로 구분하고 r = R × 계수 위치 (단면적 0.25㎡ 이하는 중심 1점)
+//  - 사각: 단면적에 따라 한 변 l 이하(1㎡ 이하 0.5m, 4㎡ 이하 0.667m, 그 이상 1m)의 등면적 사각형으로 나누고 각 중심
+const computeSamplingPoints = (data) => {
+  const D = parseFloat(data?.stackDiameter); const flange = parseFloat(data?.flangeLength) || 0;
+  if (!Number.isFinite(D) || D <= 0) return null;
+  const area = calcStackArea(data);
+  const cm = (m) => ((m + flange) * 100).toFixed(2);
+  if (data?.stackShape === 'rect') {
+    const side = parseFloat(data?.stackSide);
+    if (!Number.isFinite(area)) return { rect: true, perRadius: 0, isCenterOnly: false, coeffs: [], area: '', nearInsertion: [], farInsertion: [], wallDistances: [], lines: 0, total: 0, diameterLabel: `${D} m` };
+    const isCenterOnly = area <= 0.25;
+    const l = area <= 1 ? 0.5 : area <= 4 ? 0.667 : 1;
+    const n = isCenterOnly ? 1 : Math.max(1, Math.ceil(D / l - 1e-9));
+    const lines = isCenterOnly ? 1 : Math.max(1, Math.ceil(side / l - 1e-9));
+    const dist = Array.from({ length: n }, (_, i) => ((i + 0.5) * D) / n);
+    return {
+      rect: true, perRadius: n, lines, total: n * lines, isCenterOnly, coeffs: [], side, sideLimit: l,
+      diameterLabel: `${D} × ${side} m`, area: area.toFixed(2),
+      wallDistances: dist.map((d) => (d * 100).toFixed(2)),
+      portPositions: Array.from({ length: lines }, (_, i) => ((((i + 0.5) * side) / lines) * 100).toFixed(1)),
+      nearInsertion: dist.map(cm), farInsertion: [],
+    };
+  }
+  const R = D / 2;
+  let rnCoeffs = []; let isCenterOnly = false;
+  if (area <= 0.25) isCenterOnly = true;
+  else if (D <= 1) rnCoeffs = [0.707];
+  else if (D <= 2) rnCoeffs = [0.500, 0.866];
+  else if (D <= 4) rnCoeffs = [0.408, 0.707, 0.913];
+  else if (D <= 4.5) rnCoeffs = [0.354, 0.612, 0.791, 0.935];
+  else rnCoeffs = [0.316, 0.548, 0.707, 0.837, 0.949];
+  const near = []; const far = [];
+  if (isCenterOnly) { near.push(R); far.push(R); } else {
+    for (let i = rnCoeffs.length - 1; i >= 0; i--) { near.push(R - rnCoeffs[i] * R); far.push(R + rnCoeffs[i] * R); }
+  }
+  return {
+    rect: false, perRadius: isCenterOnly ? 1 : rnCoeffs.length, lines: 1, total: isCenterOnly ? 1 : rnCoeffs.length,
+    isCenterOnly, coeffs: rnCoeffs, diameterLabel: `${D} m`, area: area.toFixed(2),
+    wallDistances: near.map((d) => (d * 100).toFixed(2)),
+    nearInsertion: near.map(cm), farInsertion: far.map(cm),
+  };
+};
+// 통합 문서의 시트 순서를 바꾼다: first에 적은 시트를 그 순서로 맨 앞에, 나머지는 원래 순서대로.
+// 시트 번호로 가리키는 것(이름 정의의 localSheetId, 처음 열 시트 activeTab)도 새 번호로 맞춘다
+const reorderWorkbookSheets = (wbXml, first) => {
+  const block = /<sheets>([\s\S]*?)<\/sheets>/.exec(wbXml);
+  if (!block) return wbXml;
+  const sheets = [...block[1].matchAll(/<sheet\b[^>]*\/>/g)].map((m) => m[0]);
+  const nameOf = (tag) => (/\bname="([^"]*)"/.exec(tag) || [])[1];
+  const head = first.map((name) => sheets.find((tag) => nameOf(tag) === name)).filter(Boolean);
+  const next = [...head, ...sheets.filter((tag) => !head.includes(tag))];
+  if (next.every((tag, i) => tag === sheets[i])) return wbXml;
+  const newIndex = new Map(sheets.map((tag, i) => [i, next.indexOf(tag)]));
+  return wbXml
+    .replace(/<sheets>[\s\S]*?<\/sheets>/, () => `<sheets>${next.join('')}</sheets>`)
+    .replace(/\blocalSheetId="(\d+)"/g, (w, n) => `localSheetId="${newIndex.has(Number(n)) ? newIndex.get(Number(n)) : n}"`)
+    .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
+};
 // 엑셀 색: 프로그램의 기록부별 색 테마와 같은 계열 (dark: 머리줄, header: 머리칸, soft: 요약 줄·묶음 띠, input: 입력칸)
 const EXPORT_PALETTES = {
   // 형광 느낌이 나지 않게 채도를 낮춘 색
@@ -2437,7 +2506,7 @@ export default function App() {
   const createInitialFormData = () => ({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
-    totalStackDepth: '', flangeLength: '', stackDiameter: '', pitotInfo: '', pitotFactor: '0.84',
+    totalStackDepth: '', flangeLength: '', stackDiameter: '', stackShape: 'circle', stackSide: '', pitotInfo: '', pitotFactor: '0.84',
     pitotPresetId: '',
     standardO2: '',
     gasAnalyzer: [
@@ -4912,38 +4981,7 @@ export default function App() {
     });
   };
 
-  const getSamplingPoints = () => {
-    const D = parseFloat(formData.stackDiameter), flange = parseFloat(formData.flangeLength) || 0;
-    if (isNaN(D) || D <= 0) return null;
-    const R = D / 2, area = Math.PI * Math.pow(R, 2);
-    let rnCoeffs = [], isCenterOnly = false;
-
-    if (area <= 0.25) isCenterOnly = true;
-    else if (D <= 1) rnCoeffs = [0.707]; 
-    else if (D <= 2) rnCoeffs = [0.500, 0.866]; 
-    else if (D <= 4) rnCoeffs = [0.408, 0.707, 0.913]; 
-    else if (D <= 4.5) rnCoeffs = [0.354, 0.612, 0.791, 0.935];
-    else rnCoeffs = [0.316, 0.548, 0.707, 0.837, 0.949]; 
-    
-    let nearDistances = [], farDistances = [];
-    if (isCenterOnly) {
-      nearDistances.push(R); farDistances.push(R);
-    } else {
-      for (let i = rnCoeffs.length - 1; i >= 0; i--) {
-        nearDistances.push(R - (rnCoeffs[i] * R));
-        farDistances.push(R + (rnCoeffs[i] * R));
-      }
-    }
-    return {
-      perRadius: isCenterOnly ? 1 : rnCoeffs.length,
-      isCenterOnly,
-      coeffs: rnCoeffs,
-      diameterLabel: `${D} m`,
-      area: area.toFixed(2),
-      nearInsertion: nearDistances.map(d => ((d + flange) * 100).toFixed(2)),
-      farInsertion: farDistances.map(d => ((d + flange) * 100).toFixed(2)),
-    };
-  };
+  const getSamplingPoints = () => computeSamplingPoints(formData);
 
   // 굴뚝 단면 측정점 그림 (논문 삽화식 흑백 선화): 등면적 원환, 지름선, 정방향 ●, 역방향 ○
   const renderSamplingPointDiagram = (sp) => {
@@ -5416,8 +5454,7 @@ export default function App() {
     return C * Math.sqrt((2 * 9.81 * dp) / r);
   };
   const getStackAreaM2 = () => {
-    const D = parseFloat(formData.stackDiameter);
-    return Number.isFinite(D) && D > 0 ? Math.PI * Math.pow(D / 2, 2) : NaN;
+    return calcStackArea(formData);
   };
   // 측정점별 실측 유량(㎥/min) = v_i × A × 60
   const getRawPointFlowRate = (point) => {
@@ -5505,7 +5542,8 @@ export default function App() {
     if (!Number.isFinite(absPressure) || absPressure <= 0) return null;
 
     // 중간 계산은 반올림 없이 원시값 사용 (엑셀과 동일한 계산 경로)
-    const A = Math.PI * Math.pow(D / 2, 2);
+    const A = calcStackArea(formData);
+    if (!Number.isFinite(A)) return null;
     // 유량측정기록부는 임핀저 무게법이 없으므로 자동측정기 수분량(사전)을 사용
     const postFactors = isFlowRecordSheet ? null : getRawPostMoistureFactors();
     const postMoisture = isFlowRecordSheet
@@ -7004,6 +7042,42 @@ export default function App() {
         }
       }
 
+      // 누출시험 + 시료측정위치를 한 페이지로: 누출시험 표 아래에 측정위치 계산 방법과 측정점 표를 간략하게 적는다.
+      // (그림과 원형굴뚝 기준표가 있는 '시료측정위치' 시트는 계산용으로만 남기고 숨긴다)
+      let leakFooterRow = null;
+      const leakMerges = [];
+      if (layout.leak && sheetPathMap.has('누출시험')) {
+        const sp = computeSamplingPoints(sourceData);
+        const rect = sourceData.stackShape === 'rect';
+        const L = (ref, value, from) => addUpdate('누출시험', ref, value, from);
+        let r = 20;
+        L(`A${r}`, '▶ 시료측정위치 선정', 'A10'); r += 1;
+        const method = rect
+          ? '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 등면적 사각형으로 나누고 각 사각형의 중심에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.'
+          : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
+        L(`A${r}`, method, 'A5'); ['B', 'C', 'D', 'E', 'F'].forEach((c) => { L(`${c}${r}`, null, 'A5'); L(`${c}${r + 1}`, null, 'A5'); }); L(`A${r + 1}`, null, 'A5');
+        leakMerges.push(`A${r}:F${r + 1}`); r += 3;
+        const head = ['굴뚝 형태', '전체길이 (m)', '플랜지 길이 (cm)', rect ? '깊이×폭(m)' : '내경 (m)', '단면적(㎡)', '측정점수'];
+        const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
+        head.forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
+        const flangeM = toNumber(sourceData.flangeLength);
+        const dims = rect ? `${sourceData.stackDiameter || ''}×${sourceData.stackSide || ''}` : toNumber(sourceData.stackDiameter);
+        [rect ? '사각' : '원형', toNumber(sourceData.totalStackDepth), flangeM === null ? null : flangeM * 100, dims, sp && sp.area !== '' ? Number(sp.area) : null,
+          sp ? (rect ? `${sp.lines}×${sp.perRadius}=${sp.total}` : sp.total) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
+        r += 2;
+        L(`A${r}`, '측정점', 'A12'); L(`B${r}`, '벽에서 거리 (cm)', 'A12'); L(`C${r}`, '삽입 깊이 (cm)', 'A12');
+        L(`D${r}`, rect ? '측정공 위치 (cm)' : '반대편 삽입 깊이 (cm)', 'A12'); L(`E${r}`, null, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`D${r}:F${r}`); r += 1;
+        const count = sp ? Math.min(12, sp.nearInsertion.length) : 0;
+        for (let i = 0; i < Math.max(1, count); i++) {
+          L(`A${r}`, count ? `# ${i + 1}` : null, 'B14');
+          L(`B${r}`, count ? Number(sp.wallDistances[i]) : null, 'B14');
+          L(`C${r}`, count ? Number(sp.nearInsertion[i]) : null, 'B14');
+          const last = rect ? (i === 0 && sp.portPositions ? sp.portPositions.join(', ') : null) : (count && sp.farInsertion[i] !== undefined ? Number(sp.farInsertion[i]) : null);
+          L(`D${r}`, last, 'B14'); L(`E${r}`, null, 'B14'); L(`F${r}`, null, 'B14'); leakMerges.push(`D${r}:F${r}`); r += 1;
+        }
+        leakFooterRow = r + 1;
+      }
+
       // 연소가스자료 (가스분석기 3회)
       for (let i = 0; i < 3; i++) {
         const gas = sourceGasAnalyzer[i] || {};
@@ -7163,6 +7237,8 @@ export default function App() {
       addUpdate(recordSheet, 'C9', filterNumber);
       addUpdate(recordSheet, 'J13', filterNumber);
       addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
+      // 사각 굴뚝: 단면적은 깊이 × 폭 (양식은 원형 π/4·D²)
+      if (sourceData.stackShape === 'rect' && Number.isFinite(calcStackArea(sourceData))) addUpdate(recordSheet, 'G12', { formula: `G11*${toNumber(sourceData.stackSide)}` });
       if (toNumber(sourceData.filterInitial) !== null) addUpdate(recordSheet, 'D14', toNumber(sourceData.filterInitial));
       if (toNumber(sourceData.filterFinal) !== null) addUpdate(recordSheet, 'F14', toNumber(sourceData.filterFinal));
 
@@ -7297,6 +7373,7 @@ export default function App() {
                   : {}),
                 // 수분량 시트: 측정방법이 세 줄이 되었으므로 선택번호 칸도 세 줄로 합친다
                 // 측정방법 표가 한 줄 늘어 바로 아래 제목과 붙었으므로, 제목 줄을 높여 다른 제목들처럼 위에 여백을 둔다
+                ...(sheetName === '누출시험' && leakMerges.length ? { addMerges: leakMerges } : {}),
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
@@ -7338,6 +7415,11 @@ export default function App() {
         // 기호 설명 그림은 먼저 글상자의 실제 글자로 바꾼다 (수식 그림의 이름으로 묶음을 찾으므로 수식 개체로 바꾸기 전에)
         try { await replaceLegendPictures(zip, sheetPathMap.get('계산식')); } catch (error) { console.error('계산식 기호 설명 바꾸기 실패:', error); }
         try { await replacePicturesWithEquations(zip, sheetPathMap.get('계산식')); } catch (error) { console.error('계산식 수식 개체 바꾸기 실패:', error); }
+      }
+      // 누출시험 시트: 양식번호 줄을 새로 넣은 시료측정위치 요약 아래로 옮긴다
+      let leakPrintEnd = 18;
+      if (leakFooterRow) {
+        try { if (await moveRowCells(zip, sheetPathMap.get('누출시험'), 18, leakFooterRow)) leakPrintEnd = leakFooterRow; } catch (error) { console.error('누출시험 양식번호 줄 옮기기 실패:', error); }
       }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
       try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
@@ -7383,7 +7465,9 @@ export default function App() {
           });
         }
         // 이 기록부에 해당 없는 시트(유량의 누출시험)는 숨긴다
-        (layout.hideSheets || []).forEach((name) => {
+        // 시트 순서: 표지 → 누출시험(+시료측정위치) → 시료측정위치 → 연소가스자료 → 수분량 → …
+        wbXml = reorderWorkbookSheets(wbXml, ['표지', '누출시험', '시료측정위치', '연소가스자료', '수분량']);
+        [...(layout.hideSheets || []), ...(leakFooterRow ? ['시료측정위치'] : [])].forEach((name) => {
           wbXml = wbXml.replace(new RegExp(`<sheet\\b([^>]*\\bname="${name}"[^>]*?)\\s*/>`), (full, attrs) => (
             /\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`
           ));
@@ -7453,7 +7537,7 @@ export default function App() {
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
             계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
-            누출시험: { printArea: 'A1:F18' },
+            누출시험: { printArea: `A1:F${leakPrintEnd}` },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
           },
         });
@@ -9586,9 +9670,22 @@ export default function App() {
                 <input type="number" step="0.0001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-emerald-900 mb-1">순수 굴뚝 내경 (D, m)</label>
+                <label className="block text-xs font-bold text-emerald-900 mb-1">{formData.stackShape === 'rect' ? '굴뚝 깊이 (삽입 방향 안치수, m)' : '순수 굴뚝 내경 (D, m)'}</label>
                 <input type="number" step="0.0001" name="stackDiameter" value={formData.stackDiameter} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded focus:ring-2 focus:ring-emerald-500 bg-emerald-100 font-black text-emerald-900 outline-none" placeholder="자동계산 (총 깊이 - 플랜지)" />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-emerald-900 mb-1">굴뚝 형태</label>
+                <select name="stackShape" value={formData.stackShape || 'circle'} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-bold text-emerald-900 outline-none">
+                  <option value="circle">원형</option>
+                  <option value="rect">사각</option>
+                </select>
+              </div>
+              {formData.stackShape === 'rect' && (
+                <div>
+                  <label className="block text-xs font-bold text-emerald-900 mb-1">다른 변 길이 (측정공 쪽 벽 폭, m)</label>
+                  <input type="number" step="0.0001" name="stackSide" value={formData.stackSide || ''} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-black text-emerald-900 outline-none" placeholder="예: 1.5" />
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-emerald-900 mb-1">단면적 (A, ㎡)</label>
                 <input type="text" readOnly value={samplingPointsData ? samplingPointsData.area : ''} className="w-full p-2 border border-emerald-400 rounded bg-emerald-100 font-black text-emerald-900 outline-none" placeholder="자동계산" />
@@ -9600,7 +9697,7 @@ export default function App() {
               <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-sm font-bold text-slate-800">
-                    측정점 위치 (내경 {formData.stackDiameter} m)
+                    측정점 위치 ({samplingPointsData.rect ? `사각 ${samplingPointsData.diameterLabel} · 측정공 ${samplingPointsData.lines}개 × ${samplingPointsData.perRadius}점 = ${samplingPointsData.total}점` : `내경 ${formData.stackDiameter} m`})
                   </h3>
                   {samplingPointsData.isCenterOnly && (
                     <span className="bg-red-50 text-red-600 px-2 py-1 rounded text-xs font-bold animate-pulse border border-red-200">
@@ -9611,7 +9708,7 @@ export default function App() {
                 
                 <div className="flex flex-col md:flex-row gap-4 items-start">
                   <figure className="shrink-0 flex flex-col items-center gap-1 m-0 px-1 md:w-60">
-                    {renderSamplingPointDiagram(samplingPointsData)}
+                    {!samplingPointsData.rect && renderSamplingPointDiagram(samplingPointsData)}
                     <figcaption className="mt-1 text-[11px] text-slate-700 text-center leading-snug">
                       그림. 측정공 1개당 측정점 위치 (반경당 {samplingPointsData.perRadius}점)<br />
                       <span className="text-slate-500"><span className="text-[#0a84ff]">●</span> 정방향 측정점 1~{samplingPointsData.perRadius} <span className="text-[#d70015]">○</span> 역방향(반대편) 1′~{samplingPointsData.perRadius}′</span>
