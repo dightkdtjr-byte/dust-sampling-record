@@ -674,6 +674,14 @@ const getPreMoistureYd = (method, data) => {
   return Number.isFinite(main) ? main : 1;
 };
 // θ(℃)에서 물의 포화수증기압(mmHg). 습식 가스미터를 쓸 때 빼 주는 값 (ES 01114.c 식 9의 Pv)
+// 시료채취 시간(분) 목록을 누적 시간으로: 이미 누적(5,10,15…)이면 그대로, 구간(5,5,5…)이면 더해 간다.
+// 값이 줄어들지 않고 마지막이 처음보다 크면 누적으로 본다 (엑셀 내보내기와 화면 계산이 같은 기준을 쓴다)
+const isCumulativeMinutes = (values) => values.length >= 2 && values.every((v, i) => i === 0 || v >= values[i - 1]) && values[values.length - 1] > values[0];
+const toCumulativeMinutes = (values) => {
+  if (isCumulativeMinutes(values)) return values;
+  let sum = 0;
+  return values.map((v) => { sum = Math.round((sum + v) * 100) / 100; return sum; });
+};
 const saturationVaporMmHg = (tempC) => (Number.isFinite(tempC) ? 4.5812 * Math.pow(10, (7.5 * tempC) / (237.3 + tempC)) : NaN);
 const getPreMoisturePv = (method, data) => {
   if (!method || method.id !== 'imp2' || !data?.preImpinger?.wetMeter) return 0;
@@ -5525,7 +5533,7 @@ export default function App() {
       .filter((v) => Number.isFinite(v) && v > 0);
 
     if (times.length === 0) return 0;
-    return Math.max(...times);
+    return Math.max(...toCumulativeMinutes(times));
   };
 
   const getRawGasFlowFactors = () => {
@@ -5731,7 +5739,9 @@ export default function App() {
     if (timeValues.length === 0) return '-';
 
     // 시료채취 시간은 누적 시간(엑셀 B열): 지금까지의 최댓값
-    const thetaCum = Math.max(...timeValues);
+    // 구간 시간으로 적었으면 표 전체가 구간인지 보고 더한다
+    const allTimes = formData.gasMeters.slice(1).map((row) => parseFloat(row?.time)).filter((v) => Number.isFinite(v) && v > 0);
+    const thetaCum = isCumulativeMinutes(allTimes) ? Math.max(...timeValues) : timeValues.reduce((a, b) => a + b, 0);
     if (!Number.isFinite(thetaCum) || thetaCum <= 0) return '-';
 
     const rangeRows = getSamplingRowsUntil(idx);
@@ -7392,6 +7402,14 @@ export default function App() {
       addUpdate(recordSheet, 'C6', { formula: '표지!D20' });
       addUpdate(recordSheet, 'C7', String(sourceData.sampler || '').trim() ? `${String(sourceData.sampler).trim()} (인)` : null);
       addUpdate(recordSheet, 'C8', { formula: '표지!D21' });
+      // 적용한 K factor: 프로그램에서 실제로 쓴 값을 적는다 (노즐산정 표의 K는 노즐별 계산값, 여기는 현장에서 적용한 값).
+      // 프로그램에 K가 없으면 양식의 수식(노즐산정 표에서 사용노즐로 찾기)을 그대로 둔다
+      if (toNumber(sourceData.kFactor) !== null) addUpdate(recordSheet, 'C12', toNumber(sourceData.kFactor));
+      // 사용한 흡인노즐 직경(cm): 프로그램에 적힌 직경(mm)을 적는다. 양식은 노즐번호로 양식의 노즐표에서 찾는데,
+      // 사용자가 노즐 직경을 고쳐 쓰면 양식 표와 달라 등속흡인계수가 프로그램과 달라졌다. 직경이 없으면 양식의 수식을 둔다
+      if (toNumber(sourceData.nozzleDiameter) !== null && toNumber(sourceData.nozzleDiameter) > 0) addUpdate(recordSheet, 'J11', Math.round(toNumber(sourceData.nozzleDiameter) * 1000) / 10000);
+      // 유량 기록부: 유속은 측정점(예비조사 표)의 평균 동압으로 계산한다 (프로그램 화면과 같게; 양식은 기록표의 동압을 보았다)
+      if (exportSheetId === 'flow') addUpdate('계산식', 'E35', { formula: '노즐산정!J15' });
       addUpdate(recordSheet, 'C9', filterNumber);
       addUpdate(recordSheet, 'J13', filterNumber);
       addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
@@ -7411,7 +7429,7 @@ export default function App() {
       const meterTimeValues = gasMeters.slice(1).map((m) => parseFloat(m?.time)).filter((v) => Number.isFinite(v) && v > 0);
       // 같은 시간이 연달아 있어도(5,10,10,15) 누적으로 본다
       // 모두 같은 값(5,5,5…)이면 구간 시간이다
-      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v >= meterTimeValues[i - 1]) && meterTimeValues[meterTimeValues.length - 1] > meterTimeValues[0];
+      const isCumulativeMeterTime = isCumulativeMinutes(meterTimeValues);
       let runningMinutes = 0;
       gasMeters.forEach((meter, idx) => {
         const row = layout.meterStartRow + idx;
@@ -7438,7 +7456,7 @@ export default function App() {
         const orifice = exportK !== null && exportDp !== null
           ? Math.round(exportK * exportDp * 10000) / 10000
           : toNumber(meter.pressure);
-        // K factor(C12, 노즐산정에서 사용노즐로 찾은 값) × 동압을 엑셀이 계산한다. K가 없으면 직접 입력한 값을 적는다
+        // K factor(C12) × 동압을 엑셀이 계산한다. K가 없으면 직접 입력한 값을 적는다
         addUpdate(recordSheet, `F${row}`, idx > 0 && exportK !== null && exportDp !== null
           ? { formula: `IF(OR(E${row}="",N($C$12)=0),${orifice ?? '""'},ROUND($C$12*E${row},4))` }
           : orifice);
@@ -8430,6 +8448,14 @@ export default function App() {
     window.__stackpilotExportOpenForTest = exportOpenRecordExcel;
     window.__stackpilotExportOpenSamplingLogForTest = exportOpenSamplingLogExcel;
     window.__stackpilotBuildReportForTest = () => buildReportSnapshot(selectedSheet || 'dust');
+    // 시험용: 저장본을 화면에 불러온다 (화면 계산값과 엑셀 수식 결과를 비교하는 검사에서 쓴다)
+    window.__stackpilotLoadForTest = (report) => setFormData(() => {
+      const nextForm = { ...createInitialFormData() };
+      Object.keys(nextForm).forEach((key) => { if (Object.prototype.hasOwnProperty.call(report, key)) nextForm[key] = report[key]; });
+      nextForm.gasMeters = normalizeGasMeterRows(report.gasMeters, (report.points || nextForm.points).length);
+      nextForm.impingers = normalizeImpingers(nextForm.impingers, getImpingerStageCount(selectedSheet || 'dust'));
+      return nextForm;
+    });
     window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
     window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));
   }
