@@ -187,6 +187,24 @@ class StyleBook {
   }
 
   // 원래 스타일을 복사해 일부 변의 선 굵기만 바꾼 스타일 번호. changes = { left: 'thin', ... }
+  // 같은 서식에서 지정한 변의 선만 지운 서식 번호
+  withoutBorderSides(s, sides) {
+    const names = ['left', 'right', 'top', 'bottom'].filter((k) => sides.includes(k));
+    if (names.length === 0) return s;
+    const key = `${s}|nb|${names.join(',')}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const xf = this.xfs[s] || this.xfs[0];
+    let border = this.borders[Number(attr(xf, 'borderId') || 0)] || '<border/>';
+    for (const name of names) border = border.replace(new RegExp(`<${name}\\b[^>]*?(?:/>|>[\\s\\S]*?</${name}>)`), () => `<${name}/>`);
+    this.borders.push(border);
+    this.bordersChanged = true;
+    const borderId = this.borders.length - 1;
+    const next = xf.replace(/\s*borderId="\d+"/, '').replace(/\s*applyBorder="\d+"/, '').replace(/^<xf\b/, `<xf borderId="${borderId}" applyBorder="1"`);
+    this.xfs.push(next);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
   withBorderStyles(s, changes) {
     const key = `${s}|b|${['left', 'right', 'top', 'bottom'].map((k) => changes[k] || '').join(',')}`;
     if (this.added.has(key)) return this.added.get(key);
@@ -937,6 +955,137 @@ const readDrawingRows = async (zip, sheetPath, sheetXml = '') => {
   return rowsSet;
 };
 
+// ── 시트 꾸밈 통일: 모든 시트의 제목·양식번호 줄을 인쇄했을 때 같은 크기로, 쪽 전체를 두른 바깥 테두리는 없앤다 ──
+//  - 제목(1행부터 인쇄 폭 전체를 합친 칸): 상자 선을 지우고, 인쇄 크기 기준 같은 글자 크기·같은 높이로 (시트마다 인쇄 배율이 달라 배율로 나눈다)
+//  - 양식번호 줄(인쇄 범위 마지막 행의 ■…): 선을 지우고 같은 글자 크기·높이, 오른쪽 정렬
+//  - 바깥 테두리: 인쇄 범위 왼쪽·오른쪽 끝 칸의 바깥 선을 지운다. 그 칸이 표 칸(안쪽 세로선과 위·아래 선이 있는 칸)이면 표의 선이므로 둔다
+//  - sectionRule: 가로 구분선으로 묶음을 나누는 시트(계산식)는 제목 아래·양식번호 줄 위에도 같은 구분선을 둔다
+export const normalizePageFurniture = (xml, styles, {
+  sharedStrings = [], range = null, scale = 1, titlePt = 18, titleHeight = 32, footerPt = 9, footerHeight = 14,
+  footerPattern = /^\s*■/, sectionRule = false, frame = true,
+} = {}) => {
+  if (!range || !range.from.row || !range.to.row || !(scale > 0)) return xml;
+  const { cells, texts, merges, mergeOf, K, sameMerge, own } = analyzeTables(xml, styles, sharedStrings);
+  const { from, to } = range;
+  const sides = new Map(); // "r,c" → { left, right, top, bottom } (바꿔 가는 값)
+  const side = (key) => {
+    if (!sides.has(key)) sides.set(key, { ...own(key) });
+    return sides.get(key);
+  };
+  const hLine = (row, col) => !sameMerge(K(row - 1, col), K(row, col)) && Boolean(side(K(row - 1, col)).bottom || side(K(row, col)).top);
+  const vLine = (row, col) => !sameMerge(K(row, col - 1), K(row, col)) && Boolean(side(K(row, col - 1)).right || side(K(row, col)).left);
+  const blockOf = (row, col) => (mergeOf.has(K(row, col)) ? merges[mergeOf.get(K(row, col))] : { from: { row, col }, to: { row, col } });
+  const fullWidth = (b) => b.from.col <= from.col && b.to.col >= to.col;
+  // 칸 묶음이 표 칸인지: 맞은편 세로선이 있고 위·아래 선이 있다 (폭 전체를 합친 칸은 위·아래 선이 모두 있어야 한다)
+  const boxed = (b, edge) => {
+    const opposite = edge === 'left' ? vLine(b.from.row, b.to.col + 1) : vLine(b.from.row, b.from.col);
+    const top = hLine(b.from.row, edge === 'left' ? b.from.col : b.to.col);
+    const bottom = hLine(b.to.row + 1, edge === 'left' ? b.from.col : b.to.col);
+    return opposite && (fullWidth(b) ? top && bottom : top || bottom);
+  };
+  const gridCell = (row, col) => vLine(row, col) && vLine(row, col + 1); // 양옆에 세로선이 있는 칸
+  const fonts = new Map(); // "r,c" → 글자 크기
+  const aligns = new Map(); // "r,c" → { horizontal, vertical }
+  const heights = new Map(); // 행 → 높이
+  const half = (v) => Math.round(v * 2) / 2;
+
+  // 제목: 인쇄 범위 첫 칸에서 시작해 폭 전체를 합친, 글자가 있는 칸
+  const titleBlock = (() => {
+    const b = blockOf(from.row, from.col);
+    if (b.from.row !== from.row || !fullWidth(b) || b.to.row - b.from.row > 5) return null;
+    return String(texts.get(K(b.from.row, b.from.col)) || '').trim() ? b : null;
+  })();
+  // 양식번호 줄: 인쇄 범위 마지막 행
+  const footerCol = (() => {
+    for (let col = from.col; col <= to.col; col++) if (footerPattern.test(String(texts.get(K(to.row, col)) || ''))) return col;
+    return 0;
+  })();
+  const furnitureRows = new Set();
+  if (titleBlock) for (let row = titleBlock.from.row; row <= titleBlock.to.row; row++) furnitureRows.add(row);
+  if (footerCol) furnitureRows.add(to.row);
+
+  if (titleBlock) {
+    const below = titleBlock.to.row + 1;
+    const hadBottom = []; // 제목 상자 아랫선이 있던 열
+    for (let col = from.col; col <= to.col; col++) hadBottom[col] = hLine(below, col);
+    if (frame) {
+      for (let row = titleBlock.from.row; row <= titleBlock.to.row; row++) for (let col = from.col; col <= to.col; col++) Object.assign(side(K(row, col)), { left: null, right: null, top: null, bottom: null });
+      for (let col = from.col; col <= to.col; col++) {
+        const key = K(below, col);
+        if (!cells.has(key)) continue;
+        // 제목 바로 아래가 표 칸이면 표의 윗선으로 남기고, 아니면 제목 상자의 아랫선이므로 지운다
+        if (sectionRule ? hadBottom[col] : (gridCell(below, col) && hadBottom[col])) side(key).top = 'medium';
+        else side(key).top = null;
+      }
+    }
+    const n = titleBlock.to.row - titleBlock.from.row + 1;
+    for (let row = titleBlock.from.row; row <= titleBlock.to.row; row++) heights.set(row, Math.round((titleHeight / scale / n) * 100) / 100);
+    fonts.set(K(titleBlock.from.row, titleBlock.from.col), half(titlePt / scale));
+    aligns.set(K(titleBlock.from.row, titleBlock.from.col), { horizontal: 'center', vertical: 'center' });
+  }
+  if (footerCol) {
+    const above = to.row - 1;
+    if (frame) {
+      const hadTop = [];
+      for (let col = from.col; col <= to.col; col++) hadTop[col] = hLine(to.row, col);
+      for (let col = from.col; col <= to.col; col++) Object.assign(side(K(to.row, col)), { left: null, right: null, top: null, bottom: null });
+      for (let col = from.col; col <= to.col; col++) {
+        const key = K(above, col);
+        if (!cells.has(key) || furnitureRows.has(above)) continue;
+        // 양식번호 줄 바로 위가 표 칸이면 표의 아랫선을 남긴다 (양식번호 줄의 윗선으로만 그어져 있던 경우 포함)
+        if (sectionRule ? true : (gridCell(above, col) && hadTop[col])) side(key).bottom = side(key).bottom || 'medium';
+      }
+    }
+    heights.set(to.row, Math.round((footerHeight / scale) * 100) / 100);
+    const b = blockOf(to.row, footerCol);
+    fonts.set(K(b.from.row, b.from.col), half(footerPt / scale));
+    aligns.set(K(b.from.row, b.from.col), { horizontal: 'right', vertical: 'center' });
+  }
+  // 바깥 테두리: 왼쪽·오른쪽 끝
+  if (frame) {
+    for (const edge of ['left', 'right']) {
+      const col = edge === 'left' ? from.col : to.col;
+      let row = from.row;
+      while (row <= to.row) {
+        const b = blockOf(row, col);
+        const last = Math.max(row, b.to.row);
+        if (!furnitureRows.has(row)) {
+          const has = edge === 'left' ? vLine(row, col) : vLine(row, col + 1);
+          if (has && !boxed(b, edge)) {
+            for (let r = Math.max(row, b.from.row); r <= last; r++) {
+              side(K(r, col))[edge] = null;
+              // 인쇄 범위 바로 밖 칸이 같은 선을 가지고 있으면 그것도 지운다
+              const outside = K(r, edge === 'left' ? col - 1 : col + 1);
+              if (cells.has(outside)) side(outside)[edge === 'left' ? 'right' : 'left'] = null;
+            }
+          }
+        }
+        row = last + 1;
+      }
+    }
+  }
+
+  let out = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
+    const ref = parseRef(attr(attrs, 'r') || '');
+    if (!ref) return whole;
+    const key = K(ref.row, ref.col);
+    const original = Number(attr(attrs, 's') || 0);
+    let next = original;
+    if (sides.has(key)) {
+      const before = own(key); const after = sides.get(key);
+      const cleared = ['left', 'right', 'top', 'bottom'].filter((k) => before[k] && !after[k]);
+      const set = Object.fromEntries(['left', 'right', 'top', 'bottom'].filter((k) => after[k] && after[k] !== before[k]).map((k) => [k, after[k]]));
+      if (cleared.length) next = styles.withoutBorderSides(next, cleared);
+      if (Object.keys(set).length) next = styles.withBorderStyles(next, set);
+    }
+    if (fonts.has(key)) next = styles.withFontChange(next, { sz: fonts.get(key) });
+    if (aligns.has(key)) next = styles.withAlignment(next, aligns.get(key));
+    return next === original ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${close}>`;
+  });
+  for (const [row, ht] of heights) out = ensureRowHeight(out, row, ht);
+  return out;
+};
+
 // ── 인쇄 크기 통일: 한 파일의 모든 시트가 같은 폭으로 인쇄되게, 시트마다 배율을 정한다 ──
 // 공통 폭 = 용지 인쇄 가능 폭과, 시트마다 '세로가 한 장에 들어가는 폭' 중 가장 작은 값
 const A4 = { width: 595.3, height: 841.9 };
@@ -1045,7 +1194,7 @@ const setPrintScale = (xml, scale, margins) => {
   return sheetPrFixed + out;
 };
 
-export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalWidth = false } = {}) {
+export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalWidth = false, furniture = null } = {}) {
   const read = async (path) => { const f = zip.file(path); return f ? f.async('string') : null; };
   const workbookXml = await read('xl/workbook.xml');
   const relsXml = await read('xl/_rels/workbook.xml.rels');
@@ -1109,7 +1258,6 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path, xml), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
-  zip.file('xl/styles.xml', styles.serialize());
   // 인쇄 크기 통일 (여백 같게, 가로 가운데, 같은 폭)
   if (equalWidth && sheetsForWidth.length) {
     const margins = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 };
@@ -1156,10 +1304,19 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       if (measured.every((x, i) => (x.width * fixed[i]) / 100 <= maxW + 0.01 && (x.height * fixed[i]) / 100 <= maxH + 0.01)) scales = fixed;
     }
     for (let i = 0; i < measured.length; i++) {
-      const xml = await read(measured[i].path);
+      let xml = await read(measured[i].path);
+      // 제목·양식번호 줄·바깥 테두리 통일: 인쇄 배율이 정해진 뒤에 한다 (인쇄 크기 기준으로 글자·높이를 맞추므로)
+      const rule = typeof rules === 'function' ? rules(measured[i].name) : rules[measured[i].name];
+      if (furniture && rule?.furniture !== false) {
+        const next = normalizePageFurniture(xml, styles, { sharedStrings, range: measured[i].range, scale: scales[i] / 100, ...furniture, ...(rule?.furniture || {}) });
+        // 제목·양식번호 줄 높이가 바뀌어도 한 장에 들어갈 때만 적용한다
+        const size = measurePrintArea(next, measured[i].range, mdw, styles);
+        if (size && (size.height * scales[i]) / 100 <= maxH + 0.01) xml = next;
+      }
       zip.file(measured[i].path, setPrintScale(xml, scales[i], margins));
     }
   }
+  zip.file('xl/styles.xml', styles.serialize());
   // 인쇄 범위 바꾸기 (프로그램이 표를 넓혀 그린 시트), 숨긴 시트의 인쇄 범위 지우기
   if (printAreaUpdates.size || hiddenSheets.size) {
     let wb = workbookXml;

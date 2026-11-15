@@ -179,6 +179,18 @@ const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
 
 // 통합시료채취기록부 물질 목록: 양식 '시료채취 작성' 13~57행 순서 그대로
 // kind: particle(입자 샘플러) / gas(가스 샘플러) / analyzer(가스분석기) / thc(총탄화수소측정기) / box(음압상자) / plain(시작·종료값 차이)
+// collectors: 채취 기구를 고르는 물질 (이황화탄소·이황화메틸·VOCs는 흡착관 또는 테들러백으로 채취한다). 채취유량은 종료값-시작값
+// 엑셀 sampler No. 칸에는 짧은 이름(흡착관/테들러백)을 적고, 화면에서는 풀어 쓴 이름을 보여 준다
+const SAMPLING_LOG_BAG_OR_TUBE = ['흡착관', '테들러백'];
+const SAMPLING_LOG_COLLECTOR_LABEL = { 흡착관: '흡착관', 테들러백: '테들러백(폴리에스터 백)' };
+// 약어 색의 뜻 (물질 표 위 범례)
+const SAMPLING_LOG_BADGE_LEGEND = [
+  { kind: 'particle', code: 'P', text: '입자 샘플러 (여과지)' },
+  { kind: 'gas', code: 'HCl', text: '가스 샘플러 (흡수액)' },
+  { kind: 'analyzer', code: 'G', text: '현장측정 (가스분석기·총탄화수소측정기)' },
+  { kind: 'box', code: 'VOCs', text: '흡착관·테들러백·음압상자' },
+  { kind: 'plain', code: 'BZ', text: '그 밖의 채취 (시작·종료값 차이)' },
+];
 const SAMPLING_LOG_SUBSTANCES = [
   { row: 13, code: 'P', name: '먼지', kind: 'particle', targetVolume: '1000', testPeriod: '2' },
   { row: 14, code: 'G', name: '황산화물', kind: 'analyzer', duration: '15', testPeriod: '현장측정' },
@@ -191,7 +203,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 21, code: 'H2S', name: '황화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '4' },
   { row: 22, code: 'HCN', name: '시안화수소', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
   { row: 23, code: 'HDZ', name: '하이드라진', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
-  { row: 24, code: 'CS2', name: '이황화탄소', kind: 'gas', testPeriod: '9' },
+  { row: 24, code: 'CS2', name: '이황화탄소', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, testPeriod: '9' },
   { row: 25, code: 'M', name: '구리', kind: 'particle', targetVolume: '1000', testPeriod: '6' },
   { row: 26, code: 'M', name: '카드뮴', kind: 'particle', testPeriod: '6' },
   { row: 27, code: 'M', name: '납', kind: 'particle', testPeriod: '6' },
@@ -209,21 +221,21 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 39, code: 'Br', name: '브롬', kind: 'gas', suctionRate: '1', targetVolume: '40', testPeriod: '4' },
   { row: 40, code: 'THC', name: '총탄화수소', kind: 'thc', duration: '30', testPeriod: '현장측정' },
   { row: 41, code: 'BZ', name: '벤조(a)피렌', kind: 'plain', testPeriod: '9' },
-  { row: 42, code: 'VOCs', name: '염화비닐', kind: 'box', testPeriod: '9' },
-  { row: 43, code: 'VOCs', name: '벤젠', kind: 'box', duration: '15', testPeriod: '9' },
-  { row: 44, code: 'VOCs', name: '디클로로메탄', kind: 'box', testPeriod: '9' },
-  { row: 45, code: 'VOCs', name: '트리클로로에틸렌', kind: 'box', testPeriod: '9' },
-  { row: 46, code: 'VOCs', name: '1,3-부타디엔', kind: 'box', testPeriod: '9' },
-  { row: 47, code: 'VOCs', name: '테트라클로로에틸렌', kind: 'box', testPeriod: '9' },
-  { row: 48, code: 'VOCs', name: '1,2-디클로로에탄', kind: 'box', testPeriod: '9' },
-  { row: 49, code: 'VOCs', name: '클로로포름', kind: 'box', testPeriod: '9' },
-  { row: 50, code: 'VOCs', name: '아크릴로니트릴', kind: 'box', testPeriod: '9' },
-  { row: 51, code: 'VOCs', name: '스틸렌', kind: 'box', testPeriod: '9' },
-  { row: 52, code: 'VOCs', name: '에틸벤젠', kind: 'box', testPeriod: '9' },
-  { row: 53, code: 'VOCs', name: '사염화탄소', kind: 'box', testPeriod: '9' },
+  { row: 42, code: 'VOCs', name: '염화비닐', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 43, code: 'VOCs', name: '벤젠', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', duration: '15', testPeriod: '9' },
+  { row: 44, code: 'VOCs', name: '디클로로메탄', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 45, code: 'VOCs', name: '트리클로로에틸렌', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 46, code: 'VOCs', name: '1,3-부타디엔', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 47, code: 'VOCs', name: '테트라클로로에틸렌', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 48, code: 'VOCs', name: '1,2-디클로로에탄', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 49, code: 'VOCs', name: '클로로포름', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 50, code: 'VOCs', name: '아크릴로니트릴', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 51, code: 'VOCs', name: '스틸렌', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 52, code: 'VOCs', name: '에틸벤젠', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
+  { row: 53, code: 'VOCs', name: '사염화탄소', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
   { row: 54, code: 'BEN', name: '벤지딘', kind: 'plain' },
   { row: 55, code: 'AN', name: '아닐린', kind: 'plain' },
-  { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box' },
+  { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE },
   { row: 57, code: 'OX', name: '옥사이드', species: '에틸렌옥사이드 · 프로필렌옥사이드', options: ['에틸렌옥사이드', '프로필렌옥사이드'], kind: 'box', testPeriod: '9' },
 ];
 
@@ -338,7 +350,7 @@ const SAMPLING_LOG_GROUPS = [
   { id: 'particle', title: '입자상 물질', note: '여과지 포집 · 입자 샘플러', kinds: ['particle'], color: 'emerald' },
   { id: 'gas', title: '가스상 물질', note: '흡수액 포집 · 가스 샘플러', kinds: ['gas'], color: 'sky' },
   { id: 'field', title: '현장측정', note: '가스분석기 · 총탄화수소측정기', kinds: ['analyzer', 'thc'], color: 'slate' },
-  { id: 'vocs', title: 'VOCs · 기타', note: '흡착관 · 음압상자', kinds: ['box', 'plain'], color: 'violet' },
+  { id: 'vocs', title: 'VOCs · 기타', note: '흡착관 · 테들러백 · 음압상자', kinds: ['box', 'plain'], color: 'violet' },
 ];
 const SAMPLING_LOG_KIND_BADGE = {
   particle: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -399,6 +411,8 @@ const createEmptySamplingLogRow = (substance) => ({
   testPeriod: substance.testPeriod || '',
   // 한 행에 두 종이 묶인 경우(알데히드, 옥사이드) 어느 종을 의뢰하는지
   speciesSel: Array.isArray(substance.options) ? [...substance.options] : undefined,
+  // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): 흡착관 / 테들러백
+  collector: Array.isArray(substance.collectors) ? (substance.collectorDefault || substance.collectors[0]) : undefined,
 });
 
 const createEmptySamplingLog = () => ({
@@ -433,9 +447,10 @@ const sanitizeSamplingLog = (value) => {
       const di = parseInt(src.dayIndex, 10);
       row.dayIndex = Number.isFinite(di) && di >= 0 && di < 4 ? di : 0;
       Object.keys(row).forEach((field) => {
-        if (field === 'requested' || field === 'dayIndex' || field === 'speciesSel') return;
+        if (field === 'requested' || field === 'dayIndex' || field === 'speciesSel' || field === 'collector') return;
         if (src[field] !== undefined) row[field] = text(src[field]);
       });
+      if (Array.isArray(item.collectors) && item.collectors.includes(src.collector)) row.collector = src.collector;
       if (Array.isArray(item.options) && Array.isArray(src.speciesSel)) {
         const picked = item.options.filter((opt) => src.speciesSel.includes(opt));
         row.speciesSel = picked.length > 0 ? picked : [...item.options];
@@ -7379,6 +7394,8 @@ export default function App() {
           // 가장 세로로 긴 시트(시료측정위치, 그림 자리 포함)도 한 장에 들어가면서 정수 배율 반올림 뒤 장끼리 폭 차이가
           // 가장 작은 공통 폭(열 너비 어림 단위 pt) → 어느 기록부를 인쇄해도 같은 폭
           equalWidth: { width: 475.6 },
+          // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
+          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14 },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
@@ -7408,7 +7425,8 @@ export default function App() {
               ],
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }], align: false },
+            // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }], align: false, furniture: { sectionRule: true } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             누출시험: { printArea: 'A1:F18' },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
@@ -7763,6 +7781,7 @@ export default function App() {
         const volume = calcSamplingLogVolume(log, sub);
         const species = Array.isArray(sub.options) && Array.isArray(row.speciesSel) && row.speciesSel.length > 0 ? ` (${row.speciesSel.join(', ')})` : '';
         const notes = [];
+        if (Array.isArray(sub.collectors)) notes.push(SAMPLING_LOG_COLLECTOR_LABEL[row.collector] || row.collector || sub.collectorDefault || sub.collectors[0]);
         if (String(row.targetVolume || '').trim()) notes.push(`목표 ${row.targetVolume} L`);
         if (String(row.testPeriod || '').trim()) notes.push(/^\d+$/.test(String(row.testPeriod).trim()) ? `시험기한 ${row.testPeriod}일` : String(row.testPeriod));
         return {
@@ -7863,6 +7882,8 @@ export default function App() {
           add(`B${r}`, on ? `${sub.name} (${picked.join('·')})` : sub.name);
         }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
+        // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): sampler No. 칸에 고른 기구(흡착관/테들러백)를 적는다
+        if (Array.isArray(sub.collectors)) add(`E${r}`, on ? (row.collector || sub.collectorDefault || sub.collectors[0]) : null);
         add(`F${r}`, on ? toExcelDateSerial(day?.date) : null);
         add(`G${r}`, on ? toExcelTimeFraction(row.start) : null);
         add(`H${r}`, on ? toExcelTimeFraction(row.end) : null);
@@ -9189,6 +9210,15 @@ export default function App() {
                 <button type="button" onClick={() => setSamplingLogRequestedOnly(true)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>의뢰만 보기 ({logStats.requestedCount})</button>
               </span>
             </h2>
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+              <span className="font-bold text-slate-700">약어 색 = 채취 방법</span>
+              {SAMPLING_LOG_BADGE_LEGEND.map((item) => (
+                <span key={item.kind} className="inline-flex items-center gap-1 whitespace-nowrap">
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${SAMPLING_LOG_KIND_BADGE[item.kind]}`}>{item.code}</span>
+                  {item.text}
+                </span>
+              ))}
+            </div>
             <div className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
               <table className="w-full text-[11px] text-center border-collapse min-w-[1180px]">
                 <thead className="sticky top-0 z-10">
@@ -9270,6 +9300,18 @@ export default function App() {
                                     </span>
                                   )}
                                   <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${SAMPLING_LOG_KIND_BADGE[sub.kind]}`}>{sub.code}</span>
+                                  {Array.isArray(sub.collectors) && (
+                                    <select
+                                      value={row.collector || sub.collectorDefault || sub.collectors[0]}
+                                      disabled={!on}
+                                      onChange={(e) => updateSamplingLogRow(String(sub.row), 'collector', e.target.value)}
+                                      title="채취 기구"
+                                      aria-label={`${sub.name} 채취 기구`}
+                                      className="ml-1 px-1 py-0.5 border border-slate-300 rounded text-[10px] font-semibold bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                                    >
+                                      {sub.collectors.map((name) => <option key={name} value={name}>{SAMPLING_LOG_COLLECTOR_LABEL[name] || name}</option>)}
+                                    </select>
+                                  )}
                                   {on && (
                                     <span className={`w-2 h-2 rounded-full ${timeDone ? 'bg-emerald-500' : 'bg-amber-400'}`} title={timeDone ? '시각 입력 완료' : '시작/종료 시각 미입력'} />
                                   )}
