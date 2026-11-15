@@ -103,6 +103,8 @@ const computeSamplingPoints = (data) => {
     const dist = Array.from({ length: n }, (_, i) => ((i + 0.5) * D) / n);
     return {
       rect: true, perRadius: n, lines, total: n * lines, isCenterOnly, coeffs: [], side, sideLimit: l,
+      // 유속 분포가 대칭이면 수직 굴뚝은 1/4, 수평 덕트는 1/2로 줄일 수 있다
+      reduced: isCenterOnly ? 1 : Math.max(1, Math.ceil((n * lines) / (data?.rectReduce === 'quarter' ? 4 : data?.rectReduce === 'half' ? 2 : 1))),
       diameterLabel: `${D} × ${side} m`, area: area.toFixed(2),
       wallDistances: dist.map((d) => (d * 100).toFixed(2)),
       portPositions: Array.from({ length: lines }, (_, i) => ((((i + 0.5) * side) / lines) * 100).toFixed(1)),
@@ -2507,7 +2509,7 @@ export default function App() {
   const createInitialFormData = () => ({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
-    totalStackDepth: '', flangeLength: '', stackDiameter: '', stackShape: 'circle', stackSide: '', stackOrientation: 'vertical', pitotInfo: '', pitotFactor: '0.84',
+    totalStackDepth: '', flangeLength: '', stackDiameter: '', stackShape: 'circle', stackSide: '', stackOrientation: 'vertical', rectReduce: 'all', pitotInfo: '', pitotFactor: '0.84',
     pitotPresetId: '',
     standardO2: '',
     gasAnalyzer: [
@@ -7065,39 +7067,47 @@ export default function App() {
         const method = rect
           ? '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 4개 이상 등면적 사각형으로 나누고 각 사각형의 중심에서 측정한다. 유속 분포가 대칭이면 수직 굴뚝은 1/4, 수평 덕트는 1/2로 줄일 수 있다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.'
           : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 측정공이 수직 굴뚝에 있으면 단면의 1/4에 해당하는 반경상의 측정점으로 줄일 수 있고, 수평 굴뚝에 있으면 모든 측정점에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
-        // 설명 글은 세 줄까지 들어가게 세 행을 합친다 (합친 칸은 엑셀이 높이를 자동으로 늘리지 않아 글이 잘린다)
+        // 설명 글은 네 줄까지 들어가게 네 행을 합친다 (합친 칸은 엑셀이 높이를 자동으로 늘리지 않아 글이 잘린다)
         L(`A${r}`, method, 'A5');
-        [0, 1, 2].forEach((k) => ['A', 'B', 'C', 'D', 'E', 'F'].forEach((c) => { if (k || c !== 'A') L(`${c}${r + k}`, null, 'A5'); }));
-        leakMerges.push(`A${r}:F${r + 2}`); r += 4;
+        [0, 1, 2, 3].forEach((k) => ['A', 'B', 'C', 'D', 'E', 'F'].forEach((c) => { if (k || c !== 'A') L(`${c}${r + k}`, null, 'A5'); }));
+        leakMerges.push(`A${r}:F${r + 3}`); r += 5;
         const head = ['굴뚝 형태', '전체길이 (m)', 'Lnw (cm)', rect ? 'D×W (m)' : 'D (m)', '단면적(㎡)', '측정점수'];
         const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
         head.forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
         const flangeM = toNumber(sourceData.flangeLength);
         const dims = rect ? `${sourceData.stackDiameter || ''}×${sourceData.stackSide || ''}` : toNumber(sourceData.stackDiameter);
         const horizontal = !rect && sourceData.stackOrientation === 'horizontal';
-        [rect ? '사각' : (horizontal ? '원형 (수평)' : '원형 (수직)'), toNumber(sourceData.totalStackDepth), flangeM === null ? null : flangeM * 100, dims, sp && sp.area !== '' ? Number(sp.area) : null,
-          sp ? (rect ? `${sp.lines}×${sp.perRadius}=${sp.total}` : (horizontal && !sp.isCenterOnly ? sp.total * 4 : sp.total)) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
+        [rect ? (sourceData.rectReduce === 'quarter' ? '사각 (수직 1/4)' : sourceData.rectReduce === 'half' ? '사각 (수평 1/2)' : '사각') : (horizontal ? '원형 (수평)' : '원형 (수직)'), toNumber(sourceData.totalStackDepth), flangeM === null ? null : flangeM * 100, dims, sp && sp.area !== '' ? Number(sp.area) : null,
+          sp ? (rect ? (sp.reduced && sp.reduced !== sp.total ? sp.reduced : `${sp.lines}×${sp.perRadius}=${sp.total}`) : (horizontal && !sp.isCenterOnly ? sp.total * 4 : sp.total)) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
         r += 2;
         // 양식의 표현 그대로: 중심에서의 거리 → Sampling Location(안쪽) → Lnw 포함 → 최종 샘플링 위치((청) 플랜지 포함) → 깊이(반대편)
         // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
         L(`A${r}`, '(청) 플랜지 (cm)', 'A12'); L(`B${r}`, 15, 'B14');
         const blueRef = `$B$${r}`; r += 2;
         L(`A${r}`, '번호', 'A12'); L(`B${r}`, '중심 거리(cm)', 'A12'); L(`C${r}`, 'Sampling Location (cm)', 'A12');
-        L(`D${r}`, 'Lnw 포함', 'A12'); L(`E${r}`, '최종 위치', 'A12'); L(`F${r}`, rect ? '측정공' : '깊이', 'A12'); r += 1;
-        const count = sp ? Math.min(12, sp.nearInsertion.length) : 0;
+        L(`D${r}`, 'Lnw 포함', 'A12'); L(`E${r}`, '최종 샘플링 위치 (cm)', 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`); r += 1;
         const half = (toNumber(sourceData.stackDiameter) || 0) * 50; // 반지름(또는 깊이의 절반), cm
-        for (let i = 0; i < Math.max(1, count); i++) {
-          const wall = count ? Number(sp.wallDistances[i]) : null;
-          L(`A${r}`, count ? `# ${i + 1}` : null, 'B14');
-          L(`B${r}`, count ? Math.round(Math.abs(half - wall) * 100) / 100 : null, 'B14');
-          L(`C${r}`, wall, 'B14');
-          L(`D${r}`, count ? Number(sp.nearInsertion[i]) : null, 'B14');
+        const flangeCm2 = (toNumber(sourceData.flangeLength) || 0) * 100;
+        // 가까운 쪽 측정점, 원형은 이어서 반대편 측정점(중심 건너편)도 같은 칸으로 적는다
+        const pointRows = [];
+        if (sp) {
+          sp.wallDistances.slice(0, 12).forEach((w, i) => pointRows.push({ label: `# ${i + 1}`, wall: Number(w) }));
+          if (!rect && !sp.isCenterOnly) sp.farInsertion.slice(0, 12).forEach((f, i) => pointRows.push({ label: `반대편 # ${i + 1}`, wall: Math.round((Number(f) - flangeCm2) * 100) / 100 }));
+        }
+        if (pointRows.length === 0) pointRows.push(null);
+        pointRows.forEach((row) => {
+          L(`A${r}`, row ? row.label : null, 'B14');
+          L(`B${r}`, row ? Math.round(Math.abs(half - row.wall) * 100) / 100 : null, 'B14');
+          L(`C${r}`, row ? row.wall : null, 'B14');
+          L(`D${r}`, row ? { formula: `C${r}+${flangeCm2}` } : null, 'B14');
           // 최종 샘플링 위치 = Lnw 포함 값 + (청) 플랜지
-          L(`E${r}`, count ? { formula: `D${r}+${blueRef}` } : null, 'B14');
-          const last = rect
-            ? (count && sp.portPositions && sp.portPositions[i] !== undefined ? Number(sp.portPositions[i]) : null)
-            : (count && sp.farInsertion[i] !== undefined ? { formula: `${Number(sp.farInsertion[i])}+${blueRef}` } : null);
-          L(`F${r}`, last, 'B14'); r += 1;
+          L(`E${r}`, row ? { formula: `D${r}+${blueRef}` } : null, 'B14'); L(`F${r}`, null, 'B14'); leakMerges.push(`E${r}:F${r}`); r += 1;
+        });
+        // 사각 굴뚝: 측정공(다른 변 방향)의 위치
+        if (rect && sp && sp.portPositions) {
+          r += 1;
+          L(`A${r}`, `측정공 위치 (다른 변 방향, cm): ${sp.portPositions.join(', ')}`, 'A5');
+          ['B', 'C', 'D', 'E', 'F'].forEach((c) => L(`${c}${r}`, null, 'A5')); leakMerges.push(`A${r}:F${r}`); r += 1;
         }
         leakFooterRow = r + 1;
       }
@@ -9720,6 +9730,16 @@ export default function App() {
               )}
               {formData.stackShape === 'rect' && (
                 <div>
+                  <label className="block text-xs font-bold text-emerald-900 mb-1">측정점 줄이기</label>
+                  <select name="rectReduce" value={formData.rectReduce || 'all'} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-bold text-emerald-900 outline-none" title="유속 분포가 비교적 대칭일 때만 줄일 수 있습니다. 수평 굴뚝에 측정공이 있으면 모든 측정점에서 측정합니다">
+                    <option value="all">모든 측정점</option>
+                    <option value="quarter">수직 굴뚝 (1/4)</option>
+                    <option value="half">수평 덕트 (1/2)</option>
+                  </select>
+                </div>
+              )}
+              {formData.stackShape === 'rect' && (
+                <div>
                   <label className="block text-xs font-bold text-emerald-900 mb-1">다른 변 길이 (측정공 쪽 벽 폭, m)</label>
                   <input type="number" step="0.0001" name="stackSide" value={formData.stackSide || ''} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-black text-emerald-900 outline-none" placeholder="예: 1.5" />
                 </div>
@@ -9735,7 +9755,7 @@ export default function App() {
               <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-sm font-bold text-slate-800">
-                    측정점 위치 ({samplingPointsData.rect ? `사각 ${samplingPointsData.diameterLabel} · 측정공 ${samplingPointsData.lines}개 × ${samplingPointsData.perRadius}점 = ${samplingPointsData.total}점` : `내경 ${formData.stackDiameter} m · ${formData.stackOrientation === 'horizontal' ? `수평: 모든 측정점 ${samplingPointsData.isCenterOnly ? 1 : samplingPointsData.perRadius * 4}점 (직경 둘)` : `수직: 반경 하나 ${samplingPointsData.perRadius}점`}`})
+                    측정점 위치 ({samplingPointsData.rect ? `사각 ${samplingPointsData.diameterLabel} · 측정공 ${samplingPointsData.lines}개 × ${samplingPointsData.perRadius}점 = ${samplingPointsData.total}점${samplingPointsData.reduced && samplingPointsData.reduced !== samplingPointsData.total ? ` → 줄여서 ${samplingPointsData.reduced}점` : ''}` : `내경 ${formData.stackDiameter} m · ${formData.stackOrientation === 'horizontal' ? `수평: 모든 측정점 ${samplingPointsData.isCenterOnly ? 1 : samplingPointsData.perRadius * 4}점 (직경 둘)` : `수직: 반경 하나 ${samplingPointsData.perRadius}점`}`})
                   </h3>
                   {samplingPointsData.isCenterOnly && (
                     <span className="bg-red-50 text-red-600 px-2 py-1 rounded text-xs font-bold animate-pulse border border-red-200">
