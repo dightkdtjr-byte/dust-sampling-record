@@ -104,7 +104,8 @@ const computeSamplingPoints = (data) => {
     return {
       rect: true, perRadius: n, lines, total: n * lines, isCenterOnly, coeffs: [], side, sideLimit: l,
       // 유속 분포가 대칭이면 수직 굴뚝은 1/4, 수평 덕트는 1/2로 줄일 수 있다
-      reduced: isCenterOnly ? 1 : Math.max(1, Math.ceil((n * lines) / (data?.rectReduce === 'quarter' ? 4 : data?.rectReduce === 'half' ? 2 : 1))),
+      // 단면적이 20 m²를 넘으면 최대 20점 (ES 01301.1 표 2)
+      reduced: isCenterOnly ? 1 : Math.min(area > 20 ? 20 : Infinity, Math.max(1, Math.ceil((n * lines) / (data?.rectReduce === 'quarter' ? 4 : data?.rectReduce === 'half' ? 2 : 1)))),
       diameterLabel: `${D} × ${side} m`, area: area.toFixed(2),
       wallDistances: dist.map((d) => (d * 100).toFixed(2)),
       portPositions: Array.from({ length: lines }, (_, i) => ((((i + 0.5) * side) / lines) * 100).toFixed(1)),
@@ -5418,7 +5419,8 @@ export default function App() {
 
   const getRawVmStd = () => {
     const factors = getRawPostMoistureFactors();
-    return factors ? factors.vmStdL : 0;
+    // 먼지농도·표시용 표준 건조가스량: 가스미터 지시값 기준 (보정계수 Yd를 곱하지 않는다, ES 01301.1 식 9)
+    return factors ? factors.vmStdL / (Number.isFinite(factors.yd) && factors.yd > 0 ? factors.yd : 1) : 0;
   };
 
   const getRawDustWeightDiff = () => {
@@ -5773,7 +5775,7 @@ export default function App() {
 
     // 엑셀 L열 수식과 동일한 누적 순간등속 (온도·오리피스 평균은 18행부터)
     const postTerm = (0.00346 * vicCum)
-      + (((VmCum * Y) / 1000) / (273 + TmAvg)) * PmAbs;
+      + ((VmCum / 1000) / (273 + TmAvg)) * PmAbs; // 가스미터 지시값 그대로 (ES 01301.1 식 8)
     const rate = ((273 + TsAvg) * postTerm)
       / (Ps * thetaCum * Vs * (Math.PI / 4) * Math.pow(DnCm, 2))
       * 16670;
@@ -5891,7 +5893,7 @@ export default function App() {
         const Vic = getRawTotalMoistureWeight();
         const Vm_m3 = Vm / 1000;
         const part1 = 0.00346 * Vic;
-        const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
+        const part2 = (Vm_m3 * Pm_abs) / (Tm + 273); // 가스미터 지시값 그대로 (ES 01301.1 식 8)
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(2);
       } else {
@@ -5905,7 +5907,7 @@ export default function App() {
         const VicPre = ((Vm * Y * (273 / (273 + Tm)) * (Pm_abs / 760) * Xw) / (100 - Xw)) * (18 / 22.4);
         const Vm_m3 = Vm / 1000;
         const part1 = 0.00346 * VicPre;
-        const part2 = ((Vm_m3 * Y) * Pm_abs) / (Tm + 273);
+        const part2 = (Vm_m3 * Pm_abs) / (Tm + 273); // 가스미터 지시값 그대로 (ES 01301.1 식 8)
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(2);
       }
@@ -7125,8 +7127,12 @@ export default function App() {
         const mRect = `IF(${Ac}<=0.25,1,MAX(2,-INT(-(N(${Wc})/${lim}-0.000001))))`;
         const nCell = `$H$${dimRow}`; const mCell = `$I$${dimRow}`; // 인쇄 범위 밖 보조 칸
         L(`H${dimRow}`, { formula: `IF(${S}=3,${nRect},${nCirc})` }); L(`I${dimRow}`, { formula: `IF(${S}=3,${mRect},1)` });
+        // 사각 굴뚝 측정점 축소 배수(1: 모든 측정점, 2: 수평 덕트 1/2, 4: 수직 1/4): 인쇄 범위 밖 보조 칸에 적어 엑셀에서 고칠 수 있게 한다
         const reduce = sourceData.rectReduce === 'quarter' ? 4 : sourceData.rectReduce === 'half' ? 2 : 1;
-        L(`F${dimRow}`, { formula: `IF(${Ac}<=0.25,1,IF(${S}=3,-INT(-${nCell}*${mCell}/${reduce}),IF(${S}=2,${nCell}*4,${nCell})))` }, 'B14');
+        L(`J${dimRow - 1}`, '사각 축소 배수'); L(`J${dimRow}`, reduce);
+        const rectCount = `-INT(-${nCell}*${mCell}/MAX(1,N($J$${dimRow})))`;
+        // 단면적이 20 m²를 넘으면 측정점은 최대 20점 (ES 01301.1 표 2)
+        L(`F${dimRow}`, { formula: `IF(${Ac}<=0.25,1,IF(${S}=3,IF(${Ac}>20,MIN(20,${rectCount}),${rectCount}),IF(${S}=2,${nCell}*4,${nCell})))` }, 'B14');
         r += 2;
         // 측정점 표: 번호 · 중심 거리 · Sampling Location · Lnw 포함 · 최종 샘플링 위치 · 반대편
         ['번호', '중심 거리 (cm)', 'Sampling Location (cm)', 'Lnw 포함', '최종 샘플링 위치', '반대편'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
@@ -7203,9 +7209,33 @@ export default function App() {
       // 숨긴 '피토계산' 시트는 피토관 일련번호(노즐산정 C8)를 E2로 받아 찾는다. 피토관을 고르지 않아 C8이 비면
       // 엑셀에서 E2가 0이 되어 유속별 Cp 찾기가 #N/A가 되므로, 비어 있으면 빈칸을 받게 한다
       addUpdate('피토계산', 'E2', { formula: 'IF(노즐산정!$C$8="","",노즐산정!$C$8)' });
-      addUpdate('노즐산정', 'C10', toNumber(sourceData.pitotFactor));
-      addUpdate('노즐산정', 'F8', toNumber(sourceData.deltaHAt));
-      addUpdate('노즐산정', 'G8', toNumber(sourceData.gasMeterFactor));
+      // 피토계수 자동 선택을 엑셀이 한다: 기준계수 0.84(E9)로 유속을 가계산(E10)하고, 그 유속으로 계수 적용표(피토계산 시트)에서 찾는다(C9).
+      // (양식의 C9는 계수를 곱한 유속 G39를 보았는데, G39가 다시 C10을 보므로 C10을 수식으로 만들면 순환 참조가 된다)
+      // 가계산 유속은 기록표에 측정값이 있으면 그 평균 동압·밀도로, 없으면 예비조사 값으로 (프로그램 화면과 같은 순서)
+      {
+        const recRef = `'${recordSheet}'!`;
+        const mFirst = layout.meterStartRow + 1; const mLast = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
+        const hasRec = `COUNT(${recRef}E${mFirst}:E${mLast})>0`;
+        addUpdate('노즐산정', 'E10', { formula: `IFERROR($E$9*(2*9.81*IF(${hasRec},${recRef}E${mLast + 1},$J$15)/IF(${hasRec},rr,$K$15))^0.5,"")` }, 'E9');
+        addUpdate('노즐산정', 'C9', { formula: 'IF(OR($C$8="",N($E$10)<=0),"",IFERROR(INDEX(피토계산!$C$18:$C$25,_xlfn.AGGREGATE(15,6,(ROW(피토계산!$B$18:$B$25)-ROW(피토계산!$B$18)+1)/((피토계산!$B$18:$B$25+0)>=($E$10+0)),1)),""))' });
+        const typedCp = toNumber(sourceData.pitotFactor);
+        // 표에서 못 찾으면(피토관을 고르지 않았거나 표에 없는 피토관) 프로그램에 적힌 계수를 쓴다
+        addUpdate('노즐산정', 'C10', pitotSerial ? { formula: `IF(N($C$9)>0,$C$9,${typedCp ?? 0.84})` } : typedCp);
+      }
+      // 샘플러 ΔH@·Yd: 샘플러 표(M39:P43)에 프로그램의 값을 적고, 샘플러번호(B5)로 찾아 쓴다. 표에 없는 번호이면 값을 그대로 적는다
+      {
+        const samplerNo = toNumber(sourceData.samplerId);
+        const dha = toNumber(sourceData.deltaHAt); const yd = toNumber(sourceData.gasMeterFactor);
+        if (samplerNo !== null && Number.isInteger(samplerNo) && samplerNo >= 1 && samplerNo <= 5 && dha !== null && yd !== null) {
+          addUpdate('노즐산정', `O${38 + samplerNo}`, dha);
+          addUpdate('노즐산정', `P${38 + samplerNo}`, yd);
+          addUpdate('노즐산정', 'F8', { formula: `IFERROR(INDEX($O$39:$O$43,MATCH($B$5,$M$39:$M$43,0)),${dha})` });
+          addUpdate('노즐산정', 'G8', { formula: `IFERROR(INDEX($P$39:$P$43,MATCH($B$5,$M$39:$M$43,0)),${yd})` });
+        } else {
+          addUpdate('노즐산정', 'F8', dha);
+          addUpdate('노즐산정', 'G8', yd);
+        }
+      }
       addUpdate('노즐산정', 'D15', toNumber(sourceData.traverseTmIn));
       addUpdate('노즐산정', 'F15', toNumber(sourceData.traverseTmOut));
       // 스택온도 평균: 측정점이 5개 이하이면 아래 표(G17:G21)의 평균을 엑셀이 계산한다 (6개 이상이면 표에 다 못 적으므로 값으로)
@@ -7314,9 +7344,14 @@ export default function App() {
         const tubeYd = getPreMoistureYd(tubeMethod, sourceData);
         const tubePv = Math.round(getPreMoisturePv(tubeMethod, sourceData) * 100) / 100;
         addUpdate('수분량', 'E24', { formula: `IF($C$5=${tubeNo},SUM(E20:F21),SUM(E20:F23))` });
-        addUpdate('수분량', 'C28', { formula: `IF($C$5=${tubeNo},(B28-A28)*${Number.isFinite(tubeYd) ? tubeYd : 1},(B28-A28)*노즐산정!G8)` });
+        // 흡습관법의 가스 샘플러 보정계수(J28)와 습식 가스미터 여부(K28: 1이면 습식)는 인쇄 범위 밖 보조 칸에 적는다
+        addUpdate('수분량', 'J27', '가스샘플러 Yd'); addUpdate('수분량', 'K27', '습식 가스미터(1)'); addUpdate('수분량', 'L27', '포화수증기압(mmHg)');
+        addUpdate('수분량', 'J28', Number.isFinite(tubeYd) ? tubeYd : 1);
+        addUpdate('수분량', 'K28', tubePv > 0 ? 1 : 0);
+        addUpdate('수분량', 'L28', { formula: 'IF(AND($K$28=1,ISNUMBER(D28)),4.5812*10^(7.5*D28/(237.3+D28)),0)' });
+        addUpdate('수분량', 'C28', { formula: `IF($C$5=${tubeNo},(B28-A28)*$J$28,(B28-A28)*노즐산정!G8)` });
         // 자료가 없으면 0으로 (#DIV/0!이 노즐산정·계산식 전체로 번지지 않게)
-        addUpdate('수분량', 'H28', { formula: `IF(OR(N(C28)=0,N(E24)=0),0,22.4/18*E24/(C28*(273/(273+D28))*((E28+G28-IF($C$5=${tubeNo},${tubePv},0))/760)+22.4/18*E24)*100)` });
+        addUpdate('수분량', 'H28', { formula: `IF(OR(N(C28)=0,N(E24)=0),0,22.4/18*E24/(C28*(273/(273+D28))*((E28+G28-IF($C$5=${tubeNo},$L$28,0))/760)+22.4/18*E24)*100)` });
       }
       if (preImpHasData) {
         for (let i = 0; i < 4; i++) {
@@ -7331,14 +7366,19 @@ export default function App() {
         addUpdate('수분량', 'D28', toNumber(preImp.meterTemp));
         addUpdate('수분량', 'E28', toNumber(preImp.pressure) ?? toNumber(sourceData.atmPressure));
         addUpdate('수분량', 'F28', preOrifice);
-        addUpdate('수분량', 'G28', { formula: 'IF(F28="",0,F28/13.6)' });
+        addUpdate('수분량', 'G28', { formula: 'IFERROR(F28/13.6,0)' });
       } else {
-        addUpdate('수분량', 'A28', toNumber(firstVolume));
-        addUpdate('수분량', 'B28', toNumber(lastVolume));
-        addUpdate('수분량', 'D28', Number.isFinite(avgTm) ? avgTm : null);
-        addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
-        addUpdate('수분량', 'F28', Number.isFinite(avgOrifice) ? avgOrifice : null);
-        addUpdate('수분량', 'G28', { formula: 'IF(F28="",0,F28/13.6)' });
+        // 사전 측정 자료가 없으면 본 측정(기록지)의 가스미터 값을 따라간다 (아래 '본 측정시 가스흡인량' 줄과 같은 칸)
+        {
+          const recRef = `'${recordSheet}'!`;
+          const mFirst = layout.meterStartRow; const mLast = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
+          addUpdate('수분량', 'A28', { formula: `${recRef}G${mFirst}` });
+          addUpdate('수분량', 'B28', { formula: `MAX(${recRef}G${mFirst}:G${mLast})` });
+          addUpdate('수분량', 'D28', { formula: `${recRef}H${mLast + 1}` });
+          addUpdate('수분량', 'E28', { formula: '노즐산정!B8' });
+          addUpdate('수분량', 'F28', { formula: `${recRef}F${mLast + 1}` });
+        }
+        addUpdate('수분량', 'G28', { formula: 'IFERROR(F28/13.6,0)' });
       }
       for (let i = 0; i < layout.impingerRows; i++) {
         const imp = sourceImpingers[i] || {};
@@ -7370,7 +7410,8 @@ export default function App() {
       // 기록지 B열(시료채취 시간)은 누적 분. 앱 입력이 구간(5,5,5…)이면 누적으로 변환, 이미 누적(5,10,15…)이면 그대로
       const meterTimeValues = gasMeters.slice(1).map((m) => parseFloat(m?.time)).filter((v) => Number.isFinite(v) && v > 0);
       // 같은 시간이 연달아 있어도(5,10,10,15) 누적으로 본다
-      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v >= meterTimeValues[i - 1]);
+      // 모두 같은 값(5,5,5…)이면 구간 시간이다
+      const isCumulativeMeterTime = meterTimeValues.length >= 2 && meterTimeValues.every((v, i) => i === 0 || v >= meterTimeValues[i - 1]) && meterTimeValues[meterTimeValues.length - 1] > meterTimeValues[0];
       let runningMinutes = 0;
       gasMeters.forEach((meter, idx) => {
         const row = layout.meterStartRow + idx;
@@ -7382,7 +7423,11 @@ export default function App() {
         }
         // 채취점 번호는 숫자로 (글자로 넣으면 엑셀에서 '텍스트 형식의 숫자'로 표시된다)
         addUpdate(recordSheet, `A${row}`, /^\d+$/.test(String(meter.pointNum || '').trim()) ? Number(meter.pointNum) : (meter.pointNum || (idx === 0 ? '시작' : '')));
-        addUpdate(recordSheet, `B${row}`, idx === 0 ? 0 : cellMinutes);
+        // 구간 시간으로 적었으면 구간 값을 인쇄 범위 밖 Q열에 두고, 누적 시간은 엑셀이 더한다
+        if (idx > 0 && rawMinutes !== null && !isCumulativeMeterTime) {
+          addUpdate(recordSheet, `Q${row}`, rawMinutes);
+          addUpdate(recordSheet, `B${row}`, { formula: `B${row - 1}+Q${row}` });
+        } else addUpdate(recordSheet, `B${row}`, idx === 0 ? 0 : cellMinutes);
         addUpdate(recordSheet, `C${row}`, toNumber(meter.vacuum));
         addUpdate(recordSheet, `D${row}`, toNumber(meter.stackTemp));
         addUpdate(recordSheet, `E${row}`, toNumber(meter.dp));
@@ -7393,13 +7438,17 @@ export default function App() {
         const orifice = exportK !== null && exportDp !== null
           ? Math.round(exportK * exportDp * 10000) / 10000
           : toNumber(meter.pressure);
-        addUpdate(recordSheet, `F${row}`, orifice);
+        // K factor(C12, 노즐산정에서 사용노즐로 찾은 값) × 동압을 엑셀이 계산한다. K가 없으면 직접 입력한 값을 적는다
+        addUpdate(recordSheet, `F${row}`, idx > 0 && exportK !== null && exportDp !== null
+          ? { formula: `IF(OR(E${row}="",N($C$12)=0),${orifice ?? '""'},ROUND($C$12*E${row},4))` }
+          : orifice);
         addUpdate(recordSheet, `G${row}`, toNumber(meter.volume));
         addUpdate(recordSheet, `H${row}`, toNumber(meter.tmIn));
         addUpdate(recordSheet, `I${row}`, toNumber(meter.tmOut));
         addUpdate(recordSheet, `K${row}`, toNumber(meter.impingerTemp));
         const rowSp = toNumber(meter.sp);
-        addUpdate(recordSheet, `P${row}`, rowSp !== null ? rowSp : (Number.isFinite(avgSp) ? avgSp : null));
+        // 정압을 줄마다 적지 않았으면 예비조사 평균 정압(노즐산정 I15)을 따라간다
+        addUpdate(recordSheet, `P${row}`, rowSp !== null ? rowSp : (Number.isFinite(avgSp) ? { formula: 'IFERROR(노즐산정!$I$15+0,"")' } : null));
       });
       // ── 양식 자체의 수식 오류 보정 ──
       // 1) 표준산소 환산: 표준산소농도(Os)가 있으면 보정하고, 없으면 보정하지 않는다 (실측 산소 Oa가 없으면 계산할 수 없어 빈칸)
@@ -7437,6 +7486,13 @@ export default function App() {
         const firstRow = layout.meterStartRow;
         const lastRow = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
         addUpdate(recordSheet, `J${lastRow + 1}`, { formula: `IFERROR(AVERAGE(J${firstRow}:J${lastRow}),"")` });
+        // 가스시료채취량 V'm: 공정시험기준(ES 01301.1 식 8·9)은 가스미터 지시값을 그대로 쓴다 → 보정계수 Yd를 곱하지 않는다
+        // (수분량 계산의 가스채취량은 수분량 시트에서 따로 Yd를 곱한다)
+        addUpdate(recordSheet, `G${lastRow + 1}`, { formula: `(MAX(G${firstRow}:G${lastRow})-MIN(G${firstRow}:G${lastRow}))/1000` });
+        if (firstRow + 1 <= lastRow) addUpdate(recordSheet, `Q${firstRow - 2}`, '구간 시간(분)');
+        for (let row = firstRow + 1; row <= lastRow; row++) {
+          addUpdate(recordSheet, `L${row}`, { formula: `((273+AVERAGE($D$${firstRow + 1}:D${row}))*((0.00346*O${row}+((G${row}-$G$${firstRow})/1000)/(273+AVERAGE($H$${firstRow + 1}:I${row}))*(Pa+AVERAGE($F$${firstRow + 1}:F${row})/13.6)))/((Pa+Ps)*B${row}*M${row}*(PI()/4)*Dn^2))*16670` });
+        }
       }
       // 3) 피토관을 고르지 않으면 흡인관 길이(J10)가 #VALUE!로 찍힌다 → 빈칸
       addUpdate(recordSheet, 'J10', { formula: 'IFERROR(노즐산정!D9/100,"")' });
