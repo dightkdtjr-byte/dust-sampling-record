@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -7168,6 +7168,31 @@ export default function App() {
 
       // 노즐산정 밀도 표: 쓰지 않는 '몰수' 칸(모두 '-')을 없애고 성분 칸과 합친다
       nozzleMerges.push('A25:B25', 'A26:B26', 'A27:B27', 'A28:B28', 'A29:B29');
+      // 밀도 계산식 설명(인쇄 범위 오른쪽 M21:T30): 한 줄 글자 → 제목·식·기호 표로 정리
+      // 식은 H26 칸의 계산과 같게 적는다 (ΣMᵢxᵢ가 vol% 단위이므로 수분 항은 18 × Xw, 양식의 '18 × Xw/100'은 칸의 계산과 달랐다)
+      {
+        const subRuns = (parts) => ({ runs: parts.map((x) => (Array.isArray(x) ? { t: x[0], sub: true } : { t: x })) });
+        addUpdate('노즐산정', 'M21', '');
+        addUpdate('계산식', 'B43', 'Vic = (채취 전후의 실리카겔 무게차, g) + (임핀저 내 물부피 차(mL) 또는 임핀저 무게차(g))');
+        addUpdate('노즐산정', 'M24', '연소가스 밀도 계산식', 'A24');
+        ['N', 'O', 'P', 'Q', 'R', 'S', 'T'].forEach((c) => addUpdate('노즐산정', `${c}24`, '', 'A24'));
+        addUpdate('노즐산정', 'M25', subRuns(['γ', ['a'], ' = 1 / (22.4 × 100) × [ ( M', ['1'], 'x', ['1'], ' + M', ['2'], 'x', ['2'], ' + … + M', ['n'], 'x', ['n'], ' ) × (100 − X', ['w'], ') / 100 + 18 × X', ['w'], ' ]']), 'C26');
+        ['M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'].forEach((c) => { if (c !== 'M') addUpdate('노즐산정', `${c}25`, '', 'C26'); addUpdate('노즐산정', `${c}26`, '', 'C26'); });
+        const legend = [
+          [['γ', ['a']], '연소가스 밀도 (kg/Sm³)'],
+          [['M', ['i']], '성분별 분자량 (g/mol)'],
+          [['x', ['i']], '성분별 부피백분율 (vol%)'],
+          [['X', ['w']], '수분 비율 (vol%)'],
+        ];
+        legend.forEach(([sym, text], i) => {
+          const r = 27 + i;
+          addUpdate('노즐산정', `M${r}`, subRuns(sym), 'A26');
+          addUpdate('노즐산정', `N${r}`, text, 'C26');
+          ['O', 'P', 'Q', 'R', 'S', 'T'].forEach((c) => addUpdate('노즐산정', `${c}${r}`, '', 'C26'));
+          nozzleMerges.push(`N${r}:T${r}`);
+        });
+        nozzleMerges.push('M24:T24', 'M25:T26');
+      }
       ['B25', 'B26', 'B27', 'B28', 'B29'].forEach((ref) => addUpdate('노즐산정', ref, null));
       // 노즐산정: 대기 조건, 피토관, 샘플러 계수
       addUpdate('노즐산정', 'B5', toNumber(sourceData.samplerId));
@@ -7183,7 +7208,14 @@ export default function App() {
       addUpdate('노즐산정', 'G8', toNumber(sourceData.gasMeterFactor));
       addUpdate('노즐산정', 'D15', toNumber(sourceData.traverseTmIn));
       addUpdate('노즐산정', 'F15', toNumber(sourceData.traverseTmOut));
-      addUpdate('노즐산정', 'G15', Number.isFinite(avgTs) ? avgTs : null);
+      // 스택온도 평균: 측정점이 5개 이하이면 아래 표(G17:G21)의 평균을 엑셀이 계산한다 (6개 이상이면 표에 다 못 적으므로 값으로)
+      addUpdate('노즐산정', 'G15', sourcePoints.length <= 5 ? { formula: 'IFERROR(AVERAGE(G17:G21),"")' } : (Number.isFinite(avgTs) ? avgTs : null));
+      // K factor의 온도비는 (가스미터 평균온도+273)/(굴뚝온도+273)이다. 양식은 (가스미터 출구)/(가스미터 입구)로 잘못 걸려 있어
+      // K와 ΔH가 실제보다 크게 나왔다 (프로그램 화면의 계산은 원래 Tm/Ts를 쓴다)
+      for (let i = 0; i < layout.nozzleRows; i++) {
+        const row = 39 + i;
+        addUpdate('노즐산정', `D${row}`, { formula: `8.001*10^-5*C${row}^4*$F$8*$C$10^2*(1-$C$15/100)^2*($H$8/$I$8)*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)` });
+      }
       for (let i = 0; i < 5; i++) {
         const point = sourcePoints[i] || {};
         const row = 17 + i;
@@ -7210,6 +7242,13 @@ export default function App() {
       // 굴뚝 내경: 유량 양식은 A37이 고정값(1.1)이라 반드시 써 넣고, 직접 고친 내경도 그대로 반영
       const stackDiameterM = toNumber(sourceData.stackDiameter);
       if (stackDiameterM !== null && stackDiameterM > 0) addUpdate('시료측정위치', 'A37', stackDiameterM);
+      // 누출시험·시료측정위치 시트가 있으면 그 시트의 칸을 따라간다 → 엑셀에서 길이·내경을 고치면 기록지의 내경·그림도 함께 바뀐다
+      if (leakPositionCells) {
+        const pos = `'${positionSheetNameOf(layout)}'!`;
+        addUpdate('시료측정위치', 'B34', { formula: `${pos}A${leakPositionCells.dimRow}` });
+        addUpdate('시료측정위치', 'B37', { formula: `${pos}B${leakPositionCells.dimRow}` });
+        addUpdate('시료측정위치', 'A37', { formula: `${pos}C${leakPositionCells.dimRow}` });
+      }
 
       // 수분량: 사전 수분량은 고른 방법대로, 사후는 임핀저 무게
       //  - 자동측정기: C5=1, B10~B14에 5회값
@@ -7292,14 +7331,14 @@ export default function App() {
         addUpdate('수분량', 'D28', toNumber(preImp.meterTemp));
         addUpdate('수분량', 'E28', toNumber(preImp.pressure) ?? toNumber(sourceData.atmPressure));
         addUpdate('수분량', 'F28', preOrifice);
-        addUpdate('수분량', 'G28', preOrifice !== null ? preOrifice / 13.6 : 0);
+        addUpdate('수분량', 'G28', { formula: 'IF(F28="",0,F28/13.6)' });
       } else {
         addUpdate('수분량', 'A28', toNumber(firstVolume));
         addUpdate('수분량', 'B28', toNumber(lastVolume));
         addUpdate('수분량', 'D28', Number.isFinite(avgTm) ? avgTm : null);
         addUpdate('수분량', 'E28', toNumber(sourceData.atmPressure));
         addUpdate('수분량', 'F28', Number.isFinite(avgOrifice) ? avgOrifice : null);
-        addUpdate('수분량', 'G28', Number.isFinite(avgOrifice) ? avgOrifice / 13.6 : null);
+        addUpdate('수분량', 'G28', { formula: 'IF(F28="",0,F28/13.6)' });
       }
       for (let i = 0; i < layout.impingerRows; i++) {
         const imp = sourceImpingers[i] || {};
@@ -7309,10 +7348,10 @@ export default function App() {
       }
 
       // 기록지: 머리글 (계산 셀은 양식 수식을 그대로 두고 입력 셀만 기록)
-      addUpdate(recordSheet, 'C5', sourceData.company);
-      addUpdate(recordSheet, 'C6', sourceData.location);
+      addUpdate(recordSheet, 'C5', { formula: '표지!D19' });
+      addUpdate(recordSheet, 'C6', { formula: '표지!D20' });
       addUpdate(recordSheet, 'C7', String(sourceData.sampler || '').trim() ? `${String(sourceData.sampler).trim()} (인)` : null);
-      addUpdate(recordSheet, 'C8', toExcelDateSerial(sourceData.date));
+      addUpdate(recordSheet, 'C8', { formula: '표지!D21' });
       addUpdate(recordSheet, 'C9', filterNumber);
       addUpdate(recordSheet, 'J13', filterNumber);
       addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
@@ -7390,7 +7429,9 @@ export default function App() {
       addUpdate('노즐산정', 'H8', { formula: '(0.32*N($A$15)+0.44*N($B$15)+0.28*(100-N($A$15)-N($B$15)))' });
       addUpdate('노즐산정', 'D26', { formula: 'IFERROR(AVERAGE(연소가스자료!B8:B10),0)' });
       addUpdate('노즐산정', 'D27', { formula: 'IFERROR(AVERAGE(연소가스자료!C8:C10),0)' });
-      addUpdate('노즐산정', 'D28', { formula: 'IFERROR(AVERAGE(연소가스자료!D8:D10)/1000,0)' });
+      // CO는 ppm으로 적으므로 vol%로는 /10000 (양식은 /1000), 분자량은 28 (양식은 38로 적혀 있었다)
+      addUpdate('노즐산정', 'D28', { formula: 'IFERROR(AVERAGE(연소가스자료!D8:D10)/10000,0)' });
+      addUpdate('노즐산정', 'C28', 28);
       // 2) 여과지 홀더 온도(J열)는 입력 칸이 없어 평균이 #DIV/0!로 찍힌다 → 값이 없으면 빈칸
       {
         const firstRow = layout.meterStartRow;
@@ -7453,7 +7494,7 @@ export default function App() {
                   : {}),
                 // 수분량 시트: 측정방법이 세 줄이 되었으므로 선택번호 칸도 세 줄로 합친다
                 // 측정방법 표가 한 줄 늘어 바로 아래 제목과 붙었으므로, 제목 줄을 높여 다른 제목들처럼 위에 여백을 둔다
-                ...(sheetName === '노즐산정' && nozzleMerges.length ? { addMerges: nozzleMerges } : {}),
+                ...(sheetName === '노즐산정' && nozzleMerges.length ? { addMerges: nozzleMerges, removeMerges: ['M21:T25', 'M27:T27', 'M28:T28', 'M29:T29', 'M30:T30'] } : {}),
                 ...(sheetName === '누출시험' && leakMerges.length ? { addMerges: leakMerges, ...(layout.leakAsPosition ? { removeMerges: ['A1:D2', 'A17:D17'] } : {}) } : {}),
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
@@ -7507,37 +7548,11 @@ export default function App() {
         try {
           const leakPath = sheetPathMap.get('누출시험');
           const xml = await zip.file(leakPath).async('string');
-          const widths = [16.7, 14, 21.1, 13, 15, 13];
+          const widths = [16.7, 14, 21.1, 13.7, 13.7, 13.7]; // 전·후·차(D~F)는 같은 너비
           const colsXml = `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`;
           zip.file(leakPath, /<cols>[\s\S]*?<\/cols>/.test(xml) ? xml.replace(/<cols>[\s\S]*?<\/cols>/, () => colsXml) : xml.replace(/<sheetData\b/, (w) => `${colsXml}${w}`));
         } catch (error) { console.error('측정위치 열 너비 맞추기 실패:', error); }
       }
-      // 기록지의 측정점 그림(ShowPic 연결 그림): 그림 칸(E5:G10, 약 179×144pt) 가운데에 놓고,
-      // '지점 사진' 시트의 원본 칸 비율(가로 159 : 세로 199.5)과 같게 해서 그림이 찌그러지지 않게 한다
-      try {
-        const recPath = sheetPathMap.get(recordSheet);
-        const relsFile = zip.file(recPath.replace(/([^/]+)$/, '_rels/$1.rels'));
-        const rels = relsFile ? await relsFile.async('string') : '';
-        const target = (/Type="[^"]*\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/drawing"/.exec(rels) || [])[1];
-        const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
-        const drawingFile = drawingPath ? zip.file(drawingPath) : null;
-        if (drawingFile) {
-          const PT = 12700;
-          const boxW = 179.3; const boxH = 144; const pad = 3; const colE = 45; const colF = 45; // E·F열 45pt, G열 89pt, 행 24pt
-          const h = boxH - pad * 2; const w = Math.min(boxW - pad * 2, (h * 159) / 199.5);
-          const left = (boxW - w) / 2; const right = left + w; const bottom = pad + h;
-          const at = (x) => (x < colE ? [4, x] : x < colE + colF ? [5, x - colE] : [6, x - colE - colF]);
-          const [c1, o1] = at(left); const [c2, o2] = at(right);
-          const drawing = await drawingFile.async('string');
-          const next = drawing.replace(/<xdr:twoCellAnchor\b[^>]*>\s*<xdr:from>\s*<xdr:col>4<\/xdr:col>[\s\S]*?<xdr:row>4<\/xdr:row>[\s\S]*?<\/xdr:to>/, (whole) => (
-            /<xdr:to>\s*<xdr:col>6<\/xdr:col>/.test(whole)
-              ? `<xdr:twoCellAnchor><xdr:from><xdr:col>${c1}</xdr:col><xdr:colOff>${Math.round(o1 * PT)}</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>${pad * PT}</xdr:rowOff></xdr:from>`
-                + `<xdr:to><xdr:col>${c2}</xdr:col><xdr:colOff>${Math.round(o2 * PT)}</xdr:colOff><xdr:row>${4 + Math.floor(bottom / 24)}</xdr:row><xdr:rowOff>${Math.round((bottom % 24) * PT)}</xdr:rowOff></xdr:to>`
-              : whole
-          ));
-          if (next !== drawing) zip.file(drawingPath, next);
-        }
-      } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
       try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
 
@@ -7613,6 +7628,17 @@ export default function App() {
         const exportPalette = EXPORT_PALETTES[exportSheetId] || EXPORT_PALETTES.dust;
         const meterLast = layout.meterStartRow + meterRowsForTemplate; // 평균 행까지
         const postHead = 41 + (layout.impingerRows - 4);
+        // 기록지 표 아래의 표준상태 건조가스량(Vmstd): 위아래 두 칸짜리 회색 상자 → '이름 | 값' 한 줄 (값 칸 G는 그대로라 수식 참조가 바뀌지 않는다)
+        try {
+          const recPath = sheetPathMap.get(recordSheet);
+          const recXml = await zip.file(recPath).async('string');
+          const vr = meterLast + 4;
+          zip.file(recPath, patchWorksheetXml(recXml, [
+            { ref: `E${vr}`, value: { runs: [{ t: 'V' }, { t: 'm(std)', sub: true }, { t: ' (Sm³)' }] }, styleFrom: `G${vr - 1}` },
+            { ref: `F${vr}`, value: '', styleFrom: `G${vr - 1}` },
+            { ref: `G${vr - 1}`, value: '' },
+          ], { addMerges: [`E${vr}:F${vr}`] }));
+        } catch (error) { console.error('Vmstd 칸 정리 실패:', error); }
         await tidyWorkbook(zip, {
           // 양식의 시트는 모두 한 장짜리 서식이므로 한 장에 맞춰 인쇄한다
           onePageSheets: 'all',
@@ -7649,6 +7675,7 @@ export default function App() {
               fills: [
                 { range: 'F26:F29', fill: exportPalette.dark }, { range: 'H26:H29', fill: exportPalette.dark },
                 { range: 'A33:C33', fill: exportPalette.header },
+                { range: 'M21:T23', fill: null, noBorder: true },
                 { range: `F39:F${38 + layout.nozzleRows}`, fill: exportPalette.soft }, { range: `J39:J${38 + layout.nozzleRows}`, fill: exportPalette.soft },
               ],
               // 밀도는 모두 소수 셋째 자리, 샘플러 ΔH@·Yd는 넷째 자리
@@ -7657,9 +7684,17 @@ export default function App() {
             [recordSheet]: {
               // 측정 표: 시간·진공은 정수, 온도는 모두 소수 첫째 자리 (측정 행과 평균 행을 같게)
               // 표 아래 Vmstd 두 칸은 위·아래 선만 있었다 → 네 변 모두 가는 선
-              boxes: [`G${meterLast + 3}:G${meterLast + 4}`],
+              boxes: [`E${meterLast + 4}:G${meterLast + 4}`],
+              fills: [
+                { range: `G${meterLast + 3}`, fill: null, noBorder: true },
+                { range: `E${meterLast + 4}:F${meterLast + 4}`, fill: exportPalette.header },
+                { range: `G${meterLast + 4}`, fill: exportPalette.soft },
+              ],
+              rowHeights: { [meterLast + 3]: 8.25, [meterLast + 4]: 24 },
               // '등속흡인계수 (%) :'처럼 ':'로 끝나는 한 줄 라벨은 줄 바꿈 없이 칸에 맞춘다
               shrinkText: /:\s*$|\((?:mmHg|mmH2O|cm|m|%|℃)\)\s*$/,
+              // 위쪽 정보 칸에만 (측정 표의 머리말은 두 줄로 나눠 쓴다)
+              shrinkRows: [1, layout.meterStartRow - 4],
               numberFormats: [
                 { range: 'C8', code: EXPORT_DATE_FORMAT },
                 { range: `B${meterFirst}:C${meterLast}`, code: '0' },
@@ -7669,14 +7704,20 @@ export default function App() {
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft },
+              // 더 크게 인쇄되게: 넓은 열을 줄이고(가로), 묶음 사이의 남는 빈 줄을 숨긴다(세로)
+              scaleCols: { factor: 0.7, minChars: 7, floor: 6 },
+              hideBlankRows: [16, 17, 23, 42, 45, 48, 50, 56, 57, 67, 72, 73, 82] },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             [leakFooterRow ? positionSheetNameOf(layout) : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 3}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }, { range: 'G2', code: EXPORT_DATE_FORMAT }] },
-            표지: { numberFormats: [{ range: 'D21', code: EXPORT_DATE_FORMAT }] },
+            표지: { numberFormats: [{ range: 'D21', code: EXPORT_DATE_FORMAT }], equalCols: false },
           },
         });
       } catch (error) { console.error('서식 정리 실패:', error); }
+      // 기록지의 측정점 그림(ShowPic 연결 그림): 서식 정리로 열 너비가 정해진 뒤에, 그림 칸(E5:G10) 안에 가운데로 맞춘다.
+      // '지점 사진' 시트의 원본 칸은 정사각형(199.5 × 199.5pt)이므로 그림도 정사각형으로 놓아 찌그러지지 않게 한다
+      try { await fitPictureInBox(zip, sheetPathMap.get(recordSheet), { box: 'E5:G10', aspect: 1, pad: 3 }); } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);

@@ -1421,6 +1421,56 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
       });
     }
+    // 빈 줄 숨기기(hideBlankRows: [행, …]): 칸에 값이 하나도 없는 줄만 숨긴다 (세로를 줄여 더 크게 인쇄되게)
+    if (rule?.hideBlankRows) {
+      const { kinds } = analyzeTables(xml, styles, sharedStrings);
+      const used = new Set();
+      for (const [key, kind] of kinds) if (kind && kind !== 'empty') used.add(Number(key.split(',')[0]));
+      for (const row of rule.hideBlankRows) if (!used.has(row)) xml = ensureRowHidden(xml, row);
+    }
+    // 넓은 열 줄이기(scaleCols: { factor, minChars, floor }): minChars 이상인 열만 factor배로(floor보다 좁아지지는 않게).
+    // 숫자 칸과, 오른쪽 칸에 값이 있어 넘쳐 쓸 수 없는 글자 칸은 '셀에 맞춤'으로 해서 잘리거나 ####이 되지 않게 한다
+    if (rule?.scaleCols) {
+      const { factor = 0.7, minChars = 7, floor = 6 } = rule.scaleCols;
+      const range = printCols.get(sheetIndex);
+      const fmtPr = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+      const defaultCol = Number((fmtPr && attr(fmtPr[1], 'defaultColWidth')) || 8.88671875);
+      const body = /<cols>([\s\S]*?)<\/cols>/.exec(xml);
+      const els = body ? [...body[1].matchAll(/<col\b([^>]*?)\/>/g)].map((m) => ({ attrs: m[1], min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')) })) : [];
+      if (range) {
+        const keep = (attrs) => attrs.replace(/\s*\b(?:min|max|width|customWidth)="[^"]*"/g, '');
+        const out = [];
+        for (const el of els) {
+          if (el.max < range.from || el.min > range.to) { out.push({ min: el.min, tag: `<col${el.attrs}/>` }); continue; }
+          const w = attr(el.attrs, 'width');
+          if (el.min < range.from) out.push({ min: el.min, tag: `<col min="${el.min}" max="${range.from - 1}"${w !== null ? ` width="${w}" customWidth="1"` : ''}${keep(el.attrs)}/>` });
+          if (el.max > range.to) out.push({ min: range.to + 1, tag: `<col min="${range.to + 1}" max="${el.max}"${w !== null ? ` width="${w}" customWidth="1"` : ''}${keep(el.attrs)}/>` });
+        }
+        for (let c = range.from; c <= range.to; c++) {
+          const el = els.find((x) => c >= x.min && c <= x.max);
+          const w = el && attr(el.attrs, 'width') !== null ? Number(attr(el.attrs, 'width')) : defaultCol;
+          const next = w >= minChars ? Math.max(floor, Math.round(w * factor * 100) / 100) : w;
+          out.push({ min: c, tag: `<col min="${c}" max="${c}" width="${next}" customWidth="1"${el ? keep(el.attrs) : ''}/>` });
+        }
+        out.sort((a, b) => a.min - b.min);
+        const colsXml = `<cols>${out.map((x) => x.tag).join('')}</cols>`;
+        xml = body ? xml.replace(/<cols>[\s\S]*?<\/cols>/, () => colsXml) : xml.replace(/<sheetData\b/, (w) => `${colsXml}${w}`);
+        const { kinds, K } = analyzeTables(xml, styles, sharedStrings);
+        xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+          const ref = parseRef(attr(attrs, 'r') || '');
+          if (!ref) return whole;
+          const kind = kinds.get(K(ref.row, ref.col));
+          if (!kind || kind === 'empty') return whole;
+          const right = kinds.get(K(ref.row, ref.col + 1));
+          if (kind === 'text' && (!right || right === 'empty')) return whole;
+          const s0 = Number(attr(attrs, 's') || 0);
+          const next = styles.withShrink(s0);
+          return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+        });
+      }
+    }
+    // 열 너비 고르기: 같은 머리말 아래 칸들(전·후·차, 입구·출구 …)은 같은 너비로, 거의 같은 이웃 열도 같은 너비로
+    if (rule && rule.equalCols !== false && rule.align !== false) xml = equalizeColumns(xml, styles, sharedStrings, printCols.get(sheetIndex) || null);
     if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles, sharedStrings);
     if (rule?.cellStyles !== false) xml = normalizeCellStyles(xml, styles, { sharedStrings, cols: printCols.get(sheetIndex) || null, align: rule?.align !== false });
     const landscape = /<pageSetup\b[^>]*orientation="landscape"/.test(xml);
@@ -1433,6 +1483,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         const ref = parseRef(attr(attrs, 'r') || '');
         const text = String(texts.get(K(ref.row, ref.col)) || '');
         if (!ref || !rule.shrinkText.test(text)) return whole;
+        if (rule.shrinkRows && (ref.row < rule.shrinkRows[0] || ref.row > rule.shrinkRows[1])) return whole;
         const s0 = Number(attr(attrs, 's') || 0);
         // 줄 바꿈이 켜진 칸도 한 줄짜리 글이면 줄 바꿈을 끄고 줄인다 (끝의 ':'만 아래 줄로 떨어지지 않게)
         const next = styles.withShrink(s0, true);
@@ -1601,6 +1652,89 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     }
     zip.file('xl/workbook.xml', wb);
   }
+}
+
+// ── 열 너비 고르기 ──
+// 1) 가로로 병합된 머리말 바로 아래에 칸마다 작은 머리말이 있으면(가스미터지시값 → 전·후·차) 그 열들을 같은 너비로
+// 2) 이웃한 열들의 너비가 거의 같으면(가장 넓은 열 ÷ 가장 좁은 열 ≤ tolerance) 같은 너비로
+// 전체 너비(합)는 그대로이다. cols: 인쇄 범위의 [첫 열, 끝 열]
+export function equalizeColumns(xml, styles, sharedStrings, cols = null, { tolerance = 1.22 } = {}) {
+  const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+  const baseCol = Number((fmt && attr(fmt[1], 'baseColWidth')) || 8);
+  const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || baseCol + 0.71);
+  const body = /<cols>([\s\S]*?)<\/cols>/.exec(xml);
+  const els = body ? [...body[1].matchAll(/<col\b([^>]*?)\/>/g)].map((m) => ({ attrs: m[1], min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')) })) : [];
+  const { cells, texts, merges, mergeOf, K } = analyzeTables(xml, styles, sharedStrings);
+  const first = cols ? cols.from : 1; let last = cols ? cols.to : 0;
+  if (!cols) for (const key of cells.keys()) last = Math.max(last, Number(key.split(',')[1]));
+  if (!(last > first)) return xml;
+  const elOf = (col) => els.find((x) => col >= x.min && col <= x.max);
+  if ([...Array(last - first + 1)].some((_, i) => { const el = elOf(first + i); return el && isTrue(attr(el.attrs, 'hidden')); })) return xml;
+  const width = new Map();
+  for (let col = first; col <= last; col++) { const el = elOf(col); width.set(col, el && attr(el.attrs, 'width') !== null ? Number(attr(el.attrs, 'width')) : defaultCol); }
+  const before = new Map(width);
+  const fixed = new Set(); // 이미 묶음으로 맞춘 열
+  const setMean = (from, to) => {
+    let sum = 0; for (let col = from; col <= to; col++) sum += width.get(col);
+    const mean = Math.round((sum / (to - from + 1)) * 100) / 100;
+    for (let col = from; col <= to; col++) { width.set(col, mean); fixed.add(col); }
+  };
+  // 1) 병합 머리말 아래의 형제 칸
+  const groups = [];
+  for (const m of merges) {
+    if (m.to.col <= m.from.col || m.from.col < first || m.to.col > last) continue;
+    if (!String(texts.get(K(m.from.row, m.from.col)) || '').trim()) continue;
+    const below = m.to.row + 1;
+    let ok = true;
+    for (let col = m.from.col; col <= m.to.col && ok; col++) {
+      const key = K(below, col);
+      const own = mergeOf.has(key) ? merges[mergeOf.get(key)] : null;
+      if (!String(texts.get(key) || '').trim() || (own && own.to.col > own.from.col)) ok = false;
+    }
+    if (ok) groups.push([m.from.col, m.to.col]);
+  }
+  // 넓은 묶음부터 (겹치면 넓은 쪽이 이긴다)
+  groups.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
+  for (const [from, to] of groups) {
+    let free = true; for (let col = from; col <= to; col++) if (fixed.has(col)) free = false;
+    if (free) setMean(from, to);
+  }
+  // 2) 거의 같은 이웃 열 (묶음으로 맞춘 열은 묶음째 한 단위로 본다)
+  let col = first;
+  while (col <= last) {
+    let end = col; let lo = width.get(col); let hi = lo;
+    while (end + 1 <= last) {
+      const w = width.get(end + 1);
+      if (Math.max(hi, w) / Math.min(lo, w) > tolerance) break;
+      lo = Math.min(lo, w); hi = Math.max(hi, w); end += 1;
+    }
+    if (end > col && hi - lo > 0.005) {
+      let sum = 0; for (let c = col; c <= end; c++) sum += width.get(c);
+      const mean = Math.round((sum / (end - col + 1)) * 100) / 100;
+      for (let c = col; c <= end; c++) width.set(c, mean);
+    }
+    col = end + 1;
+  }
+  let changed = false;
+  for (const [c, w] of width) if (Math.abs(w - before.get(c)) > 0.005) changed = true;
+  if (!changed) return xml;
+  // <cols>를 열 하나씩으로 다시 쓴다 (범위 밖 열은 그대로)
+  const out = [];
+  const maxCol = Math.max(last, ...els.map((x) => Math.min(x.max, 16384)));
+  const keep = (attrs) => attrs.replace(/\s*\b(?:min|max|width|customWidth)="[^"]*"/g, '');
+  for (const el of els) {
+    if (el.max < first || el.min > last) { out.push({ min: el.min, tag: `<col${el.attrs}/>` }); continue; }
+    if (el.min < first) out.push({ min: el.min, tag: `<col min="${el.min}" max="${first - 1}"${attr(el.attrs, 'width') !== null ? ` width="${attr(el.attrs, 'width')}" customWidth="1"` : ''}${keep(el.attrs)}/>` });
+    if (el.max > last) out.push({ min: last + 1, tag: `<col min="${last + 1}" max="${el.max}"${attr(el.attrs, 'width') !== null ? ` width="${attr(el.attrs, 'width')}" customWidth="1"` : ''}${keep(el.attrs)}/>` });
+  }
+  void maxCol;
+  for (let c = first; c <= last; c++) {
+    const el = elOf(c);
+    out.push({ min: c, tag: `<col min="${c}" max="${c}" width="${width.get(c)}" customWidth="1"${el ? keep(el.attrs) : ''}/>` });
+  }
+  out.sort((a, b) => a.min - b.min);
+  const colsXml = `<cols>${out.map((x) => x.tag).join('')}</cols>`;
+  return body ? xml.replace(/<cols>[\s\S]*?<\/cols>/, () => colsXml) : xml.replace(/<sheetData\b/, (w) => `${colsXml}${w}`);
 }
 
 // 행 범위 [시작, 끝]을 같은 높이로
@@ -1776,6 +1910,60 @@ export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
   void grow;
   zip.file(sheetPath, xml);
   return true;
+}
+
+// ── 그림을 칸(box, 예: 'E5:G10') 안에 맞춘다: 가로세로 비율(aspect = 가로 ÷ 세로)을 지키면서 가장 크게, 가운데에 ──
+// 서식 정리가 끝난 뒤의 실제 열 너비·행 높이로 재고, 크기를 절대값(oneCellAnchor + ext)으로 적어
+// 열 너비가 달라져도 그림이 찌그러지거나 칸 밖으로 나가지 않게 한다. 칸 안에서 시작하는 그림만 바꾼다.
+export async function fitPictureInBox(zip, sheetPath, { box, aspect, pad = 3, mdw = 9 } = {}) {
+  const file = zip.file(sheetPath);
+  const range = parseRange(box || '');
+  if (!file || !range || !(aspect > 0)) return 0;
+  const xml = await file.async('string');
+  const relsFile = zip.file(sheetPath.replace(/([^/]+)$/, '_rels/$1.rels'));
+  const rels = relsFile ? await relsFile.async('string') : '';
+  const target = (/Type="[^"]*\/relationships\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/relationships\/drawing"/.exec(rels) || [])[1];
+  const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
+  const drawingFile = drawingPath ? zip.file(drawingPath) : null;
+  if (!drawingFile) return 0;
+  const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+  const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
+  const defaultCol = Number((fmt && attr(fmt[1], 'defaultColWidth')) || 8.88671875);
+  const colsBody = /<cols>([\s\S]*?)<\/cols>/.exec(xml);
+  const colEls = colsBody ? [...colsBody[1].matchAll(/<col\b([^>]*?)\/>/g)].map((m) => ({ attrs: m[1], min: Number(attr(m[1], 'min')), max: Number(attr(m[1], 'max')) })) : [];
+  const EMU_PX = 9525; const EMU_PT = 12700;
+  const colEmu = (col) => {
+    const c = colEls.find((x) => col >= x.min && col <= x.max);
+    const w = c && attr(c.attrs, 'width') !== null ? Number(attr(c.attrs, 'width')) : defaultCol;
+    return Math.trunc(((256 * w + Math.trunc(128 / mdw)) / 256) * mdw) * EMU_PX;
+  };
+  const rowEmu = (row) => {
+    const m = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)/?>`).exec(xml);
+    return Math.round((m && attr(m[1], 'ht') !== null ? Number(attr(m[1], 'ht')) : defaultRow) * EMU_PT);
+  };
+  let boxW = 0; for (let c = range.from.col; c <= range.to.col; c++) boxW += colEmu(c);
+  let boxH = 0; for (let r = range.from.row; r <= range.to.row; r++) boxH += rowEmu(r);
+  const availW = boxW - pad * 2 * EMU_PT; const availH = boxH - pad * 2 * EMU_PT;
+  if (availW <= 0 || availH <= 0) return 0;
+  let h = availH; let w = Math.round(h * aspect);
+  if (w > availW) { w = availW; h = Math.round(w / aspect); }
+  let x = Math.round((boxW - w) / 2); let y = Math.round((boxH - h) / 2);
+  let col0 = range.from.col - 1; while (col0 < range.to.col - 1 && x >= colEmu(col0 + 1)) { x -= colEmu(col0 + 1); col0 += 1; }
+  let row0 = range.from.row - 1; while (row0 < range.to.row - 1 && y >= rowEmu(row0 + 1)) { y -= rowEmu(row0 + 1); row0 += 1; }
+  const drawing = await drawingFile.async('string');
+  let count = 0;
+  const next = drawing.replace(/<xdr:(twoCellAnchor|oneCellAnchor)\b[^>]*>([\s\S]*?)<\/xdr:\1>/g, (whole, kind, inner) => {
+    const from = /<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>[\s\S]*?<\/xdr:from>/.exec(inner);
+    if (!from || !/<xdr:pic\b/.test(inner)) return whole;
+    const c = Number(from[1]) + 1; const r = Number(from[2]) + 1;
+    if (c < range.from.col || c > range.to.col || r < range.from.row || r > range.to.row) return whole;
+    count += 1;
+    const body = inner.replace(/<xdr:from>[\s\S]*?<\/xdr:from>/, '').replace(/<xdr:to>[\s\S]*?<\/xdr:to>/, '').replace(/<xdr:ext\b[^>]*\/>/, '')
+      .replace(/<a:xfrm>[\s\S]*?<\/a:xfrm>/, () => `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`);
+    return `<xdr:oneCellAnchor><xdr:from><xdr:col>${col0}</xdr:col><xdr:colOff>${x}</xdr:colOff><xdr:row>${row0}</xdr:row><xdr:rowOff>${y}</xdr:rowOff></xdr:from><xdr:ext cx="${w}" cy="${h}"/>${body}</xdr:oneCellAnchor>`;
+  });
+  if (count) zip.file(drawingPath, next);
+  return count;
 }
 
 // ── 그림을 인쇄 폭(firstCol~lastCol) 가로 가운데로 (표지 로고) ──
