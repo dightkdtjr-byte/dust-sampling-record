@@ -62,17 +62,17 @@ const equationShape = (picXml, nodes, sz) => {
   const id = (/<xdr:cNvPr\b[^>]*\bid="(\d+)"/.exec(picXml) || [])[1] || '1';
   const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(picXml) || [])[1] || 'Equation';
   const xfrm = (/<a:xfrm\b[^>]*>[\s\S]*?<\/a:xfrm>/.exec(picXml) || [])[0] || '<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>';
-  const math = `<m:oMathPara xmlns:m="${M}"><m:oMathParaPr><m:jc m:val="centerGroup"/></m:oMathParaPr><m:oMath xmlns:m="${M}">${render(nodes, sz)}</m:oMath></m:oMathPara>`;
+  const math = `<m:oMathPara xmlns:m="${M}"><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr><m:oMath xmlns:m="${M}">${render(nodes, sz)}</m:oMath></m:oMathPara>`;
   const shape = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvSpPr txBox="1"/></xdr:nvSpPr>`
     + `<xdr:spPr>${xfrm}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>`
     + `<xdr:txBody><a:bodyPr vertOverflow="overflow" horzOverflow="overflow" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>`
-    + `<a:p><a:pPr algn="ctr"/><a14:m>${math}</a14:m></a:p></xdr:txBody></xdr:sp>`;
+    + `<a:p><a:pPr algn="l"/><a14:m>${math}</a14:m></a:p></xdr:txBody></xdr:sp>`;
   return `<mc:AlternateContent xmlns:mc="${MC}"><mc:Choice xmlns:a14="${A14}" Requires="a14">${shape}</mc:Choice><mc:Fallback>${picXml}</mc:Fallback></mc:AlternateContent>`;
 };
 
 // 시트에 딸린 그림 파일에서, 이름이 equations에 있는 그림을 수식 개체로 바꾼다. 바꾼 개수를 돌려준다
 // sizes: 그림 이름별 글자 크기 (분수가 겹친 큰 수식은 아래 숫자 줄을 덮지 않게 작게)
-export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 14, '그림 5': 15 } } = {}) {
+export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 14, '그림 5': 15 }, startCol = 2 } = {}) {
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return 0;
@@ -93,6 +93,13 @@ export async function replacePicturesWithEquations(zip, sheetPath, equations = C
       const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(pic[0]) || [])[1];
       if (!name || !Object.prototype.hasOwnProperty.call(equations, name)) return whole;
       count += 1;
+      // 수식 위치 정리: 모든 수식을 같은 열(C열)에서 시작하게 한다
+      const fromCol = Number((/<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>/.exec(body) || [])[1]);
+      if (Number.isFinite(fromCol)) {
+        const delta = startCol - fromCol;
+        body = body.replace(/(<xdr:from>\s*)<xdr:col>\d+<\/xdr:col>(\s*)<xdr:colOff>-?\d+<\/xdr:colOff>/, (w, a, gap) => `${a}<xdr:col>${startCol}</xdr:col>${gap}<xdr:colOff>0</xdr:colOff>`)
+          .replace(/(<xdr:to>\s*)<xdr:col>(\d+)<\/xdr:col>/, (w, a, c) => `${a}<xdr:col>${Math.max(startCol + 1, Number(c) + delta)}</xdr:col>`);
+      }
       return `<xdr:${kind}${attrs}>${body.replace(pic[0], () => equationShape(pic[0], equations[name], Math.round((sizes[name] || fontPt) * 100)))}</xdr:${kind}>`;
     });
     if (next !== drawing) zip.file(stack.join('/'), next);

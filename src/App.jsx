@@ -7405,12 +7405,14 @@ export default function App() {
           equalWidth: { width: 475.6 },
           // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
           // frame 'box': 모든 시트에 같은 굵은 전체 테두리(인쇄 범위 둘레·제목 아래·양식번호 줄 위)
-          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'box' },
+          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer' },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
               // % 성분은 소수 둘째 자리, ppm 성분은 소수 첫째 자리
               numberFormats: [{ range: 'B5:C41', code: '0.00' }, { range: 'D5:F41', code: '0.0' }],
+              // 색: 머리줄은 짙은 남색, 평균·최대·최소 줄은 옅은 파랑, 측정값과 빈 줄은 색 없이
+              fills: [{ range: 'A4:F4', fill: '1F4E79' }, { range: 'A5:F7', fill: 'DDEBF7' }, { range: 'A8:F41', fill: null }],
             },
             시료측정위치: {
               rowHeights: { ...rowsAt(34, 38, 18), ...rowsAt(42, 48, 17.25) },

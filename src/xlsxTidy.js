@@ -201,6 +201,17 @@ class StyleBook {
     this.added.set(key, index);
     return index;
   }
+  // 같은 서식에서 채우기만 없앤 서식 번호
+  withNoFill(s) {
+    const key = `${s}|nofill`;
+    if (this.added.has(key)) return this.added.get(key);
+    const xf = this.xfs[s] || this.xfs[0];
+    if (!Number(attr(xf, 'fillId') || 0)) return s;
+    this.xfs.push(xf.replace(/\s*fillId="\d+"/, '').replace(/^<xf\b/, '<xf fillId="0"'));
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
   // 같은 서식에서 지정한 변의 선만 지운 서식 번호
   withoutBorderSides(s, sides) {
     const names = ['left', 'right', 'top', 'bottom'].filter((k) => sides.includes(k));
@@ -999,7 +1010,7 @@ export const normalizePageFurniture = (xml, styles, {
     return opposite && (fullWidth(b) ? top && bottom : top || bottom);
   };
   const gridCell = (row, col) => vLine(row, col) && vLine(row, col + 1); // 양옆에 세로선이 있는 칸
-  const noFrame = frame === true || frame === 'none';
+  const noFrame = frame === true || frame === 'none' || frame === 'footer';
   const fonts = new Map(); // "r,c" → 글자 크기
   const aligns = new Map(); // "r,c" → { horizontal, vertical }
   const heights = new Map(); // 행 → 높이
@@ -1083,14 +1094,20 @@ export const normalizePageFurniture = (xml, styles, {
 
   // 전체 테두리(frame: 'box'): 인쇄 범위 둘레, 제목 아래, 양식번호 줄 위를 모두 굵은 선으로 — 모든 시트 같은 모양
   let boxed0 = xml;
-  if (frame === 'box') {
+  if (frame === 'box' || (frame === 'footer' && footerCol)) {
     const need = new Map(); // 행 → 필요한 열들
     const want = (row, col, name) => { side(K(row, col))[name] = 'medium'; if (!need.has(row)) need.set(row, new Set()); need.get(row).add(col); };
-    for (let row = from.row; row <= to.row; row++) { want(row, from.col, 'left'); want(row, to.col, 'right'); }
-    for (let col = from.col; col <= to.col; col++) {
-      want(from.row, col, 'top'); want(to.row, col, 'bottom');
-      if (titleBlock) want(titleBlock.to.row, col, 'bottom');
-      if (footerCol) want(to.row, col, 'top');
+    if (frame === 'footer') {
+      // 양식번호 줄만 굵은 테두리 상자로
+      want(to.row, from.col, 'left'); want(to.row, to.col, 'right');
+      for (let col = from.col; col <= to.col; col++) { want(to.row, col, 'top'); want(to.row, col, 'bottom'); }
+    } else {
+      for (let row = from.row; row <= to.row; row++) { want(row, from.col, 'left'); want(row, to.col, 'right'); }
+      for (let col = from.col; col <= to.col; col++) {
+        want(from.row, col, 'top'); want(to.row, col, 'bottom');
+        if (titleBlock) want(titleBlock.to.row, col, 'bottom');
+        if (footerCol) want(to.row, col, 'top');
+      }
     }
     // 테두리를 입힐 칸이 파일에 없으면 빈 칸을 만들어 둔다
     for (const [row, colSet] of need) {
@@ -1312,6 +1329,18 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     }
     if (rule?.numberFormats) xml = setNumberFormats(xml, styles, rule.numberFormats);
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
+    // 채우기 색 바꾸기: [{ range, fill: 'DDEBF7' | null(없앰) }]
+    if (rule?.fills) {
+      const targets = rule.fills.map((f) => ({ r: parseRange(f.range), fill: f.fill })).filter((f) => f.r);
+      xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+        const ref = parseRef(attr(attrs, 'r') || '');
+        const hit = ref && targets.find((f) => ref.row >= f.r.from.row && ref.row <= f.r.to.row && ref.col >= f.r.from.col && ref.col <= f.r.to.col);
+        if (!hit) return whole;
+        const s0 = Number(attr(attrs, 's') || 0);
+        const next = hit.fill ? styles.withFill(s0, hit.fill) : styles.withNoFill(s0);
+        return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+      });
+    }
     if (rule?.borders !== false) xml = normalizeTableBorders(xml, styles, sharedStrings);
     if (rule?.cellStyles !== false) xml = normalizeCellStyles(xml, styles, { sharedStrings, cols: printCols.get(sheetIndex) || null, align: rule?.align !== false });
     const landscape = /<pageSetup\b[^>]*orientation="landscape"/.test(xml);
