@@ -5,6 +5,7 @@ import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
 import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures } from './xlsxTidy.js';
+import { replacePicturesWithEquations } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
@@ -182,7 +183,7 @@ const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
 // collectors: 채취 기구를 고르는 물질 (이황화탄소·이황화메틸·VOCs는 흡착관 또는 테들러백으로 채취한다). 채취유량은 종료값-시작값
 // 엑셀 sampler No. 칸에는 짧은 이름(흡착관/테들러백)을 적고, 화면에서는 풀어 쓴 이름을 보여 준다
 const SAMPLING_LOG_BAG_OR_TUBE = ['흡착관', '테들러백'];
-const SAMPLING_LOG_COLLECTOR_LABEL = { 흡착관: '흡착관', 테들러백: '테들러백(폴리에스터 백)' };
+const SAMPLING_LOG_COLLECTOR_LABEL = { 흡착관: '흡착관', 테들러백: '테들러백(폴리에스터 백)', 흡수액: '흡수액(가스 샘플러)' };
 // 약어 색의 뜻 (물질 표 위 범례)
 const SAMPLING_LOG_BADGE_LEGEND = [
   { kind: 'particle', code: 'P', text: '입자 샘플러 (여과지)' },
@@ -203,7 +204,8 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 21, code: 'H2S', name: '황화수소', kind: 'gas', suctionRate: '1', targetVolume: '20', duration: '20', testPeriod: '4' },
   { row: 22, code: 'HCN', name: '시안화수소', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
   { row: 23, code: 'HDZ', name: '하이드라진', kind: 'gas', suctionRate: '1', targetVolume: '10', duration: '10', testPeriod: '3' },
-  { row: 24, code: 'CS2', name: '이황화탄소', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, testPeriod: '9' },
+  // 이황화탄소: VOCs 동시측정법(흡착관·테들러백) 또는 자외선/가시선분광법(흡수액 → 가스 샘플러, Yd 적용)
+  { row: 24, code: 'CS2', name: '이황화탄소', kind: 'box', collectors: ['흡착관', '테들러백', '흡수액'], testPeriod: '9' },
   { row: 25, code: 'M', name: '구리', kind: 'particle', targetVolume: '1000', testPeriod: '6' },
   { row: 26, code: 'M', name: '카드뮴', kind: 'particle', testPeriod: '6' },
   { row: 27, code: 'M', name: '납', kind: 'particle', testPeriod: '6' },
@@ -235,7 +237,8 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 53, code: 'VOCs', name: '사염화탄소', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE, collectorDefault: '테들러백', testPeriod: '9' },
   { row: 54, code: 'BEN', name: '벤지딘', kind: 'plain' },
   { row: 55, code: 'AN', name: '아닐린', kind: 'plain' },
-  { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box', collectors: SAMPLING_LOG_BAG_OR_TUBE },
+  // 이황화메틸: 저온농축 기체크로마토그래피 — 시료채취 주머니로만 채취한다
+  { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box' },
   { row: 57, code: 'OX', name: '옥사이드', species: '에틸렌옥사이드 · 프로필렌옥사이드', options: ['에틸렌옥사이드', '프로필렌옥사이드'], kind: 'box', testPeriod: '9' },
 ];
 
@@ -483,7 +486,7 @@ const calcSamplingLogVolume = (log, substance) => {
     const yd = parseFloat(log.particleSamplerYd);
     return (b - a) * (Number.isFinite(yd) && yd > 0 ? yd : 1);
   }
-  if (substance.kind === 'gas') {
+  if (substance.kind === 'gas' || row.collector === '흡수액') {
     const yd = parseFloat(log.gasSamplerYd);
     return (b - a) * (Number.isFinite(yd) && yd > 0 ? yd : 1);
   }
@@ -7321,6 +7324,10 @@ export default function App() {
           }
         } catch (error) { console.error('표준산소 환산 유량 묶음 처리 실패:', error); }
       }
+      // 계산식: 수식 그림(캡처)을 엑셀 수식 개체로 바꾼다 (엑셀에서 실제 수식으로 보이고, 다른 프로그램은 원래 그림을 보여 준다)
+      if (sheetPathMap.has('계산식')) {
+        try { await replacePicturesWithEquations(zip, sheetPathMap.get('계산식')); } catch (error) { console.error('계산식 수식 개체 바꾸기 실패:', error); }
+      }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
       try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
 
@@ -7883,7 +7890,8 @@ export default function App() {
         }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
         // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): sampler No. 칸에 고른 기구(흡착관/테들러백)를 적는다
-        if (Array.isArray(sub.collectors)) add(`E${r}`, on ? (row.collector || sub.collectorDefault || sub.collectors[0]) : null);
+        // (흡수액은 가스 샘플러로 채취하므로 양식의 가스 샘플러 번호 수식을 그대로 둔다)
+        if (Array.isArray(sub.collectors) && row.collector !== '흡수액') add(`E${r}`, on ? (row.collector || sub.collectorDefault || sub.collectors[0]) : null);
         add(`F${r}`, on ? toExcelDateSerial(day?.date) : null);
         add(`G${r}`, on ? toExcelTimeFraction(row.start) : null);
         add(`H${r}`, on ? toExcelTimeFraction(row.end) : null);
@@ -11002,6 +11010,9 @@ export default function App() {
           <div className="ds-actionbar flex items-center justify-center gap-4 mt-8 pb-8 border-b-2 border-slate-200 border-dashed">
             <button type="button" onClick={startNewRecord} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
               새 기록지 작성
+            </button>
+            <button type="button" onClick={() => exportToTemplateExcel(null)} className="px-8 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+              현재 내용 엑셀로 추출
             </button>
             <button type="submit" className={`px-8 py-3.5 text-white font-bold rounded-xl transition-colors shadow-md ${activeTheme.primaryButton}`}>
               기록부 데이터 저장
