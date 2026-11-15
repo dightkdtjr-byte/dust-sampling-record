@@ -97,8 +97,9 @@ const computeSamplingPoints = (data) => {
     if (!Number.isFinite(area)) return { rect: true, perRadius: 0, isCenterOnly: false, coeffs: [], area: '', nearInsertion: [], farInsertion: [], wallDistances: [], lines: 0, total: 0, diameterLabel: `${D} m` };
     const isCenterOnly = area <= 0.25;
     const l = area <= 1 ? 0.5 : area <= 4 ? 0.667 : 1;
-    const n = isCenterOnly ? 1 : Math.max(1, Math.ceil(D / l - 1e-9));
-    const lines = isCenterOnly ? 1 : Math.max(1, Math.ceil(side / l - 1e-9));
+    // 4개 이상의 사각형으로 나눈다 (한 방향에 최소 2구분)
+    const n = isCenterOnly ? 1 : Math.max(2, Math.ceil(D / l - 1e-9));
+    const lines = isCenterOnly ? 1 : Math.max(2, Math.ceil(side / l - 1e-9));
     const dist = Array.from({ length: n }, (_, i) => ((i + 0.5) * D) / n);
     return {
       rect: true, perRadius: n, lines, total: n * lines, isCenterOnly, coeffs: [], side, sideLimit: l,
@@ -7053,8 +7054,8 @@ export default function App() {
         let r = 20;
         L(`A${r}`, '▶ 시료측정위치 선정', 'A10'); r += 1;
         const method = rect
-          ? '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 등면적 사각형으로 나누고 각 사각형의 중심에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.'
-          : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 수직 굴뚝은 단면의 1/4(반경 하나), 수평 굴뚝은 1/2(직경 하나: 깊이 칸까지)을 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
+          ? '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 4개 이상 등면적 사각형으로 나누고 각 사각형의 중심에서 측정한다. 유속 분포가 대칭이면 수직 굴뚝은 1/4, 수평 덕트는 1/2로 줄일 수 있다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.'
+          : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 측정공이 수직 굴뚝에 있으면 단면의 1/4에 해당하는 반경상의 측정점으로 줄일 수 있고, 수평 굴뚝에 있으면 모든 측정점에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
         L(`A${r}`, method, 'A5'); ['B', 'C', 'D', 'E', 'F'].forEach((c) => { L(`${c}${r}`, null, 'A5'); L(`${c}${r + 1}`, null, 'A5'); }); L(`A${r + 1}`, null, 'A5');
         leakMerges.push(`A${r}:F${r + 1}`); r += 3;
         const head = ['굴뚝 형태', '전체길이 (m)', 'Lnw (cm)', rect ? '깊이×폭(m)' : 'D (m)', '단면적(㎡)', '측정점수'];
@@ -7064,7 +7065,7 @@ export default function App() {
         const dims = rect ? `${sourceData.stackDiameter || ''}×${sourceData.stackSide || ''}` : toNumber(sourceData.stackDiameter);
         const horizontal = !rect && sourceData.stackOrientation === 'horizontal';
         [rect ? '사각' : (horizontal ? '원형 (수평)' : '원형 (수직)'), toNumber(sourceData.totalStackDepth), flangeM === null ? null : flangeM * 100, dims, sp && sp.area !== '' ? Number(sp.area) : null,
-          sp ? (rect ? `${sp.lines}×${sp.perRadius}=${sp.total}` : (horizontal && !sp.isCenterOnly ? sp.total * 2 : sp.total)) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
+          sp ? (rect ? `${sp.lines}×${sp.perRadius}=${sp.total}` : (horizontal && !sp.isCenterOnly ? sp.total * 4 : sp.total)) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
         r += 2;
         // 양식의 표현 그대로: 중심에서의 거리 → Sampling Location(안쪽) → Lnw 포함 → 최종 샘플링 위치((청) 플랜지 포함) → 깊이(반대편)
         // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
@@ -9695,9 +9696,9 @@ export default function App() {
               {formData.stackShape !== 'rect' && (
                 <div>
                   <label className="block text-xs font-bold text-emerald-900 mb-1">굴뚝 방향</label>
-                  <select name="stackOrientation" value={formData.stackOrientation || 'vertical'} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-bold text-emerald-900 outline-none" title="수직 굴뚝은 단면의 1/4(반경 하나), 수평 굴뚝은 1/2(직경 하나)을 측정합니다">
+                  <select name="stackOrientation" value={formData.stackOrientation || 'vertical'} onChange={handleChange} className="w-full p-2 border border-emerald-400 rounded bg-white font-bold text-emerald-900 outline-none" title="측정공이 수직 굴뚝에 있으면 단면의 1/4(반경 하나)로 줄일 수 있고, 수평 굴뚝에 있으면 모든 측정점에서 측정합니다">
                     <option value="vertical">수직 (1/4 측정)</option>
-                    <option value="horizontal">수평 (1/2 측정)</option>
+                    <option value="horizontal">수평 (모든 측정점)</option>
                   </select>
                 </div>
               )}
@@ -9718,7 +9719,7 @@ export default function App() {
               <div className="mt-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-sm font-bold text-slate-800">
-                    측정점 위치 ({samplingPointsData.rect ? `사각 ${samplingPointsData.diameterLabel} · 측정공 ${samplingPointsData.lines}개 × ${samplingPointsData.perRadius}점 = ${samplingPointsData.total}점` : `내경 ${formData.stackDiameter} m · ${formData.stackOrientation === 'horizontal' ? `수평: 직경 하나 ${samplingPointsData.perRadius * 2}점 (가까운 쪽 + 반대편)` : `수직: 반경 하나 ${samplingPointsData.perRadius}점`}`})
+                    측정점 위치 ({samplingPointsData.rect ? `사각 ${samplingPointsData.diameterLabel} · 측정공 ${samplingPointsData.lines}개 × ${samplingPointsData.perRadius}점 = ${samplingPointsData.total}점` : `내경 ${formData.stackDiameter} m · ${formData.stackOrientation === 'horizontal' ? `수평: 모든 측정점 ${samplingPointsData.isCenterOnly ? 1 : samplingPointsData.perRadius * 4}점 (직경 둘)` : `수직: 반경 하나 ${samplingPointsData.perRadius}점`}`})
                   </h3>
                   {samplingPointsData.isCenterOnly && (
                     <span className="bg-red-50 text-red-600 px-2 py-1 rounded text-xs font-bold animate-pulse border border-red-200">
