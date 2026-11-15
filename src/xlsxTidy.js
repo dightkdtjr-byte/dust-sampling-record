@@ -201,6 +201,15 @@ class StyleBook {
     this.added.set(key, index);
     return index;
   }
+  // 양식의 채우기 색을 기록부 색 테마로 바꾼다: 노랑(머리칸) → header, 연두(입력칸) → input
+  recolorFills({ header, input } = {}) {
+    const swap = (fill, rgb) => fill.replace(/<fgColor\b[^>]*\/>/, `<fgColor rgb="FF${rgb}"/>`);
+    this.fills = this.fills.map((fill) => {
+      if (header && /<fgColor\b[^>]*(?:rgb="FFFFFF99"|indexed="43"|rgb="FFFFFF00"|indexed="13")/.test(fill)) { this.fillsChanged = true; return swap(fill, header); }
+      if (input && /<fgColor\b[^>]*(?:rgb="FFCCFFCC"|indexed="42"|rgb="FFE2EFDA")/.test(fill)) { this.fillsChanged = true; return swap(fill, input); }
+      return fill;
+    });
+  }
   // 같은 서식에서 채우기만 없앤 서식 번호
   withNoFill(s) {
     const key = `${s}|nofill`;
@@ -1272,7 +1281,7 @@ const setPrintScale = (xml, scale, margins) => {
   return sheetPrFixed + out;
 };
 
-export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalWidth = false, furniture = null } = {}) {
+export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalWidth = false, furniture = null, palette = null } = {}) {
   const read = async (path) => { const f = zip.file(path); return f ? f.async('string') : null; };
   const workbookXml = await read('xl/workbook.xml');
   const relsXml = await read('xl/_rels/workbook.xml.rels');
@@ -1282,6 +1291,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
   for (const m of relsXml.matchAll(/<Relationship\b([^>]*)\/?>/g)) rels[attr(m[1], 'Id')] = attr(m[1], 'Target');
   const styles = new StyleBook(stylesXml);
   styles.cleanAll();
+  if (palette) styles.recolorFills(palette);
   const sharedXml = await read('xl/sharedStrings.xml');
   const sharedStrings = sharedXml
     ? [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => [...m[1].matchAll(/<t\b[^>]*>([^<]*)<\/t>/g)].map((t) => decodeXml(t[1])).join(''))
@@ -1319,6 +1329,8 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     const rule = typeof rules === 'function' ? rules(name) : rules[name];
     if (rule?.printArea) printAreaUpdates.set(sheetIndex, { name, range: rule.printArea });
     if (rule?.rowHeights) xml = setRowHeights(xml, rule.rowHeights);
+    // 쓰지 않는 줄 숨기기: [첫 행, 끝 행]
+    if (rule?.hideRows) for (let row = rule.hideRows[0]; row <= rule.hideRows[1]; row++) xml = ensureRowHidden(xml, row);
     // 병합 칸이 걸친 줄 전체를 같은 높이로 (양식마다 길이가 다른 표: 예) 노즐표의 채취시간 칸 A39:A56/A53/A57)
     if (rule?.rowHeightsByMerge) {
       for (const { cell, ht } of rule.rowHeightsByMerge) {

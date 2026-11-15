@@ -74,6 +74,14 @@ const DEFAULT_PITOT_PRESETS = IS_DESKTOP_BUILD ? [] : [
 // 기록부 종류별 엑셀 양식 레이아웃: 기록지 측정행 범위, 임핀저 단수, 노즐 목록 행수, 측정번호 접두어
 // o2: 계산식 시트의 표준산소 환산 칸 — 유량 Q(이름 Q가 가리키는 칸 포함), 농도 DC, '표준산소 환산 배출가스 유량' 묶음의 행 범위
 // footer: 표준산소가 있으면 꼬리말 줄(83행)을 묶음 아래(92행)로 옮겨 그 묶음까지 인쇄한다 (먼지·중금속·수은·PAHs 양식은 묶음이 인쇄 범위 밖에 있었다)
+// 엑셀 색: 프로그램의 기록부별 색 테마와 같은 계열 (dark: 머리줄, header: 머리칸, soft: 요약 줄·묶음 띠, input: 입력칸)
+const EXPORT_PALETTES = {
+  dust: { dark: '047857', header: 'A7F3D0', soft: 'D1FAE5', input: 'ECFDF5' },
+  metal: { dark: 'A16207', header: 'FEF08A', soft: 'FEF9C3', input: 'FEFCE8' },
+  mercury: { dark: '1D4ED8', header: 'BFDBFE', soft: 'DBEAFE', input: 'EFF6FF' },
+  pahs: { dark: '7E22CE', header: 'E9D5FF', soft: 'F3E8FF', input: 'FAF5FF' },
+  flow: { dark: '0E7490', header: 'A5F3FC', soft: 'CFFAFE', input: 'ECFEFF' },
+};
 const O2_CALC_CELLS_A = { qCells: ['M85'], dcCell: 'M107', flowBlocks: [[84, 91]], footer: { from: 83, to: 92 } };
 const EXPORT_TEMPLATE_LAYOUTS = {
   dust: { file: 'dust-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 18, filterPrefix: '먼지', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
@@ -7394,6 +7402,7 @@ export default function App() {
       // 서식 정리: 같은 표는 같은 행 높이, 같은 열은 같은 소수 자릿수, 숫자 서식의 꼬리 공백 제거, 한 장 너비 인쇄
       try {
         const meterFirst = layout.meterStartRow;
+        const exportPalette = EXPORT_PALETTES[exportSheetId] || EXPORT_PALETTES.dust;
         const meterLast = layout.meterStartRow + meterRowsForTemplate; // 평균 행까지
         const postHead = 41 + (layout.impingerRows - 4);
         await tidyWorkbook(zip, {
@@ -7403,6 +7412,7 @@ export default function App() {
           // 가장 세로로 긴 시트(시료측정위치, 그림 자리 포함)도 한 장에 들어가면서 정수 배율 반올림 뒤 장끼리 폭 차이가
           // 가장 작은 공통 폭(열 너비 어림 단위 pt) → 어느 기록부를 인쇄해도 같은 폭
           equalWidth: { width: 475.6 },
+          palette: exportPalette,
           // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
           // frame 'box': 모든 시트에 같은 굵은 전체 테두리(인쇄 범위 둘레·제목 아래·양식번호 줄 위)
           furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer' },
@@ -7412,7 +7422,9 @@ export default function App() {
               // % 성분은 소수 둘째 자리, ppm 성분은 소수 첫째 자리
               numberFormats: [{ range: 'B5:C41', code: '0.00' }, { range: 'D5:F41', code: '0.0' }],
               // 색: 머리줄은 짙은 남색, 평균·최대·최소 줄은 옅은 파랑, 측정값과 빈 줄은 색 없이
-              fills: [{ range: 'A4:F4', fill: '1F4E79' }, { range: 'A5:F7', fill: 'DDEBF7' }, { range: 'A8:F41', fill: null }],
+              fills: [{ range: 'A4:F4', fill: exportPalette.dark }, { range: 'A5:F7', fill: exportPalette.soft }, { range: 'A8:F41', fill: null }],
+              // 측정값(3줄) 아래의 빈 줄은 숨긴다
+              hideRows: [11, 41],
             },
             시료측정위치: {
               rowHeights: { ...rowsAt(34, 38, 18), ...rowsAt(42, 48, 17.25) },
@@ -7438,7 +7450,7 @@ export default function App() {
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: 'E7EEF7' } },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             누출시험: { printArea: 'A1:F18' },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
