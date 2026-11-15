@@ -105,6 +105,8 @@ function attachWindowBehaviors(win) {
     if (isAppUrl(url)) {
       return {
         action: 'allow',
+        // 기록부 창 안에서 연 다른 기록부 창이, 연 창을 닫을 때 같이 (저장 확인도 없이) 닫히지 않게 한다
+        outlivesOpener: true,
         overrideBrowserWindowOptions: {
           width: 1280,
           height: 900,

@@ -1382,8 +1382,19 @@ const STORAGE_KEYS = {
   samplingLogOpen: 'dust-sampling.samplinglog-open.v1',
 };
 
-// 통합시료채취기록부 창이 지금 열려 있는지 (그 창이 몇 초마다 남기는 표시로 판단)
-const isSamplingLogWindowOpen = () => {
+// 통합시료채취기록부 창이 지금 열려 있는지.
+// 그 창이 살아 있는 동안 잡고 있는 잠금(Web Locks)으로 판단한다: 창이 닫히거나 꺼지면 바로 풀리고, 가려진 창·뒤에 있는 탭에서
+// 브라우저가 타이머를 늦춰도 영향이 없다. 잠금을 쓸 수 없는 환경에서만 몇 초마다 남기는 표시를 본다
+const SAMPLING_LOG_WINDOW_LOCK = 'stackpilot-samplinglog-window';
+const isSamplingLogWindowOpen = async () => {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.query === 'function') {
+      const state = await navigator.locks.query();
+      return (state.held || []).some((lock) => lock.name === SAMPLING_LOG_WINDOW_LOCK);
+    }
+  } catch (error) {
+    console.error('통합시료채취기록부 창 확인 실패:', error);
+  }
   try {
     const current = JSON.parse(localStorage.getItem(STORAGE_KEYS.samplingLogOpen) || 'null');
     return Boolean(current && Number.isFinite(current.at) && Date.now() - current.at < 12000);
@@ -2520,7 +2531,10 @@ export default function App() {
     const place = () => {
       if (!source || !source.isConnected) { handle.style.display = 'none'; return; }
       const rect = source.getBoundingClientRect();
-      if (rect.width === 0 || rect.bottom < 70 || rect.bottom > window.innerHeight) { handle.style.display = 'none'; return; }
+      // 화면 아래에 붙어 있는 저장 버튼 줄에 가려진 칸에는 손잡이를 그리지 않는다
+      const bar = document.querySelector('.ds-actionbar');
+      const barTop = bar && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().top : window.innerHeight;
+      if (rect.width === 0 || rect.bottom < 70 || rect.bottom > Math.min(window.innerHeight, barTop)) { handle.style.display = 'none'; return; }
       handle.style.display = 'block';
       handle.style.left = `${rect.right - 5}px`;
       handle.style.top = `${rect.bottom - 5}px`;
@@ -3025,7 +3039,10 @@ export default function App() {
       const parsed = raw ? JSON.parse(raw) : null;
       if (parsed && parsed.token === token && parsed.report) {
         localStorage.removeItem(STORAGE_KEYS.pendingReport);
-        handleLoadSavedReport(parsed.report, true);
+        // 이미 열려 있던 창에 적던 내용이 있으면 덮어쓰기 전에 묻는다 (다른 창에서 이 창으로 불러오기를 보낸 경우)
+        if (!unsavedRef.current || window.confirm('이 창에 저장하지 않은 내용이 있습니다.\n불러온 기록부로 바꿀까요?')) {
+          handleLoadSavedReport(parsed.report, true);
+        }
       }
     } catch (error) {
       console.error('전달된 리포트 불러오기 실패:', error);
@@ -5902,7 +5919,7 @@ export default function App() {
     try {
       await persistReportsEncrypted(activeUser, nextReports);
       setActiveUserReports(nextReports);
-      const synced = syncSamplingLogFromSavedReport(result);
+      const synced = await syncSamplingLogFromSavedReport(result).catch((error) => { console.error('통합시료채취기록부 반영 실패:', error); return false; });
       unsavedRef.current = false;
       if (!silent) alert(`[${displayUserNameWithFallback}] 기록부를 저장했습니다.${synced ? '\n통합시료채취기록부에도 반영했습니다.' : ''}`);
       return true;
@@ -7182,6 +7199,11 @@ export default function App() {
       // C5:F5는 첫 측정값(8행)이 비면 나머지가 있어도 빈칸이 되어, 밀도 계산이 CO2 0%로 조용히 바뀌었다 → 값이 하나라도 있으면 평균.
       // 양식에서는 C5를 주인으로 한 공유 수식 묶음이므로 네 칸을 모두 직접 써서 묶음이 깨지지 않게 한다
       ['C', 'D', 'E', 'F'].forEach((col) => addUpdate('연소가스자료', `${col}5`, { formula: `IF(COUNT(${col}8:${col}10)=0,"",AVERAGE(${col}8:${col}10))` }));
+      // 최대·최소도 같은 기준으로 (첫 측정값이 비면 평균만 나오고 최대·최소는 빈칸이 되지 않게)
+      ['B', 'C', 'D', 'E', 'F'].forEach((col) => {
+        addUpdate('연소가스자료', `${col}6`, { formula: `IF(COUNT(${col}8:${col}42)=0,"",MAX(${col}8:${col}42))` });
+        addUpdate('연소가스자료', `${col}7`, { formula: `IF(COUNT(${col}8:${col}42)=0,"",MIN(${col}8:${col}42))` });
+      });
       addUpdate('노즐산정', 'H8', { formula: '(0.32*N($A$15)+0.44*N($B$15)+0.28*(100-N($A$15)-N($B$15)))' });
       addUpdate('노즐산정', 'D26', { formula: 'IFERROR(AVERAGE(연소가스자료!B8:B10),0)' });
       addUpdate('노즐산정', 'D27', { formula: 'IFERROR(AVERAGE(연소가스자료!C8:C10),0)' });
@@ -7452,7 +7474,20 @@ export default function App() {
     beat();
     const timer = window.setInterval(beat, 4000);
     window.addEventListener('pagehide', stop);
-    return () => { window.clearInterval(timer); window.removeEventListener('pagehide', stop); stop(); };
+    // 창이 열려 있는 동안 잠금을 잡고 있는다 (같이 열린 통합시료채취기록부 창이 둘이어도 되게 shared)
+    let releaseLock = null;
+    let closed = false;
+    try {
+      if (navigator.locks && typeof navigator.locks.request === 'function') {
+        navigator.locks.request(SAMPLING_LOG_WINDOW_LOCK, { mode: 'shared' }, () => (closed ? undefined : new Promise((resolve) => { releaseLock = resolve; })))
+          .catch((error) => console.error('통합시료채취기록부 창 잠금 실패:', error));
+      }
+    } catch (error) { console.error(error); }
+    return () => {
+      closed = true;
+      if (releaseLock) releaseLock();
+      window.clearInterval(timer); window.removeEventListener('pagehide', stop); stop();
+    };
   }, [isSamplingLogWindow]);
   useEffect(() => {
     if (!isSamplingLogWindow) return;
@@ -7570,12 +7605,12 @@ export default function App() {
   };
 
   // 기록부 저장 시: 통합시료채취기록부가 비어 있거나 같은 사업장·배출구면 그 물질 행을 자동으로 채운다
-  const syncSamplingLogFromSavedReport = (report) => {
+  const syncSamplingLogFromSavedReport = async (report) => {
     const sheetId = resolveReportSheetId(report);
     if (!LOG_SOURCE_SHEETS.includes(sheetId)) return false;
     // 통합시료채취기록부 창이 열려 있을 때만 그 창에 바로 반영한다. 닫혀 있으면 다음에 열 때 빈 기록부로 시작하므로
     // 반영해도 남지 않는다 (그때는 통합시료채취기록부의 '저장된 기록부에서 가져오기'로 날짜별 일차에 옮긴다)
-    if (!isSamplingLogWindowOpen()) return false;
+    if (!(await isSamplingLogWindowOpen())) return false;
     const company = String(report?.company || '').trim();
     const location = String(report?.location || '').trim();
     const logCompany = String(samplingLogData.company || '').trim();

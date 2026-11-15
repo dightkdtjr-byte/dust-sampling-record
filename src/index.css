@@ -1078,6 +1078,8 @@ html[data-palette="earth"] .ds-actionbar { background: rgba(253, 251, 246, 0.98)
   .ds-actionbar { gap: 8px !important; }
   .ds-actionbar > button { flex: 1 1 0; min-width: 0; padding: 9px 8px !important; font-size: 13px; line-height: 1.25; }
 }
+/* Enter·Tab으로 옮겨 간 칸이 버튼 줄 뒤에 가려지지 않게: 포커스로 스크롤할 때 버튼 줄 높이만큼 아래를 비워 둔다 */
+html:has(.ds-actionbar) { scroll-padding-bottom: 84px; }
 /* 휴대폰에서 글자를 입력하는 동안은 키보드 위를 가리지 않게 제자리로 돌린다 */
 @media (pointer: coarse) {
   .ds-page:has(input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:focus) .ds-actionbar { position: static; box-shadow: none; }
