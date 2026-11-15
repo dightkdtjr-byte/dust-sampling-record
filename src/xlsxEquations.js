@@ -71,7 +71,8 @@ const equationShape = (picXml, nodes, sz) => {
 };
 
 // 시트에 딸린 그림 파일에서, 이름이 equations에 있는 그림을 수식 개체로 바꾼다. 바꾼 개수를 돌려준다
-export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 20 } = {}) {
+// sizes: 그림 이름별 글자 크기 (분수가 겹친 큰 수식은 아래 숫자 줄을 덮지 않게 작게)
+export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 14, '그림 5': 15 } } = {}) {
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return 0;
@@ -92,7 +93,7 @@ export async function replacePicturesWithEquations(zip, sheetPath, equations = C
       const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(pic[0]) || [])[1];
       if (!name || !Object.prototype.hasOwnProperty.call(equations, name)) return whole;
       count += 1;
-      return `<xdr:${kind}${attrs}>${body.replace(pic[0], () => equationShape(pic[0], equations[name], Math.round(fontPt * 100)))}</xdr:${kind}>`;
+      return `<xdr:${kind}${attrs}>${body.replace(pic[0], () => equationShape(pic[0], equations[name], Math.round((sizes[name] || fontPt) * 100)))}</xdr:${kind}>`;
     });
     if (next !== drawing) zip.file(stack.join('/'), next);
   }
@@ -147,18 +148,19 @@ const legendParagraph = (line, sz) => {
     if (index) runs.push(`<a:r><a:rPr lang="en-US" altLang="ko-KR" sz="${sz}" i="1" baseline="-25000">${sym}</a:rPr><a:t>${esc(index)}</a:t></a:r>`);
   }
   runs.push(`<a:r><a:rPr lang="ko-KR" altLang="en-US" sz="${sz}">${kor}</a:rPr><a:t> = ${esc(line[1])}</a:t></a:r>`);
-  return `<a:p><a:pPr><a:lnSpc><a:spcPct val="115000"/></a:lnSpc></a:pPr>${runs.join('')}</a:p>`;
+  // 줄 간격을 행 높이(16.5pt)에 맞춰 고정: 한 줄이 한 행을 차지해 아래 묶음으로 넘치지 않는다
+  return `<a:p><a:pPr><a:lnSpc><a:spcPts val="1650"/></a:lnSpc></a:pPr>${runs.join('')}</a:p>`;
 };
 const legendAnchor = (id, name, col, row, lines, fontPt) => {
   const sz = Math.round(fontPt * 100);
-  const cy = Math.round(lines.length * fontPt * 1.55 * 12700);
+  const cy = Math.round(lines.length * 16.5 * 12700);
   return `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="5400000" cy="${cy}"/>`
     + `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvSpPr txBox="1"/></xdr:nvSpPr>`
     + `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="5400000" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>`
     + `<xdr:txBody><a:bodyPr vertOverflow="overflow" horzOverflow="overflow" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>${lines.map((line) => legendParagraph(line, sz)).join('')}</xdr:txBody></xdr:sp><xdr:clientData/></xdr:oneCellAnchor>`;
 };
 // 수식 그림(이름이 LEGENDS에 있는 것) 아래의 설명 그림들을 지우고, 같은 자리에 글상자를 넣는다. 바꾼 묶음 수를 돌려준다
-export async function replaceLegendPictures(zip, sheetPath, { fontPt = 13, leftCol = 1, rightCol = 8 } = {}) {
+export async function replaceLegendPictures(zip, sheetPath, { fontPt = 11, leftCol = 1, rightCol = 9 } = {}) {
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return 0;

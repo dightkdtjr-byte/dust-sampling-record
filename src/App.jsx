@@ -7404,7 +7404,8 @@ export default function App() {
           // 가장 작은 공통 폭(열 너비 어림 단위 pt) → 어느 기록부를 인쇄해도 같은 폭
           equalWidth: { width: 475.6 },
           // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
-          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14 },
+          // frame 'box': 모든 시트에 같은 굵은 전체 테두리(인쇄 범위 둘레·제목 아래·양식번호 줄 위)
+          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'box' },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
@@ -7435,7 +7436,7 @@ export default function App() {
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }], align: false, furniture: { sectionRule: true } },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: 'E7EEF7' } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             누출시험: { printArea: 'A1:F18' },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },

@@ -187,6 +187,20 @@ class StyleBook {
   }
 
   // 원래 스타일을 복사해 일부 변의 선 굵기만 바꾼 스타일 번호. changes = { left: 'thin', ... }
+  // 같은 서식에서 채우기 색만 바꾼 서식 번호 (rgb: 'EDEDED')
+  withFill(s, rgb) {
+    const key = `${s}|fill|${rgb}`;
+    if (this.added.has(key)) return this.added.get(key);
+    const xf = this.xfs[s] || this.xfs[0];
+    this.fills.push(`<fill><patternFill patternType="solid"><fgColor rgb="FF${rgb}"/><bgColor indexed="64"/></patternFill></fill>`);
+    this.fillsChanged = true;
+    const fillId = this.fills.length - 1;
+    const next = xf.replace(/\s*fillId="\d+"/, '').replace(/\s*applyFill="\d+"/, '').replace(/^<xf\b/, `<xf fillId="${fillId}" applyFill="1"`);
+    this.xfs.push(next);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
   // 같은 서식에서 지정한 변의 선만 지운 서식 번호
   withoutBorderSides(s, sides) {
     const names = ['left', 'right', 'top', 'bottom'].filter((k) => sides.includes(k));
@@ -288,6 +302,7 @@ class StyleBook {
   serialize() {
     let out = this.xml;
     if (this.fontsChanged) out = out.replace(/<fonts\b[^>]*>[\s\S]*?<\/fonts>/, () => `<fonts count="${this.fonts.length}">${this.fonts.join('')}</fonts>`);
+    if (this.fillsChanged) out = out.replace(/<fills\b[^>]*>[\s\S]*?<\/fills>/, () => `<fills count="${this.fills.length}">${this.fills.join('')}</fills>`);
     if (this.bordersChanged) out = out.replace(/<borders\b[^>]*>[\s\S]*?<\/borders>/, () => `<borders count="${this.borders.length}">${this.borders.join('')}</borders>`);
     if (this.added.size === 0) return out;
     return out.replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/, () => `<cellXfs count="${this.xfs.length}">${this.xfs.join('')}</cellXfs>`);
@@ -962,7 +977,7 @@ const readDrawingRows = async (zip, sheetPath, sheetXml = '') => {
 //  - sectionRule: 가로 구분선으로 묶음을 나누는 시트(계산식)는 제목 아래·양식번호 줄 위에도 같은 구분선을 둔다
 export const normalizePageFurniture = (xml, styles, {
   sharedStrings = [], range = null, scale = 1, titlePt = 18, titleHeight = 32, footerPt = 9, footerHeight = 14,
-  footerPattern = /^\s*■/, sectionRule = false, frame = true,
+  footerPattern = /^\s*■/, sectionRule = false, frame = true, sectionBand = '',
 } = {}) => {
   if (!range || !range.from.row || !range.to.row || !(scale > 0)) return xml;
   const { cells, texts, merges, mergeOf, K, sameMerge, own } = analyzeTables(xml, styles, sharedStrings);
@@ -984,6 +999,7 @@ export const normalizePageFurniture = (xml, styles, {
     return opposite && (fullWidth(b) ? top && bottom : top || bottom);
   };
   const gridCell = (row, col) => vLine(row, col) && vLine(row, col + 1); // 양옆에 세로선이 있는 칸
+  const noFrame = frame === true || frame === 'none';
   const fonts = new Map(); // "r,c" → 글자 크기
   const aligns = new Map(); // "r,c" → { horizontal, vertical }
   const heights = new Map(); // 행 → 높이
@@ -1008,7 +1024,7 @@ export const normalizePageFurniture = (xml, styles, {
     const below = titleBlock.to.row + 1;
     const hadBottom = []; // 제목 상자 아랫선이 있던 열
     for (let col = from.col; col <= to.col; col++) hadBottom[col] = hLine(below, col);
-    if (frame) {
+    if (noFrame) {
       for (let row = titleBlock.from.row; row <= titleBlock.to.row; row++) for (let col = from.col; col <= to.col; col++) Object.assign(side(K(row, col)), { left: null, right: null, top: null, bottom: null });
       for (let col = from.col; col <= to.col; col++) {
         const key = K(below, col);
@@ -1025,7 +1041,7 @@ export const normalizePageFurniture = (xml, styles, {
   }
   if (footerCol) {
     const above = to.row - 1;
-    if (frame) {
+    if (noFrame) {
       const hadTop = [];
       for (let col = from.col; col <= to.col; col++) hadTop[col] = hLine(to.row, col);
       for (let col = from.col; col <= to.col; col++) Object.assign(side(K(to.row, col)), { left: null, right: null, top: null, bottom: null });
@@ -1042,7 +1058,7 @@ export const normalizePageFurniture = (xml, styles, {
     aligns.set(K(b.from.row, b.from.col), { horizontal: 'right', vertical: 'center' });
   }
   // 바깥 테두리: 왼쪽·오른쪽 끝
-  if (frame) {
+  if (noFrame) {
     for (const edge of ['left', 'right']) {
       const col = edge === 'left' ? from.col : to.col;
       let row = from.row;
@@ -1065,12 +1081,57 @@ export const normalizePageFurniture = (xml, styles, {
     }
   }
 
-  let out = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
+  // 전체 테두리(frame: 'box'): 인쇄 범위 둘레, 제목 아래, 양식번호 줄 위를 모두 굵은 선으로 — 모든 시트 같은 모양
+  let boxed0 = xml;
+  if (frame === 'box') {
+    const need = new Map(); // 행 → 필요한 열들
+    const want = (row, col, name) => { side(K(row, col))[name] = 'medium'; if (!need.has(row)) need.set(row, new Set()); need.get(row).add(col); };
+    for (let row = from.row; row <= to.row; row++) { want(row, from.col, 'left'); want(row, to.col, 'right'); }
+    for (let col = from.col; col <= to.col; col++) {
+      want(from.row, col, 'top'); want(to.row, col, 'bottom');
+      if (titleBlock) want(titleBlock.to.row, col, 'bottom');
+      if (footerCol) want(to.row, col, 'top');
+    }
+    // 테두리를 입힐 칸이 파일에 없으면 빈 칸을 만들어 둔다
+    for (const [row, colSet] of need) {
+      const missing = [...colSet].filter((col) => !cells.has(K(row, col))).sort((x, y) => x - y);
+      if (missing.length === 0) continue;
+      const make = (col) => `<c r="${numToColName(col)}${row}"/>`;
+      const rowRe = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)(?:/>|>([\\s\\S]*?)</row>)`);
+      let m = rowRe.exec(boxed0);
+      if (!m) {
+        const tag = `<row r="${row}"/>`;
+        let placed = false;
+        boxed0 = boxed0.replace(/<row\b[^>]*\br="(\d+)"/g, (w, n) => { if (!placed && Number(n) > row) { placed = true; return `${tag}${w}`; } return w; });
+        if (!placed) boxed0 = boxed0.replace('</sheetData>', () => `${tag}</sheetData>`);
+        m = rowRe.exec(boxed0);
+        if (!m) continue;
+      }
+      const existing = [...(m[2] || '').matchAll(/<c\b[^>]*?\br="([A-Z]+)\d+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)].map((c) => ({ col: colToNum(c[1]), xml: c[0] }));
+      const all = [...existing, ...missing.map((col) => ({ col, xml: make(col) }))].sort((x, y) => x.col - y.col);
+      boxed0 = boxed0.replace(rowRe, () => `<row${m[1].replace(/\s*\/$/, '')}>${all.map((c) => c.xml).join('')}</row>`);
+    }
+  }
+  // 묶음 제목 띠: 첫 열에 굵은 글씨 제목만 있는 줄을 인쇄 폭 전체에 옅은 색으로 칠한다 (테두리 없이도 묶음이 구분되게)
+  const bandRows = new Set();
+  if (sectionBand) {
+    for (let row = from.row; row <= to.row; row++) {
+      if (furnitureRows.has(row)) continue;
+      const key = K(row, from.col);
+      const text = String(texts.get(key) || '').trim();
+      if (!text || /=$/.test(text) || !cells.has(key) || !styles.isBold(cells.get(key))) continue;
+      let alone = true;
+      for (let col = from.col + 1; col <= to.col; col++) if (String(texts.get(K(row, col)) || '').trim()) { alone = false; break; }
+      if (alone) bandRows.add(row);
+    }
+  }
+  let out = boxed0.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
     const ref = parseRef(attr(attrs, 'r') || '');
     if (!ref) return whole;
     const key = K(ref.row, ref.col);
     const original = Number(attr(attrs, 's') || 0);
     let next = original;
+    if (bandRows.has(ref.row) && ref.col >= from.col && ref.col <= to.col) next = styles.withFill(next, sectionBand);
     if (sides.has(key)) {
       const before = own(key); const after = sides.get(key);
       const cleared = ['left', 'right', 'top', 'bottom'].filter((k) => before[k] && !after[k]);
