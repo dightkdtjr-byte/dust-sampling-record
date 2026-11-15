@@ -7057,7 +7057,7 @@ export default function App() {
           : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
         L(`A${r}`, method, 'A5'); ['B', 'C', 'D', 'E', 'F'].forEach((c) => { L(`${c}${r}`, null, 'A5'); L(`${c}${r + 1}`, null, 'A5'); }); L(`A${r + 1}`, null, 'A5');
         leakMerges.push(`A${r}:F${r + 1}`); r += 3;
-        const head = ['굴뚝 형태', '전체길이 (m)', '플랜지 길이 (cm)', rect ? '깊이×폭(m)' : '내경 (m)', '단면적(㎡)', '측정점수'];
+        const head = ['굴뚝 형태', '전체길이 (m)', 'Lnw (cm)', rect ? '깊이×폭(m)' : 'D (m)', '단면적(㎡)', '측정점수'];
         const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
         head.forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
         const flangeM = toNumber(sourceData.flangeLength);
@@ -7065,15 +7065,26 @@ export default function App() {
         [rect ? '사각' : '원형', toNumber(sourceData.totalStackDepth), flangeM === null ? null : flangeM * 100, dims, sp && sp.area !== '' ? Number(sp.area) : null,
           sp ? (rect ? `${sp.lines}×${sp.perRadius}=${sp.total}` : sp.total) : null].forEach((value, i) => L(`${cols[i]}${r}`, value, 'B14'));
         r += 2;
-        L(`A${r}`, '측정점', 'A12'); L(`B${r}`, '벽에서 거리 (cm)', 'A12'); L(`C${r}`, '삽입 깊이 (cm)', 'A12');
-        L(`D${r}`, rect ? '측정공 위치 (cm)' : '반대편 삽입 깊이 (cm)', 'A12'); L(`E${r}`, null, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`D${r}:F${r}`); r += 1;
+        // 양식의 표현 그대로: 중심에서의 거리 → Sampling Location(안쪽) → Lnw 포함 → 최종 샘플링 위치((청) 플랜지 포함) → 깊이(반대편)
+        // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
+        L(`A${r}`, '(청) 플랜지 (cm)', 'A12'); L(`B${r}`, 15, 'B14');
+        const blueRef = `$B$${r}`; r += 2;
+        L(`A${r}`, '번호', 'A12'); L(`B${r}`, '중심 거리(cm)', 'A12'); L(`C${r}`, 'Sampling Location (cm)', 'A12');
+        L(`D${r}`, 'Lnw 포함', 'A12'); L(`E${r}`, '최종 위치', 'A12'); L(`F${r}`, rect ? '측정공' : '깊이', 'A12'); r += 1;
         const count = sp ? Math.min(12, sp.nearInsertion.length) : 0;
+        const half = (toNumber(sourceData.stackDiameter) || 0) * 50; // 반지름(또는 깊이의 절반), cm
         for (let i = 0; i < Math.max(1, count); i++) {
+          const wall = count ? Number(sp.wallDistances[i]) : null;
           L(`A${r}`, count ? `# ${i + 1}` : null, 'B14');
-          L(`B${r}`, count ? Number(sp.wallDistances[i]) : null, 'B14');
-          L(`C${r}`, count ? Number(sp.nearInsertion[i]) : null, 'B14');
-          const last = rect ? (i === 0 && sp.portPositions ? sp.portPositions.join(', ') : null) : (count && sp.farInsertion[i] !== undefined ? Number(sp.farInsertion[i]) : null);
-          L(`D${r}`, last, 'B14'); L(`E${r}`, null, 'B14'); L(`F${r}`, null, 'B14'); leakMerges.push(`D${r}:F${r}`); r += 1;
+          L(`B${r}`, count ? Math.round(Math.abs(half - wall) * 100) / 100 : null, 'B14');
+          L(`C${r}`, wall, 'B14');
+          L(`D${r}`, count ? Number(sp.nearInsertion[i]) : null, 'B14');
+          // 최종 샘플링 위치 = Lnw 포함 값 + (청) 플랜지
+          L(`E${r}`, count ? { formula: `D${r}+${blueRef}` } : null, 'B14');
+          const last = rect
+            ? (count && sp.portPositions && sp.portPositions[i] !== undefined ? Number(sp.portPositions[i]) : null)
+            : (count && sp.farInsertion[i] !== undefined ? { formula: `${Number(sp.farInsertion[i])}+${blueRef}` } : null);
+          L(`F${r}`, last, 'B14'); r += 1;
         }
         leakFooterRow = r + 1;
       }
