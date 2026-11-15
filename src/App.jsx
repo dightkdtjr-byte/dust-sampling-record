@@ -160,7 +160,7 @@ const EXPORT_TEMPLATE_LAYOUTS = {
   mercury: { file: 'mercury-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 27, impingerRows: 4, nozzleRows: 15, filterPrefix: '수은', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
   pahs: { file: 'pahs-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 24, impingerRows: 6, nozzleRows: 19, filterPrefix: 'PAHs', leak: { firstRow: 14, hasMeter: true }, o2: O2_CALC_CELLS_A },
   // 유량 양식은 인쇄되는 83~90행과 인쇄 범위 밖 92~99행(이름 Q가 가리키는 M93)에 같은 묶음이 두 번 있다
-  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, hideSheets: ['누출시험'], o2: { qCells: ['M84', 'M93'], dcCell: 'M115', flowBlocks: [[83, 90], [92, 99]] } }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
+  flow: { file: 'flow-template.xlsm', meterStartRow: 17, meterTemplateEndRow: 25, impingerRows: 4, nozzleRows: 18, filterPrefix: '유량', leak: null, leakAsPosition: true, o2: { qCells: ['M84', 'M93'], dcCell: 'M115', flowBlocks: [[83, 90], [92, 99]] } }, // 유량 측정에는 누출시험이 없다 → 화면에서 빼고 엑셀 시트는 숨김
 };
 // 양식에서 주변 칸은 가운데 정렬인데 혼자 왼쪽·오른쪽으로 붙어 있던 표 칸들. 내보낼 때 가운데로 맞춘다
 const EXPORT_CENTER_CELLS = (layout) => ({
@@ -7047,18 +7047,29 @@ export default function App() {
       // (그림과 원형굴뚝 기준표가 있는 '시료측정위치' 시트는 계산용으로만 남기고 숨긴다)
       let leakFooterRow = null;
       const leakMerges = [];
-      if (layout.leak && sheetPathMap.has('누출시험')) {
+      if ((layout.leak || layout.leakAsPosition) && sheetPathMap.has('누출시험')) {
         const sp = computeSamplingPoints(sourceData);
         const rect = sourceData.stackShape === 'rect';
         const L = (ref, value, from) => addUpdate('누출시험', ref, value, from);
         let r = 20;
-        L(`A${r}`, '▶ 시료측정위치 선정', 'A10'); r += 1;
+        // 유량 기록부는 누출시험이 없으므로 이 시트를 '시료측정위치 선정' 한 장으로 쓴다 (누출시험 부분은 숨김)
+        if (layout.leakAsPosition) {
+          L('A1', '시료측정위치 선정');
+          // 유량 양식의 이 시트는 A~D열 4칸짜리라, 제목과 양식번호 줄을 A~F열 폭으로 넓힌다
+          ['E1', 'F1', 'E2', 'F2'].forEach((ref) => L(ref, null, 'A1'));
+          ['E17', 'F17'].forEach((ref) => L(ref, null, 'A17'));
+          leakMerges.push('A1:F2', 'A17:F17');
+        }
+        else L(`A${r}`, '▶ 시료측정위치 선정', 'A10');
+        r += 1;
         const method = rect
           ? '사각 굴뚝: 단면적에 따라 한 변의 길이 l 이하(1 ㎡ 이하 0.5 m, 1~4 ㎡ 0.667 m, 4 ㎡ 초과 1 m)의 4개 이상 등면적 사각형으로 나누고 각 사각형의 중심에서 측정한다. 유속 분포가 대칭이면 수직 굴뚝은 1/4, 수평 덕트는 1/2로 줄일 수 있다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.'
           : '원형 굴뚝: 직경에 따라 반경을 등면적으로 구분(1 m 이하 1, 2 m 이하 2, 4 m 이하 3, 4.5 m 이하 4, 초과 5)하고 각 구분의 r = R × 계수 위치에서 측정한다. 측정공이 수직 굴뚝에 있으면 단면의 1/4에 해당하는 반경상의 측정점으로 줄일 수 있고, 수평 굴뚝에 있으면 모든 측정점에서 측정한다. 단면적 0.25 ㎡ 이하는 단면 중심 1점.';
-        L(`A${r}`, method, 'A5'); ['B', 'C', 'D', 'E', 'F'].forEach((c) => { L(`${c}${r}`, null, 'A5'); L(`${c}${r + 1}`, null, 'A5'); }); L(`A${r + 1}`, null, 'A5');
-        leakMerges.push(`A${r}:F${r + 1}`); r += 3;
-        const head = ['굴뚝 형태', '전체길이 (m)', 'Lnw (cm)', rect ? '깊이×폭(m)' : 'D (m)', '단면적(㎡)', '측정점수'];
+        // 설명 글은 세 줄까지 들어가게 세 행을 합친다 (합친 칸은 엑셀이 높이를 자동으로 늘리지 않아 글이 잘린다)
+        L(`A${r}`, method, 'A5');
+        [0, 1, 2].forEach((k) => ['A', 'B', 'C', 'D', 'E', 'F'].forEach((c) => { if (k || c !== 'A') L(`${c}${r + k}`, null, 'A5'); }));
+        leakMerges.push(`A${r}:F${r + 2}`); r += 4;
+        const head = ['굴뚝 형태', '전체길이 (m)', 'Lnw (cm)', rect ? 'D×W (m)' : 'D (m)', '단면적(㎡)', '측정점수'];
         const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
         head.forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
         const flangeM = toNumber(sourceData.flangeLength);
@@ -7386,7 +7397,7 @@ export default function App() {
                   : {}),
                 // 수분량 시트: 측정방법이 세 줄이 되었으므로 선택번호 칸도 세 줄로 합친다
                 // 측정방법 표가 한 줄 늘어 바로 아래 제목과 붙었으므로, 제목 줄을 높여 다른 제목들처럼 위에 여백을 둔다
-                ...(sheetName === '누출시험' && leakMerges.length ? { addMerges: leakMerges } : {}),
+                ...(sheetName === '누출시험' && leakMerges.length ? { addMerges: leakMerges, ...(layout.leakAsPosition ? { removeMerges: ['A1:D2', 'A17:D17'] } : {}) } : {}),
                 ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
@@ -7432,7 +7443,7 @@ export default function App() {
       // 누출시험 시트: 양식번호 줄을 새로 넣은 시료측정위치 요약 아래로 옮긴다
       let leakPrintEnd = 18;
       if (leakFooterRow) {
-        try { if (await moveRowCells(zip, sheetPathMap.get('누출시험'), 18, leakFooterRow)) leakPrintEnd = leakFooterRow; } catch (error) { console.error('누출시험 양식번호 줄 옮기기 실패:', error); }
+        try { if (await moveRowCells(zip, sheetPathMap.get('누출시험'), layout.leakAsPosition ? 17 : 18, leakFooterRow)) leakPrintEnd = leakFooterRow; } catch (error) { console.error('누출시험 양식번호 줄 옮기기 실패:', error); }
       }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
       try { await centerSheetPictures(zip, sheetPathMap.get('표지'), { firstCol: 1, lastCol: 8 }); } catch (error) { console.error('표지 로고 가운데 맞춤 실패:', error); }
@@ -7481,10 +7492,15 @@ export default function App() {
         // 시트 순서: 표지 → 누출시험(+시료측정위치) → 시료측정위치 → 연소가스자료 → 수분량 → …
         wbXml = reorderWorkbookSheets(wbXml, ['표지', '누출시험', '시료측정위치', '연소가스자료', '수분량']);
         [...(layout.hideSheets || []), ...(leakFooterRow ? ['시료측정위치'] : [])].forEach((name) => {
+          if (name === '누출시험' && layout.leakAsPosition) return;
           wbXml = wbXml.replace(new RegExp(`<sheet\\b([^>]*\\bname="${name}"[^>]*?)\\s*/>`), (full, attrs) => (
             /\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`
           ));
         });
+        // 유량 기록부: 누출시험 시트를 측정위치 시트로 쓰므로 시트 이름도 바꾼다 (다른 시트가 이 시트를 참조하지 않는다)
+        if (layout.leakAsPosition && leakFooterRow) {
+          wbXml = wbXml.replace(/(<sheet\b[^>]*\bname=")누출시험(")/, (w, a, b) => `${a}측정위치${b}`).replace(/>누출시험!/g, '>측정위치!');
+        }
         if (/<calcPr\b[^>]*\/>/.test(wbXml)) {
           wbXml = wbXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
         } else {
@@ -7550,7 +7566,7 @@ export default function App() {
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
             계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
-            누출시험: { printArea: `A1:F${leakPrintEnd}` },
+            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }] },
           },
         });
