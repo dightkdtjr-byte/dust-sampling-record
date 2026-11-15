@@ -98,3 +98,112 @@ export async function replacePicturesWithEquations(zip, sheetPath, equations = C
   }
   return count;
 }
+
+// ── 기호 설명(범례): 그림 대신 글상자의 실제 글자로 ──
+// 수식 개체가 아니라 보통 글자(아래첨자·기울임)로 적어 엑셀·휴대폰·한셀 어디서나 똑같이 보이고 선명하게 인쇄된다.
+// 한 줄 = [기호 조각들, 설명]. 기호 조각: 'P' (기울임) 또는 ['P', 's'] (기호 + 아래첨자)
+const S = (base, index) => [base, index];
+const LEGENDS = {
+  _x83189624: {
+    left: [[[S('X', 'w')], '배출가스 중의 수증기의 부피 백분율 (%)'], [[S('m', 'a')], '흡습 수분의 질량 (mₐ₂ − mₐ₁) (g)'], [[S('V', 'm')], '흡입한 건조 가스량 (건식가스미터에서 읽은 값) (L)']],
+    right: [[[S('θ', 'm')], '가스미터에서의 흡입 가스온도 (℃)'], [[S('P', 'a')], '대기압 (mmHg)'], [[S('P', 'm')], '가스미터에서의 가스의 게이지압 (mmHg)']],
+  },
+  _x83201912: {
+    left: [[['r'], '굴뚝 내의 배출가스 밀도 (kg/m³)'], [[S('r', '0')], '온도 0 ℃ 기압 760 mmHg로 환산한 습한 배출가스 밀도 (kg/Sm³)'], [[S('θ', 's')], '각 측정점에서 배출가스 온도의 평균치 (℃)']],
+    right: [[[S('P', 'a')], '대기압 (mmHg)'], [[S('P', 's')], '각 측정점에서 배출가스 정압의 평균치 (mmHg)']],
+  },
+  _x134303384: {
+    left: [[['V'], '유속 (m/s)'], [['C'], '피토관 계수']],
+    right: [[['h'], '피토관에 의한 동압 측정치 (mmH₂O)'], [['g'], '중력가속도 (9.81 m/s²)'], [['r'], '굴뚝 내의 배출가스 밀도 (kg/m³)']],
+  },
+  _x133882184: {
+    left: [[['I'], '등속흡입계수 (%)'], [[S('P', 's')], '배출가스 압력 (mmHg: 760 + P′s)'], [[S('P′', 's')], '배출가스 정압'], [[S('T', 's')], '배출가스 평균 절대온도 (K: 273 + θs (℃))'], [[S('V', 'ic')], '임핀저와 실리카겔에 채취된 물의 총량 (mL)'], [[S('V′', 'm')], '건식가스미터에서 읽은 가스시료채취량 (m³)']],
+    right: [[[S('T', 'm')], '건식가스미터의 평균 절대온도 (K: 273 + θm (℃))'], [[S('P', 'bar')], '측정공 위치의 대기압 (mmHg)'], [['ΔH'], '오리피스 압차 (mmH₂O)'], [['t'], '총시료채취시간 (분)'], [['V'], '배출가스 유속 (m/s)'], [[S('A', 'n')], '노즐의 단면적 (cm²)']],
+  },
+  _x83433656: {
+    left: [[[S('Q', 'a')], '배출가스 유량 (Sm³/hr)'], [['v'], '배출가스 유속 (m/s)'], [['A'], '굴뚝 내부 면적 (m²)']],
+    right: [[[S('P', 'a')], '대기압 (mmHg)'], [[S('P', 's')], '각 측정점에서 배출가스 정압의 평균치 (mmHg)'], [[S('θ', 's')], '각 측정점에서 배출가스 온도의 평균치 (℃)'], [[S('X', 'w')], '습윤 배출가스 중의 수증기 부피 백분율 (%)']],
+  },
+  _x86843880: {
+    left: [[['Q'], '배출가스 유량 (Sm³/hr)'], [[S('Q', 'a')], '실측 배출가스 유량 (Sm³/hr)']],
+    right: [[[S('O', 's')], '표준산소농도 (%)'], [[S('O', 'a')], '실측산소농도 (%)']],
+  },
+  '그림 5': {
+    left: [[[S('C', 'a')], '먼지농도 (mg/Sm³)'], [[S('m', 'd')], '포집된 먼지량 (mg)'], [[S('V′', 'm')], '건식가스미터에서 읽은 가스시료채취량 (m³)']],
+    right: [[[S('θ', 'm')], '건식가스미터의 평균온도 (℃)'], [[S('P', 'a')], '측정공 위치의 대기압 (mmHg)'], [['ΔH'], '오리피스 압력차 (mmH₂O)']],
+  },
+  _x86845240: {
+    left: [[['C'], '오염물질 농도 (mg/Sm³ 또는 ppm)'], [[S('C', 'a')], '실측 오염물질 농도 (mg/Sm³ 또는 ppm)']],
+    right: [[[S('O', 's')], '표준산소농도 (%)'], [[S('O', 'a')], '실측산소농도 (%)']],
+  },
+};
+const legendParagraph = (line, sz) => {
+  const sym = `<a:latin typeface="Cambria Math"/><a:ea typeface="Cambria Math"/>`;
+  const kor = `<a:latin typeface="맑은 고딕"/><a:ea typeface="맑은 고딕"/>`;
+  const runs = [];
+  for (const part of line[0]) {
+    const [base, index] = Array.isArray(part) ? part : [part, ''];
+    runs.push(`<a:r><a:rPr lang="en-US" altLang="ko-KR" sz="${sz}" i="1">${sym}</a:rPr><a:t>${esc(base)}</a:t></a:r>`);
+    if (index) runs.push(`<a:r><a:rPr lang="en-US" altLang="ko-KR" sz="${sz}" i="1" baseline="-25000">${sym}</a:rPr><a:t>${esc(index)}</a:t></a:r>`);
+  }
+  runs.push(`<a:r><a:rPr lang="ko-KR" altLang="en-US" sz="${sz}">${kor}</a:rPr><a:t> = ${esc(line[1])}</a:t></a:r>`);
+  return `<a:p><a:pPr><a:lnSpc><a:spcPct val="115000"/></a:lnSpc></a:pPr>${runs.join('')}</a:p>`;
+};
+const legendAnchor = (id, name, col, row, lines, fontPt) => {
+  const sz = Math.round(fontPt * 100);
+  const cy = Math.round(lines.length * fontPt * 1.55 * 12700);
+  return `<xdr:oneCellAnchor><xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="5400000" cy="${cy}"/>`
+    + `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvSpPr txBox="1"/></xdr:nvSpPr>`
+    + `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="5400000" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></xdr:spPr>`
+    + `<xdr:txBody><a:bodyPr vertOverflow="overflow" horzOverflow="overflow" wrap="none" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>${lines.map((line) => legendParagraph(line, sz)).join('')}</xdr:txBody></xdr:sp><xdr:clientData/></xdr:oneCellAnchor>`;
+};
+// 수식 그림(이름이 LEGENDS에 있는 것) 아래의 설명 그림들을 지우고, 같은 자리에 글상자를 넣는다. 바꾼 묶음 수를 돌려준다
+export async function replaceLegendPictures(zip, sheetPath, { fontPt = 13, leftCol = 1, rightCol = 8 } = {}) {
+  const dir = sheetPath.replace(/[^/]+$/, '');
+  const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
+  if (!relsFile) return 0;
+  const rels = await relsFile.async('string');
+  let count = 0;
+  for (const m of rels.matchAll(/<Relationship\b([^>]*)\/?>/g)) {
+    if (!/Type="[^"]*\/drawing"/.test(m[1])) continue;
+    const target = (/Target="([^"]*)"/.exec(m[1]) || [])[1] || '';
+    const stack = [];
+    for (const part of (dir + target).split('/')) { if (part === '..') stack.pop(); else if (part && part !== '.') stack.push(part); }
+    const path = stack.join('/');
+    const file = zip.file(path);
+    if (!file) continue;
+    const drawing = await file.async('string');
+    const anchors = [...drawing.matchAll(/<xdr:(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:\1>/g)].map((a) => {
+      const row = Number((/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(a[0]) || [])[1]);
+      const name = (/<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(a[0]) || [])[1] || '';
+      return { xml: a[0], row, name, formula: Object.prototype.hasOwnProperty.call(LEGENDS, name) };
+    });
+    const formulas = anchors.filter((a) => a.formula).sort((a, b) => a.row - b.row);
+    if (formulas.length === 0) continue;
+    // 설명 그림 → 바로 위의 수식 묶음
+    const sections = new Map(); // 수식 anchor → 설명 그림들
+    for (const a of anchors) {
+      if (a.formula || !Number.isFinite(a.row)) continue;
+      const owner = [...formulas].reverse().find((f) => f.row <= a.row);
+      if (!owner) continue;
+      if (!sections.has(owner)) sections.set(owner, []);
+      sections.get(owner).push(a);
+    }
+    let nextId = Math.max(0, ...[...drawing.matchAll(/<xdr:cNvPr\b[^>]*\bid="(\d+)"/g)].map((x) => Number(x[1]))) + 1;
+    let out = drawing;
+    const added = [];
+    for (const [owner, legends] of sections) {
+      const def = LEGENDS[owner.name];
+      const row = Math.min(...legends.map((a) => a.row));
+      for (const a of legends) out = out.replace(a.xml, () => '');
+      added.push(legendAnchor(nextId++, `설명 ${owner.name} L`, leftCol, row, def.left, fontPt));
+      added.push(legendAnchor(nextId++, `설명 ${owner.name} R`, rightCol, row, def.right, fontPt));
+      count += 1;
+    }
+    if (added.length) {
+      out = out.replace(/<\/xdr:wsDr>\s*$/, () => `${added.join('')}</xdr:wsDr>`);
+      zip.file(path, out);
+    }
+  }
+  return count;
+}

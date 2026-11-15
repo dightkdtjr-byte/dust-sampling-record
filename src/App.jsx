@@ -5,7 +5,7 @@ import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
 import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures } from './xlsxTidy.js';
-import { replacePicturesWithEquations } from './xlsxEquations.js';
+import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
 
@@ -7326,6 +7326,8 @@ export default function App() {
       }
       // 계산식: 수식 그림(캡처)을 엑셀 수식 개체로 바꾼다 (엑셀에서 실제 수식으로 보이고, 다른 프로그램은 원래 그림을 보여 준다)
       if (sheetPathMap.has('계산식')) {
+        // 기호 설명 그림은 먼저 글상자의 실제 글자로 바꾼다 (수식 그림의 이름으로 묶음을 찾으므로 수식 개체로 바꾸기 전에)
+        try { await replaceLegendPictures(zip, sheetPathMap.get('계산식')); } catch (error) { console.error('계산식 기호 설명 바꾸기 실패:', error); }
         try { await replacePicturesWithEquations(zip, sheetPathMap.get('계산식')); } catch (error) { console.error('계산식 수식 개체 바꾸기 실패:', error); }
       }
       // 표지: 로고를 인쇄 폭 가로 가운데로 (양식에서는 오른쪽으로 3mm쯤 치우쳐 있었다)
