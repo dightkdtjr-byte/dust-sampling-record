@@ -1506,6 +1506,13 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       const xml = await read(item.path);
       const range = printAreaUpdates.has(item.index) ? parseRange(printAreaUpdates.get(item.index).range) : printRanges.get(item.index) || null;
       const size = xml ? measurePrintArea(xml, range, mdw, styles, range ? null : await readDrawingExtent(zip, item.path, xml)) : null;
+      // 인쇄 범위가 없는 시트에서 인쇄할 끝 열을 정해 둔 경우(maxPrintCol): 그 오른쪽의 보조 칸은 인쇄 범위에 넣지 않는다
+      const itemRule = typeof rules === 'function' ? rules(item.name) : rules[item.name];
+      if (size && size.fromContent && itemRule?.maxPrintCol && size.range.to.col > itemRule.maxPrintCol) {
+        const clipped = { from: size.range.from, to: { row: size.range.to.row, col: itemRule.maxPrintCol } };
+        const again = measurePrintArea(xml, clipped, mdw, styles);
+        if (again && again.width > 0) { measured.push({ ...item, ...again, range: clipped, fromContent: true }); continue; }
+      }
       if (size && size.width > 0 && size.height > 0) measured.push({ ...item, ...size });
     }
     // 가로는 글꼴 폭 어림 오차로 3%, 세로는 머리글·바닥글 공간으로 5% 여유
@@ -1568,7 +1575,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       // 양식번호 줄을 A4 맨 아래로(furniture.footerAtBottom)
       // 1) 양식번호 줄 위쪽에 '줄 전체가 빈' 줄이 있으면 그 줄을 늘린다 (인쇄 범위 밖 오른쪽에 표가 있는 줄은 빈 줄이 아니다)
       // 2) 없으면 한 줄만 길어지지 않게, 제목·양식번호 줄을 뺀 모든 줄을 같은 비율로 조금씩 늘린다
-      else if (furniture && furniture.footerAtBottom && rule?.furniture !== false && measured[i].range) {
+      else if (furniture && furniture.footerAtBottom && !furniture.pageFooter && rule?.furniture !== false && measured[i].range) {
         const size = measurePrintArea(xml, measured[i].range, mdw, styles);
         let extra = size ? maxH / (scales[i] / 100) - size.height : 0;
         const { from, to } = measured[i].range;
@@ -1627,7 +1634,24 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
           }
         }
       }
-      zip.file(measured[i].path, setPrintScale(xml, scales[i], margins));
+      // 양식번호를 인쇄 바닥글로(furniture.pageFooter): 양식번호 줄(인쇄 범위의 마지막 줄)의 글자를 바닥글 오른쪽에 넣고 그 줄은 숨긴다.
+      // 줄을 억지로 늘리지 않아도 인쇄하면 항상 종이 맨 아래에 찍힌다. 인쇄 배율과 상관없이 같은 크기(scaleWithDoc 0)
+      let footerText = '';
+      if (furniture && furniture.pageFooter && rule?.furniture !== false && measured[i].range) {
+        const { to } = measured[i].range;
+        const { texts } = analyzeTables(xml, styles, sharedStrings);
+        for (const [key, text] of texts) if (Number(key.split(',')[0]) === to.row && String(text || '').trim()) { footerText = String(text).trim(); break; }
+        if (footerText && (!furniture.footerPattern || furniture.footerPattern.test(footerText))) xml = ensureRowHidden(xml, to.row);
+        else footerText = '';
+      }
+      let outXml = setPrintScale(xml, scales[i], margins);
+      if (footerText) {
+        const esc = footerText.replace(/&/g, '&&').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const tag = `<headerFooter scaleWithDoc="0" alignWithMargins="1"><oddFooter>&amp;R&amp;"맑은 고딕,보통"&amp;${furniture.footerPt || 9}${esc}</oddFooter></headerFooter>`;
+        if (/<headerFooter\b[^>]*(?:\/>|>[\s\S]*?<\/headerFooter>)/.test(outXml)) outXml = outXml.replace(/<headerFooter\b[^>]*(?:\/>|>[\s\S]*?<\/headerFooter>)/, () => tag);
+        else outXml = outXml.replace(/(<pageSetup\b[^>]*\/>)/, (w) => `${w}${tag}`);
+      }
+      zip.file(measured[i].path, outXml);
     }
   }
   zip.file('xl/styles.xml', styles.serialize());
@@ -1915,7 +1939,7 @@ export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
 // ── 그림을 칸(box, 예: 'E5:G10') 안에 맞춘다: 가로세로 비율(aspect = 가로 ÷ 세로)을 지키면서 가장 크게, 가운데에 ──
 // 서식 정리가 끝난 뒤의 실제 열 너비·행 높이로 재고, 크기를 절대값(oneCellAnchor + ext)으로 적어
 // 열 너비가 달라져도 그림이 찌그러지거나 칸 밖으로 나가지 않게 한다. 칸 안에서 시작하는 그림만 바꾼다.
-export async function fitPictureInBox(zip, sheetPath, { box, aspect, pad = 3, mdw = 9 } = {}) {
+export async function fitPictureInBox(zip, sheetPath, { box, aspect = 1, pad = 3, mdw = 9, fill = false } = {}) {
   const file = zip.file(sheetPath);
   const range = parseRange(box || '');
   if (!file || !range || !(aspect > 0)) return 0;
@@ -1960,7 +1984,55 @@ export async function fitPictureInBox(zip, sheetPath, { box, aspect, pad = 3, md
     count += 1;
     const body = inner.replace(/<xdr:from>[\s\S]*?<\/xdr:from>/, '').replace(/<xdr:to>[\s\S]*?<\/xdr:to>/, '').replace(/<xdr:ext\b[^>]*\/>/, '')
       .replace(/<a:xfrm>[\s\S]*?<\/a:xfrm>/, () => `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`);
+    // fill: 칸 전체를 채운다 (칸 모서리에 붙여 두 칸 기준으로 고정 → 열 너비가 달라도 칸에 꼭 맞는다)
+    if (fill) {
+      const p = pad * EMU_PT;
+      const fw = boxW - p * 2; const fh = boxH - p * 2;
+      const filled = inner.replace(/<xdr:from>[\s\S]*?<\/xdr:from>/, '').replace(/<xdr:to>[\s\S]*?<\/xdr:to>/, '').replace(/<xdr:ext\b[^>]*\/>/, '')
+        .replace(/<a:xfrm>[\s\S]*?<\/a:xfrm>/, () => `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${fw}" cy="${fh}"/></a:xfrm>`);
+      return `<xdr:twoCellAnchor editAs="twoCell"><xdr:from><xdr:col>${range.from.col - 1}</xdr:col><xdr:colOff>${p}</xdr:colOff><xdr:row>${range.from.row - 1}</xdr:row><xdr:rowOff>${p}</xdr:rowOff></xdr:from>`
+        + `<xdr:to><xdr:col>${range.to.col - 1}</xdr:col><xdr:colOff>${colEmu(range.to.col) - p}</xdr:colOff><xdr:row>${range.to.row - 1}</xdr:row><xdr:rowOff>${rowEmu(range.to.row) - p}</xdr:rowOff></xdr:to>${filled}</xdr:twoCellAnchor>`;
+    }
     return `<xdr:oneCellAnchor><xdr:from><xdr:col>${col0}</xdr:col><xdr:colOff>${x}</xdr:colOff><xdr:row>${row0}</xdr:row><xdr:rowOff>${y}</xdr:rowOff></xdr:from><xdr:ext cx="${w}" cy="${h}"/>${body}</xdr:oneCellAnchor>`;
+  });
+  if (count) zip.file(drawingPath, next);
+  return fill ? { count, aspect: (boxW - pad * 2 * EMU_PT) / (boxH - pad * 2 * EMU_PT) } : count;
+}
+
+// ── 연결 그림(카메라)의 원본 칸을 정해진 비율(aspect = 가로 ÷ 세로)로: 열을 넓히고 칸 안의 그림을 가로 가운데로 옮긴다 ──
+// 원본 칸과 그림 틀의 비율이 같아야 연결 그림이 찌그러지지 않고 틀을 꽉 채운다. 그림 크기는 그대로 둔다.
+export async function setPictureSourceAspect(zip, sheetPath, { aspect, row = 1, mdw = 9 } = {}) {
+  const file = zip.file(sheetPath);
+  if (!file || !(aspect > 0)) return 0;
+  let xml = await file.async('string');
+  const rowTag = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)/?>`).exec(xml);
+  const ht = rowTag && attr(rowTag[1], 'ht') !== null ? Number(attr(rowTag[1], 'ht')) : 0;
+  if (!(ht > 0)) return 0;
+  const px = Math.round(((ht / 0.75) * aspect));
+  const width = Math.round((px / mdw) * 10000) / 10000;
+  const colPx = Math.trunc(((256 * width + Math.trunc(128 / mdw)) / 256) * mdw);
+  xml = xml.replace(/<cols>([\s\S]*?)<\/cols>/, (w, body) => `<cols>${body.replace(/\bwidth="[^"]*"/g, `width="${width}"`)}</cols>`);
+  zip.file(sheetPath, xml);
+  const relsFile = zip.file(sheetPath.replace(/([^/]+)$/, '_rels/$1.rels'));
+  const rels = relsFile ? await relsFile.async('string') : '';
+  const target = (/Type="[^"]*\/relationships\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/relationships\/drawing"/.exec(rels) || [])[1];
+  const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
+  const drawingFile = drawingPath ? zip.file(drawingPath) : null;
+  if (!drawingFile) return 0;
+  const colEmu = colPx * 9525;
+  let count = 0;
+  const drawing = await drawingFile.async('string');
+  const next = drawing.replace(/<xdr:twoCellAnchor\b([^>]*)>([\s\S]*?)<\/xdr:twoCellAnchor>/g, (whole, attrs, inner) => {
+    const from = /<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>\s*<xdr:colOff>(-?\d+)<\/xdr:colOff>/.exec(inner);
+    const ext = /<a:ext cx="(\d+)" cy="(\d+)"/.exec(inner);
+    if (!from || !ext || !/<xdr:pic\b/.test(inner)) return whole;
+    const w = Number(ext[1]);
+    const left = Math.max(0, Math.round((colEmu - w) / 2));
+    count += 1;
+    const body = inner
+      .replace(/(<xdr:from>\s*<xdr:col>\d+<\/xdr:col>\s*<xdr:colOff>)-?\d+/, (m, a) => `${a}${left}`)
+      .replace(/<xdr:to>\s*<xdr:col>\d+<\/xdr:col>\s*<xdr:colOff>-?\d+/, () => `<xdr:to><xdr:col>${from[1]}</xdr:col><xdr:colOff>${left + w}`);
+    return `<xdr:twoCellAnchor${attrs}>${body}</xdr:twoCellAnchor>`;
   });
   if (count) zip.file(drawingPath, next);
   return count;

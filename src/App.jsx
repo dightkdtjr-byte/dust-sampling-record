@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -7705,7 +7705,7 @@ export default function App() {
           palette: exportPalette,
           // 모든 시트의 제목·양식번호 줄(■MAMO…)을 인쇄했을 때 같은 크기로 맞추고, 쪽 전체를 두른 바깥 테두리는 없앤다
           // frame 'box': 모든 시트에 같은 굵은 전체 테두리(인쇄 범위 둘레·제목 아래·양식번호 줄 위)
-          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer', footerAtBottom: true },
+          furniture: { titlePt: 18, titleHeight: 32, footerPt: 9, footerHeight: 14, frame: 'footer', footerAtBottom: true, pageFooter: true, footerPattern: /^■/ },
           rules: {
             연소가스자료: {
               rowHeights: rowsAt(4, 41, 16.5),
@@ -7722,6 +7722,7 @@ export default function App() {
             },
             수분량: {
               rowHeights: { ...rowsAt(26, 28, 20.1), ...rowsAt(postHead, postHead + 2, 20.1) },
+              maxPrintCol: 8, // 인쇄는 H열까지 (J~L열은 가스샘플러 Yd 등 보조 칸)
             },
             노즐산정: {
               rowHeights: rowsAt(37, 38, 15),
@@ -7773,7 +7774,11 @@ export default function App() {
       } catch (error) { console.error('서식 정리 실패:', error); }
       // 기록지의 측정점 그림(ShowPic 연결 그림): 서식 정리로 열 너비가 정해진 뒤에, 그림 칸(E5:G10) 안에 가운데로 맞춘다.
       // '지점 사진' 시트의 원본 칸은 정사각형(199.5 × 199.5pt)이므로 그림도 정사각형으로 놓아 찌그러지지 않게 한다
-      try { await fitPictureInBox(zip, sheetPathMap.get(recordSheet), { box: 'E5:G10', aspect: 1, pad: 3 }); } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
+      // 그림 틀은 칸 전체를 채우고, 원본 칸('지점 사진' 시트)을 틀과 같은 비율로 넓혀 그림이 찌그러지지 않게 한다
+      try {
+        const fitted = await fitPictureInBox(zip, sheetPathMap.get(recordSheet), { box: 'E5:G10', pad: 2, fill: true });
+        if (fitted && fitted.count && sheetPathMap.get('지점 사진')) await setPictureSourceAspect(zip, sheetPathMap.get('지점 사진'), { aspect: fitted.aspect });
+      } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
@@ -8471,17 +8476,9 @@ export default function App() {
     let cp = resolvePitotCpByVelocity(activePitotPreset, baseVelocity);
     let velocity = baseVelocity;
     let converged = false;
-    const seenCps = [];
-    for (let i = 0; i < 6; i += 1) {
-      velocity = cp * kFactor;
-      steps.push({ cp, velocity, note: i === 0 ? '표에서 선정한' : '재계산' });
-      seenCps.push(cp);
-      const nextCp = resolvePitotCpByVelocity(activePitotPreset, velocity);
-      if (!Number.isFinite(nextCp) || Math.abs(nextCp - cp) < 0.00005) { converged = true; break; }
-      // 구간 경계에서 두 Cp를 오가면 지금 Cp(와 그 유속)로 멈춘다
-      if (seenCps.some((seen) => Math.abs(seen - nextCp) < 0.00005)) break;
-      cp = nextCp;
-    }
+    // 공정시험기준: 기준계수 0.84로 유속을 가계산하고, 그 유속에 해당하는 피토계수를 적용해 유속을 다시 계산한다 (엑셀 노즐산정 E10 → C9 → C10과 같은 순서, 한 번만)
+    steps.push({ cp, velocity: cp * kFactor, note: '표에서 선정한' });
+    converged = true;
     velocity = cp * kFactor;
     const rows = activePitotVelocityRows;
     const minV = 0;
