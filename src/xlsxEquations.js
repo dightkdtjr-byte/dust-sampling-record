@@ -74,7 +74,7 @@ const equationShape = (picXml, nodes, sz, vAnchor = 'ctr') => {
 
 // 시트에 딸린 그림 파일에서, 이름이 equations에 있는 그림을 수식 개체로 바꾼다. 바꾼 개수를 돌려준다
 // sizes: 그림 이름별 글자 크기 (분수가 겹친 큰 수식은 아래 숫자 줄을 덮지 않게 작게)
-export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 13, '그림 5': 14, _x86843880: 13, _x86845240: 13, _x83201912: 16, _x134303384: 16, _x83433656: 16, _x133882184: 16 }, startCol = 5 } = {}) {
+export async function replacePicturesWithEquations(zip, sheetPath, equations = CALC_SHEET_EQUATIONS, { fontPt = 18, sizes = { _x83189624: 13, '그림 5': 11, _x86843880: 13, _x86845240: 13, _x83201912: 16, _x134303384: 16, _x83433656: 16, _x133882184: 16 }, startCol = 5 } = {}) {
   const dir = sheetPath.replace(/[^/]+$/, '');
   const relsFile = zip.file(`${dir}_rels/${sheetPath.split('/').pop()}.rels`);
   if (!relsFile) return 0;

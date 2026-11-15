@@ -210,6 +210,22 @@ class StyleBook {
       return fill;
     });
   }
+  // 같은 서식에 '셀에 맞춤'(shrinkToFit)을 켠 서식 번호: 칸보다 긴 글자·숫자를 넘치거나 ####로 보이지 않게 줄여 보여 준다
+  withShrink(s) {
+    const key = `${s}|shrink`;
+    if (this.added.has(key)) return this.added.get(key);
+    const base = this.xfs[s] || this.xfs[0];
+    if (/\bwrapText="(?:1|true)"/.test(base) || /\bshrinkToFit="(?:1|true)"/.test(base)) return s;
+    let xf;
+    if (/<alignment\b[^>]*\/>/.test(base)) xf = base.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${a} shrinkToFit="1"/>`);
+    else if (/\/>$/.test(base)) xf = base.replace(/\s*\/>$/, '><alignment shrinkToFit="1"/></xf>');
+    else xf = base.replace(/<\/xf>$/, '<alignment shrinkToFit="1"/></xf>');
+    xf = xf.replace(/\s*applyAlignment="\d+"/, '').replace(/^<xf\b/, '<xf applyAlignment="1"');
+    this.xfs.push(xf);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
   // 같은 서식에서 채우기만 없앤 서식 번호
   withNoFill(s) {
     const key = `${s}|nofill`;
@@ -990,6 +1006,24 @@ const readDrawingRows = async (zip, sheetPath, sheetXml = '') => {
   return rowsSet;
 };
 
+// ── 글씨 넘침 막기: 양옆에 세로선이 있는 칸(표 칸)에 값이 있으면 '셀에 맞춤'을 켠다 ──
+// 줄 바꿈이 켜진 칸은 그대로 둔다. 선 없는 글(제목·설명)은 옆 빈칸으로 넘쳐 보여도 되므로 건드리지 않는다
+export const shrinkTableCells = (xml, styles, sharedStrings = []) => {
+  const { kinds, merges, mergeOf, K, vLine } = analyzeTables(xml, styles, sharedStrings);
+  return xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
+    const ref = parseRef(attr(attrs, 'r') || '');
+    if (!ref) return whole;
+    const key = K(ref.row, ref.col);
+    const kind = kinds.get(key);
+    if (!kind || kind === 'empty') return whole;
+    const b = mergeOf.has(key) ? merges[mergeOf.get(key)] : { from: ref, to: ref };
+    if (!(vLine(b.from.row, b.from.col) && vLine(b.from.row, b.to.col + 1))) return whole;
+    const s0 = Number(attr(attrs, 's') || 0);
+    const next = styles.withShrink(s0);
+    return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${close}>`;
+  });
+};
+
 // ── 시트 꾸밈 통일: 모든 시트의 제목·양식번호 줄을 인쇄했을 때 같은 크기로, 쪽 전체를 두른 바깥 테두리는 없앤다 ──
 //  - 제목(1행부터 인쇄 폭 전체를 합친 칸): 상자 선을 지우고, 인쇄 크기 기준 같은 글자 크기·같은 높이로 (시트마다 인쇄 배율이 달라 배율로 나눈다)
 //  - 양식번호 줄(인쇄 범위 마지막 행의 ■…): 선을 지우고 같은 글자 크기·높이, 오른쪽 정렬
@@ -1020,6 +1054,9 @@ export const normalizePageFurniture = (xml, styles, {
   };
   const gridCell = (row, col) => vLine(row, col) && vLine(row, col + 1); // 양옆에 세로선이 있는 칸
   const noFrame = frame === true || frame === 'none' || frame === 'footer';
+  // 인쇄 범위 아래에 이어지는 내용(같은 열 범위)의 마지막 행
+  let lastRow = to.row;
+  for (const key of cells.keys()) { const [row, col] = key.split(',').map(Number); if (col >= from.col && col <= to.col && row > lastRow) lastRow = row; }
   const fonts = new Map(); // "r,c" → 글자 크기
   const aligns = new Map(); // "r,c" → { horizontal, vertical }
   const heights = new Map(); // 행 → 높이
@@ -1082,7 +1119,7 @@ export const normalizePageFurniture = (xml, styles, {
     for (const edge of ['left', 'right']) {
       const col = edge === 'left' ? from.col : to.col;
       let row = from.row;
-      while (row <= to.row) {
+      while (row <= lastRow) {
         const b = blockOf(row, col);
         const last = Math.max(row, b.to.row);
         if (!furnitureRows.has(row)) {
@@ -1140,7 +1177,7 @@ export const normalizePageFurniture = (xml, styles, {
   // 묶음 제목 띠: 첫 열에 굵은 글씨 제목만 있는 줄을 인쇄 폭 전체에 옅은 색으로 칠한다 (테두리 없이도 묶음이 구분되게)
   const bandRows = new Set();
   if (sectionBand) {
-    for (let row = from.row; row <= to.row; row++) {
+    for (let row = from.row; row <= lastRow; row++) {
       if (furnitureRows.has(row)) continue;
       const key = K(row, from.col);
       const text = String(texts.get(key) || '').trim();
@@ -1342,13 +1379,14 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
     // 채우기 색 바꾸기: [{ range, fill: 'DDEBF7' | null(없앰) }]
     if (rule?.fills) {
-      const targets = rule.fills.map((f) => ({ r: parseRange(f.range), fill: f.fill })).filter((f) => f.r);
+      const targets = rule.fills.map((f) => ({ r: parseRange(f.range), fill: f.fill, noBorder: f.noBorder })).filter((f) => f.r);
       xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
         const ref = parseRef(attr(attrs, 'r') || '');
         const hit = ref && targets.find((f) => ref.row >= f.r.from.row && ref.row <= f.r.to.row && ref.col >= f.r.from.col && ref.col <= f.r.to.col);
         if (!hit) return whole;
         const s0 = Number(attr(attrs, 's') || 0);
-        const next = hit.fill ? styles.withFill(s0, hit.fill) : styles.withNoFill(s0);
+        let next = hit.fill ? styles.withFill(s0, hit.fill) : styles.withNoFill(s0);
+        if (hit.noBorder) next = styles.withoutBorderSides(next, ['left', 'right', 'top', 'bottom']);
         return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
       });
     }
@@ -1356,6 +1394,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     if (rule?.cellStyles !== false) xml = normalizeCellStyles(xml, styles, { sharedStrings, cols: printCols.get(sheetIndex) || null, align: rule?.align !== false });
     const landscape = /<pageSetup\b[^>]*orientation="landscape"/.test(xml);
     if (equalWidth && !multiAreaSheets.has(sheetIndex) && !landscape) sheetsForWidth.push({ path, index: sheetIndex, name });
+    if (rule?.shrink !== false) xml = shrinkTableCells(xml, styles, sharedStrings);
     if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path, xml), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
@@ -1413,6 +1452,23 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         // 제목·양식번호 줄 높이가 바뀌어도 한 장에 들어갈 때만 적용한다
         const size = measurePrintArea(next, measured[i].range, mdw, styles);
         if (size && (size.height * scales[i]) / 100 <= maxH + 0.01) xml = next;
+      }
+      // 쪽 채우기(fillRows: [첫 행, 끝 행]): 그 행들의 높이를 늘려 양식번호 줄이 A4 맨 아래에 오게 한다
+      if (rule?.fillRows) {
+        const size = measurePrintArea(xml, measured[i].range, mdw, styles);
+        const [first, last] = rule.fillRows;
+        const extra = size ? maxH / (scales[i] / 100) - size.height : 0;
+        if (extra > 1 && last >= first) {
+          const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
+          const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
+          const heights = {};
+          for (let row = first; row <= last; row++) {
+            const m = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)/?>`).exec(xml);
+            const ht = m && attr(m[1], 'ht') !== null ? Number(attr(m[1], 'ht')) : defaultRow;
+            heights[row] = Math.round((ht + extra / (last - first + 1)) * 100) / 100;
+          }
+          for (const [row, ht] of Object.entries(heights)) xml = ensureRowHeight(xml, Number(row), ht);
+        }
       }
       zip.file(measured[i].path, setPrintScale(xml, scales[i], margins));
     }
