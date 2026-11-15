@@ -146,6 +146,8 @@ const reorderWorkbookSheets = (wbXml, first) => {
     .replace(/\blocalSheetId="(\d+)"/g, (w, n) => `localSheetId="${newIndex.has(Number(n)) ? newIndex.get(Number(n)) : n}"`)
     .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
 };
+// 누출시험과 시료측정위치를 한 장에 담은 시트의 이름 (유량 기록부는 누출시험이 없다)
+const positionSheetNameOf = (layout) => (layout.leakAsPosition ? '시료측정위치 선정' : '누출시험, 시료측정위치');
 // 엑셀의 날짜 표시: 2026년 10월 29일
 const EXPORT_DATE_FORMAT = 'yyyy"년" m"월" d"일"';
 // 엑셀 색: 프로그램의 기록부별 색 테마와 같은 계열 (dark: 머리줄, header: 머리칸, soft: 요약 줄·묶음 띠, input: 입력칸)
@@ -6642,6 +6644,26 @@ export default function App() {
       return;
     }
 
+    // 서식 있는 글자: { runs: [{ t: '글자', sub: true(아래첨자) }] }
+    if (typeof value === 'object' && Array.isArray(value.runs)) {
+      cell.setAttribute('t', 'inlineStr');
+      const isNode = cell.ownerDocument.createElementNS(ns, 'is');
+      value.runs.forEach((run) => {
+        const r = cell.ownerDocument.createElementNS(ns, 'r');
+        if (run.sub) {
+          const rPr = cell.ownerDocument.createElementNS(ns, 'rPr');
+          const va = cell.ownerDocument.createElementNS(ns, 'vertAlign');
+          va.setAttribute('val', 'subscript');
+          rPr.appendChild(va); r.appendChild(rPr);
+        }
+        const t = cell.ownerDocument.createElementNS(ns, 't');
+        t.setAttribute('xml:space', 'preserve');
+        t.textContent = String(run.t ?? '');
+        r.appendChild(t); isNode.appendChild(r);
+      });
+      cell.appendChild(isNode);
+      return;
+    }
     if (typeof value === 'object' && typeof value.formula === 'string') {
       cell.removeAttribute('t');
       const f = cell.ownerDocument.createElementNS(ns, 'f');
@@ -7216,7 +7238,7 @@ export default function App() {
         addUpdate('수분량', 'A18', pick(`▶ 흡습관법 (${tube.standard})`, `▶ 임핀저법 (${imp.standard})`, '▶ 흡습관법 · 임핀저법'));
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
         for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, pick(tube.items[i] || '-', imp.items[i] || '-', i + 1));
-        addUpdate('수분량', 'A24', '흡습 수분의 질량 ( ma )');
+        addUpdate('수분량', 'A24', { runs: [{ t: '흡습 수분의 질량 ( m' }, { t: 'a', sub: true }, { t: ' )' }] });
         // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 = 오리피스압. 흡습관법은 가스 샘플러의 가스미터압
         addUpdate('수분량', 'F26', pick('가스미터압', '오리피스압', '가스미터압'));
         addUpdate('수분량', 'G26', pick('가스미터압', '오리피스압', '가스미터압'));
@@ -7295,7 +7317,7 @@ export default function App() {
       addUpdate(recordSheet, 'J13', filterNumber);
       addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
       // 사각 굴뚝: 단면적은 깊이 × 폭 (양식은 원형 π/4·D²)
-      if (leakPositionCells) addUpdate(recordSheet, 'G12', { formula: `${layout.leakAsPosition ? '측정위치' : '누출시험'}!${leakPositionCells.area}` });
+      if (leakPositionCells) addUpdate(recordSheet, 'G12', { formula: `'${positionSheetNameOf(layout)}'!${leakPositionCells.area}` });
       else if (sourceData.stackShape === 'rect' && Number.isFinite(calcStackArea(sourceData))) addUpdate(recordSheet, 'G12', { formula: `G11*${toNumber(sourceData.stackSide)}` });
       if (toNumber(sourceData.filterInitial) !== null) addUpdate(recordSheet, 'D14', toNumber(sourceData.filterInitial));
       if (toNumber(sourceData.filterFinal) !== null) addUpdate(recordSheet, 'F14', toNumber(sourceData.filterFinal));
@@ -7568,9 +7590,10 @@ export default function App() {
             /\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`
           ));
         });
-        // 유량 기록부: 누출시험 시트를 측정위치 시트로 쓰므로 시트 이름도 바꾼다 (다른 시트가 이 시트를 참조하지 않는다)
-        if (layout.leakAsPosition && leakFooterRow) {
-          wbXml = wbXml.replace(/(<sheet\b[^>]*\bname=")누출시험(")/, (w, a, b) => `${a}측정위치${b}`).replace(/>누출시험!/g, '>측정위치!');
+        // 시료측정위치를 함께 담은 시트는 이름도 바꾼다 (다른 시트가 이 시트 이름을 참조하지 않는다)
+        if (leakFooterRow) {
+          const newName = positionSheetNameOf(layout);
+          wbXml = wbXml.replace(/(<sheet\b[^>]*\bname=")누출시험(")/, (w, a2, b2) => `${a2}${newName}${b2}`).replace(/>누출시험!/g, () => `>'${newName}'!`);
         }
         if (/<calcPr\b[^>]*\/>/.test(wbXml)) {
           wbXml = wbXml.replace(/<calcPr\b([^>]*?)(\s*fullCalcOnLoad="[^"]*")?([^>]*)\/>/, '<calcPr$1$3 fullCalcOnLoad="1"/>');
@@ -7635,6 +7658,8 @@ export default function App() {
               // 측정 표: 시간·진공은 정수, 온도는 모두 소수 첫째 자리 (측정 행과 평균 행을 같게)
               // 표 아래 Vmstd 두 칸은 위·아래 선만 있었다 → 네 변 모두 가는 선
               boxes: [`G${meterLast + 3}:G${meterLast + 4}`],
+              // '등속흡인계수 (%) :'처럼 ':'로 끝나는 한 줄 라벨은 줄 바꿈 없이 칸에 맞춘다
+              shrinkText: /:\s*$|\((?:mmHg|mmH2O|cm|m|%|℃)\)\s*$/,
               numberFormats: [
                 { range: 'C8', code: EXPORT_DATE_FORMAT },
                 { range: `B${meterFirst}:C${meterLast}`, code: '0' },
@@ -7646,7 +7671,7 @@ export default function App() {
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
             계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
-            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 3}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
+            [leakFooterRow ? positionSheetNameOf(layout) : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 3}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }, { range: 'G2', code: EXPORT_DATE_FORMAT }] },
             표지: { numberFormats: [{ range: 'D21', code: EXPORT_DATE_FORMAT }] },
           },

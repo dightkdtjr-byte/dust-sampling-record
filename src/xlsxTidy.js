@@ -211,15 +211,17 @@ class StyleBook {
     });
   }
   // 같은 서식에 '셀에 맞춤'(shrinkToFit)을 켠 서식 번호: 칸보다 긴 글자·숫자를 넘치거나 ####로 보이지 않게 줄여 보여 준다
-  withShrink(s) {
-    const key = `${s}|shrink`;
+  withShrink(s, force = false) {
+    const key = `${s}|shrink${force ? '!' : ''}`;
     if (this.added.has(key)) return this.added.get(key);
     const base = this.xfs[s] || this.xfs[0];
-    if (/\bwrapText="(?:1|true)"/.test(base) || /\bshrinkToFit="(?:1|true)"/.test(base)) return s;
+    if (!force && (/\bwrapText="(?:1|true)"/.test(base) || /\bshrinkToFit="(?:1|true)"/.test(base))) return s;
+    // force: 줄 바꿈을 끄고 한 줄로 줄여 보여 준다
+    const base2 = force ? base.replace(/\s*\bwrapText="[^"]*"/, '').replace(/\s*\bshrinkToFit="[^"]*"/, '') : base;
     let xf;
-    if (/<alignment\b[^>]*\/>/.test(base)) xf = base.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${a} shrinkToFit="1"/>`);
-    else if (/\/>$/.test(base)) xf = base.replace(/\s*\/>$/, '><alignment shrinkToFit="1"/></xf>');
-    else xf = base.replace(/<\/xf>$/, '<alignment shrinkToFit="1"/></xf>');
+    if (/<alignment\b[^>]*\/>/.test(base2)) xf = base2.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${a} shrinkToFit="1"/>`);
+    else if (/\/>$/.test(base2)) xf = base2.replace(/\s*\/>$/, '><alignment shrinkToFit="1"/></xf>');
+    else xf = base2.replace(/<\/xf>$/, '<alignment shrinkToFit="1"/></xf>');
     xf = xf.replace(/\s*applyAlignment="\d+"/, '').replace(/^<xf\b/, '<xf applyAlignment="1"');
     this.xfs.push(xf);
     const index = this.xfs.length - 1;
@@ -1079,6 +1081,9 @@ export const normalizePageFurniture = (xml, styles, {
 
   if (titleBlock) {
     const below = titleBlock.to.row + 1;
+    // 제목 바로 아래 줄이 표인지: 인쇄 폭 안쪽에 세로선이 있다 (바깥 테두리의 양 끝 선은 세지 않는다)
+    let tableRowBelow = false;
+    for (let col = from.col + 1; col <= to.col; col++) if (vLine(below, col)) { tableRowBelow = true; break; }
     const hadBottom = []; // 제목 상자 아랫선이 있던 열
     for (let col = from.col; col <= to.col; col++) hadBottom[col] = hLine(below, col);
     if (noFrame) {
@@ -1087,7 +1092,7 @@ export const normalizePageFurniture = (xml, styles, {
         const key = K(below, col);
         if (!cells.has(key)) continue;
         // 제목 바로 아래가 표 칸이면 표의 윗선으로 남기고, 아니면 제목 상자의 아랫선이므로 지운다
-        if (sectionRule ? hadBottom[col] : (gridCell(below, col) && hadBottom[col])) side(key).top = 'medium';
+        if (hadBottom[col] && (sectionRule || tableRowBelow)) side(key).top = 'medium';
         else side(key).top = null;
       }
     }
@@ -1095,6 +1100,18 @@ export const normalizePageFurniture = (xml, styles, {
     for (let row = titleBlock.from.row; row <= titleBlock.to.row; row++) heights.set(row, Math.round((titleHeight / scale / n) * 100) / 100);
     fonts.set(K(titleBlock.from.row, titleBlock.from.col), half(titlePt / scale));
     aligns.set(K(titleBlock.from.row, titleBlock.from.col), { horizontal: 'center', vertical: 'center' });
+    const titleStyle = cells.get(K(titleBlock.from.row, titleBlock.from.col));
+    for (const m of merges) {
+      if (m === titleBlock || m.from.row <= titleBlock.to.row || m.to.row >= to.row || !fullWidth(m)) continue;
+      const key = K(m.from.row, m.from.col);
+      // 제목과 같은 서식이거나, 굵고 큰 글씨(16pt 이상)인 폭 전체 병합 칸
+      const big = cells.has(key) && styles.isBold(cells.get(key)) && styles.fontOf(cells.get(key)).sz >= 16;
+      if ((cells.get(key) !== titleStyle && !big) || !String(texts.get(key) || '').trim()) continue;
+      const rows = m.to.row - m.from.row + 1;
+      for (let row = m.from.row; row <= m.to.row; row++) heights.set(row, Math.round((titleHeight / scale / rows) * 100) / 100);
+      fonts.set(key, half(titlePt / scale));
+      aligns.set(key, { horizontal: 'center', vertical: 'center' });
+    }
   }
   if (footerCol) {
     const above = to.row - 1;
@@ -1414,9 +1431,11 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       const { texts, K } = analyzeTables(xml, styles, sharedStrings);
       xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
         const ref = parseRef(attr(attrs, 'r') || '');
-        if (!ref || !rule.shrinkText.test(String(texts.get(K(ref.row, ref.col)) || ''))) return whole;
+        const text = String(texts.get(K(ref.row, ref.col)) || '');
+        if (!ref || !rule.shrinkText.test(text)) return whole;
         const s0 = Number(attr(attrs, 's') || 0);
-        const next = styles.withShrink(s0);
+        // 줄 바꿈이 켜진 칸도 한 줄짜리 글이면 줄 바꿈을 끄고 줄인다 (끝의 ':'만 아래 줄로 떨어지지 않게)
+        const next = styles.withShrink(s0, true);
         return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
       });
     }
@@ -1495,25 +1514,65 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
           for (const [row, ht] of Object.entries(heights)) xml = ensureRowHeight(xml, Number(row), ht);
         }
       }
-      // 양식번호 줄을 A4 맨 아래로(furniture.footerAtBottom): 양식번호 줄 바로 위쪽의 빈 줄 하나를 늘려 쪽을 채운다
+      // 양식번호 줄을 A4 맨 아래로(furniture.footerAtBottom)
+      // 1) 양식번호 줄 위쪽에 '줄 전체가 빈' 줄이 있으면 그 줄을 늘린다 (인쇄 범위 밖 오른쪽에 표가 있는 줄은 빈 줄이 아니다)
+      // 2) 없으면 한 줄만 길어지지 않게, 제목·양식번호 줄을 뺀 모든 줄을 같은 비율로 조금씩 늘린다
       else if (furniture && furniture.footerAtBottom && rule?.furniture !== false && measured[i].range) {
         const size = measurePrintArea(xml, measured[i].range, mdw, styles);
-        const extra = size ? maxH / (scales[i] / 100) - size.height : 0;
+        let extra = size ? maxH / (scales[i] / 100) - size.height : 0;
         const { from, to } = measured[i].range;
         const hasFooter = new RegExp(`<c\\b[^>]*\\br="[A-Z]+${to.row}"[^>]*>`).test(xml);
         if (extra > 1 && hasFooter && to.row > from.row) {
-          const { kinds, K } = analyzeTables(xml, styles, sharedStrings);
+          const { cells, kinds, merges } = analyzeTables(xml, styles, sharedStrings);
           const fmt = /<sheetFormatPr\b([^>]*)\/?>/.exec(xml);
           const defaultRow = Number((fmt && attr(fmt[1], 'defaultRowHeight')) || 15);
-          for (let row = to.row - 1; row >= Math.max(from.row + 1, to.row - 4); row--) {
+          const rowInfo = (row) => {
             const m = new RegExp(`<row\\b(?=[^>]*\\br="${row}")([^>]*?)/?>`).exec(xml);
-            if (m && isTrue(attr(m[1], 'hidden'))) continue;
-            let blank = true;
-            for (let col = from.col; col <= to.col; col++) { const kind = kinds.get(K(row, col)); if (kind && kind !== 'empty') { blank = false; break; } }
-            if (!blank) continue;
-            const ht = m && attr(m[1], 'ht') !== null ? Number(attr(m[1], 'ht')) : defaultRow;
-            xml = ensureRowHeight(xml, row, Math.round((ht + extra) * 100) / 100);
-            break;
+            return { hidden: !!(m && isTrue(attr(m[1], 'hidden'))), ht: m && attr(m[1], 'ht') !== null ? Number(attr(m[1], 'ht')) : defaultRow };
+          };
+          // 줄 전체(모든 열)에 값도 테두리도 없는 줄
+          const used = new Set();
+          for (const [key, kind] of kinds) {
+            const row = Number(key.split(',')[0]);
+            if (used.has(row)) continue;
+            const sides = styles.sidesOf(cells.get(key) || 0) || {};
+            if ((kind && kind !== 'empty') || Object.values(sides).some(Boolean)) used.add(row);
+          }
+          for (const m of merges) for (let row = m.from.row; row <= m.to.row; row++) if (m.to.row > m.from.row) used.add(row);
+          const MAX_ROW = 400; // 엑셀의 행 높이 한계(409.5pt)보다 작게
+          const blanks = [];
+          // 양식번호 줄에서 위로 올라가며, 보이는 내용 줄을 만나기 전까지의 빈 줄을 모은다.
+          // 숨긴 줄 가운데 빈 줄(묶음 사이 띄움 줄)은 다시 보이게 해서 쓴다 (유량 기록부처럼 아래쪽 묶음을 통째로 숨긴 시트)
+          let passedContent = false; // 보이는 내용 줄을 지났는가 (그 위의 숨긴 줄은 쓰지 않는다)
+          for (let row = to.row - 1; row > from.row; row--) {
+            const info = rowInfo(row);
+            if (used.has(row)) { if (!info.hidden) passedContent = true; }
+            else if (info.hidden) { if (!passedContent) blanks.push({ row, ht: 0, hidden: true }); }
+            else if (row >= to.row - 6) blanks.push({ row, ht: info.ht, hidden: false });
+            if (passedContent && row < to.row - 6) break;
+          }
+          // 보이는 빈 줄이 있으면 그 줄만 쓴다
+          if (blanks.some((x) => !x.hidden)) blanks.splice(0, blanks.length, ...blanks.filter((x) => !x.hidden));
+          if (blanks.length) {
+            for (const { row, ht, hidden } of blanks) {
+              if (extra <= 0.5) break;
+              const add = Math.min(extra, MAX_ROW - ht);
+              if (add <= 0) continue;
+              xml = ensureRowHeight(xml, row, Math.round((ht + add) * 100) / 100);
+              if (hidden) xml = xml.replace(new RegExp(`(<row\\b(?=[^>]*\\br="${row}")[^>]*?)\\s*hidden="[^"]*"`), (w, a2) => a2);
+              extra -= add;
+            }
+          } else {
+            const title = merges.find((m) => m.from.row === from.row);
+            const first = (title ? title.to.row : from.row) + 1;
+            const body = [];
+            for (let row = first; row < to.row; row++) { const info = rowInfo(row); if (!info.hidden) body.push({ row, ht: info.ht }); }
+            const total = body.reduce((sum, x) => sum + x.ht, 0);
+            // 너무 많이 늘려야 하면(30% 넘게) 줄들이 부풀어 보이므로 그대로 둔다
+            if (total > 0 && extra / total <= 0.3) {
+              const factor = 1 + extra / total;
+              for (const { row, ht } of body) xml = ensureRowHeight(xml, row, Math.floor(ht * factor * 100) / 100);
+            }
           }
         }
       }
