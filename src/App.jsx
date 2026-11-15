@@ -7081,7 +7081,11 @@ export default function App() {
         const methodLast = r + 2; r += 4;
         // 형태 선택 표: 선택번호(1 원형 수직 / 2 원형 수평 / 3 사각)
         L(`A${r}`, '번호', 'A12'); L(`B${r}`, '굴뚝 형태', 'A12'); L(`C${r}`, '선택번호', 'A12');
-        const selRow = r + 1; const S = `$C$${selRow}`;
+        // (청) 플랜지: 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
+        L(`D${r}`, '(청) 플랜지 (cm)', 'A12'); L(`E${r}`, null, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`D${r}:F${r}`);
+        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `$D$${selRow}`;
+        [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 && c === 'D' ? 15 : null, 'B14')));
+        leakMerges.push(`D${selRow}:F${selRow + 2}`);
         [['원형 (수직)'], ['원형 (수평)'], ['사각']].forEach(([name], i) => { L(`A${selRow + i}`, i + 1, 'B14'); L(`B${selRow + i}`, name, 'B14'); L(`C${selRow + i}`, i === 0 ? (rect ? 3 : (sourceData.stackOrientation === 'horizontal' ? 2 : 1)) : null, 'B14'); });
         leakMerges.push(`C${selRow}:C${selRow + 2}`); r = selRow + 4;
         // 굴뚝 제원
@@ -7102,9 +7106,6 @@ export default function App() {
         const reduce = sourceData.rectReduce === 'quarter' ? 4 : sourceData.rectReduce === 'half' ? 2 : 1;
         L(`F${dimRow}`, { formula: `IF(${Ac}<=0.25,1,IF(${S}=3,-INT(-${nCell}*${mCell}/${reduce}),IF(${S}=2,${nCell}*4,${nCell})))` }, 'B14');
         r += 2;
-        // (청) 플랜지: 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
-        L(`A${r}`, '(청) 플랜지 (cm)', 'A12'); L(`B${r}`, 15, 'B14');
-        const blueRef = `$B$${r}`; r += 2;
         // 측정점 표: 번호 · 중심 거리 · Sampling Location · Lnw 포함 · 최종 샘플링 위치 · 반대편
         ['번호', '중심 거리 (cm)', 'Sampling Location (cm)', 'Lnw 포함', '최종 샘플링 위치', '반대편'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
         const rowsCount = Math.max(5, sp && sp.rect ? Math.min(12, sp.perRadius) : 0);
@@ -7632,6 +7633,8 @@ export default function App() {
             },
             [recordSheet]: {
               // 측정 표: 시간·진공은 정수, 온도는 모두 소수 첫째 자리 (측정 행과 평균 행을 같게)
+              // 표 아래 Vmstd 두 칸은 위·아래 선만 있었다 → 네 변 모두 가는 선
+              boxes: [`G${meterLast + 3}:G${meterLast + 4}`],
               numberFormats: [
                 { range: 'C8', code: EXPORT_DATE_FORMAT },
                 { range: `B${meterFirst}:C${meterLast}`, code: '0' },
@@ -7641,9 +7644,9 @@ export default function App() {
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft } },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
-            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 5}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
+            [layout.leakAsPosition && leakFooterRow ? '측정위치' : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 3}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }, { range: 'G2', code: EXPORT_DATE_FORMAT }] },
             표지: { numberFormats: [{ range: 'D21', code: EXPORT_DATE_FORMAT }] },
           },

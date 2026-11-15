@@ -1186,6 +1186,9 @@ export const normalizePageFurniture = (xml, styles, {
       for (let col = from.col + 1; col <= to.col; col++) if (String(texts.get(K(row, col)) || '').trim()) { alone = false; break; }
       if (alone) bandRows.add(row);
     }
+    if (sectionRule) {
+      for (const row of bandRows) for (let col = from.col; col <= to.col; col++) if (cells.has(K(row, col))) side(K(row, col)).top = 'medium';
+    }
   }
   let out = boxed0.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, close) => {
     const ref = parseRef(attr(attrs, 'r') || '');
@@ -1377,6 +1380,17 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     }
     if (rule?.numberFormats) xml = setNumberFormats(xml, styles, rule.numberFormats);
     if (rule?.center) xml = setCentered(xml, styles, rule.center);
+    // 상자 테두리: 범위 안 모든 칸의 네 변에 가는 선
+    if (rule?.boxes) {
+      const targets = rule.boxes.map(parseRange).filter(Boolean);
+      xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+        const ref = parseRef(attr(attrs, 'r') || '');
+        if (!ref || !targets.some((r) => ref.row >= r.from.row && ref.row <= r.to.row && ref.col >= r.from.col && ref.col <= r.to.col)) return whole;
+        const s0 = Number(attr(attrs, 's') || 0);
+        const next = styles.withBorderStyles(s0, { left: 'thin', right: 'thin', top: 'thin', bottom: 'thin' });
+        return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+      });
+    }
     // 채우기 색 바꾸기: [{ range, fill: 'DDEBF7' | null(없앰) }]
     if (rule?.fills) {
       const targets = rule.fills.map((f) => ({ r: parseRange(f.range), fill: f.fill, noBorder: f.noBorder })).filter((f) => f.r);
@@ -1395,6 +1409,17 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     const landscape = /<pageSetup\b[^>]*orientation="landscape"/.test(xml);
     if (equalWidth && !multiAreaSheets.has(sheetIndex) && !landscape) sheetsForWidth.push({ path, index: sheetIndex, name });
     if (rule?.shrink !== false) xml = shrinkTableCells(xml, styles, sharedStrings);
+    // 글자가 정해진 모양(shrinkText 정규식)인 칸도 '셀에 맞춤' (예: 계산식의 'Q =', 'I(%) =' 같은 좁은 칸의 라벨이 잘리지 않게)
+    if (rule?.shrinkText) {
+      const { texts, K } = analyzeTables(xml, styles, sharedStrings);
+      xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+        const ref = parseRef(attr(attrs, 'r') || '');
+        if (!ref || !rule.shrinkText.test(String(texts.get(K(ref.row, ref.col)) || ''))) return whole;
+        const s0 = Number(attr(attrs, 's') || 0);
+        const next = styles.withShrink(s0);
+        return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+      });
+    }
     if (rule?.spacing !== false) xml = normalizeSectionSpacing(xml, styles, { sharedStrings, drawingRows: await readDrawingRows(zip, path, xml), cols: printCols.get(sheetIndex) || null });
     zip.file(path, xml);
   }
@@ -1689,7 +1714,7 @@ export async function moveRowCells(zip, sheetPath, fromRow, toRow) {
     });
     if (next !== drawing.xml) zip.file(drawing.path, next);
   }
-  if (grow > 0) xml = ensureRowHeight(xml, toRow + 1, Math.round((heightOf(xml, toRow + 1) + grow) * 100) / 100);
+  void grow;
   zip.file(sheetPath, xml);
   return true;
 }
