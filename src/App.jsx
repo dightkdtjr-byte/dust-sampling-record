@@ -109,7 +109,7 @@ const computeSamplingPoints = (data) => {
       diameterLabel: `${D} × ${side} m`, area: area.toFixed(2),
       wallDistances: dist.map((d) => (d * 100).toFixed(2)),
       portPositions: Array.from({ length: lines }, (_, i) => ((((i + 0.5) * side) / lines) * 100).toFixed(1)),
-      nearInsertion: dist.map(cm), farInsertion: [],
+      nearInsertion: dist.map(cm), farInsertion: isCenterOnly ? [] : Array.from({ length: lines }, (_, j) => cm(((j + 0.5) * side) / lines)),
     };
   }
   const R = D / 2;
@@ -121,7 +121,7 @@ const computeSamplingPoints = (data) => {
   else if (D <= 4.5) rnCoeffs = [0.354, 0.612, 0.791, 0.935];
   else rnCoeffs = [0.316, 0.548, 0.707, 0.837, 0.949];
   const near = []; const far = [];
-  if (isCenterOnly) { near.push(R); far.push(R); } else {
+  if (isCenterOnly) { near.push(R); } else {
     for (let i = rnCoeffs.length - 1; i >= 0; i--) { near.push(R - rnCoeffs[i] * R); far.push(R + rnCoeffs[i] * R); }
   }
   return {
@@ -7340,7 +7340,12 @@ export default function App() {
         ['D (m)', 'W (m, 사각)', '단면적 (㎡)', '측정점수'].forEach((text, i) => L(`${cols[i + 2]}${r}`, text, 'A12')); r += 1;
         const dimRow = r; const Dc = `$C$${dimRow}`; const Wc = `$D$${dimRow}`; const Ac = `$E$${dimRow}`; const Lnw = `$E$${selRow}`;
         L(`A${dimRow}`, { formula: `IF(${S}=3,"사각",IF(${S}=2,"원형 (수평)","원형 (수직)"))` }, 'B14'); L(`B${dimRow}`, null, 'B14'); leakMerges.push(`A${dimRow}:B${dimRow}`);
-        L(`C${dimRow}`, totalDepth !== null ? { formula: `$D$${selRow}-$E$${selRow}/100` } : toNumber(sourceData.stackDiameter), 'B14');
+        {
+          const appDiameter = toNumber(sourceData.stackDiameter);
+          const fromLengths = totalDepth !== null ? totalDepth - (flangeM === null ? 0 : flangeM) : null;
+          const sameAsLengths = fromLengths !== null && (appDiameter === null || Math.abs(fromLengths - appDiameter) < 0.0051);
+          L(`C${dimRow}`, sameAsLengths ? { formula: `$D$${selRow}-$E$${selRow}/100` } : appDiameter, 'B14');
+        }
         L(`D${dimRow}`, toNumber(sourceData.stackSide), 'B14');
         L(`E${dimRow}`, { formula: `IF(${S}=3,${Dc}*N(${Wc}),PI()/4*${Dc}^2)` }, 'B14');
         // 구분 수: 원형은 반경 구분 수, 사각은 깊이 방향(n)·다른 변 방향(m) 구분 수
@@ -8859,6 +8864,24 @@ export default function App() {
     window.__stackpilotExportOpenSamplingLogForTest = exportOpenSamplingLogExcel;
     window.__stackpilotBuildReportForTest = () => buildReportSnapshot(selectedSheet || 'dust');
     // 시험용: 저장본을 화면에 불러온다 (화면 계산값과 엑셀 수식 결과를 비교하는 검사에서 쓴다)
+    // 시험용: 화면이 계산하는 값을 한꺼번에 내준다 (엑셀 수식 결과와 항목별로 대조한다)
+    window.__stackpilotDerivedForTest = () => {
+      const num = (v) => { const x = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(x) ? x : null; };
+      const gas = getGasComposition(); const flows = calcGasFlowRates(); const conc = calcDustConcentrations();
+      const sp = getSamplingPoints();
+      const rows = formData.gasMeters.map((_, idx) => ({ velocity: num(getRowGasVelocityRaw(idx)), isokinetic: num(calcRowIsokineticRate(idx)), moisture: num(getRowMoistureCaptureRaw(idx)) }));
+      return {
+        gas: { o2: num(gas.o2), co2: num(gas.co2), co: num(gas.co), n2: num(gas.n2), Md: num(gas.Md), Ms: num(gas.Ms), Xw: num(gas.Xw), r0: num(gas.r0) },
+        area: num(calcStackArea(formData)), diameter: num(formData.stackDiameter),
+        points: sp ? { rect: Boolean(sp.rect), perRadius: sp.perRadius, lines: sp.lines || null, total: sp.total ?? null, reduced: sp.reduced ?? null, isCenterOnly: Boolean(sp.isCenterOnly), near: (sp.nearInsertion || []).map(num), far: (sp.farInsertion || []).map(num), wall: (sp.wallDistances || []).map(num), ports: (sp.portPositions || []).map(num) } : null,
+        traverse: { avgDp: num(getRawAvgDp()), avgTs: num(getRawAvgTs()), stackPressure: num(getRawStackPressure()), velocity: num(getRawGasVelocity()), density: num(getRawCorrectedDensityFromAvgTs(getRawAvgTs())) },
+        meter: { volumeL: num(getRawGasMeterVolDiff()), avgTm: num(getRawAvgTm()), avgTs: num(getRawAvgSamplingTs()), avgOrifice: num(getRawAvgOrifice()), minutes: num(getSamplingMinutes()), velocity: num(getRawGasVelocityFromMeterRows()), vmStdL: num(getRawVmStd()) },
+        moisture: { pre: num(calcMoisture()), post: num(calcPostMoisture()), water: num(getRawTotalMoistureWeight()) },
+        isokinetic: num(calcIsokineticRate(true)), flowWet: num(flows.wetRaw), flowDry: num(flows.dryRaw),
+        o2Factor: num(calcO2CorrectionFactor()), dustWeight: num(getRawDustWeightDiff()), concActual: num(conc.actualC), concCorrected: num(conc.correctedC),
+        pitotFactor: num(formData.pitotFactor), kFactor: num(formData.kFactor), nozzleDiameter: num(formData.nozzleDiameter), rows,
+      };
+    };
     window.__stackpilotLoadForTest = (report) => setFormData(() => {
       const nextForm = { ...createInitialFormData() };
       Object.keys(nextForm).forEach((key) => { if (Object.prototype.hasOwnProperty.call(report, key)) nextForm[key] = report[key]; });
@@ -10457,10 +10480,10 @@ export default function App() {
                       <thead>
                         <tr className="bg-slate-50 text-slate-700">
                           <th className="border-r border-b border-slate-200 p-2 whitespace-nowrap" rowSpan="2">삽입 깊이 (마킹 위치, cm)</th>
-                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={samplingPointsData.perRadius}>측정 포인트 (1~5)</th>
+                          <th className="border-b border-slate-200 p-2 whitespace-nowrap" colSpan={Math.max(samplingPointsData.nearInsertion.length, samplingPointsData.farInsertion.length, 1)}>측정 포인트</th>
                         </tr>
                         <tr className="bg-slate-50 text-slate-700">
-                          {samplingPointsData.nearInsertion.map((_, i) => (
+                          {Array.from({ length: Math.max(samplingPointsData.nearInsertion.length, samplingPointsData.farInsertion.length, 1) }, (_, i) => (
                             <th key={i} className="border-b border-l border-slate-200 p-1">{i + 1}번</th>
                           ))}
                         </tr>
@@ -10468,22 +10491,22 @@ export default function App() {
                       <tbody>
                         <tr>
                           <td className="border-r border-b border-slate-200 p-2 font-bold text-slate-800 whitespace-nowrap bg-slate-50/50">
-                            가까운 쪽 (정방향)<br/><span className="text-[9px] font-normal text-slate-600">기본 측정</span>
+                            {samplingPointsData.rect ? '가로 방향 최종 위치' : '가까운 쪽 (정방향)'}<br/><span className="text-[9px] font-normal text-slate-600">{samplingPointsData.rect ? '폭 쪽 변의 측정공에서' : '기본 측정'}</span>
                           </td>
-                          {samplingPointsData.nearInsertion.map((d, i) => (
+                          {Array.from({ length: Math.max(samplingPointsData.nearInsertion.length, samplingPointsData.farInsertion.length, 1) }, (_, i) => (
                             <td key={i} className="border-l border-b border-slate-200 p-2 font-black text-emerald-700 bg-white">
-                              {d} cm
+                              {samplingPointsData.nearInsertion[i] !== undefined ? `${samplingPointsData.nearInsertion[i]} cm` : ''}
                             </td>
                           ))}
                         </tr>
                         {!samplingPointsData.isCenterOnly && (
                           <tr>
                             <td className="border-r border-slate-200 p-2 font-bold text-red-700 whitespace-nowrap bg-red-50">
-                              깊은 쪽 (역방향)<br/><span className="text-[9px] font-normal text-red-500">반대편 측정공 대신 쓸 때</span>
+                              {samplingPointsData.rect ? '세로 방향 최종 위치' : '깊은 쪽 (역방향)'}<br/><span className="text-[9px] font-normal text-red-500">{samplingPointsData.rect ? '깊이 쪽 변의 측정공에서' : '반대편 측정공 대신 쓸 때'}</span>
                             </td>
-                            {samplingPointsData.farInsertion.map((d, i) => (
+                            {Array.from({ length: Math.max(samplingPointsData.nearInsertion.length, samplingPointsData.farInsertion.length, 1) }, (_, i) => (
                               <td key={i} className="border-l border-slate-200 p-2 font-black text-red-600 bg-red-50/50">
-                                {d} cm
+                                {samplingPointsData.farInsertion[i] !== undefined ? `${samplingPointsData.farInsertion[i]} cm` : ''}
                               </td>
                             ))}
                           </tr>
