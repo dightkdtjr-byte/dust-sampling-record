@@ -233,9 +233,17 @@ const buildTraverseSvg = ({ kind, n = 3, lines = 3, depth = 1, side = 1, caption
       parts.push(`<line x1="${x0}" y1="${y}" x2="${x0 + w}" y2="${y}" stroke="${ink}" stroke-width="0.5"/>`);
       for (let i = 0; i < nn; i++) parts.push(`<circle cx="${x0 + (w * (i + 0.5)) / nn}" cy="${y}" r="${nn * mm > 36 ? 2.2 : 3.2}" fill="${blue}"/>`);
     }
+    // 측정공은 두 방향 모두 뚫는다: 왼쪽 변에 줄마다 하나(가로 방향), 위쪽 변에 칸마다 하나(세로 방향)
+    for (let i = 0; i < nn; i++) {
+      const x = x0 + (w * (i + 0.5)) / nn;
+      parts.push(`<rect x="${x - 3.5}" y="${y0 - 14}" width="7" height="14" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
+      parts.push(`<line x1="${x}" y1="${y0}" x2="${x}" y2="${y0 + h}" stroke="${ink}" stroke-width="0.5"/>`);
+    }
+    // 세로 선을 그은 뒤 측정점을 다시 찍어 점이 선 위에 오게 한다
+    for (let j = 0; j < mm; j++) for (let i = 0; i < nn; i++) parts.push(`<circle cx="${x0 + (w * (i + 0.5)) / nn}" cy="${y0 + (h * (j + 0.5)) / mm}" r="${nn * mm > 36 ? 2.2 : 3.2}" fill="${blue}"/>`);
     text(x0 - 18, y0 - 6, '측정공', { size: 9, anchor: 'end' });
     for (let i = 0; i < nn && nn <= 8; i++) text(x0 + (w * (i + 0.5)) / nn, y0 + h + 13, String(i + 1), { size: 9, color: blue });
-    text(133, 238, caption || `측정공 ${mm}개 × 깊이 방향 ${nn}점 (각 칸의 중심)`, { size: 9 });
+    text(133, 238, caption || `측정공: 가로 방향 ${mm}개 · 세로 방향 ${nn}개 (각 칸의 중심에서 측정)`, { size: 9 });
   } else {
     // 원형: 'center'(중심 1점) · 'vertical'(측정공 1개, 한 지름) · 'horizontal'(측정공 2개, 두 지름)
     const red = '#d70015';
