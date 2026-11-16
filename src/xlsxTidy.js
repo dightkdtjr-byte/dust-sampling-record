@@ -1382,6 +1382,8 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     let xml = await read(path);
     if (!xml) continue;
     xml = fitToPageWidth(xml, { onePage: onePageSheets === 'all' || onePageSheets.includes(name) });
+    // 시트 탭 색은 없앤다 (유량 양식의 두 시트만 검은 탭이었다)
+    xml = xml.replace(/<tabColor\b[^>]*\/>/, '');
     const rule = typeof rules === 'function' ? rules(name) : rules[name];
     if (rule?.printArea) printAreaUpdates.set(sheetIndex, { name, range: rule.printArea });
     if (rule?.rowHeights) xml = setRowHeights(xml, rule.rowHeights);
@@ -1641,7 +1643,18 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         const { to } = measured[i].range;
         const { texts } = analyzeTables(xml, styles, sharedStrings);
         for (const [key, text] of texts) if (Number(key.split(',')[0]) === to.row && String(text || '').trim()) { footerText = String(text).trim(); break; }
-        if (footerText && (!furniture.footerPattern || furniture.footerPattern.test(footerText))) xml = ensureRowHidden(xml, to.row);
+        if (footerText && (!furniture.footerPattern || furniture.footerPattern.test(footerText))) {
+          xml = ensureRowHidden(xml, to.row);
+          // 양식번호 줄 위에 그었던 마감선은 지운다: 그 줄이 숨겨지면 아래 묶음의 윗선과 붙어 굵은 선이 두 줄로 보인다
+          xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+            const ref = parseRef(attr(attrs, 'r') || '');
+            // 묶음 구분선을 쓰는 시트(계산식)에서만: 다른 시트는 그 줄이 표의 마지막 줄일 수 있다
+            if (!ref || ref.row !== to.row - 1 || !(rule?.furniture && rule.furniture.sectionRule)) return whole;
+            const s0 = Number(attr(attrs, 's') || 0);
+            const next = styles.withoutBorderSides(s0, ['bottom']);
+            return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+          });
+        }
         else footerText = '';
       }
       let outXml = setPrintScale(xml, scales[i], margins);
