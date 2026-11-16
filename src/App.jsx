@@ -7328,18 +7328,22 @@ export default function App() {
         // (청) 플랜지: 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
         // 플랜지 칸을 둘로: 앞은 일반 플랜지(D열), 뒤는 (청) 플랜지(E~F열). 쓰는 쪽에 길이를 적는다 (둘 다 적으면 더한다).
         // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적는다. 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
-        L(`D${r}`, '플랜지 (cm)', 'A12'); L(`E${r}`, '(청) 플랜지 (cm)', 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`);
-        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `(N($D$${selRow})+N($E$${selRow}))`;
-        [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 && c === 'E' ? 15 : null, 'B14')));
-        leakMerges.push(`D${selRow}:D${selRow + 2}`, `E${selRow}:F${selRow + 2}`);
+        // 길이 세 칸: 전체길이(m) · Lnw(cm, 플랜지 길이) · (청) 플랜지(cm). Lnw가 곧 플랜지 길이이므로 '플랜지' 칸을 따로 두지 않는다
+        L(`D${r}`, '전체길이 (m)', 'A12'); L(`E${r}`, 'Lnw (cm)', 'A12'); L(`F${r}`, '(청) 플랜지 (cm)', 'A12');
+        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `N($F$${selRow})`;
+        const totalDepth = toNumber(sourceData.totalStackDepth); const flangeM = toNumber(sourceData.flangeLength);
+        const lengthValues = { D: totalDepth, E: flangeM === null ? 0 : flangeM * 100, F: 15 };
+        [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 ? lengthValues[c] : null, 'B14')));
+        leakMerges.push(`D${selRow}:D${selRow + 2}`, `E${selRow}:E${selRow + 2}`, `F${selRow}:F${selRow + 2}`);
         [['원형 (수직)'], ['원형 (수평)'], ['사각']].forEach(([name], i) => { L(`A${selRow + i}`, i + 1, 'B14'); L(`B${selRow + i}`, name, 'B14'); L(`C${selRow + i}`, i === 0 ? (rect ? 3 : (sourceData.stackOrientation === 'horizontal' ? 2 : 1)) : null, 'B14'); });
         leakMerges.push(`C${selRow}:C${selRow + 2}`); r = selRow + 4;
         // 굴뚝 제원
-        ['전체길이 (m)', 'Lnw (cm)', 'D (m)', 'W (m, 사각)', '단면적 (㎡)', '측정점수'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
-        const dimRow = r; const Dc = `$C$${dimRow}`; const Wc = `$D$${dimRow}`; const Ac = `$E$${dimRow}`; const Lnw = `$B$${dimRow}`;
-        const totalDepth = toNumber(sourceData.totalStackDepth); const flangeM = toNumber(sourceData.flangeLength);
-        L(`A${dimRow}`, totalDepth, 'B14'); L(`B${dimRow}`, flangeM === null ? 0 : flangeM * 100, 'B14');
-        L(`C${dimRow}`, totalDepth !== null ? { formula: `A${dimRow}-B${dimRow}/100` } : toNumber(sourceData.stackDiameter), 'B14');
+        // 전체길이·Lnw는 위 표로 옮겼다. 앞의 두 칸은 고른 굴뚝 형태를 글자로 보여 준다
+        L(`A${r}`, '굴뚝 형태', 'A12'); L(`B${r}`, null, 'A12'); leakMerges.push(`A${r}:B${r}`);
+        ['D (m)', 'W (m, 사각)', '단면적 (㎡)', '측정점수'].forEach((text, i) => L(`${cols[i + 2]}${r}`, text, 'A12')); r += 1;
+        const dimRow = r; const Dc = `$C$${dimRow}`; const Wc = `$D$${dimRow}`; const Ac = `$E$${dimRow}`; const Lnw = `$E$${selRow}`;
+        L(`A${dimRow}`, { formula: `IF(${S}=3,"사각",IF(${S}=2,"원형 (수평)","원형 (수직)"))` }, 'B14'); L(`B${dimRow}`, null, 'B14'); leakMerges.push(`A${dimRow}:B${dimRow}`);
+        L(`C${dimRow}`, totalDepth !== null ? { formula: `$D$${selRow}-$E$${selRow}/100` } : toNumber(sourceData.stackDiameter), 'B14');
         L(`D${dimRow}`, toNumber(sourceData.stackSide), 'B14');
         L(`E${dimRow}`, { formula: `IF(${S}=3,${Dc}*N(${Wc}),PI()/4*${Dc}^2)` }, 'B14');
         // 구분 수: 원형은 반경 구분 수, 사각은 깊이 방향(n)·다른 변 방향(m) 구분 수
@@ -7549,8 +7553,8 @@ export default function App() {
       // 누출시험·시료측정위치 시트가 있으면 그 시트의 칸을 따라간다 → 엑셀에서 길이·내경을 고치면 기록지의 내경·그림도 함께 바뀐다
       if (leakPositionCells) {
         const pos = `'${positionSheetNameOf(layout)}'!`;
-        addUpdate('시료측정위치', 'B34', { formula: `${pos}A${leakPositionCells.dimRow}` });
-        addUpdate('시료측정위치', 'B37', { formula: `${pos}B${leakPositionCells.dimRow}` });
+        addUpdate('시료측정위치', 'B34', { formula: `${pos}D${leakPositionCells.selRow}` });
+        addUpdate('시료측정위치', 'B37', { formula: `${pos}E${leakPositionCells.selRow}` });
         addUpdate('시료측정위치', 'A37', { formula: `${pos}C${leakPositionCells.dimRow}` });
       }
 
