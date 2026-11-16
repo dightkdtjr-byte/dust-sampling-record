@@ -6867,16 +6867,22 @@ export default function App() {
     if (typeof value === 'object' && Array.isArray(value.runs)) {
       cell.setAttribute('t', 'inlineStr');
       const isNode = cell.ownerDocument.createElementNS(ns, 'is');
+      // 조각마다 글꼴을 모두 적는다. 서식이 없는 조각은 엑셀에서 앞 조각의 서식(첨자)을 이어받아,
+      // 'Sm³/hr'의 '/hr'까지 위첨자가 되었다 → 보통 글자 조각에도 글꼴·크기·굵기를 적어 첨자가 끝나게 한다
+      const font = value.font || {};
       value.runs.forEach((run) => {
         const r = cell.ownerDocument.createElementNS(ns, 'r');
-        if (run.sub || run.sup) {
-          const rPr = cell.ownerDocument.createElementNS(ns, 'rPr');
-          // 굵은 제목 안의 첨자는 굵게 (첨자 글자는 칸의 글꼴을 물려받지 않는다)
-          if (run.bold) rPr.appendChild(cell.ownerDocument.createElementNS(ns, 'b'));
-          if (run.sz) { const sz = cell.ownerDocument.createElementNS(ns, 'sz'); sz.setAttribute('val', String(run.sz)); rPr.appendChild(sz); }
-          const va = cell.ownerDocument.createElementNS(ns, 'vertAlign');
-          va.setAttribute('val', run.sup ? 'superscript' : 'subscript');
-          rPr.appendChild(va); r.appendChild(rPr);
+        {
+          const el = (name, attrs = {}) => { const node = cell.ownerDocument.createElementNS(ns, name); Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, String(v))); return node; };
+          const rPr = el('rPr');
+          // 순서는 규격대로: rFont · charset · family · b · sz · vertAlign
+          rPr.appendChild(el('rFont', { val: font.name || '맑은 고딕' }));
+          rPr.appendChild(el('charset', { val: 129 }));
+          rPr.appendChild(el('family', { val: 3 }));
+          if (font.bold || run.bold) rPr.appendChild(el('b'));
+          rPr.appendChild(el('sz', { val: run.sz || font.sz || 11 }));
+          if (run.sub || run.sup) rPr.appendChild(el('vertAlign', { val: run.sup ? 'superscript' : 'subscript' }));
+          r.appendChild(rPr);
         }
         const t = cell.ownerDocument.createElementNS(ns, 't');
         t.setAttribute('xml:space', 'preserve');
@@ -7411,7 +7417,7 @@ export default function App() {
       // 밀도 계산식 설명(인쇄 범위 오른쪽 M21:T30): 한 줄 글자 → 제목·식·기호 표로 정리
       // 식은 H26 칸의 계산과 같게 적는다 (ΣMᵢxᵢ가 vol% 단위이므로 수분 항은 18 × Xw, 양식의 '18 × Xw/100'은 칸의 계산과 달랐다)
       {
-        const subRuns = (parts) => ({ runs: parts.map((x) => (Array.isArray(x) ? { t: x[0], sub: true } : { t: x })) });
+        const subRuns = (parts) => ({ font: { sz: 11 }, runs: parts.map((x) => (Array.isArray(x) ? { t: x[0], sub: true } : { t: x })) });
         addUpdate('노즐산정', 'M21', '');
         addUpdate('계산식', 'B43', 'Vic = (채취 전후의 실리카겔 무게차, g) + (임핀저 내 물부피 차(mL) 또는 임핀저 무게차(g))');
         addUpdate('노즐산정', 'M24', '연소가스 밀도 계산식', 'A24');
@@ -7587,7 +7593,7 @@ export default function App() {
         addUpdate('수분량', 'A18', pick(`▶ 흡습관법 (${tube.standard})`, `▶ 임핀저법 (${imp.standard})`, '▶ 흡습관법 · 임핀저법'));
         addUpdate('수분량', 'E19', '흡습 수분량(전후차)');
         for (let i = 0; i < 4; i++) addUpdate('수분량', `A${20 + i}`, pick(tube.items[i] || '-', imp.items[i] || '-', i + 1));
-        addUpdate('수분량', 'A24', { runs: [{ t: '흡습 수분의 질량 ( m' }, { t: 'a', sub: true }, { t: ' )' }] });
+        addUpdate('수분량', 'A24', { font: { sz: 11 }, runs: [{ t: '흡습 수분의 질량 ( m' }, { t: 'a', sub: true }, { t: ' )' }] });
         // 임핀저법은 입자 샘플러로 흡입하므로 가스미터 게이지압 = 오리피스압. 흡습관법은 가스 샘플러의 가스미터압
         addUpdate('수분량', 'F26', pick('가스미터압', '오리피스압', '가스미터압'));
         addUpdate('수분량', 'G26', pick('가스미터압', '오리피스압', '가스미터압'));
@@ -7750,7 +7756,7 @@ export default function App() {
       addUpdate('계산식', o2Cells.dcCell, { formula: 'IF(Os="",Ca,IF(Oa="","",Ca*((21-Os)/(21-Oa))))' });
       o2Cells.qCells.forEach((ref) => addUpdate('계산식', ref, { formula: 'IF(Os="",Qa,IF(Oa="","",Qa/((21-Os)/(21-Oa))))' }));
       // 묶음 제목의 단위 Sm3/hr: 3을 위첨자로 (바로 위 '배출가스 유량 계산 (Sm³/hr)'과 같게)
-      (o2Cells.flowBlocks || []).forEach(([titleRow]) => addUpdate('계산식', `A${titleRow}`, { runs: [{ t: ' 표준산소 환산 배출가스 유량 (Sm' }, { t: '3', sup: true, bold: true }, { t: '/hr)' }] }));
+      (o2Cells.flowBlocks || []).forEach(([titleRow]) => addUpdate('계산식', `A${titleRow}`, { font: { sz: 11, bold: true }, runs: [{ t: ' 표준산소 환산 배출가스 유량 (Sm' }, { t: '3', sup: true }, { t: '/hr)' }] }));
       if (sheetPathMap.has('먼지측정결과보고서')) {
         // 결과보고서: 표준산소가 없으면 '보정 제외'로 적고 표준산소농도는 '-' (빈 칸을 가리키면 엑셀은 0으로 보여 준다)
         addUpdate('먼지측정결과보고서', 'C10', { formula: 'IF(Oa="","-",Oa)' });
@@ -7869,6 +7875,8 @@ export default function App() {
         const calcPath = sheetPathMap.get('계산식');
         const O2_FLOW_TITLE = '표준산소 환산 배출가스 유량';
         try {
+          // 유량 양식에는 같은 묶음이 두 번 들어 있다(인쇄 범위 안과 그 아래) → 둘째는 항상 숨긴다
+          if (o2Layout.flowBlocks.length > 1) await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks.slice(1), { titleIncludes: O2_FLOW_TITLE });
           if (!String(sourceData.standardO2 ?? '').trim()) {
             await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks, { titleIncludes: O2_FLOW_TITLE });
             // 표준산소 환산 먼지농도 묶음도 함께 숨긴다 (제목 줄이 맞을 때만: 먼지·수은·PAHs 104행, 유량 112행)
@@ -8019,7 +8027,7 @@ export default function App() {
           const recXml = await zip.file(recPath).async('string');
           const vr = meterLast + 4;
           zip.file(recPath, patchWorksheetXml(recXml, [
-            { ref: `E${vr}`, value: { runs: [{ t: 'V' }, { t: 'm(std)', sub: true }, { t: ' (Sm³)' }] }, styleFrom: `G${vr - 1}` },
+            { ref: `E${vr}`, value: { font: { sz: 10, bold: true }, runs: [{ t: 'V' }, { t: 'm(std)', sub: true }, { t: ' (Sm³)' }] }, styleFrom: `G${vr - 1}` },
             { ref: `F${vr}`, value: '', styleFrom: `G${vr - 1}` },
             { ref: `G${vr - 1}`, value: '' },
           ], { addMerges: [`E${vr}:F${vr}`] }));
@@ -8643,7 +8651,9 @@ export default function App() {
       add('C58', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
-      zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT })));
+      zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }))
+        // 틀 고정: 머리줄(11~12행) 바로 아래에서 고정한다 (양식은 첫 물질인 먼지 줄까지 고정돼 있어 먼지 줄이 머리줄처럼 붙어 다녔다)
+        .replace(/<pane\b([^>]*)\bySplit="13"([^>]*)\btopLeftCell="C14"/, (w, a, b) => `<pane${a}ySplit="12"${b}topLeftCell="C13"`));
 
       // 날짜별 시트: 양식에는 1·2일차 시트만 있으므로, 완전한 1일차 시트를 복사해
       // 각 일차가 입력 시트의 자기 날짜 행(6행=1일차 … 9행=4일차)을 읽도록 만든다.
@@ -8687,13 +8697,17 @@ export default function App() {
             slotUpdates.push({ ref: `${dayCol}58`, value: nameValue(inCol, i), styleFrom: 'H58' });
             slotUpdates.push({ ref: `${signCol}58`, value: '', styleFrom: 'H58' });
           });
-          [['J', 'H'], ['K', 'I']].forEach(([dayCol, inCol], i) => {
-            slotUpdates.push({ ref: `${dayCol}57`, value: rankValue(inCol, i + 3), styleFrom: 'H57' });
-            slotUpdates.push({ ref: `${dayCol}58`, value: nameValue(inCol, i + 3), styleFrom: 'H58' });
-          });
+          // 네 번째·다섯 번째 자리(J·K열): 다섯 명일 때만 두 칸으로 나누고, 네 명 이하면 한 칸으로 합친다
+          const fiveStaff = dayStaff.length >= 5;
+          slotUpdates.push({ ref: 'J57', value: rankValue('H', 3), styleFrom: 'H57' });
+          slotUpdates.push({ ref: 'J58', value: nameValue('H', 3), styleFrom: 'H58' });
+          slotUpdates.push({ ref: 'K57', value: fiveStaff ? rankValue('I', 4) : '', styleFrom: 'H57' });
+          slotUpdates.push({ ref: 'K58', value: fiveStaff ? nameValue('I', 4) : '', styleFrom: 'H58' });
           // 알데히드·옥사이드 이름은 입력 시트의 물질명(한 종만 의뢰하면 그 종의 이름)을 따라간다. 일차별 시트의 물질 줄 = 입력 시트 줄 - 1
           SAMPLING_LOG_SUBSTANCES.filter((sub) => Array.isArray(sub.options)).forEach((sub) => slotUpdates.push({ ref: `A${sub.row - 1}`, value: { formula: src('B', sub.row) } }));
-          return patchWorksheetXml(xml, slotUpdates, { removeMerges: ['J57:K57'], addMerges: ['D58:E58', 'F58:G58', 'H58:I58'] });
+          return patchWorksheetXml(xml, slotUpdates, fiveStaff
+            ? { removeMerges: ['J57:K57'], addMerges: ['D58:E58', 'F58:G58', 'H58:I58'] }
+            : { addMerges: ['D58:E58', 'F58:G58', 'H58:I58', 'J58:K58'] });
         };
         const dayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date)
           || SAMPLING_LOG_SUBSTANCES.some((sub) => {
