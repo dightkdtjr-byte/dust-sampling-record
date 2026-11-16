@@ -269,13 +269,16 @@ const DEFAULT_GAS_SAMPLERS = IS_DESKTOP_BUILD ? [] : [
 // collectors: 채취 기구를 고르는 물질 (이황화탄소·이황화메틸·VOCs는 흡착관 또는 테들러백으로 채취한다). 채취유량은 종료값-시작값
 // 엑셀 sampler No. 칸에는 짧은 이름(흡착관/테들러백)을 적고, 화면에서는 풀어 쓴 이름을 보여 준다
 const SAMPLING_LOG_BAG_OR_TUBE = ['흡착관', '테들러백'];
-const SAMPLING_LOG_COLLECTOR_LABEL = { 흡착관: '흡착관', 테들러백: '테들러백(폴리에스터 백)', 흡수액: '흡수액(가스 샘플러)' };
+// 저장값 '테들러백'은 시료채취 주머니를 음압상자로 채취하는 경우이다 → 화면과 엑셀에는 '음압상자'로 적는다 (예전 저장본과 맞추려고 저장값은 그대로 둔다)
+const SAMPLING_LOG_COLLECTOR_LABEL = { 흡착관: '흡착관', 테들러백: '음압상자', 흡수액: '흡수액(가스 샘플러)' };
+// 엑셀 sampler No. 칸에 적는 이름 (양식의 표기 '음압상자1'을 따른다)
+const SAMPLING_LOG_COLLECTOR_EXCEL = { 흡착관: '흡착관', 테들러백: '음압상자1' };
 // 약어 색의 뜻 (물질 표 위 범례)
 const SAMPLING_LOG_BADGE_LEGEND = [
   { kind: 'particle', code: 'P', text: '입자 샘플러 (여과지)' },
   { kind: 'gas', code: 'HCl', text: '가스 샘플러 (흡수액)' },
   { kind: 'analyzer', code: 'G', text: '현장측정 (가스분석기·총탄화수소측정기)' },
-  { kind: 'box', code: 'VOCs', text: '흡착관·테들러백·음압상자' },
+  { kind: 'box', code: 'VOCs', text: '흡착관·음압상자' },
   { kind: 'plain', code: 'BZ', text: '그 밖의 채취 (시작·종료값 차이)' },
 ];
 const SAMPLING_LOG_SUBSTANCES = [
@@ -439,7 +442,7 @@ const SAMPLING_LOG_GROUPS = [
   { id: 'particle', title: '입자상 물질', note: '여과지 포집 · 입자 샘플러', kinds: ['particle'], color: 'emerald' },
   { id: 'gas', title: '가스상 물질', note: '흡수액 포집 · 가스 샘플러', kinds: ['gas'], color: 'sky' },
   { id: 'field', title: '현장측정', note: '가스분석기 · 총탄화수소측정기', kinds: ['analyzer', 'thc'], color: 'slate' },
-  { id: 'vocs', title: 'VOCs · 기타', note: '흡착관 · 테들러백 · 음압상자', kinds: ['box', 'plain'], color: 'violet' },
+  { id: 'vocs', title: 'VOCs · 기타', note: '흡착관 · 음압상자', kinds: ['box', 'plain'], color: 'violet' },
 ];
 const SAMPLING_LOG_KIND_BADGE = {
   particle: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -8323,7 +8326,7 @@ export default function App() {
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
         // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): sampler No. 칸에 고른 기구(흡착관/테들러백)를 적는다
         // (흡수액은 가스 샘플러로 채취하므로 양식의 가스 샘플러 번호 수식을 그대로 둔다)
-        if (Array.isArray(sub.collectors) && row.collector !== '흡수액') add(`E${r}`, on ? (row.collector || sub.collectorDefault || sub.collectors[0]) : null);
+        if (Array.isArray(sub.collectors) && row.collector !== '흡수액') add(`E${r}`, on ? (SAMPLING_LOG_COLLECTOR_EXCEL[row.collector || sub.collectorDefault || sub.collectors[0]] || row.collector || sub.collectorDefault || sub.collectors[0]) : null);
         add(`F${r}`, on ? toExcelDateSerial(day?.date) : null);
         add(`G${r}`, on ? toExcelTimeFraction(row.start) : null);
         add(`H${r}`, on ? toExcelTimeFraction(row.end) : null);
