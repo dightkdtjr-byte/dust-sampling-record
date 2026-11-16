@@ -7465,7 +7465,14 @@ export default function App() {
         // 유량 기록부는 기록표를 쓰지 않으므로 항상 측정점 표의 값으로 가계산한다
         const hasRec = exportSheetId === 'flow' ? 'FALSE' : `COUNT(${recRef}E${mFirst}:E${mLast})>0`;
         addUpdate('노즐산정', 'E10', { formula: `IFERROR($E$9*(2*9.81*IF(${hasRec},${recRef}E${mLast + 1},$J$15)/IF(${hasRec},rr,$K$15))^0.5,"")` }, 'E9');
-        addUpdate('노즐산정', 'C9', { formula: 'IF(OR($C$8="",N($E$10)<=0),"",IFERROR(INDEX(피토계산!$C$18:$C$25,_xlfn.AGGREGATE(15,6,(ROW(피토계산!$B$18:$B$25)-ROW(피토계산!$B$18)+1)/((피토계산!$B$18:$B$25+0)>=($E$10+0)),1)),""))' });
+        // 계수 적용표(피토계산 B18:C25, 유속 오름차순 8줄)에서 '가계산 유속 이상인 첫 줄'의 계수를 고른다. 표의 끝을 넘으면 마지막 줄의 계수.
+        // 배열식(AGGREGATE) 대신 줄마다 견주는 IF로 적는다: 엑셀에서 배열식이 빈칸으로 풀리는 일이 있었다
+        {
+          const rowsOfTable = [18, 19, 20, 21, 22, 23, 24, 25];
+          const lastFilled = rowsOfTable.slice().reverse().reduce((rest, r) => `IF(N(피토계산!$B$${r})>0,피토계산!$C$${r},${rest})`, '""');
+          const pick = rowsOfTable.slice().reverse().reduce((rest, r) => `IF(AND(N(피토계산!$B$${r})>0,$E$10<=N(피토계산!$B$${r})),피토계산!$C$${r},${rest})`, lastFilled);
+          addUpdate('노즐산정', 'C9', { formula: `IF(OR($C$8="",N($E$10)<=0),"",IFERROR(${pick},""))` });
+        }
         const typedCp = toNumber(sourceData.pitotFactor);
         // 표에서 못 찾으면(피토관을 고르지 않았거나 표에 없는 피토관) 프로그램에 적힌 계수를 쓴다
         addUpdate('노즐산정', 'C10', pitotSerial ? { formula: `IF(N($C$9)>0,$C$9,${typedCp ?? 0.84})` } : typedCp);
