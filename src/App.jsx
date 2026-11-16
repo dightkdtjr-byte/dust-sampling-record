@@ -7325,16 +7325,13 @@ export default function App() {
         const methodLast = r + 2; r += 4;
         // 형태 선택 표: 선택번호(1 원형 수직 / 2 원형 수평 / 3 사각)
         L(`A${r}`, '번호', 'A12'); L(`B${r}`, '굴뚝 형태', 'A12'); L(`C${r}`, '선택번호', 'A12');
-        // (청) 플랜지: 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
-        // 플랜지 칸을 둘로: 앞은 일반 플랜지(D열), 뒤는 (청) 플랜지(E~F열). 쓰는 쪽에 길이를 적는다 (둘 다 적으면 더한다).
-        // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적는다. 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
-        // 길이 세 칸: 전체길이(m) · Lnw(cm, 플랜지 길이) · (청) 플랜지(cm). Lnw가 곧 플랜지 길이이므로 '플랜지' 칸을 따로 두지 않는다
-        L(`D${r}`, '전체길이 (m)', 'A12'); L(`E${r}`, 'Lnw (cm)', 'A12'); L(`F${r}`, '(청) 플랜지 (cm)', 'A12');
-        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `N($F$${selRow})`;
+        // (청) 플랜지는 프로그램에 없는 값이라 쓰지 않는다. 최종 샘플링 위치 = Sampling Location + Lnw
+        L(`D${r}`, '전체길이 (m)', 'A12'); L(`E${r}`, '외벽+플랜지 (설치 포함) (cm)', 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`);
+        const selRow = r + 1; const S = `$C$${selRow}`;
         const totalDepth = toNumber(sourceData.totalStackDepth); const flangeM = toNumber(sourceData.flangeLength);
-        const lengthValues = { D: totalDepth, E: flangeM === null ? 0 : flangeM * 100, F: 15 };
+        const lengthValues = { D: totalDepth, E: flangeM === null ? 0 : flangeM * 100, F: null };
         [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 ? lengthValues[c] : null, 'B14')));
-        leakMerges.push(`D${selRow}:D${selRow + 2}`, `E${selRow}:E${selRow + 2}`, `F${selRow}:F${selRow + 2}`);
+        leakMerges.push(`D${selRow}:D${selRow + 2}`, `E${selRow}:F${selRow + 2}`);
         [['원형 (수직)'], ['원형 (수평)'], ['사각']].forEach(([name], i) => { L(`A${selRow + i}`, i + 1, 'B14'); L(`B${selRow + i}`, name, 'B14'); L(`C${selRow + i}`, i === 0 ? (rect ? 3 : (sourceData.stackOrientation === 'horizontal' ? 2 : 1)) : null, 'B14'); });
         leakMerges.push(`C${selRow}:C${selRow + 2}`); r = selRow + 4;
         // 굴뚝 제원
@@ -7363,9 +7360,9 @@ export default function App() {
         // 측정점 표: 번호 · 중심 거리 · Sampling Location · Lnw 포함 · 최종 샘플링 위치 · 반대편
         // 사각 굴뚝은 측정공을 두 방향 모두 뚫는다: 가로 방향(왼쪽 변의 측정공에서 깊이 쪽으로)은 C~E열,
         // 세로 방향(위쪽 변의 측정공에서 폭 쪽으로)은 F열에 최종 위치를 적는다 (원형일 때 F열은 반대편)
-        ['번호', '중심 거리 (cm)', 'Sampling Location (cm)', 'Lnw 포함'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12'));
-        L(`E${r}`, { formula: `IF(${S}=3,"가로 방향 최종 위치","최종 샘플링 위치")` }, 'A12');
-        L(`F${r}`, { formula: `IF(${S}=3,"세로 방향 최종 위치","반대편")` }, 'A12'); r += 1;
+        ['번호', '중심 거리 (cm)', 'Sampling Location (cm)'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12'));
+        L(`D${r}`, { formula: `IF(${S}=3,"가로 방향 최종 위치","최종 샘플링 위치")` }, 'A12');
+        L(`E${r}`, { formula: `IF(${S}=3,"세로 방향 최종 위치","반대편")` }, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`); r += 1;
         const rowsCount = Math.max(5, sp && sp.rect ? Math.min(12, Math.max(sp.perRadius, sp.lines || 0)) : 0);
         for (let i = 1; i <= rowsCount; i++) {
           // 벽에서 가까운 점부터: 원형은 R - 계수×R, 사각은 (i - 0.5) × 깊이 ÷ n
@@ -7378,8 +7375,8 @@ export default function App() {
           L(`B${r}`, { formula: `IF(C${r}="","",ABS(${Dc}*50-C${r}))` }, 'B14');
           L(`C${r}`, { formula: wall }, 'B14');
           L(`D${r}`, { formula: `IF(C${r}="","",C${r}+${Lnw})` }, 'B14');
-          L(`E${r}`, { formula: `IF(D${r}="","",D${r}+${blueRef})` }, 'B14');
-          L(`F${r}`, { formula: `IF(${S}=3,IF(OR(${i}>${mCell},${Ac}<=0.25),"",(${i}-0.5)*N(${Wc})/${mCell}*100+${Lnw}+${blueRef}),IF(OR(C${r}="",${Ac}<=0.25),"",${Dc}*100-C${r}+${Lnw}+${blueRef}))` }, 'B14');
+          L(`E${r}`, { formula: `IF(${S}=3,IF(OR(${i}>${mCell},${Ac}<=0.25),"",(${i}-0.5)*N(${Wc})/${mCell}*100+${Lnw}),IF(OR(C${r}="",${Ac}<=0.25),"",${Dc}*100-C${r}+${Lnw}))` }, 'B14');
+          L(`F${r}`, null, 'B14'); leakMerges.push(`E${r}:F${r}`);
           r += 1;
         }
         // 사각 굴뚝: 측정공(다른 변 방향)
