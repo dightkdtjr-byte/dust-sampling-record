@@ -9585,23 +9585,23 @@ export default function App() {
               ))}
             </div>
             <div className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
-              <table className="w-full text-[11px] text-center border-collapse min-w-[1180px]">
+              <table className="w-full text-[11px] text-center border-collapse min-w-[1400px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-800 text-white">
                     <th className="p-2 border border-slate-700 w-10">의뢰</th>
                     <th className="p-2 border border-slate-700 text-left min-w-[190px]">물질명</th>
-                    <th className="p-2 border border-slate-700">일차</th>
+                    <th className="p-2 border border-slate-700 min-w-[96px]">일차</th>
                     <th className="p-2 border border-slate-700">시작</th>
                     <th className="p-2 border border-slate-700">종료</th>
-                    <th className="p-2 border border-slate-700">시작값</th>
-                    <th className="p-2 border border-slate-700">종료값</th>
-                    <th className="p-2 border border-slate-700 bg-orange-700">채취유량(L)</th>
-                    <th className="p-2 border border-slate-700">온도(℃)</th>
-                    <th className="p-2 border border-slate-700">압력(mmH2O)</th>
-                    <th className="p-2 border border-slate-700">흡입속도</th>
-                    <th className="p-2 border border-slate-700">목표(L)</th>
-                    <th className="p-2 border border-slate-700">소요(min)</th>
-                    <th className="p-2 border border-slate-700">검사기간</th>
+                    <th className="p-2 border border-slate-700 min-w-[104px]">시작값</th>
+                    <th className="p-2 border border-slate-700 min-w-[104px]">종료값</th>
+                    <th className="p-2 border border-slate-700 bg-orange-700 min-w-[80px]">채취유량(L)</th>
+                    <th className="p-2 border border-slate-700 min-w-[64px]">온도(℃)</th>
+                    <th className="p-2 border border-slate-700 min-w-[72px]">압력(mmH2O)</th>
+                    <th className="p-2 border border-slate-700 min-w-[70px]">흡입속도</th>
+                    <th className="p-2 border border-slate-700 min-w-[70px]">목표(L)</th>
+                    <th className="p-2 border border-slate-700 min-w-[70px]">소요(min)</th>
+                    <th className="p-2 border border-slate-700 min-w-[80px]">검사기간</th>
                     <th className="p-2 border border-slate-700">시료번호</th>
                   </tr>
                 </thead>
