@@ -1509,6 +1509,18 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
       });
     }
+    // 글자 크기(fontSizes: [{ range, sz }])
+    if (rule?.fontSizes) {
+      const targets = rule.fontSizes.map((f) => ({ r: parseRange(f.range), sz: f.sz })).filter((f) => f.r && f.sz);
+      xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+        const ref = parseRef(attr(attrs, 'r') || '');
+        const hit = ref && targets.find((f) => ref.row >= f.r.from.row && ref.row <= f.r.to.row && ref.col >= f.r.from.col && ref.col <= f.r.to.col);
+        if (!hit) return whole;
+        const s0 = Number(attr(attrs, 's') || 0);
+        const next = styles.withFontChange(s0, { sz: hit.sz });
+        return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+      });
+    }
     // 줄 바꿈(wrap: [범위]): 여러 줄로 적은 칸. '셀에 맞춤'보다 뒤에 적용해 줄 바꿈이 이긴다
     if (rule?.wrap) {
       const targets = rule.wrap.map(parseRange).filter(Boolean);
@@ -1672,7 +1684,8 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         const { texts, kinds: footKinds } = analyzeTables(xml, styles, sharedStrings);
         // 양식번호 줄 바로 윗줄이 값이 하나도 없는 빈 줄인가 (표의 마지막 줄이 아니다)
         let aboveBlank = true;
-        for (const [key, kind] of footKinds) if (Number(key.split(',')[0]) === to.row - 1 && kind && kind !== 'empty') { aboveBlank = false; break; }
+        // (인쇄 범위 안에서만 본다: 범위 밖 오른쪽에 다른 표가 있는 줄일 수 있다)
+        for (const [key, kind] of footKinds) { const [kr, kc] = key.split(',').map(Number); if (kr === to.row - 1 && kc >= measured[i].range.from.col && kc <= to.col && kind && kind !== 'empty') { aboveBlank = false; break; } }
         for (const [key, text] of texts) if (Number(key.split(',')[0]) === to.row && String(text || '').trim()) { footerText = String(text).trim(); break; }
         if (footerText && (!furniture.footerPattern || furniture.footerPattern.test(footerText))) {
           xml = ensureRowHidden(xml, to.row);
@@ -1680,7 +1693,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
           xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
             const ref = parseRef(attr(attrs, 'r') || '');
             // 묶음 구분선을 쓰는 시트(계산식)에서만: 다른 시트는 그 줄이 표의 마지막 줄일 수 있다
-            if (!ref || ref.row !== to.row - 1 || !(aboveBlank || (rule?.furniture && rule.furniture.sectionRule))) return whole;
+            if (!ref || ref.row !== to.row - 1 || ref.col > to.col || !(aboveBlank || (rule?.furniture && rule.furniture.sectionRule))) return whole;
             const s0 = Number(attr(attrs, 's') || 0);
             const next = styles.withoutBorderSides(s0, ['bottom']);
             return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
@@ -2068,6 +2081,53 @@ export async function fitPictureInBox(zip, sheetPath, { box, aspect = 1, pad = 3
   });
   if (count) zip.file(drawingPath, next);
   return fill ? { count, aspect: (boxW - pad * 2 * EMU_PT) / (boxH - pad * 2 * EMU_PT) } : count;
+}
+
+// ── 그림 원본 시트에 그림을 더한다: 그 시트의 마지막 그림 틀을 본떠 col0(0부터 센 열)의 1행 칸에 PNG를 넣는다 ──
+// pics: [{ col0, png(Uint8Array), name }]. 넣은 개수를 돌려준다. 열 너비 정의(<cols>)도 그 열까지 늘린다
+export async function addSourcePictures(zip, sheetPath, pics) {
+  const file = zip.file(sheetPath);
+  if (!file || !Array.isArray(pics) || pics.length === 0) return 0;
+  const relsPath = sheetPath.replace(/([^/]+)$/, '_rels/$1.rels');
+  const rels = zip.file(relsPath) ? await zip.file(relsPath).async('string') : '';
+  const target = (/Type="[^"]*\/relationships\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/relationships\/drawing"/.exec(rels) || [])[1];
+  const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
+  const drawingFile = drawingPath ? zip.file(drawingPath) : null;
+  if (!drawingFile) return 0;
+  const drawingRelsPath = drawingPath.replace(/([^/]+)$/, '_rels/$1.rels');
+  let drawingRels = zip.file(drawingRelsPath) ? await zip.file(drawingRelsPath).async('string') : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  let drawing = await drawingFile.async('string');
+  const anchors = [...drawing.matchAll(/<xdr:twoCellAnchor\b[^>]*>[\s\S]*?<\/xdr:twoCellAnchor>/g)].map((m) => m[0]).filter((a) => /<xdr:pic\b/.test(a));
+  const model = anchors[anchors.length - 1];
+  if (!model) return 0;
+  let nextRel = Math.max(0, ...[...drawingRels.matchAll(/\bId="rId(\d+)"/g)].map((m) => Number(m[1]))) + 1;
+  let nextId = Math.max(0, ...[...drawing.matchAll(/<xdr:cNvPr\b[^>]*\bid="(\d+)"/g)].map((m) => Number(m[1]))) + 1;
+  const ext = /<a:ext cx="(\d+)" cy="(\d+)"/.exec(model);
+  const size = ext ? Number(ext[1]) : 2520000;
+  let count = 0; const added = [];
+  for (const pic of pics) {
+    const mediaName = `traverse_${pic.col0}.png`;
+    zip.file(`xl/media/${mediaName}`, pic.png);
+    const rid = `rId${nextRel++}`;
+    drawingRels = drawingRels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${mediaName}"/></Relationships>`);
+    const anchor = model
+      .replace(/<xdr:from>[\s\S]*?<\/xdr:from>/, `<xdr:from><xdr:col>${pic.col0}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`)
+      .replace(/<xdr:to>[\s\S]*?<\/xdr:to>/, `<xdr:to><xdr:col>${pic.col0}</xdr:col><xdr:colOff>${size}</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>${size}</xdr:rowOff></xdr:to>`)
+      .replace(/<xdr:cNvPr\b[^>]*>[\s\S]*?<\/xdr:cNvPr>|<xdr:cNvPr\b[^>]*\/>/, `<xdr:cNvPr id="${nextId++}" name="${pic.name}"/>`)
+      .replace(/\br:embed="[^"]*"/, `r:embed="${rid}"`);
+    added.push(anchor); count += 1;
+  }
+  drawing = drawing.replace(/<\/xdr:wsDr>\s*$/, () => `${added.join('')}</xdr:wsDr>`);
+  zip.file(drawingPath, drawing); zip.file(drawingRelsPath, drawingRels);
+  const maxCol = Math.max(...pics.map((pic) => pic.col0 + 1));
+  const xml = await file.async('string');
+  zip.file(sheetPath, xml.replace(/<cols>([\s\S]*?)<\/cols>/, (w, body) => `<cols>${body.replace(/(<col\b[^>]*\bmax=")(\d+)(")/g, (m, a, n, c) => `${a}${Math.max(Number(n), maxCol)}${c}`)}</cols>`));
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    const ct = await ctFile.async('string');
+    if (!/Extension="png"/i.test(ct)) zip.file('[Content_Types].xml', ct.replace(/<Types\b([^>]*)>/, (w, a) => `<Types${a}><Default Extension="png" ContentType="image/png"/>`));
+  }
+  return count;
 }
 
 // ── 연결 그림(카메라)의 원본 칸을 정해진 비율(aspect = 가로 ÷ 세로)로: 열을 넓히고 칸 안의 그림을 가로 가운데로 옮긴다 ──

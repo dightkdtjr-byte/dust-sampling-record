@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -207,6 +207,64 @@ const removeWorkbookSheet = async (zip, wbXml, sheetName) => {
     })
     .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
 };
+// ── 측정점 그림 (사각 굴뚝 · 수평 원형 굴뚝): 화면과 엑셀이 같은 그림을 쓴다 ──
+// 원형 수직 굴뚝은 양식의 그림(한 반경 위의 측정점)을 쓰고, 양식에 없는 두 경우를 여기서 그린다. 정사각형 SVG 글을 돌려준다
+//  - kind 'rect': 깊이 방향 n구분 × 측정공 m개의 격자와 각 칸 중심의 측정점
+//  - kind 'horizontal': 반경 n구분의 원에서 두 지름(측정공 2개) 위 모든 측정점
+const TRAVERSE_COEFFS = [[0.707], [0.5, 0.866], [0.408, 0.707, 0.913], [0.354, 0.612, 0.791, 0.935], [0.316, 0.548, 0.707, 0.837, 0.949]];
+const buildTraverseSvg = ({ kind, n = 3, lines = 3, depth = 1, side = 1, caption = '' }) => {
+  const ink = '#1d1d1f'; const blue = '#0a84ff'; const grey = '#8e8e93';
+  const parts = [`<svg xmlns="http://www.w3.org/2000/svg" width="266" height="266" viewBox="0 0 266 266" font-family="'Malgun Gothic','맑은 고딕',sans-serif">`, '<rect width="266" height="266" fill="#ffffff"/>'];
+  const text = (x, y, t, { size = 10, anchor = 'middle', color = ink, bold = false } = {}) => parts.push(`<text x="${x}" y="${y}" font-size="${size}" text-anchor="${anchor}" fill="${color}"${bold ? ' font-weight="700"' : ''}>${String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`);
+  if (kind === 'rect') {
+    const nn = Math.max(1, Math.min(12, Math.round(n) || 1)); const mm = Math.max(1, Math.min(12, Math.round(lines) || 1));
+    // 굴뚝 단면의 가로(깊이, 측정공에서 안쪽으로)·세로(측정공이 늘어선 변) 비율을 살리되 너무 길쭉하지 않게
+    const ratio = Math.max(0.5, Math.min(2, (Number(depth) > 0 && Number(side) > 0) ? Number(depth) / Number(side) : 1));
+    const maxW = 170; const maxH = 150;
+    const w = ratio >= maxW / maxH ? maxW : maxH * ratio; const h = ratio >= maxW / maxH ? maxW / ratio : maxH;
+    const x0 = 70 + (maxW - w) / 2; const y0 = 46 + (maxH - h) / 2;
+    text(133, 22, `사각 굴뚝: ${nn} × ${mm} = ${nn * mm}점`, { size: 12, bold: true });
+    parts.push(`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="none" stroke="${ink}" stroke-width="1.4"/>`);
+    for (let i = 1; i < nn; i++) parts.push(`<line x1="${x0 + (w * i) / nn}" y1="${y0}" x2="${x0 + (w * i) / nn}" y2="${y0 + h}" stroke="${grey}" stroke-width="0.7" stroke-dasharray="3 3"/>`);
+    for (let j = 1; j < mm; j++) parts.push(`<line x1="${x0}" y1="${y0 + (h * j) / mm}" x2="${x0 + w}" y2="${y0 + (h * j) / mm}" stroke="${grey}" stroke-width="0.7" stroke-dasharray="3 3"/>`);
+    for (let j = 0; j < mm; j++) {
+      const y = y0 + (h * (j + 0.5)) / mm;
+      parts.push(`<rect x="${x0 - 14}" y="${y - 3.5}" width="14" height="7" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
+      parts.push(`<line x1="${x0}" y1="${y}" x2="${x0 + w}" y2="${y}" stroke="${ink}" stroke-width="0.5"/>`);
+      for (let i = 0; i < nn; i++) parts.push(`<circle cx="${x0 + (w * (i + 0.5)) / nn}" cy="${y}" r="${nn * mm > 36 ? 2.2 : 3.2}" fill="${blue}"/>`);
+    }
+    text(x0 - 18, y0 - 6, '측정공', { size: 9, anchor: 'end' });
+    for (let i = 0; i < nn && nn <= 8; i++) text(x0 + (w * (i + 0.5)) / nn, y0 + h + 13, String(i + 1), { size: 9, color: blue });
+    text(133, 238, caption || `측정공 ${mm}개 × 깊이 방향 ${nn}점 (각 칸의 중심)`, { size: 9 });
+  } else {
+    const nn = Math.max(1, Math.min(5, Math.round(n) || 1)); const coeffs = TRAVERSE_COEFFS[nn - 1];
+    const cx = 133; const cy = 128; const R = 80;
+    text(133, 22, `수평 굴뚝: 모든 측정점 ${nn * 4}점`, { size: 12, bold: true });
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="${R + 5}" fill="none" stroke="${ink}" stroke-width="1.1"/>`, `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${ink}" stroke-width="0.8"/>`);
+    coeffs.forEach((c) => parts.push(`<circle cx="${cx}" cy="${cy}" r="${c * R}" fill="none" stroke="${grey}" stroke-width="0.7" stroke-dasharray="2.5 3"/>`));
+    parts.push(`<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="${ink}" stroke-width="0.8"/>`, `<line x1="${cx}" y1="${cy - R}" x2="${cx}" y2="${cy + R}" stroke="${ink}" stroke-width="0.8"/>`);
+    parts.push(`<rect x="${cx - R - 20}" y="${cy - 4}" width="14" height="8" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`, `<rect x="${cx - 4}" y="${cy - R - 20}" width="8" height="14" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
+    coeffs.forEach((c) => [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => parts.push(`<circle cx="${cx + dx * c * R}" cy="${cy + dy * c * R}" r="3.2" fill="${blue}"/>`)));
+    text(cx - R - 24, cy - 8, '측정공', { size: 9, anchor: 'end' });
+    text(133, 238, caption || `측정공 2개 · 반경당 ${nn}점 × 4 (두 지름 위의 모든 점)`, { size: 9 });
+  }
+  parts.push('</svg>');
+  return parts.join('');
+};
+const traverseSvgDataUrl = (options) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildTraverseSvg(options))}`;
+// SVG 글을 PNG(바이트)로: 엑셀에 넣을 그림
+const svgToPngBytes = (svg, size = 798) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
+      const g = canvas.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, size, size); g.drawImage(img, 0, 0, size, size);
+      canvas.toBlob((blob) => { if (!blob) { reject(new Error('그림을 만들지 못했습니다.')); return; } blob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf)), reject); }, 'image/png');
+    } catch (error) { reject(error); }
+  };
+  img.onerror = () => reject(new Error('그림을 읽지 못했습니다.'));
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+});
 // 누출시험과 시료측정위치를 한 장에 담은 시트의 이름 (유량 기록부는 누출시험이 없다)
 const positionSheetNameOf = (layout) => (layout.leakAsPosition ? '시료측정위치 선정' : '누출시험, 시료측정위치');
 // 엑셀의 날짜 표시: 2026년 10월 29일
@@ -2488,9 +2546,14 @@ export default function App() {
       alert(`${describeKmaObservation(obs)}\n\n이 지점·시각에는 날씨 관측값이 없어 날씨 칸을 그대로 두었습니다. 가까운 다른 지점을 골라 보세요.`);
       return;
     }
-    setFormData((prev) => ({ ...prev, weather: obs.weatherText }));
+    setFormData((prev) => ({
+      ...prev, weather: obs.weatherText,
+      weatherHumidity: obs.humidity === null || obs.humidity === undefined ? prev.weatherHumidity : String(obs.humidity),
+      weatherWindDir: obs.windDir || prev.weatherWindDir,
+      weatherWindSpeed: obs.windSpeed === null || obs.windSpeed === undefined ? prev.weatherWindSpeed : String(obs.windSpeed),
+    }));
     unsavedRef.current = true;
-    alert(`${describeKmaObservation(obs)}\n\n날씨 칸을 채웠습니다. 대기 온도와 대기압은 현장에서 잰 값을 적어 주세요.`);
+    alert(`${describeKmaObservation(obs)}\n\n날씨 칸을 채웠습니다. 습도·풍향·풍속은 저장하면 통합시료채취기록부의 그 일차 현장기상으로 넘어갑니다.\n대기 온도와 대기압은 현장에서 잰 값을 적어 주세요.`);
   };
   // 통합시료채취기록부: 그 일차의 기상·습도·풍향·풍속을 채운다 (시각은 그날 가장 이른 채취 시작 시각, 없으면 12시)
   const applyKmaWeatherToLogDay = async (dayIdx) => {
@@ -2645,6 +2708,8 @@ export default function App() {
   const createInitialFormData = () => ({
     date: '', company: '', location: '', sampler: '',
     weather: '', atmTemp: '', atmPressure: '',
+    // 기상청에서 받은 습도·풍향·풍속: 기록부에는 적는 칸이 없지만, 통합시료채취기록부의 그 일차 현장기상으로 넘긴다
+    weatherHumidity: '', weatherWindDir: '', weatherWindSpeed: '',
     totalStackDepth: '', flangeLength: '', stackDiameter: '', stackShape: 'circle', stackSide: '', stackOrientation: 'vertical', rectReduce: 'all', pitotInfo: '', pitotFactor: '0.84',
     pitotPresetId: '',
     standardO2: '',
@@ -7289,7 +7354,7 @@ export default function App() {
         r += 1;
         L(`A${r}`, { formula: `IF(${S}=3,"측정공: 다른 변 방향으로 "&${mCell}&"개, 간격 "&ROUND(${Wc}/${mCell}*100,1)&" cm (첫 측정공은 벽에서 "&ROUND(${Wc}/${mCell}*50,1)&" cm)","")` }, 'A5');
         blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
-        leakPositionCells = { area: `E${dimRow}`, dimRow, lastRow: r, methodFirst, methodLast };
+        leakPositionCells = { area: `E${dimRow}`, dimRow, selRow, lastRow: r, methodFirst, methodLast };
         leakFooterRow = r + 1;
       }
 
@@ -7342,6 +7407,13 @@ export default function App() {
       // 숨긴 '피토계산' 시트는 피토관 일련번호(노즐산정 C8)를 E2로 받아 찾는다. 피토관을 고르지 않아 C8이 비면
       // 엑셀에서 E2가 0이 되어 유속별 Cp 찾기가 #N/A가 되므로, 비어 있으면 빈칸을 받게 한다
       addUpdate('피토계산', 'E2', { formula: 'IF(노즐산정!$C$8="","",노즐산정!$C$8)' });
+      // 유효 길이(cm): 피토 표에서 피토관 번호로 찾는다. 유량 양식은 이 칸이 '-'로 박혀 있었다.
+      // 표에 없는 피토관이면 프로그램에 등록된 길이를 쓴다
+      {
+        const preset = pitotPresets.find((item) => String(item.id) === String(sourceData.pitotPresetId));
+        const presetLength = toNumber(preset?.length);
+        addUpdate('노즐산정', 'D9', { formula: `IF($C$8="","",IFERROR(INDEX(피토!$C$2:$C$100,MATCH($C$8,피토!$A$2:$A$100,0)),${presetLength !== null ? presetLength : '""'}))` });
+      }
       // 피토계수 자동 선택을 엑셀이 한다: 기준계수 0.84(E9)로 유속을 가계산(E10)하고, 그 유속으로 계수 적용표(피토계산 시트)에서 찾는다(C9).
       // (양식의 C9는 계수를 곱한 유속 G39를 보았는데, G39가 다시 C10을 보므로 C10을 수식으로 만들면 순환 참조가 된다)
       // 가계산 유속은 기록표에 측정값이 있으면 그 평균 동압·밀도로, 없으면 예비조사 값으로 (프로그램 화면과 같은 순서)
@@ -7359,14 +7431,52 @@ export default function App() {
       {
         const samplerNo = toNumber(sourceData.samplerId);
         const dha = toNumber(sourceData.deltaHAt); const yd = toNumber(sourceData.gasMeterFactor);
-        if (samplerNo !== null && Number.isInteger(samplerNo) && samplerNo >= 1 && samplerNo <= 5 && dha !== null && yd !== null) {
-          addUpdate('노즐산정', `O${38 + samplerNo}`, dha);
-          addUpdate('노즐산정', `P${38 + samplerNo}`, yd);
+        // 프로그램의 샘플러 프리셋을 엑셀의 샘플러 표(M39:P43, 5대)에 그대로 적는다 → 프리셋을 고치면 엑셀 표도 바뀐다
+        const tableSamplers = samplers.slice(0, 5);
+        if (tableSamplers.length > 0) {
+          for (let i = 0; i < 5; i++) {
+            const item = tableSamplers[i];
+            addUpdate('노즐산정', `M${39 + i}`, item ? (toNumber(item.id) ?? item.id) : null);
+            addUpdate('노즐산정', `N${39 + i}`, item ? extractSerialFromName(item.name) : null);
+            addUpdate('노즐산정', `O${39 + i}`, item ? toNumber(item.dHAt) : null);
+            addUpdate('노즐산정', `P${39 + i}`, item ? toNumber(item.yd) : null);
+          }
+        }
+        const tableIndex = tableSamplers.length > 0
+          ? tableSamplers.findIndex((item) => String(item.id) === String(sourceData.samplerId))
+          : (samplerNo !== null && Number.isInteger(samplerNo) && samplerNo >= 1 && samplerNo <= 5 ? samplerNo - 1 : -1);
+        if (tableIndex >= 0 && dha !== null && yd !== null) {
+          // 이 기록부에 적용한 값(프리셋을 고른 뒤 직접 고쳤을 수 있다)을 그 샘플러 줄에 적는다
+          addUpdate('노즐산정', `O${39 + tableIndex}`, dha);
+          addUpdate('노즐산정', `P${39 + tableIndex}`, yd);
           addUpdate('노즐산정', 'F8', { formula: `IFERROR(INDEX($O$39:$O$43,MATCH($B$5,$M$39:$M$43,0)),${dha})` });
           addUpdate('노즐산정', 'G8', { formula: `IFERROR(INDEX($P$39:$P$43,MATCH($B$5,$M$39:$M$43,0)),${yd})` });
         } else {
           addUpdate('노즐산정', 'F8', dha);
           addUpdate('노즐산정', 'G8', yd);
+        }
+      }
+      // 프로그램의 노즐 프리셋을 엑셀의 노즐표(B·C열 39행~)에 그대로 적는다 (이 창의 기록부 종류와 같은 때만: 노즐 세트는 종류별이다)
+      if (exportSheetId === (selectedSheet || exportSheetId)) {
+        const nozzleList = getConfiguredNozzles();
+        if (nozzleList.length > 0) {
+          for (let i = 0; i < layout.nozzleRows; i++) {
+            addUpdate('노즐산정', `B${39 + i}`, nozzleList[i] ? nozzleList[i].num : null);
+            addUpdate('노즐산정', `C${39 + i}`, nozzleList[i] ? nozzleList[i].d : null);
+          }
+        }
+      }
+      // 프로그램의 피토관 프리셋을 엑셀의 피토 표(숨긴 '피토' 시트)에 그대로 적는다 → 유속별 계수·유효 길이를 엑셀이 그 표에서 찾는다
+      if (pitotPresets.length > 0 && sheetPathMap.has('피토')) {
+        const PITOT_COLS = ['E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
+        for (let i = 0; i < 42; i++) {
+          const preset = pitotPresets[i]; const r = 2 + i;
+          const rows = preset ? getPitotVelocityRows(preset).slice(0, 8) : [];
+          addUpdate('피토', `A${r}`, preset ? (String(preset.sn || '').trim() || null) : null);
+          addUpdate('피토', `B${r}`, preset ? (String(preset.usage || '').trim() || null) : null);
+          addUpdate('피토', `C${r}`, preset ? toNumber(preset.length) : null);
+          addUpdate('피토', `D${r}`, preset && preset.calDate ? toExcelDateSerial(preset.calDate) : null);
+          PITOT_COLS.forEach((col, k) => { const row = rows[Math.floor(k / 2)]; addUpdate('피토', `${col}${r}`, row ? (k % 2 === 0 ? row.v : row.cp) : null); });
         }
       }
       addUpdate('노즐산정', 'D15', toNumber(sourceData.traverseTmIn));
@@ -7808,6 +7918,26 @@ export default function App() {
             .replace(/(<definedName\b[^>]*\bname="D"[^>]*>)[^<]*/, (w, open) => `${open}${pos}$C$${leakPositionCells.dimRow}`)
             .replace(/(<definedName\b[^>]*\bname="ShowPic"[^>]*>)([^<]*)/, (w, open, body) => `${open}${body.replace(/'?시료측정위치'?!\$G\$38/, () => `MIN(5,MAX(1,${pos}$H$${leakPositionCells.dimRow}))`)}`);
           wbXml = await removeWorkbookSheet(zip, wbXml, '시료측정위치');
+          // 사각 굴뚝·수평 원형 굴뚝의 측정점 그림: 양식에는 원형 수직 그림만 있으므로 만들어서 '지점 사진' 시트의 G1·H1 칸에 넣고,
+          // 굴뚝 형태 선택번호(1 원형 수직 / 2 원형 수평 / 3 사각)에 따라 ShowPic이 골라 보여 주게 한다
+          try {
+            const picSheetPath = sheetPathMap.get('지점 사진');
+            if (picSheetPath) {
+              const spNow = computeSamplingPoints(sourceData);
+              const isRect = Boolean(spNow && spNow.rect && spNow.perRadius > 0);
+              const rectPng = await svgToPngBytes(buildTraverseSvg(isRect
+                ? { kind: 'rect', n: spNow.perRadius, lines: spNow.lines, depth: toNumber(sourceData.stackDiameter), side: spNow.side }
+                : { kind: 'rect', n: 3, lines: 3, caption: '각 칸의 중심에서 측정 (구분 수는 측정위치 표 참조)' }));
+              const horizontalPng = await svgToPngBytes(buildTraverseSvg({ kind: 'horizontal', n: spNow && !spNow.rect && spNow.perRadius > 0 ? spNow.perRadius : 3 }));
+              const added = await addSourcePictures(zip, picSheetPath, [{ col0: 6, png: rectPng, name: '지점 사각' }, { col0: 7, png: horizontalPng, name: '지점 수평' }]);
+              if (added === 2) {
+                const sel = `${pos}$C$${leakPositionCells.selRow}`;
+                wbXml = wbXml
+                  .replace(/(<definedName\b[^>]*\bname="ShowPic"[^>]*>)([^<]*)/, (w, open, body) => `${open}IF(${sel}=3,지점사각,IF(AND(${sel}=2,${pos}$E$${leakPositionCells.dimRow}&gt;0.25),지점수평,${body}))`)
+                  .replace(/(<definedName\b[^>]*\bname="지점5"[^>]*>[^<]*<\/definedName>)/, (w) => `${w}<definedName name="지점사각">'지점 사진'!$G$1</definedName><definedName name="지점수평">'지점 사진'!$H$1</definedName>`);
+              }
+            }
+          } catch (error) { console.error('측정점 그림(사각·수평) 넣기 실패:', error); }
         }
         [...(layout.hideSheets || []), ...(leakFooterRow && !leakPositionCells ? ['시료측정위치'] : [])].forEach((name) => {
           if (name === '누출시험' && layout.leakAsPosition) return;
@@ -7968,8 +8098,15 @@ export default function App() {
   const addStaffMember = () => {
     const name = staffDraft.name.trim();
     if (!name) return;
-    saveStaffList([...staffList.filter((item) => item.name !== name), { name, rank: staffDraft.rank.trim() }]);
+    const member = { name, rank: staffDraft.rank.trim() };
+    saveStaffList([...staffList.filter((item) => item.name !== name), member]);
     setStaffDraft({ name: '', rank: staffDraft.rank });
+    // 새로 추가한 사람은 쓰고 있는 일차(1일차와 날짜가 적힌 일차)에 바로 넣는다 → 따로 누르지 않아도 엑셀에 나온다
+    setSamplingLogData((prev) => {
+      const lists = Array.from({ length: 4 }, (_, i) => (Array.isArray(prev.staffByDay?.[i]) ? prev.staffByDay[i] : []));
+      const next = lists.map((list, i) => ((i === 0 || prev.days?.[i]?.date) && !list.some((item) => item.name === name) && list.length < SAMPLING_LOG_STAFF_MAX ? [...list, member] : list));
+      return { ...prev, staffByDay: next };
+    });
   };
   const toggleSamplingLogStaff = (dayIdx, member) => setSamplingLogData((prev) => {
     const lists = Array.from({ length: 4 }, (_, i) => (Array.isArray(prev.staffByDay?.[i]) ? prev.staffByDay[i] : []));
@@ -8055,6 +8192,10 @@ export default function App() {
     if (text(report?.weather)) patch.weather = text(report.weather);
     if (text(report?.atmTemp)) patch.temp = text(report.atmTemp);
     if (text(report?.atmPressure)) patch.pressure = text(report.atmPressure);
+    // 기록부에서 기상청 자료를 받아 두었으면 습도·풍향·풍속도 함께
+    if (text(report?.weatherHumidity)) patch.humidity = text(report.weatherHumidity);
+    if (text(report?.weatherWindDir)) patch.windDir = text(report.weatherWindDir);
+    if (text(report?.weatherWindSpeed)) patch.windSpeed = text(report.weatherWindSpeed);
     return patch;
   };
   // 사업장·배출구(스택)·날짜가 모두 같은 저장 기록부 가운데 가장 최근 것의 현장 값
@@ -8429,18 +8570,23 @@ export default function App() {
 
       // 시료채취자: 1일차는 58·59행(직급·이름), 2일차는 60·61행. 3·4일차는 양식에 자리가 없어 인쇄 범위 밖 64~67행에 둔다
       // (일차별 시트가 이 칸들을 읽는다). 고르지 않은 자리는 비운다 → 양식에 적혀 있던 예시 이름이 남지 않는다
-      const STAFF_ROWS = [58, 60, 64, 66];
+      const STAFF_ROWS = [58, 60];
       const STAFF_COLS = ['E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N'];
-      STAFF_ROWS.forEach((rankRow, dayIdx) => {
+      const staffDayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date) || SAMPLING_LOG_SUBSTANCES.some((sub) => { const row = log.rows[String(sub.row)]; return row && row.requested && Number(row.dayIndex) === dayIdx; });
+      // 그 일차에 고른 사람. 아무도 고르지 않았으면, 쓰는 일차에는 프로그램에 등록된 명단을 그대로 쓴다
+      const staffOfDay = (dayIdx) => {
         const list = Array.isArray(log.staffByDay?.[dayIdx]) ? log.staffByDay[dayIdx] : [];
+        if (list.length > 0) return list;
+        return staffDayInUse(dayIdx) || dayIdx === 0 ? staffList.slice(0, SAMPLING_LOG_STAFF_MAX) : [];
+      };
+      STAFF_ROWS.forEach((rankRow, dayIdx) => {
+        const list = staffOfDay(dayIdx);
         STAFF_COLS.forEach((col, i) => {
           add(`${col}${rankRow}`, textOrNull(list[i]?.rank));
           add(`${col}${rankRow + 1}`, textOrNull(list[i]?.name));
         });
       });
       add('C58', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
-      add('B63', '3·4일차 시료채취자 (일차별 시트용)'); add('D64', '직급'); add('D65', '이름'); add('D66', '직급'); add('D67', '이름');
-      add('C64', { formula: 'IF(C8="","",C8)' }); add('C66', { formula: 'IF(C9="","",C9)' });
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
       zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT })));
@@ -8473,20 +8619,23 @@ export default function App() {
         // 일차별 시트의 시료채취자 줄(57·58행): 직급 4칸·이름 5칸으로 어긋나 있고 이름 두 칸은 글자로 박혀 있었다
         // → 다섯 자리(D·F·H·J·K) 모두 입력 시트의 그 일차 직급·이름을 읽게 한다
         const withDayStaff = (xml, dayIdx) => {
-          const rankRow = STAFF_ROWS[dayIdx]; const nameRow = rankRow + 1;
           const src = (col, row) => `'${inputSheet}'!${col}${row}`;
-          const blankIf = (ref) => `IF(${ref}="","",${ref})`;
           const slotUpdates = [];
-          [['D', 'E'], ['F', 'F'], ['H', 'G']].forEach(([dayCol, inCol]) => {
+          const rankRow = STAFF_ROWS[dayIdx]; const nameRow = rankRow === undefined ? undefined : rankRow + 1;
+          const dayStaff = staffOfDay(dayIdx);
+          // 입력 시트에 자리가 있는 1·2일차는 그 칸을 읽는 수식으로, 자리가 없는 3·4일차는 글자로 적는다
+          const rankValue = (inCol, i) => (rankRow !== undefined ? { formula: `IF(${src(inCol, rankRow)}="","",${src(inCol, rankRow)})` } : (dayStaff[i]?.rank || ''));
+          const nameValue = (inCol, i) => (rankRow !== undefined ? { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` } : (dayStaff[i]?.name ? `${dayStaff[i].name} (인)` : ''));
+          [['D', 'E'], ['F', 'F'], ['H', 'G']].forEach(([dayCol, inCol], i) => {
             const signCol = String.fromCharCode(dayCol.charCodeAt(0) + 1);
-            slotUpdates.push({ ref: `${dayCol}57`, value: { formula: blankIf(src(inCol, rankRow)) } });
+            slotUpdates.push({ ref: `${dayCol}57`, value: rankValue(inCol, i) });
             // 이름과 (인)을 한 칸으로 합친다 (직급 칸과 같은 폭, 가운데에 '이름 (인)')
-            slotUpdates.push({ ref: `${dayCol}58`, value: { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` }, styleFrom: 'H58' });
+            slotUpdates.push({ ref: `${dayCol}58`, value: nameValue(inCol, i), styleFrom: 'H58' });
             slotUpdates.push({ ref: `${signCol}58`, value: '', styleFrom: 'H58' });
           });
-          [['J', 'H'], ['K', 'I']].forEach(([dayCol, inCol]) => {
-            slotUpdates.push({ ref: `${dayCol}57`, value: { formula: blankIf(src(inCol, rankRow)) }, styleFrom: 'H57' });
-            slotUpdates.push({ ref: `${dayCol}58`, value: { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` }, styleFrom: 'H58' });
+          [['J', 'H'], ['K', 'I']].forEach(([dayCol, inCol], i) => {
+            slotUpdates.push({ ref: `${dayCol}57`, value: rankValue(inCol, i + 3), styleFrom: 'H57' });
+            slotUpdates.push({ ref: `${dayCol}58`, value: nameValue(inCol, i + 3), styleFrom: 'H58' });
           });
           // 알데히드·옥사이드 이름은 입력 시트의 물질명(한 종만 의뢰하면 그 종의 이름)을 따라간다. 일차별 시트의 물질 줄 = 입력 시트 줄 - 1
           SAMPLING_LOG_SUBSTANCES.filter((sub) => Array.isArray(sub.options)).forEach((sub) => slotUpdates.push({ ref: `A${sub.row - 1}`, value: { formula: src('B', sub.row) } }));
@@ -8611,6 +8760,8 @@ export default function App() {
             ? {
                 rowHeights: { ...rowsAt(13, 57, 17.25), ...Object.fromEntries([...longNameRows].map(([r, lines]) => [r, lines * 14 + 6])) },
                 wrap: [...longNameRows.keys()].map((r) => `B${r}`),
+                // 시료번호는 길어서 칸에 다 보이게 글자를 줄인다
+                fontSizes: [{ range: 'D13:D57', sz: 9 }],
                 numberFormats: [
                   { range: 'Q6:Q10', code: '0.0000' }, { range: 'T6:T10', code: '0.0000' },
                   { range: 'I13:K57', code: '0.00' }, { range: 'L13:M57', code: '0.0' }, { range: 'N13:N57', code: '0.00' },
@@ -8630,6 +8781,9 @@ export default function App() {
           return target ? { path: `xl/${target.replace(/^\/?xl\//, '')}`, range: m[1] === inputSheet ? 'B58:N61' : 'A57:K58' } : null;
         }).filter(Boolean);
         await boxSheetRanges(zip, staffBoxes);
+        // 병합을 푼 의뢰 칸(암모니아·비소·알데히드)은 줄 사이에 선이 없다 → 가는 선으로 칸을 나눈다
+        const inputBox = staffBoxes.find((box) => box.range === 'B58:N61');
+        if (inputBox) await boxSheetRanges(zip, ['C14:C15', 'C17:C18', 'C32:C33', 'C35:C37'].map((range) => ({ path: inputBox.path, range })), { outer: 'thin' });
       } catch (error) { console.error('시료채취자 테두리 정리 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -10232,7 +10386,11 @@ export default function App() {
                 
                 <div className="flex flex-col md:flex-row gap-4 items-start">
                   <figure className="shrink-0 flex flex-col items-center gap-1 m-0 px-1 md:w-60">
-                    {!samplingPointsData.rect && renderSamplingPointDiagram(samplingPointsData)}
+                    {samplingPointsData.rect
+                      ? <img src={traverseSvgDataUrl({ kind: 'rect', n: samplingPointsData.perRadius, lines: samplingPointsData.lines, depth: parseFloat(formData.stackDiameter), side: samplingPointsData.side })} width="240" height="240" alt={`사각 굴뚝 측정점 ${samplingPointsData.total}점`} />
+                      : (formData.stackOrientation === 'horizontal' && !samplingPointsData.isCenterOnly
+                        ? <img src={traverseSvgDataUrl({ kind: 'horizontal', n: samplingPointsData.perRadius })} width="240" height="240" alt={`수평 굴뚝 측정점 ${samplingPointsData.perRadius * 4}점`} />
+                        : renderSamplingPointDiagram(samplingPointsData))}
                     <figcaption className="mt-1 text-[11px] text-slate-700 text-center leading-snug">
                       그림. 측정공 1개당 측정점 위치 (반경당 {samplingPointsData.perRadius}점)<br />
                       <span className="text-slate-500"><span className="text-[#0a84ff]">●</span> 정방향 측정점 1~{samplingPointsData.perRadius} <span className="text-[#d70015]">○</span> 역방향(반대편) 1′~{samplingPointsData.perRadius}′</span>
@@ -10692,6 +10850,19 @@ export default function App() {
                           </option>
                         ))}
                     </select>
+                    {/* 유량측정기록부에는 시료 채취 기록(5번) 묶음이 없으므로 샘플러 번호를 여기서 고른다 (엑셀 노즐산정의 샘플러번호·ΔH@·Yd) */}
+                    {isFlowSheet && (
+                      <select
+                        value={formData.samplerId}
+                        onChange={handleSamplerChange}
+                        className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                        title="샘플러 번호 선택"
+                        aria-label="샘플러 번호 선택"
+                      >
+                        <option value="">샘플러 번호</option>
+                        {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800">미터온도(T<sub>m</sub>)</label>
