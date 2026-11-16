@@ -147,6 +147,66 @@ const reorderWorkbookSheets = (wbXml, first) => {
     .replace(/\blocalSheetId="(\d+)"/g, (w, n) => `localSheetId="${newIndex.has(Number(n)) ? newIndex.get(Number(n)) : n}"`)
     .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
 };
+// 통합 문서에서 시트 하나를 완전히 지운다: 시트 목록·관계·파일, 그 시트에만 딸린 그림·메모 파일, 그 시트의 이름 정의.
+// 뒤 시트들의 번호(localSheetId)를 하나씩 당긴다. 바뀐 workbook.xml 글을 돌려준다 (없는 시트면 그대로)
+const removeWorkbookSheet = async (zip, wbXml, sheetName) => {
+  const tags = [...(/<sheets>([\s\S]*?)<\/sheets>/.exec(wbXml) || ['', ''])[1].matchAll(/<sheet\b[^>]*\/>/g)].map((m) => m[0]);
+  const index = tags.findIndex((tag) => (/\bname="([^"]*)"/.exec(tag) || [])[1] === sheetName);
+  if (index < 0) return wbXml;
+  const rid = (/\br:id="([^"]+)"/.exec(tags[index]) || [])[1];
+  const relsPath = 'xl/_rels/workbook.xml.rels';
+  let rels = await zip.file(relsPath).async('string');
+  const relTag = [...rels.matchAll(/<Relationship\b[^>]*\/>/g)].map((m) => m[0]).find((tag) => new RegExp(`\\bId="${rid}"`).test(tag));
+  const target = relTag ? (/\bTarget="([^"]+)"/.exec(relTag) || [])[1] : '';
+  const partPath = target ? `xl/${target.replace(/^\/?xl\//, '')}` : '';
+  if (relTag) { rels = rels.replace(relTag, ''); zip.file(relsPath, rels); }
+  const removed = [];
+  if (partPath) {
+    const partRelsPath = partPath.replace(/([^/]+)$/, '_rels/$1.rels');
+    const partRelsFile = zip.file(partRelsPath);
+    const children = [];
+    if (partRelsFile) {
+      const partRels = await partRelsFile.async('string');
+      const dir = partPath.replace(/[^/]+$/, '');
+      for (const m of partRels.matchAll(/\bTarget="([^"]+)"/g)) {
+        const stack = [];
+        for (const part of (dir + m[1]).split('/')) { if (part === '..') stack.pop(); else if (part && part !== '.') stack.push(part); }
+        children.push(stack.join('/'));
+      }
+      zip.remove(partRelsPath);
+    }
+    zip.remove(partPath); removed.push(partPath);
+    // 이 시트에만 딸린 파일(그림·메모·삽입 문서)은 다른 관계 파일이 가리키지 않을 때만 지운다
+    const otherRels = [];
+    for (const name of Object.keys(zip.files)) if (/\.rels$/.test(name)) otherRels.push(await zip.file(name).async('string'));
+    for (const child of children) {
+      const base = child.split('/').pop();
+      if (!zip.file(child) || otherRels.some((text) => text.includes(`/${base}"`) || text.includes(`"${base}"`))) continue;
+      const childRels = child.replace(/([^/]+)$/, '_rels/$1.rels');
+      if (zip.file(childRels)) zip.remove(childRels);
+      zip.remove(child); removed.push(child);
+    }
+    const ctFile = zip.file('[Content_Types].xml');
+    if (ctFile) {
+      let ct = await ctFile.async('string');
+      for (const path of removed) ct = ct.replace(new RegExp(`<Override\\b[^>]*PartName="/${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*/>`), '');
+      zip.file('[Content_Types].xml', ct);
+    }
+  }
+  const quoted = `'${sheetName}'!`; const bare = `${sheetName}!`;
+  return wbXml
+    .replace(tags[index], '')
+    .replace(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g, (whole, attrs, body) => {
+      const local = /\blocalSheetId="(\d+)"/.exec(attrs);
+      if (local && Number(local[1]) === index) return '';
+      // 지운 시트를 가리키는 이름은 함께 지운다 (다른 시트 이름의 뒷부분으로 들어 있는 경우는 빼고 본다)
+      const rest = body.split(/'[^']*'!/).join('');
+      if (body.includes(quoted) || rest.includes(bare)) return '';
+      if (local && Number(local[1]) > index) return `<definedName${attrs.replace(/\blocalSheetId="\d+"/, `localSheetId="${Number(local[1]) - 1}"`)}>${body}</definedName>`;
+      return whole;
+    })
+    .replace(/\bactiveTab="(\d+)"/g, () => 'activeTab="0"');
+};
 // 누출시험과 시료측정위치를 한 장에 담은 시트의 이름 (유량 기록부는 누출시험이 없다)
 const positionSheetNameOf = (layout) => (layout.leakAsPosition ? '시료측정위치 선정' : '누출시험, 시료측정위치');
 // 엑셀의 날짜 표시: 2026년 10월 29일
@@ -7478,6 +7538,8 @@ export default function App() {
       addUpdate(recordSheet, 'B14', sourceData.standardO2 ? toNumber(sourceData.standardO2) : null);
       // 사각 굴뚝: 단면적은 깊이 × 폭 (양식은 원형 π/4·D²)
       if (leakPositionCells) addUpdate(recordSheet, 'G12', { formula: `'${positionSheetNameOf(layout)}'!${leakPositionCells.area}` });
+      // 연도내경도 누출시험·시료측정위치 시트의 내경 칸을 직접 읽는다 (숨겨 두던 옛 '시료측정위치' 시트는 지운다)
+      if (leakPositionCells) addUpdate(recordSheet, 'G11', { formula: `'${positionSheetNameOf(layout)}'!C${leakPositionCells.dimRow}` });
       else if (sourceData.stackShape === 'rect' && Number.isFinite(calcStackArea(sourceData))) addUpdate(recordSheet, 'G12', { formula: `G11*${toNumber(sourceData.stackSide)}` });
       if (toNumber(sourceData.filterInitial) !== null) addUpdate(recordSheet, 'D14', toNumber(sourceData.filterInitial));
       if (toNumber(sourceData.filterFinal) !== null) addUpdate(recordSheet, 'F14', toNumber(sourceData.filterFinal));
@@ -7738,7 +7800,16 @@ export default function App() {
         // 이 기록부에 해당 없는 시트(유량의 누출시험)는 숨긴다
         // 시트 순서: 표지 → 누출시험(+시료측정위치) → 시료측정위치 → 연소가스자료 → 수분량 → …
         wbXml = reorderWorkbookSheets(wbXml, ['표지', '누출시험', '시료측정위치', '연소가스자료', '수분량']);
-        [...(layout.hideSheets || []), ...(leakFooterRow ? ['시료측정위치'] : [])].forEach((name) => {
+        // 옛 '시료측정위치' 시트: 측정위치 계산을 누출시험 시트로 옮겼으므로 지운다. 이 시트를 읽던 두 이름은 새 시트를 보게 한다
+        //  - D(연도내경) → 내경 칸, ShowPic(측정점 그림 고르기) → 반경 구분 수 칸(1~5로 맞춤)
+        if (leakFooterRow && leakPositionCells) {
+          const pos = `'${positionSheetNameOf(layout)}'!`;
+          wbXml = wbXml
+            .replace(/(<definedName\b[^>]*\bname="D"[^>]*>)[^<]*/, (w, open) => `${open}${pos}$C$${leakPositionCells.dimRow}`)
+            .replace(/(<definedName\b[^>]*\bname="ShowPic"[^>]*>)([^<]*)/, (w, open, body) => `${open}${body.replace(/'?시료측정위치'?!\$G\$38/, () => `MIN(5,MAX(1,${pos}$H$${leakPositionCells.dimRow}))`)}`);
+          wbXml = await removeWorkbookSheet(zip, wbXml, '시료측정위치');
+        }
+        [...(layout.hideSheets || []), ...(leakFooterRow && !leakPositionCells ? ['시료측정위치'] : [])].forEach((name) => {
           if (name === '누출시험' && layout.leakAsPosition) return;
           wbXml = wbXml.replace(new RegExp(`<sheet\\b([^>]*\\bname="${name}"[^>]*?)\\s*/>`), (full, attrs) => (
             /\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`
