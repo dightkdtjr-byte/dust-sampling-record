@@ -7355,8 +7355,12 @@ export default function App() {
         L(`F${dimRow}`, { formula: `IF(${Ac}<=0.25,1,IF(${S}=3,IF(${Ac}>20,MIN(20,${rectCount}),${rectCount}),IF(${S}=2,${nCell}*4,${nCell})))` }, 'B14');
         r += 2;
         // 측정점 표: 번호 · 중심 거리 · Sampling Location · Lnw 포함 · 최종 샘플링 위치 · 반대편
-        ['번호', '중심 거리 (cm)', 'Sampling Location (cm)', 'Lnw 포함', '최종 샘플링 위치', '반대편'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12')); r += 1;
-        const rowsCount = Math.max(5, sp && sp.rect ? Math.min(12, sp.perRadius) : 0);
+        // 사각 굴뚝은 측정공을 두 방향 모두 뚫는다: 가로 방향(왼쪽 변의 측정공에서 깊이 쪽으로)은 C~E열,
+        // 세로 방향(위쪽 변의 측정공에서 폭 쪽으로)은 F열에 최종 위치를 적는다 (원형일 때 F열은 반대편)
+        ['번호', '중심 거리 (cm)', 'Sampling Location (cm)', 'Lnw 포함'].forEach((text, i) => L(`${cols[i]}${r}`, text, 'A12'));
+        L(`E${r}`, { formula: `IF(${S}=3,"가로 방향 최종 위치","최종 샘플링 위치")` }, 'A12');
+        L(`F${r}`, { formula: `IF(${S}=3,"세로 방향 최종 위치","반대편")` }, 'A12'); r += 1;
+        const rowsCount = Math.max(5, sp && sp.rect ? Math.min(12, Math.max(sp.perRadius, sp.lines || 0)) : 0);
         for (let i = 1; i <= rowsCount; i++) {
           // 벽에서 가까운 점부터: 원형은 R - 계수×R, 사각은 (i - 0.5) × 깊이 ÷ n
           // 반경 구분 수(n)별 계수 표에서 i번째(벽에 가까운 순) 계수. 해당 없는 칸은 0
@@ -7364,17 +7368,19 @@ export default function App() {
           const c = table.map((list) => list[i - 1] ?? 0);
           const coeff = `IF(${nCell}=1,${c[0]},IF(${nCell}=2,${c[1]},IF(${nCell}=3,${c[2]},IF(${nCell}=4,${c[3]},${c[4]}))))`;
           const wall = `IF(${i}>${nCell},"",IF(${Ac}<=0.25,${Dc}*50,IF(${S}=3,(${i}-0.5)*${Dc}/${nCell}*100,(1-${coeff})*${Dc}*50)))`;
-          L(`A${r}`, { formula: `IF(${i}>${nCell},"","# ${i}")` }, 'B14');
+          L(`A${r}`, { formula: `IF(${i}>IF(${S}=3,MAX(${nCell},${mCell}),${nCell}),"","# ${i}")` }, 'B14');
           L(`B${r}`, { formula: `IF(C${r}="","",ABS(${Dc}*50-C${r}))` }, 'B14');
           L(`C${r}`, { formula: wall }, 'B14');
           L(`D${r}`, { formula: `IF(C${r}="","",C${r}+${Lnw})` }, 'B14');
           L(`E${r}`, { formula: `IF(D${r}="","",D${r}+${blueRef})` }, 'B14');
-          L(`F${r}`, { formula: `IF(OR(C${r}="",${S}=3,${Ac}<=0.25),"",${Dc}*100-C${r}+${Lnw}+${blueRef})` }, 'B14');
+          L(`F${r}`, { formula: `IF(${S}=3,IF(OR(${i}>${mCell},${Ac}<=0.25),"",(${i}-0.5)*N(${Wc})/${mCell}*100+${Lnw}+${blueRef}),IF(OR(C${r}="",${Ac}<=0.25),"",${Dc}*100-C${r}+${Lnw}+${blueRef}))` }, 'B14');
           r += 1;
         }
         // 사각 굴뚝: 측정공(다른 변 방향)
         r += 1;
-        L(`A${r}`, { formula: `IF(${S}=3,"측정공: 다른 변 방향으로 "&${mCell}&"개, 간격 "&ROUND(${Wc}/${mCell}*100,1)&" cm (첫 측정공은 벽에서 "&ROUND(${Wc}/${mCell}*50,1)&" cm)","")` }, 'A5');
+        L(`A${r}`, { formula: `IF(${S}=3,"가로 방향 측정공: 폭(W) 쪽 변에 "&${mCell}&"개, 간격 "&ROUND(${Wc}/${mCell}*100,1)&" cm (첫 측정공은 모서리에서 "&ROUND(${Wc}/${mCell}*50,1)&" cm)","")` }, 'A5');
+        blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
+        L(`A${r}`, { formula: `IF(${S}=3,"세로 방향 측정공: 깊이(D) 쪽 변에 "&${nCell}&"개, 간격 "&ROUND(${Dc}/${nCell}*100,1)&" cm (첫 측정공은 모서리에서 "&ROUND(${Dc}/${nCell}*50,1)&" cm)","")` }, 'A5');
         blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
         leakPositionCells = { area: `E${dimRow}`, dimRow, selRow, lastRow: r, methodFirst, methodLast };
         leakFooterRow = r + 1;
