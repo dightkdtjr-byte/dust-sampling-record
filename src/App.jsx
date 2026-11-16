@@ -6886,10 +6886,13 @@ export default function App() {
       const isNode = cell.ownerDocument.createElementNS(ns, 'is');
       value.runs.forEach((run) => {
         const r = cell.ownerDocument.createElementNS(ns, 'r');
-        if (run.sub) {
+        if (run.sub || run.sup) {
           const rPr = cell.ownerDocument.createElementNS(ns, 'rPr');
+          // 굵은 제목 안의 첨자는 굵게 (첨자 글자는 칸의 글꼴을 물려받지 않는다)
+          if (run.bold) rPr.appendChild(cell.ownerDocument.createElementNS(ns, 'b'));
+          if (run.sz) { const sz = cell.ownerDocument.createElementNS(ns, 'sz'); sz.setAttribute('val', String(run.sz)); rPr.appendChild(sz); }
           const va = cell.ownerDocument.createElementNS(ns, 'vertAlign');
-          va.setAttribute('val', 'subscript');
+          va.setAttribute('val', run.sup ? 'superscript' : 'subscript');
           rPr.appendChild(va); r.appendChild(rPr);
         }
         const t = cell.ownerDocument.createElementNS(ns, 't');
@@ -7748,6 +7751,8 @@ export default function App() {
       const o2Cells = layout.o2 || O2_CALC_CELLS_A;
       addUpdate('계산식', o2Cells.dcCell, { formula: 'IF(Os="",Ca,IF(Oa="","",Ca*((21-Os)/(21-Oa))))' });
       o2Cells.qCells.forEach((ref) => addUpdate('계산식', ref, { formula: 'IF(Os="",Qa,IF(Oa="","",Qa/((21-Os)/(21-Oa))))' }));
+      // 묶음 제목의 단위 Sm3/hr: 3을 위첨자로 (바로 위 '배출가스 유량 계산 (Sm³/hr)'과 같게)
+      (o2Cells.flowBlocks || []).forEach(([titleRow]) => addUpdate('계산식', `A${titleRow}`, { runs: [{ t: ' 표준산소 환산 배출가스 유량 (Sm' }, { t: '3', sup: true, bold: true }, { t: '/hr)' }] }));
       if (sheetPathMap.has('먼지측정결과보고서')) {
         // 결과보고서: 표준산소가 없으면 '보정 제외'로 적고 표준산소농도는 '-' (빈 칸을 가리키면 엑셀은 0으로 보여 준다)
         addUpdate('먼지측정결과보고서', 'C10', { formula: 'IF(Oa="","-",Oa)' });
