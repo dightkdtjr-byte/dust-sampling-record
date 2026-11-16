@@ -9859,49 +9859,6 @@ export default function App() {
                   </table>
                 </div>
               </details>
-              <div className="md:col-span-4 border border-slate-200 rounded-lg p-3 bg-white">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="text-xs font-bold text-slate-800">시료채취자</span>
-                  <span className="text-[10px] text-slate-500">명단은 프로그램에 저장됩니다. 일차마다 참여한 사람을 눌러 고르세요 (일차당 {SAMPLING_LOG_STAFF_MAX}명까지, 일차별 시트에는 앞의 5명).</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <input type="text" name="staff-rank" value={staffDraft.rank} onChange={(e) => setStaffDraft((prev) => ({ ...prev, rank: e.target.value }))} className={`${logInput} w-32`} placeholder="직급 (예: 전문위원)" />
-                  <input type="text" name="staff-name" value={staffDraft.name} onChange={(e) => setStaffDraft((prev) => ({ ...prev, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStaffMember(); } }} className={`${logInput} w-32`} placeholder="이름" />
-                  <button type="button" onClick={addStaffMember} className="px-3 py-1.5 text-[11px] font-bold bg-orange-600 text-white rounded border border-orange-700">명단에 추가</button>
-                  {staffList.length === 0 && <span className="text-[11px] text-slate-400">등록된 사람이 없습니다.</span>}
-                  {staffList.map((member) => (
-                    <span key={`staff-${member.name}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 bg-slate-50 text-[11px] text-slate-700">
-                      {member.rank && <span className="text-slate-500">{member.rank}</span>}
-                      <span className="font-bold">{member.name}</span>
-                      <button type="button" onClick={() => saveStaffList(staffList.filter((item) => item.name !== member.name))} className="text-red-500 font-bold" title="명단에서 삭제" aria-label={`${member.name} 명단에서 삭제`}>×</button>
-                    </span>
-                  ))}
-                </div>
-                <div className="space-y-1.5">
-                  {log.days.map((day, dayIdx) => {
-                    const picked = Array.isArray(log.staffByDay?.[dayIdx]) ? log.staffByDay[dayIdx] : [];
-                    if (dayIdx > 0 && !day.date && picked.length === 0) return null;
-                    // 명단에서 지운 사람도 이 기록부에 골라 둔 것은 보여 준다
-                    const members = [...staffList, ...picked.filter((item) => !staffList.some((m) => m.name === item.name))];
-                    return (
-                      <div key={`staff-day-${dayIdx}`} className="flex flex-wrap items-center gap-1.5">
-                        <span className="w-28 text-[11px] font-bold text-slate-700">{dayIdx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</span>
-                        {members.length === 0 && <span className="text-[11px] text-slate-400">위에서 명단을 먼저 추가하세요.</span>}
-                        {members.map((member) => {
-                          const on = picked.some((item) => item.name === member.name);
-                          return (
-                            <button key={`staff-day-${dayIdx}-${member.name}`} type="button" onClick={() => toggleSamplingLogStaff(dayIdx, member)} aria-pressed={on}
-                              className={`px-2 py-1 rounded-full border text-[11px] font-bold ${on ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
-                              {member.rank ? `${member.rank} ` : ''}{member.name}
-                            </button>
-                          );
-                        })}
-                        <span className="text-[10px] text-slate-400">{picked.length}명</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -10025,6 +9982,53 @@ export default function App() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
               <span className="ds-sec-num">3</span>
+              시료채취자
+            </h2>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-[10px] text-slate-500">명단은 프로그램에 저장됩니다. 일차마다 참여한 사람을 눌러 고르세요 (일차당 {SAMPLING_LOG_STAFF_MAX}명까지, 일차별 시트에는 앞의 5명).</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <input type="text" name="staff-rank" value={staffDraft.rank} onChange={(e) => setStaffDraft((prev) => ({ ...prev, rank: e.target.value }))} className={`${logInput} w-32`} placeholder="직급 (예: 전문위원)" />
+                  <input type="text" name="staff-name" value={staffDraft.name} onChange={(e) => setStaffDraft((prev) => ({ ...prev, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStaffMember(); } }} className={`${logInput} w-32`} placeholder="이름" />
+                  <button type="button" onClick={addStaffMember} className="px-3 py-1.5 text-[11px] font-bold bg-orange-600 text-white rounded border border-orange-700">명단에 추가</button>
+                  {staffList.length === 0 && <span className="text-[11px] text-slate-400">등록된 사람이 없습니다.</span>}
+                  {staffList.map((member) => (
+                    <span key={`staff-${member.name}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 bg-slate-50 text-[11px] text-slate-700">
+                      {member.rank && <span className="text-slate-500">{member.rank}</span>}
+                      <span className="font-bold">{member.name}</span>
+                      <button type="button" onClick={() => saveStaffList(staffList.filter((item) => item.name !== member.name))} className="text-red-500 font-bold" title="명단에서 삭제" aria-label={`${member.name} 명단에서 삭제`}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {log.days.map((day, dayIdx) => {
+                    const picked = Array.isArray(log.staffByDay?.[dayIdx]) ? log.staffByDay[dayIdx] : [];
+                    if (dayIdx > 0 && !day.date && picked.length === 0) return null;
+                    // 명단에서 지운 사람도 이 기록부에 골라 둔 것은 보여 준다
+                    const members = [...staffList, ...picked.filter((item) => !staffList.some((m) => m.name === item.name))];
+                    return (
+                      <div key={`staff-day-${dayIdx}`} className="flex flex-wrap items-center gap-1.5">
+                        <span className="w-28 text-[11px] font-bold text-slate-700">{dayIdx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</span>
+                        {members.length === 0 && <span className="text-[11px] text-slate-400">위에서 명단을 먼저 추가하세요.</span>}
+                        {members.map((member) => {
+                          const on = picked.some((item) => item.name === member.name);
+                          return (
+                            <button key={`staff-day-${dayIdx}-${member.name}`} type="button" onClick={() => toggleSamplingLogStaff(dayIdx, member)} aria-pressed={on}
+                              className={`px-2 py-1 rounded-full border text-[11px] font-bold ${on ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                              {member.rank ? `${member.rank} ` : ''}{member.name}
+                            </button>
+                          );
+                        })}
+                        <span className="text-[10px] text-slate-400">{picked.length}명</span>
+                      </div>
+                    );
+                  })}
+                </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">4</span>
               물질별 채취 기록 <span className="text-xs font-normal text-slate-500">(의뢰 표시한 물질만 추출)</span>
               <span className="ml-auto flex items-center gap-1">
                 <button type="button" onClick={() => setSamplingLogRequestedOnly(false)} className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${!samplingLogRequestedOnly ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>전체</button>
