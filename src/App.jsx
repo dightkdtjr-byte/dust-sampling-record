@@ -265,6 +265,42 @@ const svgToPngBytes = (svg, size = 798) => new Promise((resolve, reject) => {
   img.onerror = () => reject(new Error('그림을 읽지 못했습니다.'));
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 });
+// 시트 이름 바꾸기: 통합 문서의 시트 목록, 이름 정의, 모든 시트의 수식에서 그 시트를 가리키는 곳을 함께 바꾼다.
+// pairs: [[옛 이름, 새 이름], …]. 새 이름은 따옴표가 필요 없는 이름(한글·영문·숫자)만 쓴다. 내보내기의 맨 마지막에 한다
+const renameWorkbookSheets = async (zip, pairs) => {
+  const wbFile = zip.file('xl/workbook.xml');
+  if (!wbFile) return;
+  let wb = await wbFile.async('string');
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const xmlText = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const active = pairs.filter(([from, to]) => from !== to && new RegExp(`<sheet\\b[^>]*\\bname="${esc(xmlText(from))}"`).test(wb) && !new RegExp(`<sheet\\b[^>]*\\bname="${esc(xmlText(to))}"`).test(wb));
+  if (active.length === 0) return;
+  const fix = (text) => {
+    let out = text;
+    for (const [from, to] of active) {
+      // 따옴표로 감싼 참조('이름'!)와, 따옴표 없이 쓴 참조(이름!)를 모두 바꾼다. 다른 시트 이름의 뒷부분인 경우는 건드리지 않는다
+      out = out.split(`'${xmlText(from)}'!`).join(`${to}!`).split(`&apos;${xmlText(from)}&apos;!`).join(`${to}!`);
+      if (/^[A-Za-z0-9_가-힣]+$/.test(from)) out = out.replace(new RegExp(`(^|[^A-Za-z0-9_가-힣'.])${esc(from)}!`, 'g'), (w, lead) => `${lead}${to}!`);
+    }
+    return out;
+  };
+  for (const [from, to] of active) wb = wb.replace(new RegExp(`(<sheet\\b[^>]*\\bname=")${esc(xmlText(from))}(")`), (w, a, b) => `${a}${to}${b}`);
+  wb = wb.replace(/(<definedName\b[^>]*>)([^<]*)(<\/definedName>)/g, (w, open, body, close) => `${open}${fix(body)}${close}`);
+  zip.file('xl/workbook.xml', wb);
+  for (const name of Object.keys(zip.files)) {
+    if (!/^xl\/(?:worksheets|chartsheets|charts|drawings)\/[^/]+\.xml$/.test(name)) continue;
+    const text = await zip.file(name).async('string');
+    const next = /^xl\/worksheets\//.test(name)
+      ? text.replace(/(<f\b[^>]*>)([^<]*)(<\/f>)/g, (w, open, body, close) => `${open}${fix(body)}${close}`).replace(/(<formula1>|<formula2>|<formula>)([^<]*)/g, (w, open, body) => `${open}${fix(body)}`)
+      : fix(text);
+    if (next !== text) zip.file(name, next);
+  }
+};
+// 내보낸 기록부의 시트 이름 정리 (양식의 이름 → 짧고 내용에 맞는 이름)
+//  - '기록지(수분량자동측정기)': 수분량 측정 방법과 상관없는 기록지이다 → '기록지'
+//  - '먼지측정결과보고서': 수은·PAHs·유량 기록부에서도 이 이름이었다 → '결과보고서'
+//  - '연소가스자료' → '연소가스', (유량) '시료측정위치 선정' → '시료측정위치'
+const EXPORT_SHEET_RENAMES = [['기록지(수분량자동측정기)', '기록지'], ['먼지측정결과보고서', '결과보고서'], ['연소가스자료', '연소가스'], ['시료측정위치 선정', '시료측정위치']];
 // 누출시험과 시료측정위치를 한 장에 담은 시트의 이름 (유량 기록부는 누출시험이 없다)
 const positionSheetNameOf = (layout) => (layout.leakAsPosition ? '시료측정위치 선정' : '누출시험, 시료측정위치');
 // 엑셀의 날짜 표시: 2026년 10월 29일
@@ -7638,6 +7674,8 @@ export default function App() {
       // 적용한 K factor: 프로그램에서 실제로 쓴 값을 적는다 (노즐산정 표의 K는 노즐별 계산값, 여기는 현장에서 적용한 값).
       // 프로그램에 K가 없으면 양식의 수식(노즐산정 표에서 사용노즐로 찾기)을 그대로 둔다
       if (toNumber(sourceData.kFactor) !== null) addUpdate(recordSheet, 'C12', toNumber(sourceData.kFactor));
+      // 유량 기록부: 배출가스 정압은 측정점 표의 평균 정압(노즐산정 I15, mmH2O)을 쓴다 → 아래 칸(mmHg)은 이것을 13.6으로 나눈 값
+      if (exportSheetId === 'flow') addUpdate(recordSheet, 'J14', { formula: '노즐산정!I15' });
       // 사용한 흡인노즐 직경(cm): 프로그램에 적힌 직경(mm)을 적는다. 양식은 노즐번호로 양식의 노즐표에서 찾는데,
       // 사용자가 노즐 직경을 고쳐 쓰면 양식 표와 달라 등속흡인계수가 프로그램과 달라졌다. 직경이 없으면 양식의 수식을 둔다
       if (toNumber(sourceData.nozzleDiameter) !== null && toNumber(sourceData.nozzleDiameter) > 0) addUpdate(recordSheet, 'J11', Math.round(toNumber(sourceData.nozzleDiameter) * 1000) / 10000);
@@ -8063,6 +8101,8 @@ export default function App() {
         const fitted = await fitPictureInBox(zip, sheetPathMap.get(recordSheet), { box: 'E5:G10', pad: 2, fill: true });
         if (fitted && fitted.count && sheetPathMap.get('지점 사진')) await setPictureSourceAspect(zip, sheetPathMap.get('지점 사진'), { aspect: fitted.aspect });
       } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
+      // 시트 이름 정리: 모든 처리가 끝난 뒤 맨 마지막에 (앞의 처리는 양식의 시트 이름으로 찾는다)
+      try { await renameWorkbookSheets(zip, EXPORT_SHEET_RENAMES); } catch (error) { console.error('시트 이름 정리 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
