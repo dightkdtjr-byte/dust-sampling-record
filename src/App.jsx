@@ -10454,11 +10454,11 @@ export default function App() {
             <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4 bg-emerald-50 p-4 rounded-lg border border-emerald-200">
               <div>
                 <label className="block text-xs font-bold text-emerald-800 mb-1">총 측정 깊이 (m)</label>
-                <input type="number" step="0.0001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="끝벽까지의 총 길이" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
+                <input type="number" step="0.0001" name="totalStackDepth" value={formData.totalStackDepth} onChange={handleChange} placeholder="전체길이 (끝벽까지)"className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-emerald-800 mb-1">플랜지 길이 (m)</label>
-                <input type="number" step="0.0001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽 돌출부" className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
+                <input type="number" step="0.0001" name="flangeLength" value={formData.flangeLength} onChange={handleChange} placeholder="외벽+플랜지 (설치 포함)"className="w-full p-2 border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-500 bg-white outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-emerald-900 mb-1">{formData.stackShape === 'rect' ? '굴뚝 깊이 (삽입 방향 안치수, m)' : '순수 굴뚝 내경 (D, m)'}</label>
@@ -11175,8 +11175,8 @@ export default function App() {
                       <th className="pb-2 pt-2 text-xs font-bold">정압<br/>(mmH2O)</th>
                       <th className="pb-2 pt-2 text-xs font-bold">동압<br/>(mmH2O)</th>
                       <th className="pb-2 pt-2 text-xs font-bold">온도(℃)</th>
-                      {isFlowSheet && <th className="pb-2 pt-2 text-xs font-bold">유속<br/>(m/s)</th>}
-                      {isFlowSheet && <th className="pb-2 pt-2 text-xs font-bold">유량<br/>(㎥/min, 실측)</th>}
+                      <th className="pb-2 pt-2 text-xs font-bold">유속<br/>(m/s)</th>
+                      <th className="pb-2 pt-2 text-xs font-bold">유량<br/>(㎥/min, 실측)</th>
                       <th className="pb-2 pt-2 rounded-tr-lg"></th>
                     </tr>
                   </thead>
@@ -11188,8 +11188,8 @@ export default function App() {
                         <td className="py-1"><input type="number" step="0.1" value={point.sp !== undefined ? point.sp : ''} onChange={(e) => handlePointChange(idx, 'sp', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
                         <td className="py-1"><input type="number" step="0.1" value={point.dp} onChange={(e) => handlePointChange(idx, 'dp', e.target.value)} className="w-16 p-1 border border-emerald-300 bg-emerald-50 rounded text-center font-black text-emerald-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
                         <td className="py-1"><input type="number" step="0.1" value={point.ts} onChange={(e) => handlePointChange(idx, 'ts', e.target.value)} className="w-16 p-1 border border-slate-300 rounded text-center text-sm outline-none focus:ring-2 focus:ring-emerald-500" /></td>
-                        {isFlowSheet && <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointGasVelocity(point))}</td>}
-                        {isFlowSheet && <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointFlowRate(point))}</td>}
+                        <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointGasVelocity(point))}</td>
+                        <td className="py-1 font-bold text-slate-900">{fmtOrDash(getRawPointFlowRate(point))}</td>
                         <td className="py-1">
                           <button type="button" onClick={() => removePoint(idx)} className="text-red-500 hover:text-red-700 text-xs font-bold p-1 transition-colors">삭제</button>
                         </td>
@@ -11202,8 +11202,8 @@ export default function App() {
                         <td className="py-1.5">{calcAvgSp() !== 0 ? calcAvgSp().toFixed(2) : '-'}</td>
                         <td className="py-1.5 text-emerald-700">{calcAvgDp() !== 0 ? calcAvgDp().toFixed(1) : '-'}</td>
                         <td className="py-1.5">{calcAvgTs() !== 0 ? calcAvgTs().toFixed(2) : '-'}</td>
-                        {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 ? getRawGasVelocity().toFixed(2) : '-'}</td>}
-                        {isFlowSheet && <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 && Number.isFinite(getStackAreaM2()) ? (getRawGasVelocity() * getStackAreaM2() * 60).toFixed(2) : '-'}</td>}
+                        <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 ? getRawGasVelocity().toFixed(2) : '-'}</td>
+                        <td className="py-1.5 text-emerald-700">{getRawGasVelocity() > 0 && Number.isFinite(getStackAreaM2()) ? (getRawGasVelocity() * getStackAreaM2() * 60).toFixed(2) : '-'}</td>
                         <td className="py-1.5"></td>
                     </tr>
                   </tbody>
