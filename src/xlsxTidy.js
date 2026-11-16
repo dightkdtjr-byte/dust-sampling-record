@@ -1641,7 +1641,10 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       let footerText = '';
       if (furniture && furniture.pageFooter && rule?.furniture !== false && measured[i].range) {
         const { to } = measured[i].range;
-        const { texts } = analyzeTables(xml, styles, sharedStrings);
+        const { texts, kinds: footKinds } = analyzeTables(xml, styles, sharedStrings);
+        // 양식번호 줄 바로 윗줄이 값이 하나도 없는 빈 줄인가 (표의 마지막 줄이 아니다)
+        let aboveBlank = true;
+        for (const [key, kind] of footKinds) if (Number(key.split(',')[0]) === to.row - 1 && kind && kind !== 'empty') { aboveBlank = false; break; }
         for (const [key, text] of texts) if (Number(key.split(',')[0]) === to.row && String(text || '').trim()) { footerText = String(text).trim(); break; }
         if (footerText && (!furniture.footerPattern || furniture.footerPattern.test(footerText))) {
           xml = ensureRowHidden(xml, to.row);
@@ -1649,7 +1652,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
           xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
             const ref = parseRef(attr(attrs, 'r') || '');
             // 묶음 구분선을 쓰는 시트(계산식)에서만: 다른 시트는 그 줄이 표의 마지막 줄일 수 있다
-            if (!ref || ref.row !== to.row - 1 || !(rule?.furniture && rule.furniture.sectionRule)) return whole;
+            if (!ref || ref.row !== to.row - 1 || !(aboveBlank || (rule?.furniture && rule.furniture.sectionRule))) return whole;
             const s0 = Number(attr(attrs, 's') || 0);
             const next = styles.withoutBorderSides(s0, ['bottom']);
             return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
@@ -1772,6 +1775,33 @@ export function equalizeColumns(xml, styles, sharedStrings, cols = null, { toler
   out.sort((a, b) => a.min - b.min);
   const colsXml = `<cols>${out.map((x) => x.tag).join('')}</cols>`;
   return body ? xml.replace(/<cols>[\s\S]*?<\/cols>/, () => colsXml) : xml.replace(/<sheetData\b/, (w) => `${colsXml}${w}`);
+}
+
+// ── 표 상자 테두리: 범위(예: 'A57:K58') 안 모든 칸에 가는 선, 범위 바깥 둘레는 outer 굵기 ──
+// boxes: [{ path: 시트 파일 경로, range }]. 한 파일의 서식(styles.xml)을 한 번만 읽고 쓴다
+export async function boxSheetRanges(zip, boxes, { outer = 'medium' } = {}) {
+  const stylesFile = zip.file('xl/styles.xml');
+  if (!stylesFile) return 0;
+  const styles = new StyleBook(await stylesFile.async('string'));
+  let count = 0;
+  for (const { path, range } of boxes) {
+    const file = zip.file(path); const r = parseRange(range || '');
+    if (!file || !r) continue;
+    const xml = await file.async('string');
+    zip.file(path, xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+      const ref = parseRef(attr(attrs, 'r') || '');
+      if (!ref || ref.row < r.from.row || ref.row > r.to.row || ref.col < r.from.col || ref.col > r.to.col) return whole;
+      const s0 = Number(attr(attrs, 's') || 0);
+      const next = styles.withBorderStyles(s0, {
+        left: ref.col === r.from.col ? outer : 'thin', right: ref.col === r.to.col ? outer : 'thin',
+        top: ref.row === r.from.row ? outer : 'thin', bottom: ref.row === r.to.row ? outer : 'thin',
+      });
+      count += 1;
+      return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+    }));
+  }
+  zip.file('xl/styles.xml', styles.serialize());
+  return count;
 }
 
 // 행 범위 [시작, 끝]을 같은 높이로

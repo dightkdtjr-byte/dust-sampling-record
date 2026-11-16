@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -510,8 +510,18 @@ const createEmptySamplingLog = () => ({
   // Yd 칸을 직접 고쳤는지: true면 프리셋을 고쳐도 그대로 둔다
   particleSamplerYdManual: false, gasSamplerYdManual: false,
   days: Array.from({ length: 4 }, () => ({ date: '', weather: '', temp: '', humidity: '', pressure: '', windDir: '', windSpeed: '' })),
+  // 일차별 시료채취자: [{ name, rank }] (양식 한 줄에 9명까지)
+  staffByDay: Array.from({ length: 4 }, () => []),
   rows: Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => [String(item.row), createEmptySamplingLogRow(item)])),
 });
+// 시료채취자 명단(직급·이름) 정리: 이름이 있는 사람만, 같은 이름은 한 번만
+const SAMPLING_LOG_STAFF_MAX = 9;
+const sanitizeStaffList = (value, max = 200) => {
+  const seen = new Set();
+  return (Array.isArray(value) ? value : []).map((item) => ({ name: String(item?.name ?? '').trim(), rank: String(item?.rank ?? '').trim() }))
+    .filter((item) => item.name && !seen.has(item.name) && seen.add(item.name)).slice(0, max);
+};
+const SAMPLING_LOG_STAFF_STORAGE_KEY = 'dust-sampling.staff.v1';
 
 const sanitizeSamplingLog = (value) => {
   const base = createEmptySamplingLog();
@@ -527,6 +537,7 @@ const sanitizeSamplingLog = (value) => {
     if (!src || typeof src !== 'object') return day;
     return Object.fromEntries(Object.keys(day).map((key) => [key, text(src[key])]));
   });
+  next.staffByDay = base.staffByDay.map((list, idx) => sanitizeStaffList(Array.isArray(value.staffByDay) ? value.staffByDay[idx] : [], SAMPLING_LOG_STAFF_MAX));
   next.rows = Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => {
     const key = String(item.row);
     const src = value.rows && typeof value.rows === 'object' ? value.rows[key] : null;
@@ -7595,6 +7606,8 @@ export default function App() {
         try {
           if (!String(sourceData.standardO2 ?? '').trim()) {
             await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks, { titleIncludes: O2_FLOW_TITLE });
+            // 표준산소 환산 먼지농도 묶음도 함께 숨긴다 (제목 줄이 맞을 때만: 먼지·수은·PAHs 104행, 유량 112행)
+            await hideRowBlocks(zip, calcPath, [[104, 111], [112, 119]], { titleIncludes: '표준산소 환산 먼지농도' });
           } else if (o2Layout.footer) {
             const [blockFrom, blockTo] = o2Layout.flowBlocks[0];
             const footerText = await readSheetCellText(zip, calcPath, `A${o2Layout.footer.from}`);
@@ -7819,6 +7832,29 @@ export default function App() {
 
   // ===== 통합시료채취기록부 =====
   const updateSamplingLogField = (key, value) => setSamplingLogData(prev => ({ ...prev, [key]: value }));
+  // 시료채취자 명단: 프로그램에 한 번 등록해 두고 기록부마다 일차별로 고른다
+  const [staffList, setStaffList] = useState(() => {
+    try { return sanitizeStaffList(JSON.parse(localStorage.getItem(SAMPLING_LOG_STAFF_STORAGE_KEY) || '[]')); } catch (error) { console.error(error); return []; }
+  });
+  const [staffDraft, setStaffDraft] = useState({ name: '', rank: '' });
+  const saveStaffList = (next) => {
+    const clean = sanitizeStaffList(next);
+    setStaffList(clean);
+    try { localStorage.setItem(SAMPLING_LOG_STAFF_STORAGE_KEY, JSON.stringify(clean)); } catch (error) { console.error(error); }
+  };
+  const addStaffMember = () => {
+    const name = staffDraft.name.trim();
+    if (!name) return;
+    saveStaffList([...staffList.filter((item) => item.name !== name), { name, rank: staffDraft.rank.trim() }]);
+    setStaffDraft({ name: '', rank: staffDraft.rank });
+  };
+  const toggleSamplingLogStaff = (dayIdx, member) => setSamplingLogData((prev) => {
+    const lists = Array.from({ length: 4 }, (_, i) => (Array.isArray(prev.staffByDay?.[i]) ? prev.staffByDay[i] : []));
+    const has = lists[dayIdx].some((item) => item.name === member.name);
+    if (!has && lists[dayIdx].length >= SAMPLING_LOG_STAFF_MAX) return prev;
+    lists[dayIdx] = has ? lists[dayIdx].filter((item) => item.name !== member.name) : [...lists[dayIdx], { name: member.name, rank: member.rank }];
+    return { ...prev, staffByDay: lists };
+  });
 
   // ── 샘플러 프리셋의 Yd·ΔH@를 고치면, 그 샘플러를 골라 둔 열린 기록부와 통합시료채취기록부 칸도 따라 바꾼다 ──
   // (다른 창에서 고친 프리셋도 storage 동기화로 들어와 같은 규칙이 적용됨. 저장된 기록은 그대로)
@@ -8266,6 +8302,20 @@ export default function App() {
         if (r >= 14) add(`V${r}`, { formula: `IF(K${r}="","",K${r}*(273/(273+$L${r}))*($I$6+N($N${r}))/760)` });
       });
 
+      // 시료채취자: 1일차는 58·59행(직급·이름), 2일차는 60·61행. 3·4일차는 양식에 자리가 없어 인쇄 범위 밖 64~67행에 둔다
+      // (일차별 시트가 이 칸들을 읽는다). 고르지 않은 자리는 비운다 → 양식에 적혀 있던 예시 이름이 남지 않는다
+      const STAFF_ROWS = [58, 60, 64, 66];
+      const STAFF_COLS = ['E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N'];
+      STAFF_ROWS.forEach((rankRow, dayIdx) => {
+        const list = Array.isArray(log.staffByDay?.[dayIdx]) ? log.staffByDay[dayIdx] : [];
+        STAFF_COLS.forEach((col, i) => {
+          add(`${col}${rankRow}`, textOrNull(list[i]?.rank));
+          add(`${col}${rankRow + 1}`, textOrNull(list[i]?.name));
+        });
+      });
+      add('C58', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
+      add('B63', '3·4일차 시료채취자 (일차별 시트용)'); add('D64', '직급'); add('D65', '이름'); add('D66', '직급'); add('D67', '이름');
+      add('C64', { formula: 'IF(C8="","",C8)' }); add('C66', { formula: 'IF(C9="","",C9)' });
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
       zip.file(inputPath, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }));
@@ -8295,6 +8345,26 @@ export default function App() {
             new RegExp(`(<c r="([B-K])\\d+"[^>]*><f>IF\\(\\$J\\$7='${inputRef}'!\\$?F(\\d+),'${inputRef}'!)(?:\\$?[A-Z]{1,3}\\$?\\d+|#REF!)(,"")`, 'g'),
             (full, head, col, srcRow, tail) => `${head}${DAY_SHEET_INPUT_COLUMNS[col]}${srcRow}${tail}`,
           );
+        // 일차별 시트의 시료채취자 줄(57·58행): 직급 4칸·이름 5칸으로 어긋나 있고 이름 두 칸은 글자로 박혀 있었다
+        // → 다섯 자리(D·F·H·J·K) 모두 입력 시트의 그 일차 직급·이름을 읽게 한다
+        const withDayStaff = (xml, dayIdx) => {
+          const rankRow = STAFF_ROWS[dayIdx]; const nameRow = rankRow + 1;
+          const src = (col, row) => `'${inputSheet}'!${col}${row}`;
+          const blankIf = (ref) => `IF(${ref}="","",${ref})`;
+          const slotUpdates = [];
+          [['D', 'E'], ['F', 'F'], ['H', 'G']].forEach(([dayCol, inCol]) => {
+            const signCol = String.fromCharCode(dayCol.charCodeAt(0) + 1);
+            slotUpdates.push({ ref: `${dayCol}57`, value: { formula: blankIf(src(inCol, rankRow)) } });
+            // 이름과 (인)을 한 칸으로 합친다 (직급 칸과 같은 폭, 가운데에 '이름 (인)')
+            slotUpdates.push({ ref: `${dayCol}58`, value: { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` }, styleFrom: 'H58' });
+            slotUpdates.push({ ref: `${signCol}58`, value: '', styleFrom: 'H58' });
+          });
+          [['J', 'H'], ['K', 'I']].forEach(([dayCol, inCol]) => {
+            slotUpdates.push({ ref: `${dayCol}57`, value: { formula: blankIf(src(inCol, rankRow)) }, styleFrom: 'H57' });
+            slotUpdates.push({ ref: `${dayCol}58`, value: { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` }, styleFrom: 'H58' });
+          });
+          return patchWorksheetXml(xml, slotUpdates, { removeMerges: ['J57:K57'], addMerges: ['D58:E58', 'F58:G58', 'H58:I58'] });
+        };
         const dayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date)
           || SAMPLING_LOG_SUBSTANCES.some((sub) => {
             const row = log.rows[String(sub.row)];
@@ -8302,9 +8372,9 @@ export default function App() {
           });
         if (firstDayXml) {
           // 1·2일차: 기존 시트 파일도 1일차 기반으로 다시 만든다 (양식의 깨진 참조 수정 포함)
-          zip.file(firstDayPath, buildDaySheetXml(0));
+          zip.file(firstDayPath, withDayStaff(buildDaySheetXml(0), 0));
           const secondDayPath = sheetPathMap.get(templateDaySheets[1]);
-          if (secondDayPath) zip.file(secondDayPath, buildDaySheetXml(1));
+          if (secondDayPath) zip.file(secondDayPath, withDayStaff(buildDaySheetXml(1), 1));
           let relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('string');
           const ctFile = zip.file('[Content_Types].xml');
           let ctXml = ctFile ? await ctFile.async('string') : '';
@@ -8315,7 +8385,7 @@ export default function App() {
             const existingFiles = Object.keys(zip.files).filter((f) => /^xl\/worksheets\/sheet\d+\.xml$/.test(f));
             const nextNum = Math.max(0, ...existingFiles.map((f) => parseInt(f.match(/(\d+)\.xml$/)[1], 10))) + 1;
             const partPath = `xl/worksheets/sheet${nextNum}.xml`;
-            zip.file(partPath, buildDaySheetXml(dayIdx));
+            zip.file(partPath, withDayStaff(buildDaySheetXml(dayIdx), dayIdx));
             if (firstDayRels) zip.file(`xl/worksheets/_rels/sheet${nextNum}.xml.rels`, firstDayRels);
             const relIds = Array.from(relsXml.matchAll(/Id="rId(\d+)"/g)).map((m) => parseInt(m[1], 10));
             const relId = `rId${Math.max(0, ...relIds) + 1}`;
@@ -8424,6 +8494,15 @@ export default function App() {
               }),
         });
       } catch (error) { console.error('서식 정리 실패:', error); }
+      // 시료채취자 칸의 테두리: 입력 시트 B58:N61, 일차별 시트 A57:K58 (가는 선 + 굵은 둘레)
+      try {
+        const relsNow = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+        const staffBoxes = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"/g)).map((m) => {
+          const target = (new RegExp(`Id="${m[2]}"[^>]*Target="([^"]+)"`).exec(relsNow) || new RegExp(`Target="([^"]+)"[^>]*Id="${m[2]}"`).exec(relsNow) || [])[1];
+          return target ? { path: `xl/${target.replace(/^\/?xl\//, '')}`, range: m[1] === inputSheet ? 'B58:N61' : 'A57:K58' } : null;
+        }).filter(Boolean);
+        await boxSheetRanges(zip, staffBoxes);
+      } catch (error) { console.error('시료채취자 테두리 정리 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
@@ -9446,6 +9525,49 @@ export default function App() {
                   </table>
                 </div>
               </details>
+              <div className="md:col-span-4 border border-slate-200 rounded-lg p-3 bg-white">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-slate-800">시료채취자</span>
+                  <span className="text-[10px] text-slate-500">명단은 프로그램에 저장됩니다. 일차마다 참여한 사람을 눌러 고르세요 (일차당 {SAMPLING_LOG_STAFF_MAX}명까지, 일차별 시트에는 앞의 5명).</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <input type="text" name="staff-rank" value={staffDraft.rank} onChange={(e) => setStaffDraft((prev) => ({ ...prev, rank: e.target.value }))} className={`${logInput} w-32`} placeholder="직급 (예: 전문위원)" />
+                  <input type="text" name="staff-name" value={staffDraft.name} onChange={(e) => setStaffDraft((prev) => ({ ...prev, name: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addStaffMember(); } }} className={`${logInput} w-32`} placeholder="이름" />
+                  <button type="button" onClick={addStaffMember} className="px-3 py-1.5 text-[11px] font-bold bg-orange-600 text-white rounded border border-orange-700">명단에 추가</button>
+                  {staffList.length === 0 && <span className="text-[11px] text-slate-400">등록된 사람이 없습니다.</span>}
+                  {staffList.map((member) => (
+                    <span key={`staff-${member.name}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 bg-slate-50 text-[11px] text-slate-700">
+                      {member.rank && <span className="text-slate-500">{member.rank}</span>}
+                      <span className="font-bold">{member.name}</span>
+                      <button type="button" onClick={() => saveStaffList(staffList.filter((item) => item.name !== member.name))} className="text-red-500 font-bold" title="명단에서 삭제" aria-label={`${member.name} 명단에서 삭제`}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {log.days.map((day, dayIdx) => {
+                    const picked = Array.isArray(log.staffByDay?.[dayIdx]) ? log.staffByDay[dayIdx] : [];
+                    if (dayIdx > 0 && !day.date && picked.length === 0) return null;
+                    // 명단에서 지운 사람도 이 기록부에 골라 둔 것은 보여 준다
+                    const members = [...staffList, ...picked.filter((item) => !staffList.some((m) => m.name === item.name))];
+                    return (
+                      <div key={`staff-day-${dayIdx}`} className="flex flex-wrap items-center gap-1.5">
+                        <span className="w-28 text-[11px] font-bold text-slate-700">{dayIdx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</span>
+                        {members.length === 0 && <span className="text-[11px] text-slate-400">위에서 명단을 먼저 추가하세요.</span>}
+                        {members.map((member) => {
+                          const on = picked.some((item) => item.name === member.name);
+                          return (
+                            <button key={`staff-day-${dayIdx}-${member.name}`} type="button" onClick={() => toggleSamplingLogStaff(dayIdx, member)} aria-pressed={on}
+                              className={`px-2 py-1 rounded-full border text-[11px] font-bold ${on ? 'bg-orange-600 text-white border-orange-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                              {member.rank ? `${member.rank} ` : ''}{member.name}
+                            </button>
+                          );
+                        })}
+                        <span className="text-[10px] text-slate-400">{picked.length}명</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
