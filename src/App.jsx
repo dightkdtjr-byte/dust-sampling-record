@@ -8121,7 +8121,12 @@ export default function App() {
             },
             // 계산식 시트는 수식 모양대로 칸을 붙여 놓았으므로 정렬은 건드리지 않는다
             // 계산식은 가로 구분선으로 묶음을 나누므로 제목 아래·양식번호 줄 위에도 구분선을 둔다
-            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' }], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft },
+            계산식: { numberFormats: [{ range: 'G24:G25', code: '0.0' }, { range: 'J75:J76', code: '0.0' }, { range: 'O75', code: '0.0' }, { range: 'O76', code: '0' },
+              // 표준산소 환산 식에 옮겨 적는 값(유량 Qa, 표준·실측 산소농도)은 소수 둘째 자리까지 보인다
+              ...(() => {
+                const o2 = layout.o2 || O2_CALC_CELLS_A; const t = o2.flowBlocks[0][0]; const d = Number(String(o2.dcCell).replace(/\D/g, ''));
+                return [{ range: `G${t + 1}`, code: '0.00' }, { range: `K${t + 1}:K${t + 2}`, code: '0.00' }, { range: `K${d}:K${d + 1}`, code: '0.00' }];
+              })()], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft },
               // 더 크게 인쇄되게: 넓은 열을 줄이고(가로), 묶음 사이의 남는 빈 줄을 숨긴다(세로)
               scaleCols: { factor: 0.7, minChars: 7, floor: 6 },
               hideBlankRows: [16, 17, 23, 42, 45, 48, 50, 56, 57, 67, 72, 73, 82] },
