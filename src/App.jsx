@@ -7326,10 +7326,12 @@ export default function App() {
         // 형태 선택 표: 선택번호(1 원형 수직 / 2 원형 수평 / 3 사각)
         L(`A${r}`, '번호', 'A12'); L(`B${r}`, '굴뚝 형태', 'A12'); L(`C${r}`, '선택번호', 'A12');
         // (청) 플랜지: 양식과 같이 15 cm를 기본으로 적고, 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
-        L(`D${r}`, '(청) 플랜지 (cm)', 'A12'); L(`E${r}`, null, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`D${r}:F${r}`);
-        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `$D$${selRow}`;
-        [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 && c === 'D' ? 15 : null, 'B14')));
-        leakMerges.push(`D${selRow}:F${selRow + 2}`);
+        // 플랜지 칸을 둘로: 앞은 일반 플랜지(D열), 뒤는 (청) 플랜지(E~F열). 쓰는 쪽에 길이를 적는다 (둘 다 적으면 더한다).
+        // (청) 플랜지는 양식과 같이 15 cm를 기본으로 적는다. 엑셀에서 고치면 최종 샘플링 위치가 따라 바뀐다
+        L(`D${r}`, '플랜지 (cm)', 'A12'); L(`E${r}`, '(청) 플랜지 (cm)', 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`);
+        const selRow = r + 1; const S = `$C$${selRow}`; const blueRef = `(N($D$${selRow})+N($E$${selRow}))`;
+        [0, 1, 2].forEach((k) => ['D', 'E', 'F'].forEach((c) => L(`${c}${selRow + k}`, k === 0 && c === 'E' ? 15 : null, 'B14')));
+        leakMerges.push(`D${selRow}:D${selRow + 2}`, `E${selRow}:F${selRow + 2}`);
         [['원형 (수직)'], ['원형 (수평)'], ['사각']].forEach(([name], i) => { L(`A${selRow + i}`, i + 1, 'B14'); L(`B${selRow + i}`, name, 'B14'); L(`C${selRow + i}`, i === 0 ? (rect ? 3 : (sourceData.stackOrientation === 'horizontal' ? 2 : 1)) : null, 'B14'); });
         leakMerges.push(`C${selRow}:C${selRow + 2}`); r = selRow + 4;
         // 굴뚝 제원
