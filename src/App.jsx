@@ -8103,6 +8103,13 @@ export default function App() {
       } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
       // 시트 이름 정리: 모든 처리가 끝난 뒤 맨 마지막에 (앞의 처리는 양식의 시트 이름으로 찾는다)
       try { await renameWorkbookSheets(zip, EXPORT_SHEET_RENAMES); } catch (error) { console.error('시트 이름 정리 실패:', error); }
+      // 유량 기록부: 시료 채취 기록이 없으므로 기록지 시트는 숨긴다 (다른 시트의 수식이 이 시트의 기압·정압·내경 칸을 읽으므로 지우지는 않는다)
+      if (exportSheetId === 'flow') {
+        try {
+          const wbNow = await zip.file('xl/workbook.xml').async('string');
+          zip.file('xl/workbook.xml', wbNow.replace(/<sheet\b([^>]*\bname="기록지"[^>]*?)\s*\/>/, (full, attrs) => (/\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`)));
+        } catch (error) { console.error('유량 기록지 숨기기 실패:', error); }
+      }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
