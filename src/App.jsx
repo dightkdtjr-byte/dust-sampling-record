@@ -434,8 +434,21 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
 
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 15, 18, 33, 36, 37
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 18(암모니아), 33(비소), 36·37(알데히드). 황산화물·질소산화물(14·15)은 별개 종이라 추출 시 병합을 풀고 각각 O 표시
-const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set([18, 33, 36, 37]);
-const SAMPLING_LOG_UNMERGE_ON_EXPORT = ['C14:C15'];
+// 프로그램에서는 줄마다 따로 의뢰하므로(암모니아 1·2, 비소 입자·가스, 알데히드 1~3회차), 추출할 때 병합을 모두 풀고 줄마다 O 표시를 한다.
+// 병합해 두면 알데히드-1만 의뢰해도 2·3회차 줄에 샘플러 번호가 찍혔다
+const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set();
+const SAMPLING_LOG_UNMERGE_ON_EXPORT = ['C14:C15', 'C17:C18', 'C32:C33', 'C35:C37'];
+// sampler No. 칸이 샘플러 이름 칸을 읽는 줄: 입자 샘플러(P3), 가스 샘플러(R3)
+const SAMPLING_LOG_SAMPLER_NAME_ROWS = { P: [13, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34], R: [17, 18, 19, 20, 21, 22, 23, 35, 36, 37, 38, 39] };
+// 두 종이 묶인 물질(알데히드·옥사이드)의 이름: 한 종만 의뢰하면 그 종의 이름으로, 둘 다이면 묶음 이름으로.
+// 회차 번호(알데히드-1의 '-1')는 그대로 붙인다
+const samplingLogSpeciesName = (sub, row) => {
+  if (!Array.isArray(sub.options)) return sub.name;
+  const picked = row && row.requested && Array.isArray(row.speciesSel) ? sub.options.filter((opt) => row.speciesSel.includes(opt)) : sub.options;
+  if (picked.length !== 1) return sub.name;
+  const suffix = (/(-\d+)$/.exec(sub.name) || [''])[0];
+  return `${picked[0]}${suffix}`;
+};
 
 // 물질 표 그룹 (표시용): 입자상 / 가스상 / 현장측정 / VOCs·기타
 const SAMPLING_LOG_GROUPS = [
@@ -8225,7 +8238,7 @@ export default function App() {
         if (String(row.testPeriod || '').trim()) notes.push(/^\d+$/.test(String(row.testPeriod).trim()) ? `시험기한 ${row.testPeriod}일` : String(row.testPeriod));
         return {
           sampleNo: buildSamplingLogSampleNo(log, sub),
-          name: `${sub.name}${species}`,
+          name: Array.isArray(sub.options) ? samplingLogSpeciesName(sub, row) : `${sub.name}${species}`,
           date: log.days[row.dayIndex]?.date || '',
           start: row.start, end: row.end, meterStart: row.meterStart, meterEnd: row.meterEnd,
           volume: Number.isFinite(volume) ? Math.round(volume * 100) / 100 : null,
@@ -8309,6 +8322,8 @@ export default function App() {
         add(`T${r}`, gs ? toNumber(gs.yd) : null);
       }
 
+      // sampler No.: 제 줄의 의뢰 칸을 보고, 샘플러를 고르지 않았으면 0이 아니라 빈칸으로 (양식은 알데히드 2·3회차가 1회차 줄을 보았다)
+      Object.entries(SAMPLING_LOG_SAMPLER_NAME_ROWS).forEach(([col, list]) => list.forEach((r) => add(`E${r}`, { formula: `IF(OR(C${r}="",$${col}$3=""),"",$${col}$3)` })));
       const longNameRows = new Map(); // 행 → 줄 수 (물질명을 여러 줄로 적은 행)
       SAMPLING_LOG_SUBSTANCES.forEach((sub) => {
         const r = sub.row;
@@ -8317,11 +8332,8 @@ export default function App() {
         const day = on ? log.days[row.dayIndex] : null;
         if (!SAMPLING_LOG_MERGED_CHECK_ROWS.has(r)) add(`C${r}`, on ? 'O' : null);
         if (Array.isArray(sub.options)) {
-          // 알데히드·옥사이드: 의뢰한 종을 물질명 칸에 함께 적음 (예: 옥사이드 (에틸렌옥사이드))
-          const picked = on && Array.isArray(row.speciesSel) && row.speciesSel.length > 0 ? row.speciesSel : sub.options;
-          // 긴 이름이 한 줄에 줄어들어 안 보이지 않게, 의뢰한 종을 줄마다 적는다 (그 줄은 높이를 늘린다)
-          add(`B${r}`, on ? [sub.name, ...picked].join('\n') : sub.name);
-          if (on) longNameRows.set(r, 1 + picked.length);
+          // 알데히드·옥사이드: 한 종만 의뢰하면 그 종의 이름, 둘 다이면 묶음 이름
+          add(`B${r}`, samplingLogSpeciesName(sub, row));
         }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
         // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): sampler No. 칸에 고른 기구(흡착관/테들러백)를 적는다
@@ -8405,6 +8417,8 @@ export default function App() {
             slotUpdates.push({ ref: `${dayCol}57`, value: { formula: blankIf(src(inCol, rankRow)) }, styleFrom: 'H57' });
             slotUpdates.push({ ref: `${dayCol}58`, value: { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` }, styleFrom: 'H58' });
           });
+          // 알데히드·옥사이드 이름은 입력 시트의 물질명(한 종만 의뢰하면 그 종의 이름)을 따라간다. 일차별 시트의 물질 줄 = 입력 시트 줄 - 1
+          SAMPLING_LOG_SUBSTANCES.filter((sub) => Array.isArray(sub.options)).forEach((sub) => slotUpdates.push({ ref: `A${sub.row - 1}`, value: { formula: src('B', sub.row) } }));
           return patchWorksheetXml(xml, slotUpdates, { removeMerges: ['J57:K57'], addMerges: ['D58:E58', 'F58:G58', 'H58:I58'] });
         };
         const dayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date)
@@ -9804,7 +9818,7 @@ export default function App() {
                               </td>
                               <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{sub.species || sub.name}</span>
+                                  <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{Array.isArray(sub.options) ? samplingLogSpeciesName(sub, row) : (sub.species || sub.name)}</span>
                                   {sub.part && <span className="text-[10px] text-slate-500">{sub.part}</span>}
                                   {Array.isArray(sub.options) && getSamplingLogRowsOfSpecies(sub)[0].row === sub.row && (
                                     <span className="inline-flex items-center gap-2 ml-1">
