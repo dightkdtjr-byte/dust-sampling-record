@@ -7459,7 +7459,8 @@ export default function App() {
       {
         const recRef = `'${recordSheet}'!`;
         const mFirst = layout.meterStartRow + 1; const mLast = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
-        const hasRec = `COUNT(${recRef}E${mFirst}:E${mLast})>0`;
+        // 유량 기록부는 기록표를 쓰지 않으므로 항상 측정점 표의 값으로 가계산한다
+        const hasRec = exportSheetId === 'flow' ? 'FALSE' : `COUNT(${recRef}E${mFirst}:E${mLast})>0`;
         addUpdate('노즐산정', 'E10', { formula: `IFERROR($E$9*(2*9.81*IF(${hasRec},${recRef}E${mLast + 1},$J$15)/IF(${hasRec},rr,$K$15))^0.5,"")` }, 'E9');
         addUpdate('노즐산정', 'C9', { formula: 'IF(OR($C$8="",N($E$10)<=0),"",IFERROR(INDEX(피토계산!$C$18:$C$25,_xlfn.AGGREGATE(15,6,(ROW(피토계산!$B$18:$B$25)-ROW(피토계산!$B$18)+1)/((피토계산!$B$18:$B$25+0)>=($E$10+0)),1)),""))' });
         const typedCp = toNumber(sourceData.pitotFactor);
@@ -8905,7 +8906,8 @@ export default function App() {
   // 유속 출처: 기록표(적산유량 행)에 동압이 있으면 기록표, 없으면 예비조사(4번 섹션)
   const buildPitotAutoSelection = () => {
     if (!isPitotCpAutoApplied || !activePitotPreset) return null;
-    const meterV = getRawGasVelocityFromMeterRows(PITOT_BASE_CP);
+    // 유량측정기록부에는 시료 채취 기록표가 없다 → 측정점(예비조사) 유속만 본다
+    const meterV = isFlowRecordSheet ? NaN : getRawGasVelocityFromMeterRows(PITOT_BASE_CP);
     const useMeter = Number.isFinite(meterV) && meterV > 0;
     const baseVelocity = useMeter ? meterV : getRawGasVelocity(PITOT_BASE_CP);
     const source = useMeter ? '기록표' : '예비조사';
@@ -10872,7 +10874,7 @@ export default function App() {
                   측정점별 동압 및 온도
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
+                  <div className="flex flex-wrap items-center gap-1.5 max-w-full bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800 whitespace-nowrap">피토계수</label>
                     <input
                       type="number"
@@ -10894,7 +10896,7 @@ export default function App() {
                     <select
                       value={formData.pitotPresetId}
                       onChange={handlePitotPresetChange}
-                      className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer max-w-full min-w-0"
                       title="피토 프리셋 선택"
                     >
                       <option value="">피토 프리셋</option>
@@ -10906,19 +10908,6 @@ export default function App() {
                           </option>
                         ))}
                     </select>
-                    {/* 유량측정기록부에는 시료 채취 기록(5번) 묶음이 없으므로 샘플러 번호를 여기서 고른다 (엑셀 노즐산정의 샘플러번호·ΔH@·Yd) */}
-                    {isFlowSheet && (
-                      <select
-                        value={formData.samplerId}
-                        onChange={handleSamplerChange}
-                        className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                        title="샘플러 번호 선택"
-                        aria-label="샘플러 번호 선택"
-                      >
-                        <option value="">샘플러 번호</option>
-                        {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
-                    )}
                   </div>
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800">미터온도(T<sub>m</sub>)</label>
@@ -11138,6 +11127,33 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* 유량측정기록부: 시료 채취 기록은 없지만, 다른 기록부와 같은 자리(5번)에서 장비 프리셋(샘플러)을 고른다 → 엑셀 노즐산정의 샘플러번호·ΔH@·Yd */}
+          {isFlowSheet && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="ds-sec-title">
+              <span className="ds-sec-num">5</span>
+              장비 프리셋
+            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
+                <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
+                <select
+                  value={formData.samplerId}
+                  onChange={handleSamplerChange}
+                  aria-label="장비 프리셋 선택"
+                  className="p-1 border border-emerald-300 rounded text-sm font-bold text-emerald-800 bg-emerald-50 focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer max-w-full"
+                >
+                  <option value="">선택 안 함</option>
+                  {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </div>
+              {formData.samplerId && (
+                <span className="text-xs text-slate-600">Yd <b className="text-slate-900">{formData.gasMeterFactor || '-'}</b> · ΔH@ <b className="text-slate-900">{formData.deltaHAt || '-'}</b></span>
+              )}
+            </div>
+          </div>
+          )}
 
           {/* 섹션 5: 시료채취 및 등속흡인 (유량측정기록부에서는 사용하지 않음) */}
           {!isFlowSheet && (
@@ -11808,7 +11824,7 @@ export default function App() {
           {/* 섹션 6: 시료 분석 및 비고 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
-              <span className="ds-sec-num">{isFlowSheet ? 5 : 6}</span>
+              <span className="ds-sec-num">6</span>
               {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
