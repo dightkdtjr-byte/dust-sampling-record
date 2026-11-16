@@ -693,6 +693,42 @@ const toCumulativeMinutes = (values) => {
   let sum = 0;
   return values.map((v) => { sum = Math.round((sum + v) * 100) / 100; return sum; });
 };
+// 묶음(공유) 수식 바로잡기: 묶음의 대표 칸(수식 글이 든 칸)을 값으로 덮어쓰면, 같은 묶음의 나머지 칸이
+// '대표 없는 수식'으로 남아 엑셀이 파일을 열 때 오류(복구)를 낸다. 덮어쓰기 전 XML에서 대표 수식을 읽어,
+// 남은 칸마다 제 자리에 맞게 옮긴 수식을 직접 적어 준다
+const shiftA1Formula = (formula, dRow, dCol) => {
+  const colName = (n) => { let out = ''; let x = n; while (x > 0) { out = String.fromCharCode(65 + ((x - 1) % 26)) + out; x = Math.floor((x - 1) / 26); } return out; };
+  const colNum = (name) => name.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  // 따옴표 안(글자·시트 이름)은 건드리지 않는다
+  return formula.split(/("[^"]*"|'[^']*')/).map((part, i) => (i % 2 === 1 ? part
+    : part.replace(/(\$?)([A-Z]{1,3})(\$?)(\d+)(?![\d(A-Za-z_])/g, (whole, cAbs, col, rAbs, row, offset, str) => {
+      if (/[A-Za-z_.]/.test(str[offset - 1] || '')) return whole;
+      const nextCol = cAbs ? col : colName(colNum(col) + dCol);
+      const nextRow = rAbs ? row : String(Number(row) + dRow);
+      return `${cAbs}${nextCol}${rAbs}${nextRow}`;
+    }))).join('');
+};
+const repairOrphanSharedFormulas = (beforeXml, afterXml) => {
+  const refOf = (ref) => { const m = /^([A-Z]+)(\d+)$/.exec(ref); return m ? { col: m[1].split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0), row: Number(m[2]) } : null; };
+  const decode = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  const encode = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const mastersOf = (xml) => {
+    const map = new Map();
+    for (const m of xml.matchAll(/<c\b[^>]*\br="([A-Z]+\d+)"[^>]*>\s*<f\b([^>]*)>([^<]*)<\/f>/g)) {
+      const si = /\bsi="(\d+)"/.exec(m[2]);
+      if (/t="shared"/.test(m[2]) && si && m[3]) map.set(si[1], { ref: m[1], formula: decode(m[3]) });
+    }
+    return map;
+  };
+  const before = mastersOf(beforeXml); const after = mastersOf(afterXml);
+  return afterXml.replace(/(<c\b[^>]*\br="([A-Z]+\d+)"[^>]*>\s*)<f\b([^>]*)\/>/g, (whole, head, ref, attrs) => {
+    const si = /\bsi="(\d+)"/.exec(attrs);
+    if (!/t="shared"/.test(attrs) || !si || after.has(si[1]) || !before.has(si[1])) return whole;
+    const master = before.get(si[1]); const a = refOf(master.ref); const b = refOf(ref);
+    if (!a || !b) return whole;
+    return `${head}<f>${encode(shiftA1Formula(master.formula, b.row - a.row, b.col - a.col))}</f>`;
+  });
+};
 const saturationVaporMmHg = (tempC) => (Number.isFinite(tempC) ? 4.5812 * Math.pow(10, (7.5 * tempC) / (237.3 + tempC)) : NaN);
 const getPreMoisturePv = (method, data) => {
   if (!method || method.id !== 'imp2' || !data?.preImpinger?.wetMeter) return 0;
@@ -8270,6 +8306,7 @@ export default function App() {
         add(`T${r}`, gs ? toNumber(gs.yd) : null);
       }
 
+      const longNameRows = new Map(); // 행 → 줄 수 (물질명을 여러 줄로 적은 행)
       SAMPLING_LOG_SUBSTANCES.forEach((sub) => {
         const r = sub.row;
         const row = log.rows[String(r)];
@@ -8279,7 +8316,9 @@ export default function App() {
         if (Array.isArray(sub.options)) {
           // 알데히드·옥사이드: 의뢰한 종을 물질명 칸에 함께 적음 (예: 옥사이드 (에틸렌옥사이드))
           const picked = on && Array.isArray(row.speciesSel) && row.speciesSel.length > 0 ? row.speciesSel : sub.options;
-          add(`B${r}`, on ? `${sub.name} (${picked.join('·')})` : sub.name);
+          // 긴 이름이 한 줄에 줄어들어 안 보이지 않게, 의뢰한 종을 줄마다 적는다 (그 줄은 높이를 늘린다)
+          add(`B${r}`, on ? [sub.name, ...picked].join('\n') : sub.name);
+          if (on) longNameRows.set(r, 1 + picked.length);
         }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
         // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): sampler No. 칸에 고른 기구(흡착관/테들러백)를 적는다
@@ -8318,7 +8357,7 @@ export default function App() {
       add('C64', { formula: 'IF(C8="","",C8)' }); add('C66', { formula: 'IF(C9="","",C9)' });
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
-      zip.file(inputPath, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }));
+      zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT })));
 
       // 날짜별 시트: 양식에는 1·2일차 시트만 있으므로, 완전한 1일차 시트를 복사해
       // 각 일차가 입력 시트의 자기 날짜 행(6행=1일차 … 9행=4일차)을 읽도록 만든다.
@@ -8482,7 +8521,8 @@ export default function App() {
           // 숫자 열은 자릿수를 하나로: 가스미터·채취유량 소수 둘째, 온도·게이지압(mmH2O) 소수 첫째, 압력(mmHg) 소수 둘째
           rules: (name) => (name === inputSheet
             ? {
-                rowHeights: rowsAt(13, 57, 17.25),
+                rowHeights: { ...rowsAt(13, 57, 17.25), ...Object.fromEntries([...longNameRows].map(([r, lines]) => [r, lines * 14 + 6])) },
+                wrap: [...longNameRows.keys()].map((r) => `B${r}`),
                 numberFormats: [
                   { range: 'Q6:Q10', code: '0.0000' }, { range: 'T6:T10', code: '0.0000' },
                   { range: 'I13:K57', code: '0.00' }, { range: 'L13:M57', code: '0.0' }, { range: 'N13:N57', code: '0.00' },

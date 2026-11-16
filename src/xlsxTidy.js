@@ -129,6 +129,23 @@ class StyleBook {
     return index;
   }
 
+  // 같은 서식에 줄 바꿈을 켠 서식 번호 ('셀에 맞춤'은 끈다: 둘은 함께 쓸 수 없다)
+  withWrap(s) {
+    const key = `${s}|wrap`;
+    if (this.added.has(key)) return this.added.get(key);
+    const base = this.xfs[s] || this.xfs[0];
+    const set = (a) => `${a.replace(/\s*(?:wrapText|shrinkToFit)="[^"]*"/g, '')} wrapText="1"`;
+    let xf;
+    if (/<alignment\b[^>]*\/>/.test(base)) xf = base.replace(/<alignment\b([^>]*)\/>/, (w, a) => `<alignment${set(a)}/>`);
+    else if (/\/>$/.test(base)) xf = base.replace(/\s*\/>$/, `><alignment${set('')}/></xf>`);
+    else xf = base.replace(/<\/xf>$/, `<alignment${set('')}/></xf>`);
+    xf = xf.replace(/\s*applyAlignment="\d+"/, '').replace(/^<xf\b/, '<xf applyAlignment="1"');
+    this.xfs.push(xf);
+    const index = this.xfs.length - 1;
+    this.added.set(key, index);
+    return index;
+  }
+
   // 원래 스타일을 복사해 표시 형식 번호만 바꾼 스타일 번호
   withNumFmtId(s, id) {
     const key = `${s}|n|${id}`;
@@ -1489,6 +1506,17 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
         const s0 = Number(attr(attrs, 's') || 0);
         // 줄 바꿈이 켜진 칸도 한 줄짜리 글이면 줄 바꿈을 끄고 줄인다 (끝의 ':'만 아래 줄로 떨어지지 않게)
         const next = styles.withShrink(s0, true);
+        return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
+      });
+    }
+    // 줄 바꿈(wrap: [범위]): 여러 줄로 적은 칸. '셀에 맞춤'보다 뒤에 적용해 줄 바꿈이 이긴다
+    if (rule?.wrap) {
+      const targets = rule.wrap.map(parseRange).filter(Boolean);
+      xml = xml.replace(/<c\b([^>]*?)(\/?)>/g, (whole, attrs, selfClose) => {
+        const ref = parseRef(attr(attrs, 'r') || '');
+        if (!ref || !targets.some((r) => ref.row >= r.from.row && ref.row <= r.to.row && ref.col >= r.from.col && ref.col <= r.to.col)) return whole;
+        const s0 = Number(attr(attrs, 's') || 0);
+        const next = styles.withWrap(s0);
         return next === s0 ? whole : `<c${attrs.replace(/\s*\bs="\d+"/, '')} s="${next}"${selfClose}>`;
       });
     }
