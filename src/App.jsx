@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures, replaceSourcePictures } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures, replaceSourcePictures, clearRowBlocks, deleteSheetRows } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -7754,9 +7754,9 @@ export default function App() {
       //    - 유량 Q = Qa ÷ (21-Os)/(21-Oa): 양식은 Os가 비면 0%로 보고 계산해 표준산소가 없는데도 유량이 줄어들었다
       const o2Cells = layout.o2 || O2_CALC_CELLS_A;
       addUpdate('계산식', o2Cells.dcCell, { formula: 'IF(Os="",Ca,IF(Oa="","",Ca*((21-Os)/(21-Oa))))' });
-      o2Cells.qCells.forEach((ref) => addUpdate('계산식', ref, { formula: 'IF(Os="",Qa,IF(Oa="","",Qa/((21-Os)/(21-Oa))))' }));
+      o2Cells.qCells.slice(0, 1).forEach((ref) => addUpdate('계산식', ref, { formula: 'IF(Os="",Qa,IF(Oa="","",Qa/((21-Os)/(21-Oa))))' }));
       // 묶음 제목의 단위 Sm3/hr: 3을 위첨자로 (바로 위 '배출가스 유량 계산 (Sm³/hr)'과 같게)
-      (o2Cells.flowBlocks || []).forEach(([titleRow]) => addUpdate('계산식', `A${titleRow}`, { font: { sz: 11, bold: true }, runs: [{ t: ' 표준산소 환산 배출가스 유량 (Sm' }, { t: '3', sup: true }, { t: '/hr)' }] }));
+      (o2Cells.flowBlocks || []).slice(0, 1).forEach(([titleRow]) => addUpdate('계산식', `A${titleRow}`, { font: { sz: 11, bold: true }, runs: [{ t: ' 표준산소 환산 배출가스 유량 (Sm' }, { t: '3', sup: true }, { t: '/hr)' }] }));
       if (sheetPathMap.has('먼지측정결과보고서')) {
         // 결과보고서: 표준산소가 없으면 '보정 제외'로 적고 표준산소농도는 '-' (빈 칸을 가리키면 엑셀은 0으로 보여 준다)
         addUpdate('먼지측정결과보고서', 'C10', { formula: 'IF(Oa="","-",Oa)' });
@@ -7876,7 +7876,11 @@ export default function App() {
         const O2_FLOW_TITLE = '표준산소 환산 배출가스 유량';
         try {
           // 유량 양식에는 같은 묶음이 두 번 들어 있다(인쇄 범위 안과 그 아래) → 둘째는 항상 숨긴다
-          if (o2Layout.flowBlocks.length > 1) await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks.slice(1), { titleIncludes: O2_FLOW_TITLE });
+          // (첫 묶음을 인쇄 범위 안으로 복사해 넣고 원래 자리의 것을 지우지 않은 것으로 보인다) 숨기고, 내용도 모두 지운다
+          if (o2Layout.flowBlocks.length > 1) {
+            await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks.slice(1), { titleIncludes: O2_FLOW_TITLE });
+            await clearRowBlocks(zip, calcPath, o2Layout.flowBlocks.slice(1));
+          }
           if (!String(sourceData.standardO2 ?? '').trim()) {
             await hideRowBlocks(zip, calcPath, o2Layout.flowBlocks, { titleIncludes: O2_FLOW_TITLE });
             // 표준산소 환산 먼지농도 묶음도 함께 숨긴다 (제목 줄이 맞을 때만: 먼지·수은·PAHs 104행, 유량 112행)
@@ -7954,6 +7958,18 @@ export default function App() {
           wbXml = wbXml.replace(/(<definedName\b[^>]*name="_xlnm\.Print_Area"[^>]*>)([^<]*)(<\/definedName>)/g, (full, open, body, close) => {
             if (!/^'?계산식'?!/.test(body)) return full;
             return `${open}${body.replace(/(:\$?[A-Z]{1,3}\$?)(\d+)$/, (m, head) => `${head}${o2CalcPrintEndRow}`)}${close}`;
+          });
+        }
+        // 지운 중복 묶음(유량 양식의 둘째 '표준산소 환산 유량')을 가리키던 이름(Q 등)은 남은 첫 묶음의 같은 자리를 보게 한다
+        {
+          const blocks = (layout.o2 || O2_CALC_CELLS_A).flowBlocks || [];
+          blocks.slice(1).forEach(([from, to]) => {
+            const delta = blocks[0][0] - from;
+            wbXml = wbXml.replace(/(<definedName\b[^>]*>)([^<]*)(<\/definedName>)/g, (full, open, body, close) => (
+              /^'?계산식'?!/.test(body)
+                ? `${open}${body.replace(/(\$?[A-Z]{1,3}\$?)(\d+)/g, (m, col, row) => (Number(row) >= from && Number(row) <= to ? `${col}${Number(row) + delta}` : m))}${close}`
+                : full
+            ));
           });
         }
         // 이 기록부에 해당 없는 시트(유량의 누출시험)는 숨긴다
@@ -8116,6 +8132,12 @@ export default function App() {
         const fitted = await fitPictureInBox(zip, sheetPathMap.get(recordSheet), { box: 'E5:G10', pad: 2, fill: true });
         if (fitted && fitted.count && sheetPathMap.get('지점 사진')) await setPictureSourceAspect(zip, sheetPathMap.get('지점 사진'), { aspect: fitted.aspect });
       } catch (error) { console.error('측정점 그림 맞추기 실패:', error); }
+      // 유량 양식의 중복 묶음(둘째 '표준산소 환산 유량', 비워 둔 줄)을 실제로 삭제하고 아래 줄을 당긴다.
+      // 모든 처리가 끝난 뒤에 한다 (앞의 처리는 양식의 줄 번호로 찾는다)
+      try {
+        const extraBlocks = ((layout.o2 || O2_CALC_CELLS_A).flowBlocks || []).slice(1).sort((x, y) => y[0] - x[0]);
+        for (const [from, to] of extraBlocks) await deleteSheetRows(zip, '계산식', from, to);
+      } catch (error) { console.error('중복 묶음 삭제 실패:', error); }
       // 시트 이름 정리: 모든 처리가 끝난 뒤 맨 마지막에 (앞의 처리는 양식의 시트 이름으로 찾는다)
       try { await renameWorkbookSheets(zip, EXPORT_SHEET_RENAMES); } catch (error) { console.error('시트 이름 정리 실패:', error); }
       // 유량 기록부: 시료 채취 기록이 없으므로 기록지 시트는 숨긴다 (다른 시트의 수식이 이 시트의 기압·정압·내경 칸을 읽으므로 지우지는 않는다)

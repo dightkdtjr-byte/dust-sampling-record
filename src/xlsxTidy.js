@@ -2083,6 +2083,109 @@ export async function fitPictureInBox(zip, sheetPath, { box, aspect = 1, pad = 3
   return fill ? { count, aspect: (boxW - pad * 2 * EMU_PT) / (boxH - pad * 2 * EMU_PT) } : count;
 }
 
+// ── 줄 묶음 비우기: blocks([[첫 행, 끝 행], …])의 칸(값·수식·서식)과 그 안의 병합, 그 줄에서 시작하는 그림·글상자를 모두 지운다 ──
+// 줄 자체는 남겨(숨김 상태 그대로) 아래 줄들의 번호가 밀리지 않게 한다
+export async function clearRowBlocks(zip, sheetPath, blocks) {
+  const file = zip.file(sheetPath);
+  if (!file || !Array.isArray(blocks) || blocks.length === 0) return 0;
+  const inBlock = (row) => blocks.some(([from, to]) => row >= from && row <= to);
+  let xml = await file.async('string');
+  let count = 0;
+  xml = xml.replace(/<row\b([^>]*)>([\s\S]*?)<\/row>/g, (whole, attrs) => {
+    const row = Number(attr(attrs, 'r'));
+    if (!inBlock(row)) return whole;
+    count += 1;
+    return `<row${attrs.replace(/\s*\bspans="[^"]*"/, '').replace(/\s*\b(?:s|customFormat|thickBot|thickTop)="[^"]*"/g, '')}/>`;
+  });
+  // 그 줄들에 걸친 병합 지우기
+  const merges = [...xml.matchAll(/<mergeCell\b[^>]*\bref="([^"]+)"[^>]*\/>/g)];
+  const keep = merges.filter((m) => { const r = parseRange(m[1]); return !(r && inBlock(r.from.row) && inBlock(r.to.row)); });
+  if (keep.length !== merges.length) {
+    xml = xml.replace(/<mergeCells\b[^>]*>[\s\S]*?<\/mergeCells>/, () => (keep.length ? `<mergeCells count="${keep.length}">${keep.map((m) => m[0]).join('')}</mergeCells>` : ''));
+  }
+  zip.file(sheetPath, xml);
+  for (const path of await readSheetDrawingPaths(zip, sheetPath)) {
+    const drawingFile = zip.file(path);
+    if (!drawingFile) continue;
+    const drawing = await drawingFile.async('string');
+    const next = drawing.replace(/<xdr:(twoCellAnchor|oneCellAnchor)\b[^>]*>[\s\S]*?<\/xdr:\1>/g, (whole) => {
+      const row0 = Number((/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(whole) || [])[1]);
+      return Number.isFinite(row0) && inBlock(row0 + 1) ? '' : whole;
+    });
+    if (next !== drawing) zip.file(path, next);
+  }
+  return count;
+}
+
+// ── 시트에서 줄을 실제로 삭제한다 (엑셀의 '행 삭제'와 같게) ──
+// sheetName 시트의 from~to 행을 지우고 아래 줄을 위로 당긴다. 함께 고치는 것:
+//  그 시트의 행·칸 번호, 병합·조건부 서식 등 범위, 그 시트의 그림 위치, 모든 시트의 수식과 이름 정의에서 그 시트를 가리키는 참조.
+// 지운 줄을 가리키는 참조는 없어야 한다 (미리 비우고 이름을 옮겨 둔 뒤에 부른다)
+export async function deleteSheetRows(zip, sheetName, from, to) {
+  const count = to - from + 1;
+  if (!(count > 0)) return 0;
+  const wbFile = zip.file('xl/workbook.xml'); const relsFile = zip.file('xl/_rels/workbook.xml.rels');
+  if (!wbFile || !relsFile) return 0;
+  let wb = await wbFile.async('string'); const rels = await relsFile.async('string');
+  const sheets = [...wb.matchAll(/<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"/g)].map((m) => {
+    const target = (new RegExp(`Id="${m[2]}"[^>]*Target="([^"]+)"`).exec(rels) || new RegExp(`Target="([^"]+)"[^>]*Id="${m[2]}"`).exec(rels) || [])[1];
+    return { name: decodeXml(m[1]), path: target ? `xl/${target.replace(/^\/?xl\//, '')}` : '' };
+  }).filter((x) => x.path && zip.file(x.path));
+  const self = sheets.find((x) => x.name === sheetName);
+  if (!self) return 0;
+  const shiftRow = (row) => (row > to ? row - count : row);
+  // 수식 글에서 참조를 옮긴다. own: 시트 이름 없이 쓴 참조도 이 시트의 것이다
+  const fixFormula = (text, own) => text.split(/("(?:[^"]|"")*")/).map((part, i) => (i % 2 === 1 ? part
+    : part.replace(/((?:'[^']+'|[A-Za-z0-9_.가-힣]+)!)?(\$?[A-Z]{1,3}\$?)(\d+)(?::(\$?[A-Z]{1,3}\$?)(\d+))?(?![\d(A-Za-z_])/g, (whole, prefix, c1, r1, c2, r2, offset, str) => {
+      if (!prefix && /[A-Za-z0-9_.가-힣]/.test(str[offset - 1] || '')) return whole;
+      const target = prefix ? prefix.slice(0, -1).replace(/^'|'$/g, '').replace(/''/g, "'") : null;
+      if (target === null ? !own : target !== sheetName) return whole;
+      return `${prefix || ''}${c1}${shiftRow(Number(r1))}${c2 ? `:${c2}${shiftRow(Number(r2))}` : ''}`;
+    }))).join('');
+  const fixXmlFormula = (encoded, own) => {
+    const plain = decodeXml(encoded); const next = fixFormula(plain, own);
+    return next === plain ? encoded : next.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  const fixRange = (ref) => ref.split(' ').map((one) => one.replace(/(\$?[A-Z]{1,3}\$?)(\d+)/g, (w, c, r) => `${c}${shiftRow(Number(r))}`)).join(' ');
+  for (const sheet of sheets) {
+    let xml = await zip.file(sheet.path).async('string');
+    const own = sheet.name === sheetName;
+    if (own) {
+      // 줄 지우기 + 아래 줄 번호 당기기
+      xml = xml.replace(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, (whole, attrs, inner) => {
+        const row = Number(attr(attrs, 'r'));
+        if (row >= from && row <= to) return '';
+        if (row <= to) return whole;
+        const next = row - count;
+        const newAttrs = attrs.replace(/\br="\d+"/, `r="${next}"`);
+        if (inner === undefined) return `<row${newAttrs}/>`;
+        return `<row${newAttrs}>${inner.replace(/(<c\b[^>]*?\br=")([A-Z]+)\d+(")/g, (w, a, col, b) => `${a}${col}${next}${b}`)}</row>`;
+      });
+      // 범위를 적는 속성들 (공유 수식의 ref, 병합, 조건부 서식, 데이터 유효성, 범위 정보)
+      xml = xml.replace(/(<f\b[^>]*?\bref=")([^"]+)(")/g, (w, a, ref, b) => `${a}${fixRange(ref)}${b}`)
+        .replace(/(<mergeCell\b[^>]*?\bref=")([^"]+)(")/g, (w, a, ref, b) => `${a}${fixRange(ref)}${b}`)
+        .replace(/(\bsqref=")([^"]+)(")/g, (w, a, ref, b) => `${a}${fixRange(ref)}${b}`)
+        .replace(/(<dimension\b[^>]*?\bref=")([^"]+)(")/g, (w, a, ref, b) => `${a}${fixRange(ref)}${b}`)
+        .replace(/(<brk\b[^>]*?\bid=")(\d+)(")/g, (w, a, id, b) => `${a}${shiftRow(Number(id))}${b}`);
+    }
+    xml = xml.replace(/(<f\b[^>]*>)([^<]+)(<\/f>)/g, (w, open, body, close) => `${open}${fixXmlFormula(body, own)}${close}`)
+      .replace(/(<formula[12]?>)([^<]+)(<\/formula[12]?>)/g, (w, open, body, close) => `${open}${fixXmlFormula(body, own)}${close}`);
+    zip.file(sheet.path, xml);
+  }
+  // 이름 정의
+  wb = wb.replace(/(<definedName\b[^>]*>)([^<]*)(<\/definedName>)/g, (w, open, body, close) => `${open}${fixXmlFormula(body, false)}${close}`);
+  zip.file('xl/workbook.xml', wb);
+  // 그 시트의 그림·글상자 위치 (행 번호는 0부터)
+  for (const path of await readSheetDrawingPaths(zip, self.path)) {
+    const drawingFile = zip.file(path);
+    if (!drawingFile) continue;
+    const drawing = await drawingFile.async('string');
+    const next = drawing.replace(/(<xdr:row>)(\d+)(<\/xdr:row>)/g, (w, a, row0, b) => `${a}${Number(row0) + 1 > to ? Number(row0) - count : row0}${b}`);
+    if (next !== drawing) zip.file(path, next);
+  }
+  return count;
+}
+
 // ── 그림 원본 시트의 그림 바꾸기: 0부터 센 열 번호 순서대로 그 칸의 그림 파일 내용을 pngs[열]로 바꾼다 (PNG 그림만) ──
 export async function replaceSourcePictures(zip, sheetPath, pngs) {
   const relsPath = sheetPath.replace(/([^/]+)$/, '_rels/$1.rels');
