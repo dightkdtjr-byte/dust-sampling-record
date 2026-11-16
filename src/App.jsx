@@ -7625,6 +7625,8 @@ export default function App() {
       addUpdate('노즐산정', 'F26', { formula: 'C15' });
       addUpdate('노즐산정', 'A34', { formula: '(C34*(100-$C$15)/100)+18/(22.4*100)*$C$15' });
       if (exportSheetId === 'flow') addUpdate('계산식', 'O75', { formula: '노즐산정!C15' });
+      // 유량은 본 측정(임핀저)이 없다: 결과보고서의 수분량(이름 Xw = 기록지 J9)도 고른 방법의 사전 수분량을 보게 한다
+      if (exportSheetId === 'flow') addUpdate(recordSheet, 'J9', { formula: '노즐산정!C15' });
       const preImp = sourceData.preImpinger || createEmptyPreImpinger();
       // 무게법(흡습관·임핀저) 입력이 있으면 지금 고른 방법과 상관없이 적어 둔다 → 엑셀에서 1·2로 바꿔도 값이 있다
       const preImpHasData = [preImp.meterStart, preImp.meterEnd, preImp.meterTemp, preImp.orifice]
@@ -7867,7 +7869,12 @@ export default function App() {
                 ...(sheetName === '노즐산정' ? { numberFormats: [{ range: `J15:J${16 + Math.max(5, sourcePoints.length)}`, code: '0.0' }, { range: 'A34:A34', code: '0.000' }] } : {}),
               }
         );
-        zip.file(sheetPath, patched);
+        // 유량 양식은 수분량 시트의 무게법 표(18~29행)를 숨겨 두었다 → 흡습관법·임핀저법을 골랐으면 그 표를 보이게 한다
+        // (그 아래 '시료채취 후' 표는 유량에 해당 없으므로 숨긴 채로 둔다)
+        const showWeightTable = sheetName === '수분량' && exportSheetId === 'flow' && exportMoistureMethod.id !== 'auto';
+        zip.file(sheetPath, showWeightTable
+          ? patched.replace(/<row\b[^>]*>/g, (tag) => { const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]); return r >= 18 && r <= 29 ? tag.replace(/\s*\bhidden="[^"]*"/, '') : tag; })
+          : patched);
       }
 
       if (rowStyler) zip.file('xl/styles.xml', rowStyler.serialize());
