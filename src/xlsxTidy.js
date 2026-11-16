@@ -2083,6 +2083,30 @@ export async function fitPictureInBox(zip, sheetPath, { box, aspect = 1, pad = 3
   return fill ? { count, aspect: (boxW - pad * 2 * EMU_PT) / (boxH - pad * 2 * EMU_PT) } : count;
 }
 
+// ── 그림 원본 시트의 그림 바꾸기: 0부터 센 열 번호 순서대로 그 칸의 그림 파일 내용을 pngs[열]로 바꾼다 (PNG 그림만) ──
+export async function replaceSourcePictures(zip, sheetPath, pngs) {
+  const relsPath = sheetPath.replace(/([^/]+)$/, '_rels/$1.rels');
+  const rels = zip.file(relsPath) ? await zip.file(relsPath).async('string') : '';
+  const target = (/Type="[^"]*\/relationships\/drawing"[^>]*Target="([^"]+)"/.exec(rels) || /Target="([^"]+)"[^>]*Type="[^"]*\/relationships\/drawing"/.exec(rels) || [])[1];
+  const drawingPath = target ? `xl/${target.replace(/^(\.\.\/)+/, '')}` : '';
+  const drawingFile = drawingPath ? zip.file(drawingPath) : null;
+  const drawingRelsFile = drawingPath ? zip.file(drawingPath.replace(/([^/]+)$/, '_rels/$1.rels')) : null;
+  if (!drawingFile || !drawingRelsFile) return 0;
+  const drawing = await drawingFile.async('string'); const drawingRels = await drawingRelsFile.async('string');
+  let count = 0;
+  for (const m of drawing.matchAll(/<xdr:twoCellAnchor\b[^>]*>([\s\S]*?)<\/xdr:twoCellAnchor>/g)) {
+    const col = Number((/<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>/.exec(m[1]) || [])[1]);
+    const rid = (/\br:embed="([^"]+)"/.exec(m[1]) || [])[1];
+    if (!Number.isInteger(col) || !rid || !pngs[col]) continue;
+    const rel = [...drawingRels.matchAll(/<Relationship\b[^>]*\/>/g)].map((x) => x[0]).find((tag) => new RegExp(`\\bId="${rid}"`).test(tag));
+    const media = rel ? (/\bTarget="([^"]+)"/.exec(rel) || [])[1] : '';
+    const mediaPath = media ? `xl/${media.replace(/^(\.\.\/)+/, '')}` : '';
+    if (!mediaPath || !/\.png$/i.test(mediaPath) || !zip.file(mediaPath)) continue;
+    zip.file(mediaPath, pngs[col]); count += 1;
+  }
+  return count;
+}
+
 // ── 그림 원본 시트에 그림을 더한다: 그 시트의 마지막 그림 틀을 본떠 col0(0부터 센 열)의 1행 칸에 PNG를 넣는다 ──
 // pics: [{ col0, png(Uint8Array), name }]. 넣은 개수를 돌려준다. 열 너비 정의(<cols>)도 그 열까지 늘린다
 export async function addSourcePictures(zip, sheetPath, pics) {

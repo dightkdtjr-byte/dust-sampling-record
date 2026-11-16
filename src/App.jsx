@@ -4,7 +4,7 @@ import mainLogoImage from './assets/mainlogo.svg';
 import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
-import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures } from './xlsxTidy.js';
+import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures, replaceSourcePictures } from './xlsxTidy.js';
 import { replacePicturesWithEquations, replaceLegendPictures } from './xlsxEquations.js';
 import { fetchCityObservations as webFetchCityObservations, searchPlaces as webSearchPlaces, fetchLocalWeather as webFetchLocalWeather } from '../electron/weather.mjs';
 import { buildRecordSheets, buildSamplingLogSheets, buildPresetSheets, buildWorkbook, buildStackSectionSvg, renderSvgToPng } from './openWorkbook.js';
@@ -237,16 +237,32 @@ const buildTraverseSvg = ({ kind, n = 3, lines = 3, depth = 1, side = 1, caption
     for (let i = 0; i < nn && nn <= 8; i++) text(x0 + (w * (i + 0.5)) / nn, y0 + h + 13, String(i + 1), { size: 9, color: blue });
     text(133, 238, caption || `측정공 ${mm}개 × 깊이 방향 ${nn}점 (각 칸의 중심)`, { size: 9 });
   } else {
-    const nn = Math.max(1, Math.min(5, Math.round(n) || 1)); const coeffs = TRAVERSE_COEFFS[nn - 1];
-    const cx = 133; const cy = 128; const R = 80;
-    text(133, 22, `수평 굴뚝: 모든 측정점 ${nn * 4}점`, { size: 12, bold: true });
+    // 원형: 'center'(중심 1점) · 'vertical'(측정공 1개, 한 지름) · 'horizontal'(측정공 2개, 두 지름)
+    const red = '#d70015';
+    const center = kind === 'center';
+    const nn = center ? 0 : Math.max(1, Math.min(5, Math.round(n) || 1)); const coeffs = center ? [] : TRAVERSE_COEFFS[nn - 1];
+    const cx = 133; const cy = 128; const R = 80; const horizontal = kind === 'horizontal';
+    text(133, 22, center ? '원형 굴뚝: 중심 1점' : (horizontal ? `수평 굴뚝: 모든 측정점 ${nn * 4}점` : `수직 굴뚝: 반경당 ${nn}점`), { size: 12, bold: true });
     parts.push(`<circle cx="${cx}" cy="${cy}" r="${R + 5}" fill="none" stroke="${ink}" stroke-width="1.1"/>`, `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${ink}" stroke-width="0.8"/>`);
     coeffs.forEach((c) => parts.push(`<circle cx="${cx}" cy="${cy}" r="${c * R}" fill="none" stroke="${grey}" stroke-width="0.7" stroke-dasharray="2.5 3"/>`));
-    parts.push(`<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="${ink}" stroke-width="0.8"/>`, `<line x1="${cx}" y1="${cy - R}" x2="${cx}" y2="${cy + R}" stroke="${ink}" stroke-width="0.8"/>`);
-    parts.push(`<rect x="${cx - R - 20}" y="${cy - 4}" width="14" height="8" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`, `<rect x="${cx - 4}" y="${cy - R - 20}" width="8" height="14" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
-    coeffs.forEach((c) => [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => parts.push(`<circle cx="${cx + dx * c * R}" cy="${cy + dy * c * R}" r="3.2" fill="${blue}"/>`)));
+    parts.push(`<line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="${ink}" stroke-width="0.8"/>`);
+    if (horizontal) parts.push(`<line x1="${cx}" y1="${cy - R}" x2="${cx}" y2="${cy + R}" stroke="${ink}" stroke-width="0.8"/>`);
+    else parts.push(`<line x1="${cx}" y1="${cy - 5}" x2="${cx}" y2="${cy + 5}" stroke="${ink}" stroke-width="0.8"/>`);
+    parts.push(`<rect x="${cx - R - 20}" y="${cy - 4}" width="14" height="8" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
+    if (horizontal) parts.push(`<rect x="${cx - 4}" y="${cy - R - 20}" width="8" height="14" fill="#ffffff" stroke="${ink}" stroke-width="0.9"/>`);
     text(cx - R - 24, cy - 8, '측정공', { size: 9, anchor: 'end' });
-    text(133, 238, caption || `측정공 2개 · 반경당 ${nn}점 × 4 (두 지름 위의 모든 점)`, { size: 9 });
+    if (center) parts.push(`<circle cx="${cx}" cy="${cy}" r="3.4" fill="${blue}"/>`);
+    // 벽(측정공 쪽)에 가까운 점부터 1번. 측정공 쪽 반경은 파란 점, 건너편 반경은 빨간 빈 점(n′)
+    const fromWall = [...coeffs].sort((x, y) => y - x);
+    fromWall.forEach((c, i) => {
+      const axes = horizontal ? [[-1, 0, 1, 0], [0, -1, 0, 1]] : [[-1, 0, 1, 0]];
+      axes.forEach(([nx, ny, fx, fy], axis) => {
+        parts.push(`<circle cx="${cx + fx * c * R}" cy="${cy + fy * c * R}" r="3.2" fill="#ffffff" stroke="${red}" stroke-width="1.1"/>`);
+        parts.push(`<circle cx="${cx + nx * c * R}" cy="${cy + ny * c * R}" r="3.4" fill="${blue}"/>`);
+        if (axis === 0) { text(cx + nx * c * R, cy - 8, String(i + 1), { size: 8, color: blue }); text(cx + fx * c * R, cy + 15, `${i + 1}′`, { size: 8, color: red }); }
+      });
+    });
+    text(133, 238, caption || (center ? '단면적 0.25 m² 이하: 단면 중심에서 측정' : (horizontal ? `측정공 2개 · 두 지름 위의 모든 점 (반경당 ${nn}점 × 4)` : `측정공 1개 · ● 측정공 쪽 1~${nn}  ○ 건너편 1′~${nn}′`)), { size: 9 });
   }
   parts.push('</svg>');
   return parts.join('');
@@ -5224,47 +5240,6 @@ export default function App() {
   const getSamplingPoints = () => computeSamplingPoints(formData);
 
   // 굴뚝 단면 측정점 그림 (논문 삽화식 흑백 선화): 등면적 원환, 지름선, 정방향 ●, 역방향 ○
-  const renderSamplingPointDiagram = (sp) => {
-    const width = 240;
-    const height = 232;
-    const cx = 134;
-    const cy = 108;
-    const R = 70;
-    const ink = '#1d1d1f';
-    const coeffs = sp.isCenterOnly ? [] : [...sp.coeffs].sort((a, b) => b - a); // 벽에 가까운 점부터 1번
-    const nearPts = sp.isCenterOnly ? [{ x: cx, y: cy, n: 1 }] : coeffs.map((c, i) => ({ x: cx - c * R, y: cy, n: i + 1 }));
-    const farPts = sp.isCenterOnly ? [] : coeffs.map((c, i) => ({ x: cx + c * R, y: cy, n: i + 1 }));
-    return (
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="max-w-full h-auto" aria-label={`반경당 ${sp.perRadius}점 측정점 위치`} style={{ fontFamily: 'inherit' }}>
-        <circle cx={cx} cy={cy} r={R + 6} fill="none" stroke={ink} strokeWidth="1.1" />
-        <circle cx={cx} cy={cy} r={R} fill="none" stroke={ink} strokeWidth="0.8" />
-        {coeffs.map((c, i) => (
-          <circle key={i} cx={cx} cy={cy} r={c * R} fill="none" stroke="#8e8e93" strokeWidth="0.7" strokeDasharray="2.5 3" />
-        ))}
-        <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke={ink} strokeWidth="0.8" />
-        <line x1={cx} y1={cy - 5} x2={cx} y2={cy + 5} stroke={ink} strokeWidth="0.8" />
-        <rect x={cx - R - 22} y={cy - 4} width="14" height="8" fill="#fff" stroke={ink} strokeWidth="0.9" />
-        <text x={cx - R - 26} y={cy + 3.5} fontSize="9" fill={ink} textAnchor="end">측정공</text>
-        {farPts.map((pt) => (
-          <g key={`far-${pt.n}`}>
-            <circle cx={pt.x} cy={pt.y} r="3.4" fill="#fff" stroke="#d70015" strokeWidth="1.1" />
-            <text x={pt.x} y={pt.y + 15} fontSize="9" fill="#d70015" textAnchor="middle">{pt.n}′</text>
-          </g>
-        ))}
-        {nearPts.map((pt) => (
-          <g key={`near-${pt.n}`}>
-            <circle cx={pt.x} cy={pt.y} r="3.6" fill="#0a84ff" />
-            <text x={pt.x} y={pt.y - 9} fontSize="9" fill="#0a84ff" textAnchor="middle">{pt.n}</text>
-          </g>
-        ))}
-        <line x1={cx - R - 6} y1={cy + R + 20} x2={cx + R + 6} y2={cy + R + 20} stroke={ink} strokeWidth="0.6" />
-        <line x1={cx - R - 6} y1={cy + R + 16} x2={cx - R - 6} y2={cy + R + 24} stroke={ink} strokeWidth="0.6" />
-        <line x1={cx + R + 6} y1={cy + R + 16} x2={cx + R + 6} y2={cy + R + 24} stroke={ink} strokeWidth="0.6" />
-        <text x={cx} y={cy + R + 36} fontSize="9" fill={ink} textAnchor="middle">D = {sp.diameterLabel || ''}</text>
-      </svg>
-    );
-  };
-
   // 표 생성 계획: 지점 수에 맞는 권장 행 수(지점당)를 정하고, 총 시간을 그 행 수로 나눠 0.5분 단위 간격을 정한다
   // 총 시간 = 지점 수 × 지점당 행 수 × 행 간격 (모든 지점·행이 같은 시간)
   const getTableGenerationPlan = () => {
@@ -7973,6 +7948,10 @@ export default function App() {
                 ? { kind: 'rect', n: spNow.perRadius, lines: spNow.lines, depth: toNumber(sourceData.stackDiameter), side: spNow.side }
                 : { kind: 'rect', n: 3, lines: 3, caption: '각 칸의 중심에서 측정 (구분 수는 측정위치 표 참조)' }));
               const horizontalPng = await svgToPngBytes(buildTraverseSvg({ kind: 'horizontal', n: spNow && !spNow.rect && spNow.perRadius > 0 ? spNow.perRadius : 3 }));
+              // 양식의 원형 그림 여섯 장(중심 1점, 반경당 1~5점)도 프로그램 화면과 같은 그림으로 바꾼다
+              const circlePngs = [];
+              for (let k = 0; k <= 5; k++) circlePngs.push(await svgToPngBytes(buildTraverseSvg(k === 0 ? { kind: 'center' } : { kind: 'vertical', n: k })));
+              await replaceSourcePictures(zip, picSheetPath, circlePngs);
               const added = await addSourcePictures(zip, picSheetPath, [{ col0: 6, png: rectPng, name: '지점 사각' }, { col0: 7, png: horizontalPng, name: '지점 수평' }]);
               if (added === 2) {
                 const sel = `${pos}$C$${leakPositionCells.selRow}`;
@@ -10444,11 +10423,13 @@ export default function App() {
                 
                 <div className="flex flex-col md:flex-row gap-4 items-start">
                   <figure className="shrink-0 flex flex-col items-center gap-1 m-0 px-1 md:w-60">
-                    {samplingPointsData.rect
-                      ? <img src={traverseSvgDataUrl({ kind: 'rect', n: samplingPointsData.perRadius, lines: samplingPointsData.lines, depth: parseFloat(formData.stackDiameter), side: samplingPointsData.side })} width="240" height="240" alt={`사각 굴뚝 측정점 ${samplingPointsData.total}점`} />
-                      : (formData.stackOrientation === 'horizontal' && !samplingPointsData.isCenterOnly
-                        ? <img src={traverseSvgDataUrl({ kind: 'horizontal', n: samplingPointsData.perRadius })} width="240" height="240" alt={`수평 굴뚝 측정점 ${samplingPointsData.perRadius * 4}점`} />
-                        : renderSamplingPointDiagram(samplingPointsData))}
+                    {/* 측정점 그림: 엑셀의 측정점 그림(ShowPic)과 같은 그림 */}
+                    <img
+                      src={traverseSvgDataUrl(samplingPointsData.rect
+                        ? { kind: 'rect', n: samplingPointsData.perRadius, lines: samplingPointsData.lines, depth: parseFloat(formData.stackDiameter), side: samplingPointsData.side }
+                        : { kind: samplingPointsData.isCenterOnly ? 'center' : (formData.stackOrientation === 'horizontal' ? 'horizontal' : 'vertical'), n: samplingPointsData.perRadius })}
+                      width="240" height="240" alt="측정점 위치 그림"
+                    />
                     <figcaption className="mt-1 text-[11px] text-slate-700 text-center leading-snug">
                       그림. 측정공 1개당 측정점 위치 (반경당 {samplingPointsData.perRadius}점)<br />
                       <span className="text-slate-500"><span className="text-[#0a84ff]">●</span> 정방향 측정점 1~{samplingPointsData.perRadius} <span className="text-[#d70015]">○</span> 역방향(반대편) 1′~{samplingPointsData.perRadius}′</span>
@@ -10909,6 +10890,26 @@ export default function App() {
                         ))}
                     </select>
                   </div>
+                  {/* 유량측정기록부: 시료 채취 기록(5번) 묶음이 없으므로 장비 프리셋(샘플러)을 피토계수 줄 바로 아래에서 고른다 → 엑셀 노즐산정의 샘플러번호·ΔH@·Yd */}
+                  {isFlowSheet && (
+                    <div className="basis-full flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm max-w-full">
+                        <label className="text-[11px] font-bold text-emerald-800 whitespace-nowrap">장비 프리셋</label>
+                        <select
+                          value={formData.samplerId}
+                          onChange={handleSamplerChange}
+                          aria-label="장비 프리셋 선택"
+                          className="p-1 border border-emerald-300 rounded text-[11px] font-bold text-emerald-800 bg-white outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer max-w-full min-w-0"
+                        >
+                          <option value="">선택 안 함</option>
+                          {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                        </select>
+                        {formData.samplerId && (
+                          <span className="text-[11px] text-slate-600 whitespace-nowrap">Yd <b className="text-slate-900">{formData.gasMeterFactor || '-'}</b> · ΔH@ <b className="text-slate-900">{formData.deltaHAt || '-'}</b></span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
                     <label className="text-[11px] font-bold text-emerald-800">미터온도(T<sub>m</sub>)</label>
                     <input type="number" step="0.1" name="traverseTmIn" value={formData.traverseTmIn} onChange={handleChange} placeholder="입구" className="w-14 p-1 border border-emerald-300 rounded text-xs text-center outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -11127,33 +11128,6 @@ export default function App() {
               </div>
             </div>
           </div>
-
-          {/* 유량측정기록부: 시료 채취 기록은 없지만, 다른 기록부와 같은 자리(5번)에서 장비 프리셋(샘플러)을 고른다 → 엑셀 노즐산정의 샘플러번호·ΔH@·Yd */}
-          {isFlowSheet && (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="ds-sec-title">
-              <span className="ds-sec-num">5</span>
-              장비 프리셋
-            </h2>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
-                <label className="text-xs font-bold text-slate-700">장비 프리셋 선택</label>
-                <select
-                  value={formData.samplerId}
-                  onChange={handleSamplerChange}
-                  aria-label="장비 프리셋 선택"
-                  className="p-1 border border-emerald-300 rounded text-sm font-bold text-emerald-800 bg-emerald-50 focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer max-w-full"
-                >
-                  <option value="">선택 안 함</option>
-                  {samplers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-              </div>
-              {formData.samplerId && (
-                <span className="text-xs text-slate-600">Yd <b className="text-slate-900">{formData.gasMeterFactor || '-'}</b> · ΔH@ <b className="text-slate-900">{formData.deltaHAt || '-'}</b></span>
-              )}
-            </div>
-          </div>
-          )}
 
           {/* 섹션 5: 시료채취 및 등속흡인 (유량측정기록부에서는 사용하지 않음) */}
           {!isFlowSheet && (
@@ -11824,7 +11798,7 @@ export default function App() {
           {/* 섹션 6: 시료 분석 및 비고 */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="ds-sec-title">
-              <span className="ds-sec-num">6</span>
+              <span className="ds-sec-num">{isFlowSheet ? 5 : 6}</span>
               {isDustSheet ? '먼지 시료 무게 및 최종 결과' : (isFlowSheet ? '유량 산출 결과 및 비고' : '최종 결과 및 비고')}
             </h2>
             
