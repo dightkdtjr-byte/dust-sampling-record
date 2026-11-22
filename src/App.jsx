@@ -7830,6 +7830,25 @@ export default function App() {
         addUpdate('먼지측정결과보고서', 'C5', sourceData.company);
         addUpdate('먼지측정결과보고서', 'C6', sourceData.location);
         addUpdate('먼지측정결과보고서', 'A17', sourceData.remarks);
+        // 연료사용량: 양식에 견본 숫자(480, 320 L/hr)가 박혀 있어 모든 보고서에 그대로 찍혔고,
+        // '최대배출가스유량'도 그 숫자로 계산되었다 → 칸을 비우고, 두 칸을 직접 적었을 때만 계산되게 한다
+        addUpdate('먼지측정결과보고서', 'C7', null);
+        addUpdate('먼지측정결과보고서', 'G7', null);
+        addUpdate('먼지측정결과보고서', 'G14', { formula: 'IF(AND(N(C7)>0,N(G7)>0),Qa*C7/G7,"")' });
+        // 기록부 종류에 맞는 보고서: 양식은 어느 기록부나 '먼지측정 결과보고서'에 먼지농도·등속계수 줄이 있어서,
+        // 여과지 무게가 없는 금속·수은·PAHs는 먼지농도가 0.0으로, 시료채취가 없는 유량은 #DIV/0!로 찍혔다
+        //  - 제목을 기록부 종류에 맞춘다  - 먼지농도 줄(12행)은 먼지 기록부에만 둔다(나머지는 아래 반복문에서 숨김)
+        //  - 유량은 등속계수 칸도 비운다  - 줄을 뺀 만큼 항목 기호(가나다)를 당긴다
+        const reportTitle = { metal: '금속 시료채취 결과보고서', mercury: '수은 시료채취 결과보고서', pahs: 'PAHs 시료채취 결과보고서', flow: '유량측정 결과보고서' }[exportSheetId];
+        if (reportTitle) addUpdate('먼지측정결과보고서', 'A1', reportTitle);
+        if (exportSheetId !== 'dust') {
+          ['C12', 'G12'].forEach((ref) => addUpdate('먼지측정결과보고서', ref, null));
+          const isFlowReport = exportSheetId === 'flow';
+          if (isFlowReport) ['E11', 'G11', 'H11'].forEach((ref) => addUpdate('먼지측정결과보고서', ref, null));
+          const [flowMark, maxMark] = isFlowReport ? ['라', '마'] : ['마', '바'];
+          addUpdate('먼지측정결과보고서', 'A13', { formula: `IF(Os="","${flowMark}. 측정유량(표준산소 보정 제외) :","${flowMark}. 표준산소환산 측정유량 :")` });
+          addUpdate('먼지측정결과보고서', 'A14', `${maxMark}. 실측치를 이용한 최대배출가스유량 :`);
+        }
       }
 
       for (const [sheetName, updates] of updatesBySheet.entries()) {
@@ -7880,16 +7899,18 @@ export default function App() {
         //  - 자동측정법: 무게법 표(18~30행)를 숨긴다  - 흡습관법·임핀저법: 자동측정 값이 하나도 없으면 자동측정법 표(8~15행)를 숨긴다
         //  숨긴 줄의 수식은 그대로라서, 엑셀에서 선택번호를 바꾸고 줄 숨기기를 풀면 다른 방법으로 볼 수 있다
         let sheetOut = patched;
+        const setHidden = (from, to, hidden) => {
+          sheetOut = sheetOut.replace(/<row\b[^>]*>/g, (tag) => {
+            const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
+            if (!(r >= from && r <= to)) return tag;
+            const bare = tag.replace(/\s*\bhidden="[^"]*"/, '');
+            return hidden ? bare.replace(/(\/?>)$/, ' hidden="1"$1') : bare;
+          });
+        };
+        // 결과보고서의 먼지농도 줄은 먼지 기록부에만 둔다
+        if (sheetName === '먼지측정결과보고서' && exportSheetId !== 'dust') setHidden(12, 12, true);
         if (sheetName === '수분량') {
           const weightMethod = exportMoistureMethod.id !== 'auto';
-          const setHidden = (from, to, hidden) => {
-            sheetOut = sheetOut.replace(/<row\b[^>]*>/g, (tag) => {
-              const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
-              if (!(r >= from && r <= to)) return tag;
-              const bare = tag.replace(/\s*\bhidden="[^"]*"/, '');
-              return hidden ? bare.replace(/(\/?>)$/, ' hidden="1"$1') : bare;
-            });
-          };
           const hasAutoValues = (sourceMoistures || []).some((v) => toNumber(v) !== null);
           if (weightMethod) { if (!hasAutoValues) setHidden(8, 15, true); if (exportSheetId === 'flow') setHidden(18, 29, false); } else setHidden(18, 30, true);
         }
@@ -8184,6 +8205,18 @@ export default function App() {
           const wbNow = await zip.file('xl/workbook.xml').async('string');
           zip.file('xl/workbook.xml', wbNow.replace(/<sheet\b([^>]*\bname="기록지"[^>]*?)\s*\/>/, (full, attrs) => (/\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`)));
         } catch (error) { console.error('유량 기록지 숨기기 실패:', error); }
+      }
+      // 유량 기록부: 계산식 시트의 인쇄 범위 아래에 남는 먼지농도 계산 묶음(#DIV/0!가 보인다)은 해당이 없으므로 숨긴다.
+      // 위에서 중복 묶음을 지운 뒤라 꼬리말 줄 다음(92행)부터가 그 묶음이다
+      if (exportSheetId === 'flow') {
+        try {
+          const calcPathNow = sheetPathMap.get('계산식');
+          const calcNow = await zip.file(calcPathNow).async('string');
+          zip.file(calcPathNow, calcNow.replace(/<row\b[^>]*>/g, (tag) => {
+            const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
+            return r >= 92 ? tag.replace(/\s*\bhidden="[^"]*"/, '').replace(/(\/?>)$/, ' hidden="1"$1') : tag;
+          }));
+        } catch (error) { console.error('유량 계산식 아래 묶음 숨기기 실패:', error); }
       }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
