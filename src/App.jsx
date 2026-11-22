@@ -8206,18 +8206,32 @@ export default function App() {
           zip.file('xl/workbook.xml', wbNow.replace(/<sheet\b([^>]*\bname="기록지"[^>]*?)\s*\/>/, (full, attrs) => (/\bstate="/.test(attrs) ? full : `<sheet${attrs} state="hidden"/>`)));
         } catch (error) { console.error('유량 기록지 숨기기 실패:', error); }
       }
-      // 유량 기록부: 계산식 시트의 인쇄 범위 아래에 남는 먼지농도 계산 묶음(#DIV/0!가 보인다)은 해당이 없으므로 숨긴다.
-      // 위에서 중복 묶음을 지운 뒤라 꼬리말 줄 다음(92행)부터가 그 묶음이다
-      if (exportSheetId === 'flow') {
+      // 먼지 기록부가 아니면 계산식 시트의 인쇄 범위 아래에 남는 먼지농도 계산 묶음은 해당이 없으므로 숨긴다
+      // (여과지 무게가 없어 0이나 #DIV/0!가 보인다). 유량은 위에서 중복 묶음을 지운 뒤라 92행부터, 나머지는 93행부터다
+      if (exportSheetId !== 'dust') {
         try {
+          const firstRow = exportSheetId === 'flow' ? 92 : 93;
           const calcPathNow = sheetPathMap.get('계산식');
           const calcNow = await zip.file(calcPathNow).async('string');
           zip.file(calcPathNow, calcNow.replace(/<row\b[^>]*>/g, (tag) => {
             const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
-            return r >= 92 ? tag.replace(/\s*\bhidden="[^"]*"/, '').replace(/(\/?>)$/, ' hidden="1"$1') : tag;
+            return r >= firstRow ? tag.replace(/\s*\bhidden="[^"]*"/, '').replace(/(\/?>)$/, ' hidden="1"$1') : tag;
           }));
-        } catch (error) { console.error('유량 계산식 아래 묶음 숨기기 실패:', error); }
+        } catch (error) { console.error('계산식 아래 묶음 숨기기 실패:', error); }
       }
+      // 시트 보기 정리: 양식은 시트마다 배율(70~100%)·보기 방식(일반/페이지 나누기 미리 보기)·선택 칸·스크롤 위치가 제각각이라
+      // 파일을 열면 시트마다 모양이 달랐다 → 모든 시트를 일반 보기, 같은 배율, 눈금선 없이, 맨 위 A1에서 열리게 맞춘다
+      try {
+        let first = true;
+        for (const path of sheetPathMap.values()) {
+          const sheetFile = zip.file(path);
+          if (!sheetFile) continue;
+          const xml = await sheetFile.async('string');
+          const view = `<sheetViews><sheetView${first ? ' tabSelected="1"' : ''} showGridLines="0" zoomScale="85" zoomScaleNormal="85" zoomScaleSheetLayoutView="85" workbookViewId="0"><selection activeCell="A1" sqref="A1"/></sheetView></sheetViews>`;
+          first = false;
+          if (/<sheetViews>[\s\S]*?<\/sheetViews>/.test(xml)) zip.file(path, xml.replace(/<sheetViews>[\s\S]*?<\/sheetViews>/, () => view));
+        }
+      } catch (error) { console.error('시트 보기 정리 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
       const url = URL.createObjectURL(blob);
