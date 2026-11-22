@@ -219,9 +219,14 @@ class StyleBook {
     return index;
   }
   // 양식의 채우기 색을 기록부 색 테마로 바꾼다: 노랑(머리칸) → header, 연두(입력칸) → input
-  recolorFills({ header, input } = {}) {
+  recolorFills({ header, input, soft } = {}) {
     const swap = (fill, rgb) => fill.replace(/<fgColor\b[^>]*\/>/, `<fgColor rgb="FF${rgb}"/>`);
     this.fills = this.fills.map((fill) => {
+      // 인쇄 범위 밖 보조 표에 남아 있던 양식의 색도 기록부 색 테마로: 연한 파랑 머리칸 → 머리칸 색, 진한 연두 입력 칸 → 입력 칸 색,
+      // 기록표 시작 줄의 연한 초록 → 요약 줄 색
+      if (header && /<fgColor\b[^>]*theme="8"[^>]*tint="0\.79/.test(fill)) { this.fillsChanged = true; return swap(fill, header); }
+      if (input && /<fgColor\b[^>]*rgb="FF92D050"/.test(fill)) { this.fillsChanged = true; return swap(fill, input); }
+      if (soft && /<fgColor\b[^>]*theme="6"[^>]*tint="0\.79/.test(fill)) { this.fillsChanged = true; return swap(fill, soft); }
       if (header && /<fgColor\b[^>]*(?:rgb="FFFFFF99"|indexed="43"|rgb="FFFFFF00"|indexed="13"|indexed="11"|rgb="FF00FF00"|rgb="FF00FFFF"|indexed="15")/.test(fill)) { this.fillsChanged = true; return swap(fill, header); }
       if (input && /<fgColor\b[^>]*(?:rgb="FFCCFFCC"|indexed="42"|rgb="FFE2EFDA")/.test(fill)) { this.fillsChanged = true; return swap(fill, input); }
       return fill;
