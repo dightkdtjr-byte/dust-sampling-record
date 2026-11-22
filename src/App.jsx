@@ -6822,7 +6822,7 @@ export default function App() {
     rowColorList.forEach(({ row, colorIdx }) => {
       const rowEl = ensureRow(sheetData, row, ns);
       // 양식에서 원래 색이 칠해진 칸만 (F·J·L~O 수식·여백 칸은 제외)
-      ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'K', 'P'].forEach((col) => {
+      ['A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'K'].forEach((col) => {
         const cell = ensureCell(rowEl, parseCellRef(`${col}${row}`), ns);
         const original = parseInt(cell.getAttribute('s') || '0', 10);
         cell.setAttribute('s', String(styler.styleFor(Number.isFinite(original) ? original : 0, colorIdx)));
@@ -6966,12 +6966,14 @@ export default function App() {
       shiftCrossSheetRowRefs(sheetData, options.shiftRefsToSheet, options.shiftRefsFromRow, options.shiftRefsDelta, options.extendRangeEndFrom);
     }
 
-    updates.forEach(({ ref, value, styleFrom }) => {
+    updates.forEach(({ ref, value, styleFrom, styleOnly, clearStyle }) => {
       const parsed = parseCellRef(ref);
       if (!parsed) return;
       const row = ensureRow(sheetData, parsed.row, ns);
       const cell = ensureCell(row, parsed, ns);
-      setXmlCellValue(cell, value, ns);
+      // styleOnly: 값·수식은 그대로 두고 서식만 바꾼다. clearStyle: 서식을 지운다(양식에 남은 색·테두리 정리)
+      if (!styleOnly) setXmlCellValue(cell, value, ns);
+      if (clearStyle) cell.removeAttribute('s');
       // 새로 만든 칸에 다른 칸의 서식(테두리·글꼴)을 입힌다
       if (styleFrom) {
         const src = parseCellRef(styleFrom);
@@ -7261,6 +7263,11 @@ export default function App() {
         if (!updatesBySheet.has(sheetName)) updatesBySheet.set(sheetName, []);
         updatesBySheet.get(sheetName).push({ ref, value, styleFrom });
       };
+      // 값·수식은 그대로 두고 서식만: 다른 칸의 서식을 입히거나(styleFrom), 서식을 지운다
+      const restyle = (sheetName, ref, styleFrom = null) => {
+        if (!updatesBySheet.has(sheetName)) updatesBySheet.set(sheetName, []);
+        updatesBySheet.get(sheetName).push({ ref, styleFrom, styleOnly: true, clearStyle: !styleFrom });
+      };
       // 측정값이 들어간 행까지만 내보낸다 (조기 종료 시 계획만 채워진 빈 행이 엑셀 시간 MAX·평균에 섞이지 않게)
       const lastMeasuredIdx = getLastMeasuredMeterIdx(sourceGasMeters);
       const lastMeaningfulIdx = lastMeasuredIdx > 0
@@ -7360,10 +7367,11 @@ export default function App() {
         const nRect = `IF(${Ac}<=0.25,1,MAX(2,-INT(-(${Dc}/${lim}-0.000001))))`;
         const mRect = `IF(${Ac}<=0.25,1,MAX(2,-INT(-(N(${Wc})/${lim}-0.000001))))`;
         const nCell = `$H$${dimRow}`; const mCell = `$I$${dimRow}`; // 인쇄 범위 밖 보조 칸
-        L(`H${dimRow}`, { formula: `IF(${S}=3,${nRect},${nCirc})` }); L(`I${dimRow}`, { formula: `IF(${S}=3,${mRect},1)` });
+        L(`H${dimRow}`, { formula: `IF(${S}=3,${nRect},${nCirc})` }, 'B14'); L(`I${dimRow}`, { formula: `IF(${S}=3,${mRect},1)` }, 'B14');
         // 사각 굴뚝 측정점 축소 배수(1: 모든 측정점, 2: 수평 덕트 1/2, 4: 수직 1/4): 인쇄 범위 밖 보조 칸에 적어 엑셀에서 고칠 수 있게 한다
         const reduce = sourceData.rectReduce === 'quarter' ? 4 : sourceData.rectReduce === 'half' ? 2 : 1;
-        L(`J${dimRow - 1}`, '사각 축소 배수'); L(`J${dimRow}`, reduce);
+        // 인쇄 범위 밖 보조 칸에도 이름과 표 서식을 준다 (이름 없는 숫자만 떠 있지 않게)
+        L(`H${dimRow - 1}`, '구분 수 n', 'A12'); L(`I${dimRow - 1}`, '구분 수 m', 'A12'); L(`J${dimRow - 1}`, '축소 배수', 'A12'); L(`J${dimRow}`, reduce, 'B14');
         const rectCount = `-INT(-${nCell}*${mCell}/MAX(1,N($J$${dimRow})))`;
         // 단면적이 20 m²를 넘으면 측정점은 최대 20점 (ES 01301.1 표 2)
         L(`F${dimRow}`, { formula: `IF(${Ac}<=0.25,1,IF(${S}=3,IF(${Ac}>20,MIN(20,${rectCount}),${rectCount}),IF(${S}=2,${nCell}*4,${nCell})))` }, 'B14');
@@ -7619,6 +7627,13 @@ export default function App() {
         // 자동측정기 값이 있으면 참고로 남긴다 (선택은 C5=2라 임핀저 값이 적용됨)
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       }
+      // 노즐산정의 인쇄 범위 밖 보조 표 정리: 멀리 떨어진 칸(ED44)의 점 하나 때문에 시트가 오른쪽으로 끝없이 넓어졌다 → 지운다.
+      // 샘플러 표는 첫 두 줄만 색이 칠해져 있었다 → 나머지 줄과 같게. 노즐 순위 표의 머리글은 위 표 머리글과 같은 색으로.
+      addUpdate('노즐산정', 'ED44', null); restyle('노즐산정', 'ED44');
+      ['O', 'P'].forEach((c) => [39, 40].forEach((r) => restyle('노즐산정', `${c}${r}`, `${c}41`)));
+      if (exportSheetId !== 'flow') ['M', 'N', 'O', 'P', 'Q'].forEach((c) => restyle('노즐산정', `${c}50`, 'M45'));
+      // 유량 양식의 보조 칸(L15 정압 mmHg, L16 가스미터온도 평균)에 이름을 붙인다
+      if (exportSheetId === 'flow') { addUpdate('노즐산정', 'M15', '← 배출가스 정압 (mmHg)'); addUpdate('노즐산정', 'M16', '← 가스미터온도 평균 (℃)'); }
       // 자동측정 값이 하나도 없으면 평균이 #DIV/0!가 되던 것을 0으로 (화면의 수분량 0.00과 같게)
       addUpdate('수분량', 'B15', { formula: 'IF(COUNT(B10:B14)=0,0,AVERAGE(B10:B14))' });
       // 시료채취 후 표의 합계 줄에 이름을 붙인다 (양식은 빈칸)
@@ -7803,7 +7818,21 @@ export default function App() {
         // 가스시료채취량 V'm: 공정시험기준(ES 01301.1 식 8·9)은 가스미터 지시값을 그대로 쓴다 → 보정계수 Yd를 곱하지 않는다
         // (수분량 계산의 가스채취량은 수분량 시트에서 따로 Yd를 곱한다)
         addUpdate(recordSheet, `G${lastRow + 1}`, { formula: `(MAX(G${firstRow}:G${lastRow})-MIN(G${firstRow}:G${lastRow}))/1000` });
-        if (firstRow + 1 <= lastRow) addUpdate(recordSheet, `Q${firstRow - 2}`, '구간 시간(분)');
+        // 인쇄 범위 밖 줄별 계산 칸(L~Q열) 정리: 양식에는 빨간 글씨 메모('26년 추가'), 정압 열만 다른 색·빨간 글씨,
+        // 이름 없는 평균 칸, 머리글 없는 색칠 칸이 남아 있었다 → 다른 열과 같은 서식으로 맞추고 이름을 붙인다
+        const headRow = firstRow - 2;
+        addUpdate(recordSheet, `P${headRow - 1}`, null); restyle(recordSheet, `P${headRow - 1}`);
+        addUpdate(recordSheet, `P${headRow}`, '배출가스 정압\n(mmH2O)', `N${headRow}`); restyle(recordSheet, `P${headRow + 1}`, `N${headRow + 1}`);
+        for (let row = firstRow; row <= lastRow; row++) restyle(recordSheet, `P${row}`, `L${row}`);
+        addUpdate(recordSheet, `O${lastRow + 1}`, '평균 (mmH2O)', `M${lastRow}`); restyle(recordSheet, `P${lastRow + 1}`, `L${lastRow}`);
+        addUpdate(recordSheet, `O${lastRow + 2}`, '평균 (mmHg)', `M${lastRow}`); restyle(recordSheet, `P${lastRow + 2}`, `N${lastRow}`);
+        // 구간 시간 열(Q): 구간 시간으로 적은 기록에만 쓴다 → 그때만 머리글과 테두리를 두고, 아니면 양식에 남은 색을 지운다
+        const intervalTimes = firstRow + 1 <= lastRow && !isCumulativeMeterTime;
+        for (let row = headRow; row <= lastRow + 2; row++) restyle(recordSheet, `Q${row}`);
+        if (intervalTimes) {
+          addUpdate(recordSheet, `Q${headRow}`, '구간 시간\n(분)', `N${headRow}`); restyle(recordSheet, `Q${headRow + 1}`, `N${headRow + 1}`);
+          for (let row = firstRow; row <= lastRow; row++) restyle(recordSheet, `Q${row}`, `M${row}`);
+        }
         for (let row = firstRow + 1; row <= lastRow; row++) {
           addUpdate(recordSheet, `L${row}`, { formula: `((273+AVERAGE($D$${firstRow + 1}:D${row}))*((0.00346*O${row}+((G${row}-$G$${firstRow})/1000)/(273+AVERAGE($H$${firstRow + 1}:I${row}))*(Pa+AVERAGE($F$${firstRow + 1}:F${row})/13.6)))/((Pa+Ps)*B${row}*M${row}*(PI()/4)*Dn^2))*16670` });
         }
