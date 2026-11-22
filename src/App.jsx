@@ -7619,6 +7619,11 @@ export default function App() {
         // 자동측정기 값이 있으면 참고로 남긴다 (선택은 C5=2라 임핀저 값이 적용됨)
         for (let i = 0; i < 5; i++) addUpdate('수분량', `B${10 + i}`, toNumber(sourceMoistures[i]));
       }
+      // 자동측정 값이 하나도 없으면 평균이 #DIV/0!가 되던 것을 0으로 (화면의 수분량 0.00과 같게)
+      addUpdate('수분량', 'B15', { formula: 'IF(COUNT(B10:B14)=0,0,AVERAGE(B10:B14))' });
+      // 시료채취 후 표의 합계 줄에 이름을 붙인다 (양식은 빈칸)
+      addUpdate('수분량', `A${33 + layout.impingerRows}`, '흡습 수분의 질량 (합계)', 'A24');
+      ['B', 'C', 'D'].forEach((c) => addUpdate('수분량', `${c}${33 + layout.impingerRows}`, null, `${c}24`));
       // 양식의 가스 밀도(노즐산정 F26), 습윤 밀도(노즐산정 A34), 유량 양식의 수분량(계산식 O75)이
       // 자동측정기 평균(B15)이나 빈 칸(H29)만 보던 것을, 선택번호(C5)를 따르는 사전 수분량(노즐산정 C15)을 보게 한다
       // → 엑셀에서 1·2·3을 바꿔도 밀도·유속·노즐 계산이 같이 바뀐다
@@ -7861,7 +7866,7 @@ export default function App() {
                 // 측정방법 표가 한 줄 늘어 바로 아래 제목과 붙었으므로, 제목 줄을 높여 다른 제목들처럼 위에 여백을 둔다
                 ...(sheetName === '노즐산정' && nozzleMerges.length ? { addMerges: nozzleMerges, removeMerges: ['M21:T25', 'M27:T27', 'M28:T28', 'M29:T29', 'M30:T30'] } : {}),
                 ...(sheetName === '누출시험' && leakMerges.length ? { addMerges: leakMerges, ...(layout.leakAsPosition ? { removeMerges: ['A1:D2', 'A17:D17'] } : {}) } : {}),
-                ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7'], rowGaps: { 8: 38 } } : {}),
+                ...(sheetName === '수분량' ? { removeMerges: ['C5:C6'], addMerges: ['C5:C7', `A${33 + layout.impingerRows}:D${33 + layout.impingerRows}`], rowGaps: { 8: 38 } } : {}),
                 rowStyler,
                 centerCells: EXPORT_CENTER_CELLS(layout)[sheetName] || [],
                 // 결과보고서의 산소 농도 칸: 값이 없으면 '-'(글자)가 왼쪽에 붙으므로, 숫자처럼 단위 '(%)' 옆에 오게 오른쪽 정렬
@@ -7871,10 +7876,24 @@ export default function App() {
         );
         // 유량 양식은 수분량 시트의 무게법 표(18~29행)를 숨겨 두었다 → 흡습관법·임핀저법을 골랐으면 그 표를 보이게 한다
         // (그 아래 '시료채취 후' 표는 유량에 해당 없으므로 숨긴 채로 둔다)
-        const showWeightTable = sheetName === '수분량' && exportSheetId === 'flow' && exportMoistureMethod.id !== 'auto';
-        zip.file(sheetPath, showWeightTable
-          ? patched.replace(/<row\b[^>]*>/g, (tag) => { const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]); return r >= 18 && r <= 29 ? tag.replace(/\s*\bhidden="[^"]*"/, '') : tag; })
-          : patched);
+        // 모든 기록부: 고르지 않은 측정방법의 표는 숨긴다 (값이 없는 표에 0이나 본 측정 값이 보여 헷갈리지 않게).
+        //  - 자동측정법: 무게법 표(18~30행)를 숨긴다  - 흡습관법·임핀저법: 자동측정 값이 하나도 없으면 자동측정법 표(8~15행)를 숨긴다
+        //  숨긴 줄의 수식은 그대로라서, 엑셀에서 선택번호를 바꾸고 줄 숨기기를 풀면 다른 방법으로 볼 수 있다
+        let sheetOut = patched;
+        if (sheetName === '수분량') {
+          const weightMethod = exportMoistureMethod.id !== 'auto';
+          const setHidden = (from, to, hidden) => {
+            sheetOut = sheetOut.replace(/<row\b[^>]*>/g, (tag) => {
+              const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
+              if (!(r >= from && r <= to)) return tag;
+              const bare = tag.replace(/\s*\bhidden="[^"]*"/, '');
+              return hidden ? bare.replace(/(\/?>)$/, ' hidden="1"$1') : bare;
+            });
+          };
+          const hasAutoValues = (sourceMoistures || []).some((v) => toNumber(v) !== null);
+          if (weightMethod) { if (!hasAutoValues) setHidden(8, 15, true); if (exportSheetId === 'flow') setHidden(18, 29, false); } else setHidden(18, 30, true);
+        }
+        zip.file(sheetPath, sheetOut);
       }
 
       if (rowStyler) zip.file('xl/styles.xml', rowStyler.serialize());
