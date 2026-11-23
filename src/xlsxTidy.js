@@ -1565,7 +1565,11 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     // 가로는 글꼴 폭 어림 오차로 3%, 세로는 머리글·바닥글 공간으로 5% 여유
     const maxW = printableW * 0.97;
     const maxH = printableH * 0.95;
-    const bound = Math.min(maxW, ...measured.map((x) => (maxH / x.height) * x.width));
+    // ownScale 시트(유난히 긴 시트): 공통 폭을 정할 때 높이를 따지지 않고, 그 시트만 한 장에 들어가게 따로 줄인다
+    // (긴 시트 하나 때문에 다른 시트까지 모두 작게 인쇄되지 않게)
+    const ownScale = (x) => Boolean((typeof rules === 'function' ? rules(x.name) : rules[x.name])?.ownScale);
+    const heightCap = (x) => Math.max(10, Math.floor((maxH / x.height) * 100));
+    const bound = Math.min(maxW, ...measured.filter((x) => !ownScale(x)).map((x) => (maxH / x.height) * x.width));
     // 인쇄 범위가 없는 시트는 잰 범위(값·테두리가 있는 칸)를 인쇄 범위로 지정한다 (엑셀이 빈 서식 칸까지 잡지 않게)
     for (const x of measured) {
       if (!x.fromContent || printAreaUpdates.has(x.index)) continue;
@@ -1574,7 +1578,7 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
     const fixedWidth = typeof equalWidth === 'object' && equalWidth.width ? equalWidth.width : null;
     // 배율은 정수(%)만 되므로, 배율이 작은 시트(계산식 등)는 반올림 오차로 폭이 어긋난다.
     // 공통 폭을 상한에서 조금씩 낮춰 가며, 모든 시트가 들어가면서 장끼리 폭 차이가 가장 작은 값을 고른다
-    const scalesFor = (common, round) => measured.map((x) => Math.max(10, Math.min(400, round((common / x.width) * 100))));
+    const scalesFor = (common, round) => measured.map((x) => Math.max(10, Math.min(400, ownScale(x) ? heightCap(x) : 400, round((common / x.width) * 100))));
     let best = null;
     for (let k = 0; k <= 120; k++) {
       const common = bound * (1 - k * 0.001);
@@ -1582,7 +1586,8 @@ export async function tidyWorkbook(zip, { rules = {}, onePageSheets = [], equalW
       const widths = measured.map((x, i) => (x.width * scales[i]) / 100);
       const fits = measured.every((x, i) => widths[i] <= maxW + 0.01 && (x.height * scales[i]) / 100 <= maxH + 0.01);
       if (!fits) continue;
-      const spread = Math.max(...widths) / Math.min(...widths);
+      const shared = widths.filter((w, i) => !ownScale(measured[i]));
+      const spread = shared.length ? Math.max(...shared) / Math.min(...shared) : 1;
       // 폭 차이가 0.3% 넘게 줄어들 때만 더 작은 공통 폭을 택한다 (괜히 작아지지 않게)
       if (!best || spread < best.spread - 0.003) best = { spread, scales };
     }

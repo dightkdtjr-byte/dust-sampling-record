@@ -7383,6 +7383,9 @@ export default function App() {
         L(`D${r}`, { formula: `IF(${S}=3,"가로 방향 최종 위치","최종 샘플링 위치")` }, 'A12');
         L(`E${r}`, { formula: `IF(${S}=3,"세로 방향 최종 위치","반대편")` }, 'A12'); L(`F${r}`, null, 'A12'); leakMerges.push(`E${r}:F${r}`); r += 1;
         const rowsCount = Math.max(5, sp && sp.rect ? Math.min(12, Math.max(sp.perRadius, sp.lines || 0)) : 0);
+        const pointFirstRow = r;
+        // 실제 측정점보다 남는 빈 줄은 숨긴다 (테두리만 있는 빈 줄이 표 아래에 늘어서지 않게. 수식은 그대로라 숨기기를 풀면 다시 쓸 수 있다)
+        const pointUsedRows = sp ? Math.min(rowsCount, sp.rect ? Math.max(sp.perRadius, sp.lines || 0) : sp.perRadius) : 0;
         for (let i = 1; i <= rowsCount; i++) {
           // 벽에서 가까운 점부터: 원형은 R - 계수×R, 사각은 (i - 0.5) × 깊이 ÷ n
           // 반경 구분 수(n)별 계수 표에서 i번째(벽에 가까운 순) 계수. 해당 없는 칸은 0
@@ -7404,7 +7407,7 @@ export default function App() {
         blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
         L(`A${r}`, { formula: `IF(${S}=3,"세로 방향 측정공: 깊이(D) 쪽 변에 "&${nCell}&"개, 간격 "&ROUND(${Dc}/${nCell}*100,1)&" cm (첫 측정공은 모서리에서 "&ROUND(${Dc}/${nCell}*50,1)&" cm)","")` }, 'A5');
         blankRow(r, 'A5', ['A']); leakMerges.push(`A${r}:F${r}`); r += 1;
-        leakPositionCells = { area: `E${dimRow}`, dimRow, selRow, lastRow: r, methodFirst, methodLast };
+        leakPositionCells = { area: `E${dimRow}`, dimRow, selRow, lastRow: r, methodFirst, methodLast, pointHide: pointUsedRows >= 1 && pointUsedRows < rowsCount ? [pointFirstRow + pointUsedRows, pointFirstRow + rowsCount - 1] : null };
         leakFooterRow = r + 1;
       }
 
@@ -7940,6 +7943,12 @@ export default function App() {
         };
         // 결과보고서의 먼지농도 줄은 먼지 기록부에만 둔다
         if (sheetName === '먼지측정결과보고서' && exportSheetId !== 'dust') setHidden(12, 12, true);
+        if (sheetName === '누출시험' && leakPositionCells?.pointHide) setHidden(leakPositionCells.pointHide[0], leakPositionCells.pointHide[1], true);
+        // 노즐산정의 측정점별 표(17~21행, 5점까지): 쓰지 않은 지점 줄은 숨긴다
+        if (sheetName === '노즐산정' && sourcePoints.length <= 5) {
+          const used = sourcePoints.filter((point) => ['ts', 'tp', 'sp', 'dp'].some((k) => toNumber(point?.[k]) !== null)).length;
+          if (used >= 1 && used < 5) setHidden(17 + used, 21, true);
+        }
         if (sheetName === '수분량') {
           const weightMethod = exportMoistureMethod.id !== 'auto';
           const hasAutoValues = (sourceMoistures || []).some((v) => toNumber(v) !== null);
@@ -7980,6 +7989,14 @@ export default function App() {
             }
           }
         } catch (error) { console.error('표준산소 환산 유량 묶음 처리 실패:', error); }
+        // 먼지 기록부: 꼬리말 아래에 있는 '먼지농도 계산'(93~103행)·'표준산소 환산 먼지농도'(104~111행)도 인쇄 범위에 넣는다
+        // (결과보고서에 적는 먼지농도의 계산 과정이 화면에는 있는데 인쇄·PDF에서는 잘려 나가지 않게)
+        if (exportSheetId === 'dust') {
+          try {
+            const dustTitle = await readSheetCellText(zip, calcPath, 'A93');
+            if (dustTitle.includes('먼지농도 계산')) o2CalcPrintEndRow = String(sourceData.standardO2 ?? '').trim() ? 111 : 103;
+          } catch (error) { console.error('먼지농도 계산 인쇄 범위 처리 실패:', error); }
+        }
       }
       // 계산식: 수식 그림(캡처)을 엑셀 수식 개체로 바꾼다 (엑셀에서 실제 수식으로 보이고, 다른 프로그램은 원래 그림을 보여 준다)
       if (sheetPathMap.has('계산식')) {
@@ -8207,7 +8224,9 @@ export default function App() {
               })()], align: false, shrinkText: /^.{1,8}=\s*$/, furniture: { sectionRule: true, sectionBand: exportPalette.soft },
               // 더 크게 인쇄되게: 넓은 열을 줄이고(가로), 묶음 사이의 남는 빈 줄을 숨긴다(세로)
               scaleCols: { factor: 0.7, minChars: 7, floor: 6 },
-              hideBlankRows: [16, 17, 23, 42, 45, 48, 50, 56, 57, 67, 72, 73, 82] },
+              hideBlankRows: [16, 17, 23, 42, 45, 48, 50, 56, 57, 67, 72, 73, 82],
+              // 먼지 기록부는 먼지농도 계산까지 넣어 시트가 길다 → 이 시트만 따로 줄인다 (다른 시트 인쇄 크기는 그대로)
+              ownScale: exportSheetId === 'dust' },
             // 누출시험 표는 A~F열 18행으로 그리므로 인쇄 범위도 맞춘다 (수은·PAHs 양식은 A1:D17로 잘려 있었다)
             [leakFooterRow ? positionSheetNameOf(layout) : '누출시험']: { printArea: `A1:F${leakPrintEnd}`, ...(leakPositionCells ? { rowHeights: rowsAt(leakPositionCells.methodFirst, leakPositionCells.methodLast, 19), numberFormats: [...(layout.leak ? [{ range: 'A14', code: EXPORT_DATE_FORMAT }] : []), { range: `C${leakPositionCells.dimRow}:E${leakPositionCells.dimRow}`, code: '0.00' }, { range: `B${leakPositionCells.dimRow + 3}:F${leakPositionCells.lastRow}`, code: '0.00' }] } : {}), ...(layout.leakAsPosition && leakFooterRow ? { hideRows: [3, 20] } : {}) },
             먼지측정결과보고서: { numberFormats: [{ range: 'G10', code: '0.0' }, { range: 'G2', code: EXPORT_DATE_FORMAT }] },
@@ -8249,6 +8268,21 @@ export default function App() {
             return r >= firstRow ? tag.replace(/\s*\bhidden="[^"]*"/, '').replace(/(\/?>)$/, ' hidden="1"$1') : tag;
           }));
         } catch (error) { console.error('계산식 아래 묶음 숨기기 실패:', error); }
+      }
+      // 먼지 기록부: 인쇄 범위를 먼지농도 계산까지 늘렸으므로, 그 사이에 낀 양식번호 줄(■…)은 숨긴다 (양식번호는 쪽 바닥글에 나온다)
+      if (exportSheetId === 'dust' && sheetPathMap.get('계산식')) {
+        try {
+          const calcPathNow = sheetPathMap.get('계산식');
+          const footerRows = [];
+          for (let r = 80; r <= 95; r++) if ((await readSheetCellText(zip, calcPathNow, `A${r}`)).trim().startsWith('■')) footerRows.push(r);
+          if (footerRows.length) {
+            const calcNow = await zip.file(calcPathNow).async('string');
+            zip.file(calcPathNow, calcNow.replace(/<row\b[^>]*>/g, (tag) => {
+              const r = Number((/\br="(\d+)"/.exec(tag) || [])[1]);
+              return footerRows.includes(r) ? tag.replace(/\s*\bhidden="[^"]*"/, '').replace(/(\/?>)$/, ' hidden="1"$1') : tag;
+            }));
+          }
+        } catch (error) { console.error('계산식 양식번호 줄 숨기기 실패:', error); }
       }
       // 연소가스 시트의 그래프 정리: 굵은 검은 점선 눈금·검은 테두리를 연한 회색 실선으로, 가로축 시각이 0으로만 나오던
       // 표시 형식(#,##0)을 시:분으로, 120칸마다 하나만 보이던 가로축 눈금을 측정값마다 보이게 한다. 자료 선의 색은 그대로 둔다
