@@ -91,7 +91,9 @@ const computeSamplingPoints = (data) => {
   const D = parseFloat(data?.stackDiameter); const flange = parseFloat(data?.flangeLength) || 0;
   if (!Number.isFinite(D) || D <= 0) return null;
   const area = calcStackArea(data);
-  const cm = (m) => ((m + flange) * 100).toFixed(2);
+  // 소수 둘째 자리 반올림은 십진 기준으로 (36.985가 36.98로 내려가 엑셀 표시 36.99와 어긋나지 않게)
+  const fix2 = (v) => (Math.round(Number((v * 100).toPrecision(12))) / 100).toFixed(2);
+  const cm = (m) => fix2((m + flange) * 100);
   if (data?.stackShape === 'rect') {
     const side = parseFloat(data?.stackSide);
     if (!Number.isFinite(area)) return { rect: true, perRadius: 0, isCenterOnly: false, coeffs: [], area: '', nearInsertion: [], farInsertion: [], wallDistances: [], lines: 0, total: 0, diameterLabel: `${D} m` };
@@ -107,7 +109,7 @@ const computeSamplingPoints = (data) => {
       // 단면적이 20 m²를 넘으면 최대 20점 (ES 01301.1 표 2)
       reduced: isCenterOnly ? 1 : Math.min(area > 20 ? 20 : Infinity, Math.max(1, Math.ceil((n * lines) / (data?.rectReduce === 'quarter' ? 4 : data?.rectReduce === 'half' ? 2 : 1)))),
       diameterLabel: `${D} × ${side} m`, area: area.toFixed(2),
-      wallDistances: dist.map((d) => (d * 100).toFixed(2)),
+      wallDistances: dist.map((d) => fix2(d * 100)),
       portPositions: Array.from({ length: lines }, (_, i) => ((((i + 0.5) * side) / lines) * 100).toFixed(1)),
       nearInsertion: dist.map(cm), farInsertion: isCenterOnly ? [] : Array.from({ length: lines }, (_, j) => cm(((j + 0.5) * side) / lines)),
     };
@@ -127,7 +129,7 @@ const computeSamplingPoints = (data) => {
   return {
     rect: false, perRadius: isCenterOnly ? 1 : rnCoeffs.length, lines: 1, total: isCenterOnly ? 1 : rnCoeffs.length,
     isCenterOnly, coeffs: rnCoeffs, diameterLabel: `${D} m`, area: area.toFixed(2),
-    wallDistances: near.map((d) => (d * 100).toFixed(2)),
+    wallDistances: near.map((d) => fix2(d * 100)),
     nearInsertion: near.map(cm), farInsertion: far.map(cm),
   };
 };
@@ -5453,7 +5455,8 @@ export default function App() {
   const getRawOrificePressureFromRow = (row) => {
     const kVal = parseFloat(formData.kFactor);
     const dpVal = parseFloat(row?.dp);
-    if (Number.isFinite(kVal) && Number.isFinite(dpVal)) return kVal * dpVal;
+    // 엑셀 기록지 F열 = ROUND(K×동압, 4)와 같게 넷째 자리로 맞춘다 (평균·등속흡입계수가 끝자리에서 달라지지 않게)
+    if (Number.isFinite(kVal) && Number.isFinite(dpVal)) return Math.round(Number((kVal * dpVal * 10000).toPrecision(12))) / 10000;
     const manualPressure = parseFloat(row?.pressure);
     return Number.isFinite(manualPressure) ? manualPressure : NaN;
   };
@@ -5741,7 +5744,8 @@ export default function App() {
   const calcO2CorrectionFactor = () => {
     const o2_ref = parseFloat(formData.standardO2);
     const gasComp = getGasComposition();
-    const o2_act = gasComp.o2;
+    // 실측 산소농도는 회사 양식(연소가스 시트 평균 칸)처럼 소수 둘째 자리로 반올림한 값으로 환산한다
+    const o2_act = Math.round(Number((gasComp.o2 * 100).toPrecision(12))) / 100;
     if (isNaN(o2_ref)) return 1.0;
     // 표준산소농도는 있는데 실측 O2가 없으면 0%로 보정하지 않고 계산 불가로 둔다
     if (!hasMeasuredO2() || isNaN(o2_act) || o2_act >= 21) return NaN;
@@ -7565,9 +7569,27 @@ export default function App() {
       addUpdate('노즐산정', 'G15', sourcePoints.length <= 5 ? { formula: 'IFERROR(AVERAGE(G17:G21),"")' } : (Number.isFinite(avgTs) ? avgTs : null));
       // K factor의 온도비는 (가스미터 평균온도+273)/(굴뚝온도+273)이다. 양식은 (가스미터 출구)/(가스미터 입구)로 잘못 걸려 있어
       // K와 ΔH가 실제보다 크게 나왔다 (프로그램 화면의 계산은 원래 Tm/Ts를 쓴다)
+      // 노즐별 예상 채취량: 프로그램의 노즐 예측표와 같은 식으로 계산한다.
+      //  노즐로 들어오는 가스(유속×노즐 단면적)를 건조 기준으로 바꿔
+      //   · (L)  가스미터가 가리킬 양 = …×(Tm+273)/(Ts+273)×(굴뚝 절대압/대기압)÷Yd
+      //   · (SL) 표준상태 양       = …×273/(273+Ts)×(굴뚝 절대압/760)
+      //  양식은 (L)에 온도·압력 환산 없이 Yd를 곱하고, (SL)에는 굴뚝 압력 대신 가스미터 압력(대기압+ΔH)을 써서
+      //  프로그램 화면의 예측표와 값이 달랐다 ((L)은 30% 안팎, (SL)·예상시간은 1% 안팎)
+      const nozzleDryFlow = (dia) => `PI()/4*${dia}^2*$G$39*60/1000*(1-$C$15/100)`;
+      const nozzleStdFlow = (dia) => `${nozzleDryFlow(dia)}*(273/(273+$G$15))*(($B$8+$I$15/13.6)/760)`;
       for (let i = 0; i < layout.nozzleRows; i++) {
         const row = 39 + i;
         addUpdate('노즐산정', `D${row}`, { formula: `8.001*10^-5*C${row}^4*$F$8*$C$10^2*(1-$C$15/100)^2*($H$8/$I$8)*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)` });
+        if (exportSheetId !== 'flow') {
+          addUpdate('노즐산정', `H${row}`, { formula: `${nozzleDryFlow(`C${row}`)}*$A$39*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)/$G$8` });
+          addUpdate('노즐산정', `I${row}`, { formula: `${nozzleStdFlow(`C${row}`)}*$A$39` });
+        }
+      }
+      if (exportSheetId !== 'flow') {
+        // 사용 노즐의 분당 유량(SL/min)과 순위 표의 예상시간도 같은 식으로 (예상시간의 목표량은 프로그램의 목표 채취량)
+        const targetVolume = toNumber(sourceData.targetVolume) > 0 ? toNumber(sourceData.targetVolume) : 1000;
+        addUpdate('노즐산정', 'O46', { formula: nozzleStdFlow('M46') });
+        for (let row = 51; row <= 58; row++) addUpdate('노즐산정', `Q${row}`, { formula: `IFERROR(CEILING(${targetVolume}/(${nozzleStdFlow(`O${row}`)}),1),"")` });
       }
       for (let i = 0; i < 5; i++) {
         const point = sourcePoints[i] || {};
@@ -9104,6 +9126,51 @@ export default function App() {
         isokinetic: num(calcIsokineticRate(true)), flowWet: num(flows.wetRaw), flowDry: num(flows.dryRaw),
         o2Factor: num(calcO2CorrectionFactor()), dustWeight: num(getRawDustWeightDiff()), concActual: num(conc.actualC), concCorrected: num(conc.correctedC),
         pitotFactor: num(formData.pitotFactor), kFactor: num(formData.kFactor), nozzleDiameter: num(formData.nozzleDiameter), rows,
+        // 전체 대조용: 엑셀의 계산 칸마다 짝이 되는 화면 계산값 (반올림 전 값)
+        full: (() => {
+          const avg = (list) => { const v = list.map((x) => parseFloat(x)).filter(Number.isFinite); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+          const Pa = parseFloat(formData.atmPressure);
+          const preAbs = getRawStackPressure();
+          const tsPre = getRawAvgTs(); const dpPre = getRawAvgDp(); const vsPre = getRawGasVelocity();
+          const tmPre = getTraverseMeterTempAvg();
+          const cp = parseFloat(formData.pitotFactor) || 0.84; const yd = parseFloat(formData.gasMeterFactor) || 1.0; const dHAt = parseFloat(formData.deltaHAt);
+          const psRatio = preAbs / Pa;
+          const nozzles = getConfiguredNozzles().map((n) => {
+            const d = parseFloat(n.d);
+            const k = 8.001e-5 * Math.pow(d, 4) * dHAt * Math.pow(cp, 2) * Math.pow(1 - gas.Xw / 100, 2) * (gas.Md / gas.Ms) * ((tmPre + 273) / (tsPre + 273)) * psRatio;
+            const an = Math.PI * Math.pow(d / 2000, 2);
+            const qm = (vsPre * an * 60000 * ((tmPre + 273) / (tsPre + 273)) * (preAbs / Pa) * (1 - gas.Xw / 100)) / yd;
+            const qsl = qm * yd * (273 / (tmPre + 273)) * (Pa / 760);
+            return { num: num(n.num), d: num(d), k: num(k), dH: num(k * dpPre), qm: num(qm), qsl: num(qsl), time: num(Math.ceil((parseFloat(formData.targetVolume) || 1000) / qsl)) };
+          });
+          const sampling = formData.gasMeters.map((row, idx) => ({ row, idx })).filter(({ row, idx }) => isActiveMeterRow(row, idx) && idx > 0);
+          const post = getRawPostMoistureFactors();
+          const pre = formData.preImpinger || {};
+          return {
+            pre: { avgTp: num(getRawAvgTp()), avgSp: num(getRawAvgSp()), avgDp: num(dpPre), avgTs: num(tsPre), absPressure: num(preAbs), density: num(gas.r0 * (273 / (273 + tsPre)) * (preAbs / 760)), velocity: num(vsPre), tm: num(tmPre) },
+            nozzles,
+            meterAvg: {
+              minutes: num(getSamplingMinutes()), vacuum: avg(sampling.map(({ row }) => row.vacuum)), ts: avg(sampling.map(({ row }) => row.stackTemp)), dp: avg(sampling.map(({ row }) => row.dp)),
+              orifice: num(getRawAvgOrifice()), volumeM3: num(getRawGasMeterVolDiff() / 1000), tm: num(getRawAvgTm()), impingerTemp: avg(sampling.map(({ row }) => row.impingerTemp)),
+              spAbs: num(getRawSamplingStackPressure()), vmStdM3: num(getRawVmStd() / 1000),
+            },
+            rowOrifice: formData.gasMeters.map((row) => num(getRawOrificePressureFromRow(row))),
+            moisture: {
+              method: formData.moistureMethod, pre: num(getRawPreMoisture()), post: num(getRawPostMoisture()), water: num(getRawTotalMoistureWeight()),
+              postVmStdL: post ? num(post.vmStdL) : null, postDeltaVmL: post ? num(post.deltaVmL) : null,
+              preWater: (pre.impingers || []).reduce((sum, imp) => { const x = parseFloat(imp?.initial), y = parseFloat(imp?.final); return Number.isFinite(x) && Number.isFinite(y) ? sum + (y - x) : sum; }, 0),
+            },
+            result: {
+              xwReport: num(isFlowRecordSheet ? getRawPreMoisture() : getRawPostMoisture()),
+              density: num(isFlowRecordSheet ? gas.r0 * (273 / (273 + tsPre)) * (preAbs / 760) : getRawAvgCorrectedDensityFromMeterRows()),
+              velocity: num(isFlowRecordSheet ? vsPre : getRawGasVelocityFromMeterRows()),
+              isokinetic: num(calcIsokineticRate(true)), qa: num(flows.dryRaw), qWet: num(flows.wetRaw), o2Factor: num(calcO2CorrectionFactor()),
+              ca: (() => { const v = getRawVmStd() / 1000, w = getRawDustWeightDiff(); return v > 0 && w > 0 ? w / v : null; })(),
+              dc: (() => { const v = getRawVmStd() / 1000, w = getRawDustWeightDiff(), k = calcO2CorrectionFactor(); return v > 0 && w > 0 && Number.isFinite(k) ? (w / v) * k : null; })(),
+              dustMg: num(getRawDustWeightDiff()),
+            },
+          };
+        })(),
       };
     };
     window.__stackpilotLoadForTest = (report) => setFormData(() => {
