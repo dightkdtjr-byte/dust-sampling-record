@@ -1083,107 +1083,103 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
 
 const SKYLINE_FLYER_CSS = `
 @keyframes skylineTwinkle {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 0.85; }
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
 }
 .skyline-star {
   position: absolute;
   border-radius: 9999px;
-  background: rgba(226, 232, 244, 0.9);
+  background: #e9dfc6;
   animation: skylineTwinkle var(--twinkle-duration, 3.2s) ease-in-out infinite;
   animation-delay: var(--twinkle-delay, 0s);
 }
-/* 달: 가는 초승달. 노란 그라데이션 대신 상아색 한 톤 */
+/* 해·달: 번짐 없는 납작한 색면 (판화의 한 판) */
 .skyline-moon {
   position: absolute;
-  left: 9%;
+  left: 10%;
   top: 9%;
-  width: clamp(40px, 4.6vw, 62px);
-  height: clamp(40px, 4.6vw, 62px);
+  width: clamp(44px, 5vw, 66px);
+  height: clamp(44px, 5vw, 66px);
   border-radius: 9999px;
-  background: #ece6d6;
-  -webkit-mask: radial-gradient(circle at 66% 42%, transparent 49%, #000 50.5%);
-  mask: radial-gradient(circle at 66% 42%, transparent 49%, #000 50.5%);
-  transform: rotate(-18deg);
+  background: #e9dfc6;
+  -webkit-mask: radial-gradient(circle at 68% 40%, transparent 50%, #000 51%);
+  mask: radial-gradient(circle at 68% 40%, transparent 50%, #000 51%);
+  transform: rotate(-20deg);
 }
-.skyline-moon-halo {
-  position: absolute;
-  left: calc(9% - 110px);
-  top: calc(9% - 110px);
-  width: 280px;
-  height: 280px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(214, 222, 240, 0.16), rgba(160, 176, 214, 0.06) 42%, rgba(160, 176, 214, 0) 70%);
-}
-/* 해: 윤곽이 번지는 옅은 원반. 빛살·테두리 없음 */
+.skyline-moon-halo { display: none; }
 .skyline-sun {
   position: absolute;
   left: 9%;
-  top: 8%;
-  width: clamp(54px, 6vw, 80px);
-  height: clamp(54px, 6vw, 80px);
+  top: 9%;
+  width: clamp(56px, 6.5vw, 86px);
+  height: clamp(56px, 6.5vw, 86px);
   border-radius: 9999px;
-  background: radial-gradient(circle, #fffdf4 0 52%, rgba(255, 250, 232, 0.75) 66%, rgba(255, 246, 220, 0) 100%);
-  box-shadow: 0 0 60px 30px rgba(255, 248, 226, 0.55), 0 0 180px 90px rgba(255, 244, 214, 0.32);
+  background: #f7f1df;
 }
 .skyline-sunrise-mountain, .skyline-sunrise-mountain-sheet {
   position: absolute;
-  left: 76%;
-  top: 46%;
-  width: clamp(60px, 6.4vw, 88px);
-  height: clamp(60px, 6.4vw, 88px);
+  left: 64%;
+  top: 44%;
+  width: clamp(130px, 17vw, 250px);
+  height: clamp(130px, 17vw, 250px);
   border-radius: 9999px;
-  background: radial-gradient(circle, #fff3dc 0 50%, rgba(255, 226, 190, 0.8) 64%, rgba(255, 214, 170, 0) 100%);
-  box-shadow: 0 0 70px 36px rgba(255, 220, 178, 0.5), 0 0 220px 120px rgba(255, 196, 150, 0.3);
+  background: #d9603b;
 }
 .skyline-sunrise-mountain-sheet {
-  top: 58%;
-  width: clamp(44px, 5vw, 64px);
-  height: clamp(44px, 5vw, 64px);
+  top: 62%;
+  width: clamp(90px, 11vw, 160px);
+  height: clamp(90px, 11vw, 160px);
 }
-/* 구름: 뭉게구름 대신 길게 누운 옅은 층운 */
+/* 구름: 목판화의 가로 띠 구름. 끝이 둥근 납작한 띠 두 줄 */
 @keyframes skylineCloudDrift {
-  from { transform: translateX(-40vw) scale(var(--cloud-scale, 1)); }
+  from { transform: translateX(-45vw) scale(var(--cloud-scale, 1)); }
   to { transform: translateX(125vw) scale(var(--cloud-scale, 1)); }
 }
 .skyline-cloud {
   position: absolute;
   left: 0;
-  width: 460px;
-  height: 22px;
+  width: 300px;
+  height: 7px;
   border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--cloud-color, rgba(255, 255, 255, 0.8)) 30%, var(--cloud-color, rgba(255, 255, 255, 0.8)) 62%, rgba(255, 255, 255, 0));
+  background: var(--cloud-color, #f6f1e4);
   transform-origin: left center;
-  filter: blur(9px);
-  animation: skylineCloudDrift calc(var(--cloud-duration, 160s) * 1.6) linear infinite;
+  animation: skylineCloudDrift calc(var(--cloud-duration, 160s) * 2) linear infinite;
   animation-delay: var(--cloud-delay, 0s);
   will-change: transform;
 }
+.skyline-cloud::after {
+  content: '';
+  position: absolute;
+  left: 22%;
+  top: 14px;
+  width: 64%;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--cloud-color, #f6f1e4);
+}
+/* 종이 결: 화면 전체에 깔리는 고운 알갱이 */
+.skyline-grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .1 0 0 0 0 .1 0 0 0 .7 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: var(--grain-opacity, 0.5);
+  mix-blend-mode: multiply;
+}
 @keyframes skylinePlume {
-  from { transform: scale(1, 1) translateY(0); }
-  to { transform: scale(1.07, 1.1) translateY(-5px); }
+  from { transform: translateX(0); }
+  to { transform: translateX(14px); }
 }
 .skyline-plume {
-  transform-box: fill-box;
-  transform-origin: left bottom;
-  animation: skylinePlume var(--plume-duration, 22s) ease-in-out infinite alternate;
+  animation: skylinePlume var(--plume-duration, 16s) ease-in-out infinite alternate;
   animation-delay: var(--plume-delay, 0s);
 }
 @keyframes skylineBeacon {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 1; }
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0.15; }
 }
 .skyline-beacon {
-  animation: skylineBeacon 3.2s ease-in-out infinite;
+  animation: skylineBeacon 2.8s linear infinite;
   animation-delay: var(--beacon-delay, 0s);
-}
-@keyframes skylineLight {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-.skyline-light {
-  animation: skylineLight var(--glow-duration, 6s) ease-in-out infinite;
-  animation-delay: var(--glow-delay, 0s);
 }
 .skyline-svg {
   position: absolute;
@@ -1193,66 +1189,44 @@ const SKYLINE_FLYER_CSS = `
   width: 100%;
   height: 100%;
   display: block;
-  /* 연기가 그림 영역 위로 올라가도 잘리지 않고 하늘로 이어지게 */
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-light { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon { animation: none; }
 }
 `;
 
-// ── 안개 낀 강 건너 공단: 멀수록 하늘빛에 묻히는 색(공기 원근)으로 깊이를 낸 조용한 풍경 ──
-// 층마다 한 색조만 쓰고, 굴뚝은 왼쪽이 밝은 원통 명암. 가운데 큰 굴뚝에는 시료채취 작업대가 달려 있다.
+// ── 판화 포스터풍 공단 풍경 ──
+// 모드마다 잉크 다섯 가지쯤만 쓴다. 그라데이션·번짐 없이 납작한 색면과 가는 선으로만 그리고,
+// 가장자리는 손으로 오린 듯 살짝 흔들리게, 화면은 한쪽(가운데 오른편)으로 몰아 비대칭으로 짠다.
 const SKYLINE_PALETTES = {
   day: {
-    ridge1: '#d3dbe0', ridge2: '#bfcad2', far: '#aab7c1', tower: '#93a2ae', towerShade: '#7f8f9c',
-    plant: '#6b7b88', plantLight: '#8b9aa6', plantShade: '#515f6b', band: '#a9675c',
-    mist: 'rgba(238,236,229,0.9)', glow: 'rgba(255,250,236,0.55)',
-    water0: '#e3e8e8', water1: '#b9c5cc', ripple: 'rgba(255,255,255,0.55)',
-    bank: '#3d4b4d', bankShade: '#273234', plume: 'rgba(255,255,255,0.95)', light: null, beacon: null,
+    ridge1: '#b9c8c4', ridge2: '#93aaaa', far: '#7b949a', ink: '#2c4150', mid: '#4f6875', band: '#c4523a',
+    plume: '#f7f2e5', plumeShade: '#dcd9ca', water: '#d5dcd0', stroke: '#f7f2e5', bank: '#1d2c36', light: null, beacon: null,
   },
   morning: {
-    ridge1: '#dcc6c1', ridge2: '#c6adb2', far: '#ac93a0', tower: '#96808f', towerShade: '#806b7c',
-    plant: '#66566a', plantLight: '#87758a', plantShade: '#4a3d4f', band: '#a05a52',
-    mist: 'rgba(247,222,200,0.9)', glow: 'rgba(255,214,170,0.6)',
-    water0: '#f3d8c0', water1: '#c2aab3', ripple: 'rgba(255,240,224,0.6)',
-    bank: '#372d3d', bankShade: '#231c29', plume: 'rgba(255,238,224,0.95)', light: null, beacon: null,
+    ridge1: '#e0ae8b', ridge2: '#bf8672', far: '#93676a', ink: '#2b2436', mid: '#54425c', band: '#d9603b',
+    plume: '#f9ecd5', plumeShade: '#e9c9a5', water: '#eecda3', stroke: '#f9ecd5', bank: '#1b1624', light: null, beacon: null,
   },
   night: {
-    ridge1: '#1d2841', ridge2: '#172037', far: '#121a2d', tower: '#0f1727', towerShade: '#0a101d',
-    plant: '#0a101d', plantLight: '#172138', plantShade: '#05080f', band: '#3a1f24',
-    mist: 'rgba(38,50,80,0.75)', glow: 'rgba(120,110,120,0.22)',
-    water0: '#202a40', water1: '#0b111e', ripple: 'rgba(170,186,220,0.16)',
-    bank: '#04070d', bankShade: '#020409', plume: 'rgba(150,166,200,0.26)', light: '#ffd9a3', beacon: '#ff5b4d',
+    ridge1: '#1e3348', ridge2: '#18293b', far: '#132334', ink: '#060c14', mid: '#101c2a', band: '#7c2f29',
+    plume: '#34495e', plumeShade: '#2a3c50', water: '#1a2b3c', stroke: '#3b536a', bank: '#03070c', light: '#e9b867', beacon: '#e5503f',
   },
 };
 
-// 공단 바닥(= 강기슭) 높이
-const SCENE_GROUND = 440;
-// 굴뚝: x는 중심, w는 밑동 너비. plat는 작업대 높이(굴뚝 높이에 대한 비율), plume은 연기 길이
+// 물가(공단 바닥) 높이
+const SCENE_GROUND = 452;
+// 굴뚝: x는 중심, w는 밑동 너비. plat는 작업대 높이 비율, plume은 연기 크기 배율(0이면 연기 없음)
 const SCENE_STACKS = [
-  { x: 322, w: 28, h: 238, plat: [0.64], plume: 300 },
-  { x: 612, w: 42, h: 372, plat: [0.5, 0.8], plume: 440 },
-  { x: 706, w: 24, h: 206, plat: [0.62], plume: 230 },
-  { x: 1012, w: 36, h: 312, plat: [0.58], plume: 370 },
-  { x: 1338, w: 26, h: 226, plat: [0.62], plume: 280 },
+  { x: 700, w: 44, h: 384, plat: [0.52, 0.82], plume: 1.25 },
+  { x: 776, w: 34, h: 300, plat: [0.6], plume: 0.9 },
+  { x: 918, w: 26, h: 214, plat: [0.62], plume: 0 },
+  { x: 318, w: 22, h: 190, plat: [0.64], plume: 0.6 },
 ];
-// 먼 공단의 굴뚝 (작고 옅게)
-const SCENE_FAR_STACKS = [
-  { x: 96, w: 10, h: 120 }, { x: 138, w: 8, h: 92 }, { x: 204, w: 12, h: 142 },
-  { x: 1452, w: 11, h: 128 }, { x: 1508, w: 8, h: 96 }, { x: 1560, w: 10, h: 112 },
-];
-const SCENE_COOLING = [{ x: 770, w: 150, h: 176 }, { x: 898, w: 118, h: 146 }];
-const SCENE_HALLS = [{ x: 372, w: 190, h: 44, teeth: 5 }, { x: 1066, w: 210, h: 52, teeth: 0 }, { x: 196, w: 96, h: 34, teeth: 0 }, { x: 1392, w: 120, h: 38, teeth: 3 }];
-const SCENE_TANKS = [{ x: 468, w: 54, h: 60 }, { x: 528, w: 54, h: 74 }, { x: 1404, w: 46, h: 54 }];
-// 증류탑 무리
-const SCENE_COLUMNS = [{ x: 1178, w: 14, h: 128 }, { x: 1202, w: 18, h: 164 }, { x: 1232, w: 12, h: 104 }, { x: 1256, w: 15, h: 142 }];
-const SCENE_PIPE_RACK = { x0: 724, x1: 1000, y: 26 };
-// 앞 강둑의 나무: 양옆에 몰아 화면 가운데를 비운다
-const SCENE_TREES = [
-  ...Array.from({ length: 16 }, (_, i) => ({ x: -6 + i * 19 + ((i * 7) % 9), r: (13 + ((i * 11) % 14)) * (1 - i / 26) })),
-  ...Array.from({ length: 16 }, (_, i) => ({ x: 1606 - i * 19 - ((i * 5) % 8), r: (14 + ((i * 13) % 15)) * (1 - i / 26) })),
-];
+const SCENE_FAR_STACKS = [{ x: 1392, w: 10, h: 132 }, { x: 1428, w: 8, h: 104 }, { x: 96, w: 9, h: 96 }];
+const SCENE_TANKS = [{ x: 1010, w: 96, h: 58 }, { x: 1118, w: 96, h: 58 }, { x: 1226, w: 70, h: 44 }];
+const SCENE_COLUMNS = [{ x: 838, w: 14, h: 150 }, { x: 862, w: 18, h: 118 }, { x: 962, w: 13, h: 132 }];
+const SCENE_HALLS = [{ x: 520, w: 150, h: 46, teeth: 4 }, { x: 352, w: 130, h: 30, teeth: 0 }];
 
 const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
@@ -1260,200 +1234,141 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const G = SCENE_GROUND;
   const stackScale = compact ? 0.66 : 1;
   const night = Boolean(pal.light);
-  const cyl = `url(#${id('cyl')})`;
+  const cut = `url(#${id('cut')})`;
+  const halfAt = (st, t) => (st.w / 2) * (1 - 0.36 * t);
 
-  // 위로 갈수록 가늘어지는 굴뚝. 밑동 반너비 w/2 → 꼭대기 반너비 w×0.31
-  const halfAt = (st, t) => (st.w / 2) * (1 - 0.38 * t);
-  const stackShape = (st, h, fill) => {
-    const top = G - h;
-    return <path d={`M${st.x - st.w / 2},${G} L${st.x - halfAt(st, 1)},${top} L${st.x + halfAt(st, 1)},${top} L${st.x + st.w / 2},${G} Z`} fill={fill} />;
+  // 연기: 목판화 구름처럼 세 번 굽이치는 납작한 덩어리 + 아랫면 그늘 한 판
+  const plumePath = (cx, top, s) => {
+    const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
+    return `M${cx - 4},${top} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${cx + 4},${top} Z`;
   };
-  // 바람에 눕는 연기: 굴뚝 꼭대기에서 오른쪽으로 길게 퍼지며 옅어진다
-  const plume = (key, cx, top, len, seed, opacity = 1) => (
-    <path key={key} className="skyline-plume" opacity={opacity}
-      d={`M${cx - 3},${top} C${cx - 2},${top - len * 0.12} ${cx + len * 0.18},${top - len * 0.2} ${cx + len},${top - len * 0.3} L${cx + len},${top - len * 0.54} C${cx + len * 0.42},${top - len * 0.44} ${cx + 8},${top - len * 0.22} ${cx + 3},${top} Z`}
-      fill={`url(#${id('plume')})`} filter={`url(#${id('blur')})`}
-      style={{ '--plume-duration': `${18 + (seed % 5) * 3}s`, '--plume-delay': `-${(seed * 7) % 19}s` }} />
-  );
-  // 조명은 흩뿌리지 않고 구조물에 붙인다: 건물 처마, 배관 받침, 탱크·증류탑 층마다 한 줄씩
-  const lights = [];
-  if (night) {
-    const row = (x0, x1, y, step) => { for (let x = x0; x <= x1; x += step) lights.push({ x, y }); };
-    SCENE_HALLS.forEach((f) => row(f.x + 8, f.x + f.w - 8, G - f.h + 7, compact ? 44 : 22));
-    SCENE_TANKS.forEach((t) => row(t.x + 6, t.x + t.w - 6, G - t.h + 12, 21));
-    if (!compact) {
-      row(SCENE_PIPE_RACK.x0 + 8, SCENE_PIPE_RACK.x1 - 8, G - SCENE_PIPE_RACK.y - 3, 29);
-      SCENE_COLUMNS.forEach((c) => [0.3, 0.55, 0.8].forEach((f) => lights.push({ x: c.x + c.w + 2, y: G - c.h * f - 3 })));
-    }
-    row(60, 250, G - 26, 38); row(1436, 1590, G - 22, 36);
-    lights.forEach((l, i) => { const c = seededNoise(i * 7 + 3); l.i = i; l.r = 0.7 + c * 0.5; l.cool = c > 0.74; });
-  }
+  const plumeShadePath = (cx, top, s) => {
+    const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
+    return `M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`;
+  };
   const stacks = SCENE_STACKS.map((st) => ({ ...st, hh: Math.round(st.h * stackScale) }));
 
   return (
     <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        <linearGradient id={id('cyl')} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={pal.plantLight} />
-          <stop offset="0.42" stopColor={pal.plant} />
-          <stop offset="1" stopColor={pal.plantShade} />
-        </linearGradient>
-        <linearGradient id={id('tower')} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={pal.tower} />
-          <stop offset="1" stopColor={pal.towerShade} />
-        </linearGradient>
-        <linearGradient id={id('plume')} x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor={pal.plume} />
-          <stop offset="0.45" stopColor={pal.plume} stopOpacity="0.5" />
-          <stop offset="1" stopColor={pal.plume} stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id={id('mist')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.mist} stopOpacity="0" />
-          <stop offset="1" stopColor={pal.mist} />
-        </linearGradient>
-        <linearGradient id={id('glow')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.glow} stopOpacity="0" />
-          <stop offset="0.75" stopColor={pal.glow} />
-          <stop offset="1" stopColor={pal.glow} stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id={id('water')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.water0} />
-          <stop offset="1" stopColor={pal.water1} />
-        </linearGradient>
-        <linearGradient id={id('refl')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.plant} stopOpacity="0.5" />
-          <stop offset="1" stopColor={pal.plant} stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id={id('bank')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.bank} />
-          <stop offset="1" stopColor={pal.bankShade} />
-        </linearGradient>
-        <filter id={id('blur')} x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={compact ? 5 : 8} /></filter>
-        <filter id={id('soft')} x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.6" /></filter>
-        <filter id={id('halo')} x="-400%" y="-400%" width="900%" height="900%"><feGaussianBlur stdDeviation="2.6" /></filter>
+        {/* 손으로 오린 가장자리: 윤곽을 2~3px 흔든다 */}
+        <filter id={id('cut')} x="-2%" y="-2%" width="104%" height="104%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="7" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale={compact ? 1.4 : 2} xChannelSelector="R" yChannelSelector="G" />
+        </filter>
       </defs>
 
-      {/* 지평선 가까이의 옅은 빛 */}
-      <rect x="0" y="150" width="1600" height="230" fill={`url(#${id('glow')})`} />
-
-      {/* 먼 산 두 겹: 뒤가 더 옅다 */}
-      <path d="M0,318 C120,296 210,276 330,292 C450,308 520,262 660,270 C790,278 860,312 990,300 C1120,288 1210,250 1340,264 C1440,274 1520,300 1600,290 L1600,520 L0,520 Z" fill={pal.ridge1} />
-      <path d="M0,352 C140,340 240,318 380,330 C500,340 600,356 740,344 C880,332 960,316 1100,326 C1240,336 1330,360 1460,346 C1520,340 1570,334 1600,336 L1600,520 L0,520 Z" fill={pal.ridge2} />
-      <rect x="0" y="300" width="1600" height="110" fill={`url(#${id('mist')})`} opacity="0.7" />
-
-      {/* 먼 공단: 가는 굴뚝 몇 개와 냉각탑, 옅은 연기 */}
-      <g fill={pal.far}>
-        {SCENE_FAR_STACKS.map((st, i) => <path key={`far-${i}`} d={`M${st.x - st.w / 2},${G} L${st.x - st.w * 0.3},${G - st.h} L${st.x + st.w * 0.3},${G - st.h} L${st.x + st.w / 2},${G} Z`} />)}
-        <rect x="40" y={G - 30} width="230" height="30" />
-        <rect x="1420" y={G - 26} width="180" height="26" />
+      {/* 먼 산 두 판 */}
+      <g filter={cut}>
+        <path d="M0,356 L90,330 L170,342 L260,300 L340,328 L420,312 L520,344 L640,322 L760,350 L900,318 L1010,340 L1120,296 L1230,332 L1330,306 L1450,338 L1540,320 L1600,330 L1600,520 L0,520 Z" fill={pal.ridge1} />
+        <path d="M0,392 L120,372 L250,384 L360,360 L470,382 L600,396 L1010,396 L1130,372 L1260,350 L1380,366 L1480,344 L1600,358 L1600,520 L0,520 Z" fill={pal.ridge2} />
+        {/* 먼 굴뚝과 낮은 건물 */}
+        <g fill={pal.far}>
+          {SCENE_FAR_STACKS.map((st, i) => <rect key={`far-${i}`} x={st.x - st.w / 2} y={G - st.h} width={st.w} height={st.h} />)}
+          <path d={`M1340,${G} L1340,${G - 30} L1470,${G - 30} L1470,${G - 18} L1560,${G - 18} L1560,${G} Z M40,${G} L40,${G - 22} L150,${G - 22} L150,${G} Z`} />
+        </g>
       </g>
-      {!compact && SCENE_FAR_STACKS.filter((_, i) => i % 2 === 0).map((st, i) => plume(`far-plume-${i}`, st.x, G - st.h, 130, i + 11, 0.6))}
-      {SCENE_COOLING.map((t, i) => {
-        const top = G - t.h, x0 = t.x, x1 = t.x + t.w, inset = t.w * 0.18, waist = G - t.h * 0.44;
+
+      {/* 연기 (굴뚝 뒤) */}
+      {stacks.filter((st) => st.plume > 0).map((st, i) => {
+        const s = st.plume * (compact ? 0.7 : 1), top = G - st.hh;
         return (
-          <g key={`cooling-${i}`}>
-            <path d={`M${x0},${G} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset * 0.86},${top} L${x1 - inset * 0.86},${top} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${G} Z`} fill={`url(#${id('tower')})`} />
-            <ellipse cx={t.x + t.w / 2} cy={top} rx={t.w / 2 - inset * 0.86} ry="3" fill={pal.towerShade} />
-            {plume(`cool-plume-${i}`, t.x + t.w * 0.42, top + 4, t.w * 2.6, i + 3, 0.9)}
+          <g key={`plume-${i}`} className="skyline-plume" style={{ '--plume-duration': `${15 + i * 4}s`, '--plume-delay': `-${i * 5}s` }}>
+            <path d={plumePath(st.x, top, s)} fill={pal.plume} />
+            <path d={plumeShadePath(st.x, top, s)} fill={pal.plumeShade} />
           </g>
         );
       })}
-      <rect x="0" y={G - 120} width="1600" height="122" fill={`url(#${id('mist')})`} opacity="0.85" />
 
-      {/* 공단: 낮은 건물·탱크·증류탑·배관 받침 */}
-      <g fill={pal.plant}>
+      {/* 공단: 잉크 한 판 + 왼쪽 밝은 면 한 판 */}
+      <g filter={cut}>
         {SCENE_HALLS.map((f, i) => {
           const tw = f.teeth ? f.w / f.teeth : 0;
           const roof = f.teeth
-            ? Array.from({ length: f.teeth }).map((_, k) => `L${f.x + k * tw},${G - f.h} L${f.x + k * tw + tw * 0.6},${G - f.h - 14} L${f.x + (k + 1) * tw},${G - f.h}`).join(' ')
+            ? Array.from({ length: f.teeth }).map((_, k) => `L${f.x + k * tw},${G - f.h - 16} L${f.x + (k + 1) * tw},${G - f.h}`).join(' ')
             : `L${f.x},${G - f.h} L${f.x + f.w},${G - f.h}`;
-          return <path key={`hall-${i}`} d={`M${f.x},${G} ${roof} L${f.x + f.w},${G} Z`} />;
+          return <path key={`hall-${i}`} d={`M${f.x},${G} L${f.x},${G - f.h} ${roof} L${f.x + f.w},${G} Z`} fill={pal.ink} />;
+        })}
+        {SCENE_TANKS.map((t, i) => (
+          <g key={`tank-${i}`}>
+            <path d={`M${t.x},${G} L${t.x},${G - t.h + 8} Q${t.x + t.w / 2},${G - t.h - 8} ${t.x + t.w},${G - t.h + 8} L${t.x + t.w},${G} Z`} fill={pal.ink} />
+            <path d={`M${t.x},${G} L${t.x},${G - t.h + 8} Q${t.x + t.w * 0.14},${G - t.h + 2} ${t.x + t.w * 0.3},${G - t.h - 1} L${t.x + t.w * 0.3},${G} Z`} fill={pal.mid} />
+          </g>
+        ))}
+        {SCENE_COLUMNS.map((c, i) => (
+          <g key={`col-${i}`}>
+            <path d={`M${c.x},${G} L${c.x},${G - c.h + c.w / 2} A${c.w / 2},${c.w / 2} 0 0 1 ${c.x + c.w},${G - c.h + c.w / 2} L${c.x + c.w},${G} Z`} fill={pal.ink} />
+            {[0.34, 0.62, 0.86].map((f) => <rect key={f} x={c.x - 4} y={G - c.h * f} width={c.w + 8} height="2" fill={pal.ink} />)}
+          </g>
+        ))}
+        {stacks.map((st, i) => {
+          const top = G - st.hh, ht = halfAt(st, 1);
+          return (
+            <g key={`stack-${i}`}>
+              <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x + ht},${top} L${st.x + st.w / 2},${G} Z`} fill={pal.ink} />
+              <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x - ht * 0.3},${top} L${st.x - st.w * 0.16},${G} Z`} fill={pal.mid} />
+              {[14, 34].map((dy) => {
+                const hw = halfAt(st, 1 - dy / st.hh);
+                return <rect key={dy} x={st.x - hw} y={top + dy} width={hw * 2} height="9" fill={pal.band} />;
+              })}
+              <rect x={st.x - ht - 3} y={top - 1} width={ht * 2 + 6} height="5" fill={pal.ink} />
+            </g>
+          );
         })}
       </g>
-      {SCENE_TANKS.map((t, i) => (
-        <g key={`tank-${i}`}>
-          <path d={`M${t.x},${G} L${t.x},${G - t.h + 6} Q${t.x + t.w / 2},${G - t.h - 6} ${t.x + t.w},${G - t.h + 6} L${t.x + t.w},${G} Z`} fill={cyl} />
-          <path d={`M${t.x + t.w - 5},${G} L${t.x + t.w - 5},${G - t.h + 10}`} stroke={pal.plantShade} strokeWidth="1" />
-        </g>
-      ))}
-      {!compact && SCENE_COLUMNS.map((c, i) => (
-        <g key={`col-${i}`}>
-          <path d={`M${c.x},${G} L${c.x},${G - c.h + c.w / 2} A${c.w / 2},${c.w / 2} 0 0 1 ${c.x + c.w},${G - c.h + c.w / 2} L${c.x + c.w},${G} Z`} fill={cyl} />
-          {[0.3, 0.55, 0.8].map((f) => <rect key={f} x={c.x - 3} y={G - c.h * f} width={c.w + 6} height="1.6" fill={pal.plantShade} />)}
-          <path d={`M${c.x + c.w / 2},${G - c.h} L${c.x + c.w / 2},${G - c.h - 12}`} stroke={pal.plantShade} strokeWidth="1.2" />
-        </g>
-      ))}
-      {!compact && (() => {
-        const r = SCENE_PIPE_RACK, y = G - r.y;
-        return (
-          <g stroke={pal.plantShade} fill="none">
-            <path d={`M${r.x0},${y} L${r.x1},${y} M${r.x0},${y + 5} L${r.x1},${y + 5}`} strokeWidth="1.8" />
-            <path d={Array.from({ length: 10 }).map((_, k) => `M${r.x0 + 8 + k * 29},${y} L${r.x0 + 8 + k * 29},${G}`).join(' ')} strokeWidth="1.2" />
-          </g>
-        );
-      })()}
 
-      {/* 굴뚝: 연기 → 몸통 → 띠 → 작업대(난간·받침) → 사다리 */}
-      {stacks.map((st, i) => {
-        const top = G - st.hh, ht = halfAt(st, 1);
-        return (
-          <g key={`stack-${i}`}>
-            {plume(`plume-${i}`, st.x, top - 1, st.plume * (compact ? 0.7 : 1), i)}
-            {stackShape(st, st.hh, cyl)}
-            <rect x={st.x - ht - 2} y={top} width={ht * 2 + 4} height="4" fill={pal.plantShade} />
-            {[16, 32].map((dy) => {
-              const hw = halfAt(st, 1 - dy / st.hh);
-              return <rect key={dy} x={st.x - hw} y={top + dy} width={hw * 2} height="6" fill={pal.band} opacity={night ? 0.9 : 0.55} />;
-            })}
-            {st.plat.map((f) => {
-              const y = G - st.hh * f, hw = halfAt(st, f) + 8;
-              return (
-                <g key={f} stroke={pal.plantShade} fill="none">
-                  <rect x={st.x - hw} y={y} width={hw * 2} height="2.6" fill={pal.plantShade} stroke="none" />
-                  <path d={`M${st.x - hw},${y - 8} L${st.x + hw},${y - 8}`} strokeWidth="1" />
-                  <path d={Array.from({ length: Math.floor((hw * 2) / 6) + 1 }).map((_, k) => `M${st.x - hw + k * 6},${y} L${st.x - hw + k * 6},${y - 8}`).join(' ')} strokeWidth="0.7" />
-                  <path d={`M${st.x - hw},${y + 2.6} L${st.x - hw + 8},${y + 12} M${st.x + hw},${y + 2.6} L${st.x + hw - 8},${y + 12}`} strokeWidth="1" />
-                  {night && <circle cx={st.x - hw + 2} cy={y - 10} r="1.3" fill={pal.light} stroke="none" />}
-                </g>
-              );
-            })}
-            <path d={`M${st.x + st.w / 2 - 1},${G} L${st.x + halfAt(st, st.plat[st.plat.length - 1]) - 1},${G - st.hh * st.plat[st.plat.length - 1]}`} stroke={pal.plantShade} strokeWidth="1" opacity="0.8" />
-            {pal.beacon && <circle className="skyline-beacon" cx={st.x} cy={top - 4} r="2.2" fill={pal.beacon} style={{ '--beacon-delay': `-${i * 0.8}s` }} />}
-          </g>
-        );
-      })}
-
-      {/* 밤: 공단 조명 (번진 빛 + 또렷한 점) */}
-      {night && (
-        <>
-          <g filter={`url(#${id('halo')})`} opacity="0.55">
-            {lights.map((l) => <circle key={`h-${l.i}`} cx={l.x} cy={l.y} r={l.r * 2.4} fill={l.cool ? '#dfe9ff' : pal.light} />)}
-          </g>
-          {lights.map((l) => (
-            <circle key={`l-${l.i}`} className={l.i % 4 === 0 ? 'skyline-light' : undefined} cx={l.x} cy={l.y} r={l.r} fill={l.cool ? '#eef3ff' : pal.light}
-              style={l.i % 4 === 0 ? { '--glow-duration': `${5 + (l.i % 5)}s`, '--glow-delay': `-${l.i % 7}s` } : undefined} />
-          ))}
-        </>
-      )}
-
-      {/* 강기슭 안개 → 강물과 비친 그림자 */}
-      <rect x="0" y={G - 46} width="1600" height="48" fill={`url(#${id('mist')})`} opacity="0.8" />
-      <rect x="0" y={G} width="1600" height="80" fill={`url(#${id('water')})`} />
-      <g filter={`url(#${id('soft')})`}>
-        {stacks.map((st, i) => <rect key={`refl-${i}`} x={st.x - st.w / 2} y={G} width={st.w} height={Math.min(44, st.hh * 0.14)} fill={`url(#${id('refl')})`} />)}
-        {SCENE_COOLING.map((t, i) => <rect key={`reflc-${i}`} x={t.x} y={G} width={t.w} height="20" fill={`url(#${id('refl')})`} opacity="0.6" />)}
-        {night && lights.filter((l) => l.i % 3 === 0).map((l) => <rect key={`rl-${l.i}`} x={l.x - 0.8} y={G + 1} width="1.6" height={10 + (l.i % 5) * 4} fill={l.cool ? '#dfe9ff' : pal.light} opacity="0.3" />)}
+      {/* 가는 선: 작업대 난간·받침, 사다리, 배관 받침 (선은 흔들지 않고 또렷하게) */}
+      <g stroke={pal.ink} fill="none" strokeLinecap="round">
+        {stacks.map((st, i) => st.plat.map((f) => {
+          const y = G - st.hh * f, hw = halfAt(st, f) + 9;
+          return (
+            <g key={`plat-${i}-${f}`}>
+              <path d={`M${st.x - hw},${y} L${st.x + hw},${y}`} strokeWidth="3" />
+              <path d={`M${st.x - hw},${y - 9} L${st.x + hw},${y - 9}`} strokeWidth="1.2" />
+              <path d={Array.from({ length: Math.floor((hw * 2) / 7) + 1 }).map((_, k) => `M${st.x - hw + k * 7},${y} L${st.x - hw + k * 7},${y - 9}`).join(' ')} strokeWidth="0.9" />
+              <path d={`M${st.x - hw},${y + 2} L${st.x - hw + 9},${y + 13} M${st.x + hw},${y + 2} L${st.x + hw - 9},${y + 13}`} strokeWidth="1.2" />
+            </g>
+          );
+        }))}
+        {!compact && <path d={`M586,${G - 34} L690,${G - 34} M586,${G - 28} L690,${G - 28} ${[0, 1, 2, 3].map((k) => `M${596 + k * 28},${G - 34} L${596 + k * 28},${G}`).join(' ')}`} strokeWidth="1.6" />}
+        {!compact && <path d={`M${SCENE_STACKS[0].x + 60},${G} L${SCENE_STACKS[0].x + halfAt(SCENE_STACKS[0], 0.82) + 6},${G - SCENE_STACKS[0].h * 0.82}`} strokeWidth="0.8" />}
       </g>
-      {[[90, 6, 260], [520, 12, 340], [980, 8, 220], [1260, 15, 280], [300, 20, 180], [780, 24, 300]].map(([x, dy, w], i) => (
-        <path key={`ripple-${i}`} d={`M${x},${G + dy} L${x + w},${G + dy}`} stroke={pal.ripple} strokeWidth="1" strokeLinecap="round" />
+
+      {/* 밤: 불 켜진 창과 경고등 */}
+      {night && (
+        <g fill={pal.light}>
+          {[[534, 30], [556, 30], [600, 30], [644, 30], [366, 16], [410, 16], [454, 16], [1024, 30], [1060, 30], [1132, 30], [1190, 30], [1240, 22], [844, 60], [868, 44], [968, 52], [1356, 16], [1410, 16], [70, 10]].map(([x, dy], i) => (
+            <rect key={`win-${i}`} x={x} y={G - dy} width="5" height="4" />
+          ))}
+          {stacks.map((st, i) => st.plat.map((f) => <rect key={`pl-${i}-${f}`} x={st.x - halfAt(st, f) - 9} y={G - st.hh * f - 14} width="3" height="3" />))}
+        </g>
+      )}
+      {pal.beacon && stacks.map((st, i) => (
+        <circle key={`beacon-${i}`} className="skyline-beacon" cx={st.x} cy={G - st.hh - 6} r="2.6" fill={pal.beacon} style={{ '--beacon-delay': `-${i * 0.7}s` }} />
       ))}
 
-      {/* 앞 강둑: 양옆이 올라오는 어두운 땅과 나무 */}
-      <path d={`M0,${G + 30} C200,${G + 22} 380,${G + 46} 620,${G + 48} C860,${G + 50} 1080,${G + 44} 1300,${G + 34} C1420,${G + 28} 1520,${G + 22} 1600,${G + 18} L1600,520 L0,520 Z`} fill={`url(#${id('bank')})`} />
-      <g fill={pal.bank}>
-        {(compact ? SCENE_TREES.filter((_, i) => i % 2 === 0) : SCENE_TREES).map((t, i) => (
-          <circle key={`tree-${i}`} cx={t.x} cy={G + 32 - t.r * 0.45} r={t.r} />
-        ))}
+      {/* 물: 한 판의 색면 위에 붓으로 그은 듯한 가로 획과 굴뚝 그림자 */}
+      <rect x="0" y={G} width="1600" height="70" fill={pal.water} />
+      <g fill={pal.ink} opacity="0.32">
+        {stacks.map((st, i) => <path key={`refl-${i}`} d={`M${st.x - st.w / 2},${G} L${st.x + st.w / 2},${G} L${st.x + st.w * 0.3},${G + Math.min(40, st.hh * 0.11)} L${st.x - st.w * 0.3},${G + Math.min(40, st.hh * 0.11)} Z`} />)}
+      </g>
+      <g stroke={pal.stroke} strokeWidth="2.2" strokeLinecap="round" fill="none">
+        <path d={`M120,${G + 9} L330,${G + 9} M560,${G + 15} L860,${G + 15} M640,${G + 23} L760,${G + 23} M980,${G + 8} L1190,${G + 8} M1280,${G + 18} L1470,${G + 18} M260,${G + 24} L420,${G + 24}`} />
+      </g>
+
+      {/* 앞 둑: 왼쪽이 높은 어두운 땅과 갈대 */}
+      <g filter={cut}>
+        <path d={`M0,${G + 10} L140,${G + 16} L300,${G + 34} L520,${G + 44} L1000,${G + 50} L1600,${G + 46} L1600,580 L0,580 Z`} fill={pal.bank} />
+      </g>
+      <g stroke={pal.bank} strokeWidth="2" strokeLinecap="round" fill="none">
+        {Array.from({ length: compact ? 14 : 30 }).map((_, i) => {
+          const x = 12 + i * 9 + ((i * 7) % 6), h = 22 + ((i * 13) % 26), lean = ((i * 5) % 9) - 3;
+          return <path key={`reed-${i}`} d={`M${x},${G + 22} Q${x + lean * 0.3},${G + 22 - h * 0.6} ${x + lean},${G + 14 - h}`} />;
+        })}
+        {Array.from({ length: compact ? 6 : 12 }).map((_, i) => {
+          const x = 1596 - i * 10 - ((i * 5) % 7), h = 18 + ((i * 11) % 20), lean = -(((i * 3) % 7) - 2);
+          return <path key={`reedr-${i}`} d={`M${x},${G + 52} Q${x + lean * 0.3},${G + 52 - h * 0.6} ${x + lean},${G + 44 - h}`} />;
+        })}
       </g>
     </svg>
   );
@@ -5737,8 +5652,8 @@ export default function App() {
     const Dn_best = bestNozzle.d;
     const An = Math.PI * Math.pow(Dn_best / 2000, 2);
     const Ps_abs = Pm + avgSp / 13.6;
-    // 표준상태 건조 유량(SL/min) = 노즐 단면적 × 유속 × (1 − 수분) × 273/(273+Ts) × 굴뚝 절대압/760
-    const Q_sl = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (Ts + 273)) * (Ps_abs / 760);
+    // 표준 채취 유량(SL/min) = 노즐 단면적 × 유속 × (1 − 수분) × 273/(273+Ts) × 굴뚝 절대압/760 × Yd
+    const Q_sl = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (Ts + 273)) * (Ps_abs / 760) * Yd;
     
     let fastestTime = Math.ceil(targetVol / Q_sl);
     if (fastestTime <= 0 || !isFinite(fastestTime)) fastestTime = 65;
@@ -7415,17 +7330,17 @@ export default function App() {
       // K와 ΔH가 실제보다 크게 나왔다 (프로그램 화면의 계산은 원래 Tm/Ts를 쓴다)
       // 노즐별 예상 채취량: 프로그램의 노즐 예측표와 같은 식으로 계산한다.
       //  노즐로 들어오는 가스(유속×노즐 단면적)를 건조 기준으로 바꿔
-      //   · (L)  가스미터가 가리킬 양 = …×(Tm+273)/(Ts+273)×(굴뚝 절대압/(대기압+ΔH/13.6))÷Yd
-      //   · (SL) 표준상태 양       = …×273/(273+Ts)×(굴뚝 절대압/760)
+      //   · (L)  가스미터가 가리킬 양 = …×(Tm+273)/(Ts+273)×(굴뚝 절대압/(대기압+ΔH/13.6))  (Yd로 나누지 않는다)
+      //   · (SL) 표준 채취량      = …×273/(273+Ts)×(굴뚝 절대압/760)×Yd  (기록지의 '지시값 차 × Yd'와 같은 기준)
       //  양식은 (L)에 온도·압력 환산 없이 Yd를 곱하고, (SL)에는 굴뚝 압력 대신 가스미터 압력(대기압+ΔH)을 써서
       //  프로그램 화면의 예측표와 값이 달랐다 ((L)은 30% 안팎, (SL)·예상시간은 1% 안팎)
       const nozzleDryFlow = (dia) => `PI()/4*${dia}^2*$G$39*60/1000*(1-$C$15/100)`;
-      const nozzleStdFlow = (dia) => `${nozzleDryFlow(dia)}*(273/(273+$G$15))*(($B$8+$I$15/13.6)/760)`;
+      const nozzleStdFlow = (dia) => `${nozzleDryFlow(dia)}*(273/(273+$G$15))*(($B$8+$I$15/13.6)/760)*$G$8`;
       for (let i = 0; i < layout.nozzleRows; i++) {
         const row = 39 + i;
         addUpdate('노즐산정', `D${row}`, { formula: `8.001*10^-5*C${row}^4*$F$8*$C$10^2*(1-$C$15/100)^2*($H$8/$I$8)*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)` });
         if (exportSheetId !== 'flow') {
-          addUpdate('노즐산정', `H${row}`, { formula: `${nozzleDryFlow(`C${row}`)}*$A$39*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/($B$8+F${row}/13.6))/$G$8` });
+          addUpdate('노즐산정', `H${row}`, { formula: `${nozzleDryFlow(`C${row}`)}*$A$39*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/($B$8+F${row}/13.6))` });
           addUpdate('노즐산정', `I${row}`, { formula: `${nozzleStdFlow(`C${row}`)}*$A$39` });
         }
       }
@@ -8982,8 +8897,9 @@ export default function App() {
             const d = parseFloat(n.d);
             const k = 8.001e-5 * Math.pow(d, 4) * dHAt * Math.pow(cp, 2) * Math.pow(1 - gas.Xw / 100, 2) * (gas.Md / gas.Ms) * ((tmPre + 273) / (tsPre + 273)) * psRatio;
             const an = Math.PI * Math.pow(d / 2000, 2);
-            const qsl = vsPre * an * 60000 * (1 - gas.Xw / 100) * (273 / (tsPre + 273)) * (preAbs / 760);
-            const qm = qsl * ((tmPre + 273) / 273) * (760 / (Pa + (k * dpPre) / 13.6)) / yd;
+            const qbase = vsPre * an * 60000 * (1 - gas.Xw / 100) * (273 / (tsPre + 273)) * (preAbs / 760);
+            const qm = qbase * ((tmPre + 273) / 273) * (760 / (Pa + (k * dpPre) / 13.6));
+            const qsl = qbase * yd;
             return { num: num(n.num), d: num(d), k: num(k), dH: num(k * dpPre), qm: num(qm), qsl: num(qsl), time: num(Math.ceil((parseFloat(formData.targetVolume) || 1000) / qsl)) };
           });
           const sampling = formData.gasMeters.map((row, idx) => ({ row, idx })).filter(({ row, idx }) => isActiveMeterRow(row, idx) && idx > 0);
@@ -9156,8 +9072,10 @@ export default function App() {
         // (SL) 표준상태 건조 유량 = 노즐 단면적 × 유속 × (1 − 수분) × 273/(273+Ts) × 굴뚝 절대압/760
         // (L)  가스미터가 가리킬 유량 = (SL) × (273+Tm)/273 × 760/(대기압 + ΔH/13.6) ÷ Yd
         const dhRaw = !isNaN(k) && !isNaN(dp) ? k * dp : 0;
-        const Q_sl = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (273 + Ts)) * (Ps / 760);
-        const Q_m = Q_sl * ((273 + Tm) / 273) * (760 / (Pm + dhRaw / 13.6)) / Yd;
+        // (L): 가스미터 지시값으로 본 양이라 Yd로 나누지 않는다. Yd는 표준 채취량 (SL)에만 한 번 곱한다 (회사 양식과 같다)
+        const Q_base = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (273 + Ts)) * (Ps / 760);
+        const Q_m = Q_base * ((273 + Tm) / 273) * (760 / (Pm + dhRaw / 13.6));
+        const Q_sl = Q_base * Yd;
         
         const calcTime = Math.ceil(targetVol / Q_sl);
         if (isFinite(calcTime) && calcTime > 0) {
@@ -9240,37 +9158,37 @@ export default function App() {
   const isMorningSky = resolvedSkyMode === 'morning';
   const skyOrbClass = isNightSky ? 'skyline-moon' : (isMorningSky ? '' : 'skyline-sun');
   const menuSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#060a13] via-[#111c33] to-[#39405a]'
+    ? 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#7f9bb8] via-[#cbbfc6] to-[#f4dcc2]'
-      : 'bg-gradient-to-b from-[#b4cbdc] via-[#dbe6ec] to-[#f1ece2]');
+      ? 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]'
+      : 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]');
   const menuSkyOverlayClass = isNightSky
-    ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent'
+    ? 'hidden'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#fff2cc]/38 via-[#ffdca5]/20 to-transparent'
-      : 'bg-gradient-to-b from-white/42 via-sky-100/12 to-transparent');
+      ? 'hidden'
+      : 'hidden');
   const menuSkyGlowLeftClass = isNightSky
-    ? 'bg-slate-400/10'
-    : (isMorningSky ? 'bg-amber-50/40' : 'bg-white/60');
+    ? 'hidden'
+    : 'hidden';
   const menuSkyGlowRightClass = isNightSky
-    ? 'bg-slate-500/10'
-    : (isMorningSky ? 'bg-rose-100/30' : 'bg-sky-100/40');
+    ? 'hidden'
+    : 'hidden';
   const sheetSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#060a13] via-[#111c33] to-[#39405a]'
+    ? 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#7f9bb8] via-[#cbbfc6] to-[#f4dcc2]'
-      : 'bg-gradient-to-b from-[#b4cbdc] via-[#dbe6ec] to-[#f1ece2]');
+      ? 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]'
+      : 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]');
   const sheetSkyOverlayClass = isNightSky
-    ? 'bg-gradient-to-b from-[#040915]/42 via-[#1d2f64]/16 to-transparent'
+    ? 'hidden'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#fff3d6]/34 via-[#ffe4b8]/16 to-transparent'
-      : 'bg-gradient-to-b from-white/34 via-sky-100/10 to-transparent');
-  const sceneCloudColor = isNightSky ? 'rgba(170, 184, 220, 0.1)' : (isMorningSky ? 'rgba(255, 236, 220, 0.7)' : 'rgba(255, 255, 255, 0.8)');
+      ? 'hidden'
+      : 'hidden');
+  const sceneCloudColor = isNightSky ? '#2a3f54' : (isMorningSky ? '#f9ecd5' : '#f7f2e5');
   const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 4) : SKYLINE_CLOUDS;
   // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
   const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
     <>
-      {isNightSky && <div className="skyline-moon-halo" />}
+      <div className="skyline-grain" style={{ '--grain-opacity': isNightSky ? 0.4 : 0.45 }} />
       {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} />}
       {sceneClouds.slice(0, cloudCount).map((cloud) => (
         <div
@@ -11536,8 +11454,9 @@ export default function App() {
                                 k = formatKFactorDisplay(k_val);
                                 dh = calcExpectedOrificeDH(k_val, getRawAvgDp());
                                 const an = Math.PI * Math.pow(Dn/2000, 2);
-                                const q_sl = vs * an * 60000 * (1-Xw/100) * (273/(ts+273)) * (ps/760);
-                                const q_m = q_sl * ((tm+273)/273) * (760/(pm + (k_val * getRawAvgDp())/13.6)) / y;
+                                const q_base = vs * an * 60000 * (1-Xw/100) * (273/(ts+273)) * (ps/760);
+                                const q_m = q_base * ((tm+273)/273) * (760/(pm + (k_val * getRawAvgDp())/13.6));
+                                const q_sl = q_base * y;
                                 
                                 let time = Math.ceil((parseFloat(formData.targetVolume) || 1000) / q_sl);
                                 if (!isFinite(time) || time <= 0) time = 0;
