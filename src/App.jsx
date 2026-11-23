@@ -1083,187 +1083,107 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
 
 const SKYLINE_FLYER_CSS = `
 @keyframes skylineTwinkle {
-  0%, 100% { opacity: 0.26; transform: scale(0.9); }
-  50% { opacity: 0.95; transform: scale(1.08); }
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.85; }
 }
 .skyline-star {
   position: absolute;
   border-radius: 9999px;
-  background: rgba(241, 245, 249, 0.95);
-  box-shadow: 0 0 6px rgba(224, 231, 255, 0.8), 0 0 14px rgba(191, 219, 254, 0.45);
+  background: rgba(226, 232, 244, 0.9);
   animation: skylineTwinkle var(--twinkle-duration, 3.2s) ease-in-out infinite;
   animation-delay: var(--twinkle-delay, 0s);
-  will-change: opacity, transform;
 }
+/* 달: 가는 초승달. 노란 그라데이션 대신 상아색 한 톤 */
 .skyline-moon {
   position: absolute;
-  left: 8%;
-  top: 8%;
-  width: clamp(72px, 9vw, 108px);
-  height: clamp(72px, 9vw, 108px);
+  left: 9%;
+  top: 9%;
+  width: clamp(40px, 4.6vw, 62px);
+  height: clamp(40px, 4.6vw, 62px);
   border-radius: 9999px;
-  background: radial-gradient(circle at 35% 35%, rgba(254, 249, 195, 1) 0 44%, rgba(253, 230, 138, 0.96) 68%, rgba(250, 204, 21, 0.92) 100%);
-  -webkit-mask: radial-gradient(circle at 70% 50%, transparent 46%, #000 47%);
-  mask: radial-gradient(circle at 70% 50%, transparent 46%, #000 47%);
-  box-shadow: 0 0 24px rgba(250, 204, 21, 0.35), 0 0 54px rgba(165, 180, 252, 0.18);
-  transform: rotate(-12deg);
+  background: #ece6d6;
+  -webkit-mask: radial-gradient(circle at 66% 42%, transparent 49%, #000 50.5%);
+  mask: radial-gradient(circle at 66% 42%, transparent 49%, #000 50.5%);
+  transform: rotate(-18deg);
 }
-.skyline-moon::before {
-  content: none;
+.skyline-moon-halo {
+  position: absolute;
+  left: calc(9% - 110px);
+  top: calc(9% - 110px);
+  width: 280px;
+  height: 280px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(214, 222, 240, 0.16), rgba(160, 176, 214, 0.06) 42%, rgba(160, 176, 214, 0) 70%);
 }
-.skyline-moon::after {
-  content: none;
-}
+/* 해: 윤곽이 번지는 옅은 원반. 빛살·테두리 없음 */
 .skyline-sun {
   position: absolute;
-  left: 8%;
+  left: 9%;
   top: 8%;
-  width: clamp(74px, 9vw, 112px);
-  height: clamp(74px, 9vw, 112px);
+  width: clamp(54px, 6vw, 80px);
+  height: clamp(54px, 6vw, 80px);
   border-radius: 9999px;
-  background: radial-gradient(circle at 36% 34%, rgba(254, 249, 195, 1), rgba(253, 230, 138, 0.95) 48%, rgba(251, 191, 36, 0.88));
-  box-shadow: 0 0 0 12px rgba(254, 240, 138, 0.25), 0 0 36px rgba(250, 204, 21, 0.35), 0 0 70px rgba(249, 115, 22, 0.2);
+  background: radial-gradient(circle, #fffdf4 0 52%, rgba(255, 250, 232, 0.75) 66%, rgba(255, 246, 220, 0) 100%);
+  box-shadow: 0 0 60px 30px rgba(255, 248, 226, 0.55), 0 0 180px 90px rgba(255, 244, 214, 0.32);
 }
-.skyline-sunrise-mountain {
+.skyline-sunrise-mountain, .skyline-sunrise-mountain-sheet {
   position: absolute;
-  left: 80%;
-  top: 33%;
-  width: clamp(92px, 10vw, 136px);
-  height: clamp(92px, 10vw, 136px);
+  left: 76%;
+  top: 46%;
+  width: clamp(60px, 6.4vw, 88px);
+  height: clamp(60px, 6.4vw, 88px);
   border-radius: 9999px;
-  background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 1), rgba(253, 224, 71, 0.96) 44%, rgba(251, 146, 60, 0.9));
-  box-shadow: 0 0 0 11px rgba(254, 240, 138, 0.2), 0 0 36px rgba(251, 191, 36, 0.32), 0 0 66px rgba(251, 146, 60, 0.2);
+  background: radial-gradient(circle, #fff3dc 0 50%, rgba(255, 226, 190, 0.8) 64%, rgba(255, 214, 170, 0) 100%);
+  box-shadow: 0 0 70px 36px rgba(255, 220, 178, 0.5), 0 0 220px 120px rgba(255, 196, 150, 0.3);
 }
 .skyline-sunrise-mountain-sheet {
-  position: absolute;
-  left: 78%;
-  top: 54%;
-  width: clamp(56px, 7vw, 84px);
-  height: clamp(56px, 7vw, 84px);
-  border-radius: 9999px;
-  background: radial-gradient(circle at 50% 38%, rgba(254, 249, 195, 0.98), rgba(253, 224, 71, 0.92) 44%, rgba(251, 146, 60, 0.86));
-  box-shadow: 0 0 0 8px rgba(254, 240, 138, 0.18), 0 0 28px rgba(251, 191, 36, 0.28), 0 0 48px rgba(251, 146, 60, 0.18);
+  top: 58%;
+  width: clamp(44px, 5vw, 64px);
+  height: clamp(44px, 5vw, 64px);
 }
+/* 구름: 뭉게구름 대신 길게 누운 옅은 층운 */
 @keyframes skylineCloudDrift {
-  from { transform: translateX(-30vw) scale(var(--cloud-scale, 1)); }
+  from { transform: translateX(-40vw) scale(var(--cloud-scale, 1)); }
   to { transform: translateX(125vw) scale(var(--cloud-scale, 1)); }
-}
-.skyline-cloud, .skyline-cloud::before, .skyline-cloud::after {
-  background: var(--cloud-color, rgba(255, 255, 255, 0.92));
-  border-radius: 9999px;
 }
 .skyline-cloud {
   position: absolute;
   left: 0;
-  width: 190px;
-  height: 54px;
+  width: 460px;
+  height: 22px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--cloud-color, rgba(255, 255, 255, 0.8)) 30%, var(--cloud-color, rgba(255, 255, 255, 0.8)) 62%, rgba(255, 255, 255, 0));
   transform-origin: left center;
-  filter: blur(0.6px) drop-shadow(0 6px 10px var(--cloud-shadow, rgba(120, 140, 170, 0.18)));
-  animation: skylineCloudDrift var(--cloud-duration, 160s) linear infinite;
+  filter: blur(9px);
+  animation: skylineCloudDrift calc(var(--cloud-duration, 160s) * 1.6) linear infinite;
   animation-delay: var(--cloud-delay, 0s);
   will-change: transform;
 }
-.skyline-cloud::before {
-  content: '';
-  position: absolute;
-  left: 18%;
-  bottom: 30%;
-  width: 56%;
-  height: 140%;
+@keyframes skylinePlume {
+  from { transform: scale(1, 1) translateY(0); }
+  to { transform: scale(1.07, 1.1) translateY(-5px); }
 }
-.skyline-cloud::after {
-  content: '';
-  position: absolute;
-  left: 52%;
-  bottom: 24%;
-  width: 40%;
-  height: 120%;
-}
-@keyframes skylineSunRays {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.skyline-sun::after {
-  content: '';
-  position: absolute;
-  inset: -90%;
-  border-radius: 9999px;
-  background: repeating-conic-gradient(from 0deg, rgba(255, 236, 170, 0.22) 0deg 7deg, rgba(255, 236, 170, 0) 7deg 24deg);
-  -webkit-mask: radial-gradient(circle, rgba(0, 0, 0, 0.9) 20%, rgba(0, 0, 0, 0) 68%);
-  mask: radial-gradient(circle, rgba(0, 0, 0, 0.9) 20%, rgba(0, 0, 0, 0) 68%);
-  animation: skylineSunRays 90s linear infinite;
-}
-.skyline-moon-halo {
-  position: absolute;
-  left: calc(8% - 40px);
-  top: calc(8% - 40px);
-  width: clamp(152px, 17vw, 190px);
-  height: clamp(152px, 17vw, 190px);
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(250, 240, 200, 0.22), rgba(199, 210, 254, 0.1) 45%, rgba(199, 210, 254, 0) 72%);
-}
-@keyframes skylineShootingStar {
-  0% { opacity: 0; transform: translate(0, 0) rotate(-28deg); }
-  3% { opacity: 1; }
-  10% { opacity: 0; transform: translate(-300px, 160px) rotate(-28deg); }
-  100% { opacity: 0; transform: translate(-300px, 160px) rotate(-28deg); }
-}
-.skyline-shooting-star {
-  position: absolute;
-  width: 150px;
-  height: 2px;
-  border-radius: 9999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95));
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
-  opacity: 0;
-  animation: skylineShootingStar var(--shoot-duration, 13s) ease-out infinite;
-  animation-delay: var(--shoot-delay, 0s);
-}
-@keyframes skylineWindowGlow {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-.skyline-window-night {
-  animation: skylineWindowGlow var(--glow-duration, 5s) ease-in-out infinite;
-  animation-delay: var(--glow-delay, 0s);
-}
-@keyframes skylineSvgSmoke {
-  0% { transform: translate(0px, 0px) scale(0.45); opacity: 0; }
-  12% { opacity: var(--max-opacity, 0.5); }
-  100% { transform: translate(var(--drift, 80px), calc(-1 * var(--rise, 260px))) scale(var(--end-scale, 3)); opacity: 0; }
-}
-.skyline-svg-smoke {
+.skyline-plume {
   transform-box: fill-box;
-  transform-origin: center;
-  opacity: 0;
-  animation: skylineSvgSmoke var(--rise-duration, 16s) ease-out infinite;
-  animation-delay: var(--rise-delay, 0s);
+  transform-origin: left bottom;
+  animation: skylinePlume var(--plume-duration, 22s) ease-in-out infinite alternate;
+  animation-delay: var(--plume-delay, 0s);
 }
 @keyframes skylineBeacon {
-  0%, 100% { opacity: 0.15; }
+  0%, 100% { opacity: 0.2; }
   50% { opacity: 1; }
 }
 .skyline-beacon {
-  animation: skylineBeacon 2.4s ease-in-out infinite;
+  animation: skylineBeacon 3.2s ease-in-out infinite;
   animation-delay: var(--beacon-delay, 0s);
 }
-@keyframes skylineFlap {
-  from { transform: scaleY(1); }
-  to { transform: scaleY(0.3); }
+@keyframes skylineLight {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
-.skyline-bird {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: skylineFlap var(--flap-duration, 0.8s) ease-in-out infinite alternate;
-  animation-delay: var(--flap-delay, 0s);
-}
-@keyframes skylineFog {
-  from { transform: translateX(-70px); }
-  to { transform: translateX(70px); }
-}
-.skyline-fog {
-  animation: skylineFog var(--fog-duration, 36s) ease-in-out infinite alternate;
-  animation-delay: var(--fog-delay, 0s);
+.skyline-light {
+  animation: skylineLight var(--glow-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--glow-delay, 0s);
 }
 .skyline-svg {
   position: absolute;
@@ -1276,342 +1196,265 @@ const SKYLINE_FLYER_CSS = `
   /* 연기가 그림 영역 위로 올라가도 잘리지 않고 하늘로 이어지게 */
   overflow: visible;
 }
+@media (prefers-reduced-motion: reduce) {
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-light { animation: none; }
+}
 `;
 
-// ── 겹겹이 오린 종이 디오라마: 깊이별 한 가지 색 실루엣으로 그린 공단 풍경 ──
-// 빛은 왼쪽 위. 각 층(먼 산 → 도시 → 공장 → 앞 땅)은 같은 색조의 명암 두 단계만 쓴다.
+// ── 안개 낀 강 건너 공단: 멀수록 하늘빛에 묻히는 색(공기 원근)으로 깊이를 낸 조용한 풍경 ──
+// 층마다 한 색조만 쓰고, 굴뚝은 왼쪽이 밝은 원통 명암. 가운데 큰 굴뚝에는 시료채취 작업대가 달려 있다.
 const SKYLINE_PALETTES = {
   day: {
-    far: '#cfdceb', farDetail: '#bccbdd', city: '#a7bbd1', cityWin: '#bfd0e2', haze1: 'rgba(222,236,250,0.65)', haze2: 'rgba(214,230,246,0.5)',
-    plant: '#73899f', plantShade: '#5e7389', plantLight: '#8ea2b6', plantBand: '#9fb1c3', plantWin: '#95a9bd',
-    near: '#4b7362', nearShade: '#3a5c4e', nearLight: '#64917b', road: '#587566', roadLine: 'rgba(235,245,238,0.75)', rail: '#34514a',
-    smoke: ['rgba(255,255,255,0.85)', 'rgba(255,255,255,0)'], windowLit: null, beacon: null, lamp: null, headlight: null,
-    bird: '#48607a', plane: '#f2f6fa', contrail: 'rgba(255,255,255,0.7)', cirrus: 'rgba(255,255,255,0.55)', sunHaze: 'rgba(255,238,200,0.22)',
+    ridge1: '#d3dbe0', ridge2: '#bfcad2', far: '#aab7c1', tower: '#93a2ae', towerShade: '#7f8f9c',
+    plant: '#6b7b88', plantLight: '#8b9aa6', plantShade: '#515f6b', band: '#a9675c',
+    mist: 'rgba(238,236,229,0.9)', glow: 'rgba(255,250,236,0.55)',
+    water0: '#e3e8e8', water1: '#b9c5cc', ripple: 'rgba(255,255,255,0.55)',
+    bank: '#3d4b4d', bankShade: '#273234', plume: 'rgba(255,255,255,0.95)', light: null, beacon: null,
   },
   morning: {
-    far: '#e3cfdd', farDetail: '#d4bccd', city: '#c0a3b8', cityWin: '#d2bacb', haze1: 'rgba(255,228,214,0.6)', haze2: 'rgba(250,220,210,0.45)',
-    plant: '#8f7489', plantShade: '#776076', plantLight: '#a58ca0', plantBand: '#b59fb0', plantWin: '#ad95a8',
-    near: '#5a4f6a', nearShade: '#473d57', nearLight: '#6e6380', road: '#66597a', roadLine: 'rgba(255,235,225,0.65)', rail: '#3d3450',
-    smoke: ['rgba(255,246,238,0.85)', 'rgba(255,246,238,0)'], windowLit: null, beacon: null, lamp: null, headlight: null,
-    bird: '#5a4a5c', plane: '#fff6ee', contrail: 'rgba(255,236,220,0.7)', cirrus: 'rgba(255,240,228,0.5)', sunHaze: 'rgba(255,190,150,0.3)',
+    ridge1: '#dcc6c1', ridge2: '#c6adb2', far: '#ac93a0', tower: '#96808f', towerShade: '#806b7c',
+    plant: '#66566a', plantLight: '#87758a', plantShade: '#4a3d4f', band: '#a05a52',
+    mist: 'rgba(247,222,200,0.9)', glow: 'rgba(255,214,170,0.6)',
+    water0: '#f3d8c0', water1: '#c2aab3', ripple: 'rgba(255,240,224,0.6)',
+    bank: '#372d3d', bankShade: '#231c29', plume: 'rgba(255,238,224,0.95)', light: null, beacon: null,
   },
   night: {
-    far: '#1a2850', farDetail: '#162243', city: '#111c3a', cityWin: '#ffd47a', haze1: 'rgba(30,45,90,0.5)', haze2: 'rgba(20,32,70,0.5)',
-    plant: '#0d1630', plantShade: '#080f22', plantLight: '#16223f', plantBand: '#5a2d35', plantWin: '#ffd47a',
-    near: '#060a18', nearShade: '#04060f', nearLight: '#0b1224', road: '#0e1526', roadLine: 'rgba(255,230,180,0.3)', rail: '#03050c',
-    smoke: ['rgba(200,210,235,0.5)', 'rgba(200,210,235,0)'], windowLit: '#ffd47a', beacon: '#ff5a4a', lamp: 'rgba(255,214,130,0.9)', headlight: 'rgba(255,240,200,0.9)',
-    bird: null, plane: '#8e9ab5', contrail: null, cirrus: 'rgba(190,205,240,0.07)', sunHaze: 'rgba(255,170,90,0.14)',
+    ridge1: '#1d2841', ridge2: '#172037', far: '#121a2d', tower: '#0f1727', towerShade: '#0a101d',
+    plant: '#0a101d', plantLight: '#172138', plantShade: '#05080f', band: '#3a1f24',
+    mist: 'rgba(38,50,80,0.75)', glow: 'rgba(120,110,120,0.22)',
+    water0: '#202a40', water1: '#0b111e', ripple: 'rgba(170,186,220,0.16)',
+    bank: '#04070d', bankShade: '#020409', plume: 'rgba(150,166,200,0.26)', light: '#ffd9a3', beacon: '#ff5b4d',
   },
 };
 
-// 바닥선. 앞 땅 층이 420 근처부터 덮으므로 물체 밑동은 자연스럽게 땅에 묻힌다
-const SCENE_GROUND = 432;
-// 도시 층: 촘촘한 건물 열 (같은 색이라 겹치면 한 덩어리로 보인다)
-const SCENE_CITY = Array.from({ length: 64 }, (_, i) => ({
-  x: -12 + i * 26 + ((i * 7) % 9), w: 14 + ((i * 5) % 20), h: 26 + ((i * 13) % 74), antenna: i % 9 === 4,
-}));
-// 공장 층
-const SCENE_HALLS = [{ x: 40, w: 280, h: 72, teeth: 5 }, { x: 880, w: 320, h: 92, teeth: 6 }, { x: 1320, w: 220, h: 62, teeth: 4 }];
-const SCENE_BLOCKS = [{ x: 600, w: 84, h: 196 }, { x: 1090, w: 72, h: 166 }, { x: 0, w: 56, h: 140 }, { x: 760, w: 60, h: 120 }, { x: 1560, w: 60, h: 150 }];
+// 공단 바닥(= 강기슭) 높이
+const SCENE_GROUND = 440;
+// 굴뚝: x는 중심, w는 밑동 너비. plat는 작업대 높이(굴뚝 높이에 대한 비율), plume은 연기 길이
 const SCENE_STACKS = [
-  { x: 150, w: 34, h: 296, smoke: 7 }, { x: 362, w: 48, h: 392, smoke: 9 }, { x: 556, w: 40, h: 336, smoke: 8 },
-  { x: 1004, w: 52, h: 380, smoke: 9 }, { x: 1186, w: 30, h: 256, smoke: 6 }, { x: 1486, w: 36, h: 300, smoke: 7 },
+  { x: 322, w: 28, h: 238, plat: [0.64], plume: 300 },
+  { x: 612, w: 42, h: 372, plat: [0.5, 0.8], plume: 440 },
+  { x: 706, w: 24, h: 206, plat: [0.62], plume: 230 },
+  { x: 1012, w: 36, h: 312, plat: [0.58], plume: 370 },
+  { x: 1338, w: 26, h: 226, plat: [0.62], plume: 280 },
 ];
-const SCENE_COOLING = [{ x: 690, w: 150, h: 208 }, { x: 1236, w: 118, h: 178 }];
-const SCENE_TANKS = [{ x: 420, w: 72, h: 60 }, { x: 504, w: 72, h: 82 }, { x: 1398, w: 62, h: 50 }, { x: 1468, w: 62, h: 50 }];
-const SCENE_SPHERE = { cx: 862, cy: 388, r: 40 };
-const SCENE_CRANE = { x: 262, top: 146, jib: 230, counter: 72, hookX: 140 };
-const SCENE_PYLONS = [{ x: 470, h: 150 }, { x: 940, h: 165 }, { x: 1300, h: 150 }];
-// 앞 땅 층: 나무는 크기가 다른 무리로 (같은 색 실루엣이라 겹치며 숲 덩어리가 된다)
-const SCENE_TREE_CLUSTERS = [
-  [40, 62, 88], [230, 250], [330, 352, 372, 390], [560, 580], [700, 724, 744], [880, 902], [1010, 1036, 1052, 1076], [1210, 1230], [1360, 1384, 1402], [1520, 1544, 1566, 1590],
+// 먼 공단의 굴뚝 (작고 옅게)
+const SCENE_FAR_STACKS = [
+  { x: 96, w: 10, h: 120 }, { x: 138, w: 8, h: 92 }, { x: 204, w: 12, h: 142 },
+  { x: 1452, w: 11, h: 128 }, { x: 1508, w: 8, h: 96 }, { x: 1560, w: 10, h: 112 },
 ];
-const SCENE_TREES = SCENE_TREE_CLUSTERS.flatMap((cluster, ci) => cluster.map((x, k) => ({
-  x, r: 15 + ((ci * 5 + k * 3) % 11), h: 20 + ((ci * 7 + k * 5) % 16),
-})));
-const SCENE_LAMPS = [120, 400, 680, 960, 1240, 1500];
-const SCENE_CARS = [
-  { dir: 1, dur: 36, delay: -6, len: 26 }, { dir: -1, dur: 44, delay: -21, len: 24 }, { dir: 1, dur: 52, delay: -33, len: 36 }, { dir: -1, dur: 40, delay: -13, len: 22 },
+const SCENE_COOLING = [{ x: 770, w: 150, h: 176 }, { x: 898, w: 118, h: 146 }];
+const SCENE_HALLS = [{ x: 372, w: 190, h: 44, teeth: 5 }, { x: 1066, w: 210, h: 52, teeth: 0 }, { x: 196, w: 96, h: 34, teeth: 0 }, { x: 1392, w: 120, h: 38, teeth: 3 }];
+const SCENE_TANKS = [{ x: 468, w: 54, h: 60 }, { x: 528, w: 54, h: 74 }, { x: 1404, w: 46, h: 54 }];
+// 증류탑 무리
+const SCENE_COLUMNS = [{ x: 1178, w: 14, h: 128 }, { x: 1202, w: 18, h: 164 }, { x: 1232, w: 12, h: 104 }, { x: 1256, w: 15, h: 142 }];
+const SCENE_PIPE_RACK = { x0: 724, x1: 1000, y: 26 };
+// 앞 강둑의 나무: 양옆에 몰아 화면 가운데를 비운다
+const SCENE_TREES = [
+  ...Array.from({ length: 16 }, (_, i) => ({ x: -6 + i * 19 + ((i * 7) % 9), r: (13 + ((i * 11) % 14)) * (1 - i / 26) })),
+  ...Array.from({ length: 16 }, (_, i) => ({ x: 1606 - i * 19 - ((i * 5) % 8), r: (14 + ((i * 13) % 15)) * (1 - i / 26) })),
 ];
-const SCENE_TRAIN = { dur: 100, delay: -42, cars: [50, 42, 46, 46, 42, 46, 42, 46] };
-const SCENE_BIRD_FLOCKS = [
-  { path: 'M-80,150 C300,120 700,170 1700,130', dur: 52, delay: -8, birds: [[0, 0], [-16, 9], [-32, 18], [16, 9], [32, 18], [-48, 26]] },
-  { path: 'M1700,200 C1200,170 600,230 -120,190', dur: 64, delay: -30, birds: [[0, 0], [-14, 8], [14, 8], [-28, 16]] },
-];
-const SCENE_PLANE = { path: 'M-160,58 L1760,92', dur: 78, delay: -26 };
-const SCENE_ROAD_Y = 478;
-const SCENE_RAIL_Y = 500;
 
 const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
   const id = (name) => `${scope}-sky-${name}`;
   const G = SCENE_GROUND;
   const stackScale = compact ? 0.66 : 1;
-  const shadeW = (w) => Math.max(4, Math.round(w * 0.34));
-  const night = Boolean(pal.windowLit);
+  const night = Boolean(pal.light);
+  const cyl = `url(#${id('cyl')})`;
 
-  // 공장 층의 상자형 물체: 본체 + 오른쪽 그늘면 (같은 층 색조)
-  const box = (key, x, y, w, h, extra = null) => (
-    <g key={key}>
-      <rect x={x} y={y} width={w} height={h} fill={pal.plant} />
-      <rect x={x + w - shadeW(w)} y={y} width={shadeW(w)} height={h} fill={pal.plantShade} />
-      {extra}
-    </g>
+  // 위로 갈수록 가늘어지는 굴뚝. 밑동 반너비 w/2 → 꼭대기 반너비 w×0.31
+  const halfAt = (st, t) => (st.w / 2) * (1 - 0.38 * t);
+  const stackShape = (st, h, fill) => {
+    const top = G - h;
+    return <path d={`M${st.x - st.w / 2},${G} L${st.x - halfAt(st, 1)},${top} L${st.x + halfAt(st, 1)},${top} L${st.x + st.w / 2},${G} Z`} fill={fill} />;
+  };
+  // 바람에 눕는 연기: 굴뚝 꼭대기에서 오른쪽으로 길게 퍼지며 옅어진다
+  const plume = (key, cx, top, len, seed, opacity = 1) => (
+    <path key={key} className="skyline-plume" opacity={opacity}
+      d={`M${cx - 3},${top} C${cx - 2},${top - len * 0.12} ${cx + len * 0.18},${top - len * 0.2} ${cx + len},${top - len * 0.3} L${cx + len},${top - len * 0.54} C${cx + len * 0.42},${top - len * 0.44} ${cx + 8},${top - len * 0.22} ${cx + 3},${top} Z`}
+      fill={`url(#${id('plume')})`} filter={`url(#${id('blur')})`}
+      style={{ '--plume-duration': `${18 + (seed % 5) * 3}s`, '--plume-delay': `-${(seed * 7) % 19}s` }} />
   );
-  const windowsFor = (x, y, w, h, seedBase) => {
-    const cols = Math.max(2, Math.floor(w / 14));
-    const rows = Math.max(2, Math.floor((h - 16) / (compact ? 26 : 18)));
-    const out = [];
-    for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) {
-      const seed = seedBase + r * 17 + c * 7;
-      const lit = night && seededNoise(seed) > 0.45;
-      if (night && !lit) continue;
-      out.push(<rect key={`${r}-${c}`} x={x + 6 + c * ((w - 12) / cols) + 1} y={y + 10 + r * ((h - 16) / rows)} width={Math.max(3, (w - 12) / cols - 4)} height="6" fill={pal.plantWin} className={lit ? 'skyline-window-night' : undefined} style={lit ? { '--glow-duration': `${4 + (seed % 5)}s`, '--glow-delay': `-${seed % 7}s` } : undefined} />);
+  // 조명은 흩뿌리지 않고 구조물에 붙인다: 건물 처마, 배관 받침, 탱크·증류탑 층마다 한 줄씩
+  const lights = [];
+  if (night) {
+    const row = (x0, x1, y, step) => { for (let x = x0; x <= x1; x += step) lights.push({ x, y }); };
+    SCENE_HALLS.forEach((f) => row(f.x + 8, f.x + f.w - 8, G - f.h + 7, compact ? 44 : 22));
+    SCENE_TANKS.forEach((t) => row(t.x + 6, t.x + t.w - 6, G - t.h + 12, 21));
+    if (!compact) {
+      row(SCENE_PIPE_RACK.x0 + 8, SCENE_PIPE_RACK.x1 - 8, G - SCENE_PIPE_RACK.y - 3, 29);
+      SCENE_COLUMNS.forEach((c) => [0.3, 0.55, 0.8].forEach((f) => lights.push({ x: c.x + c.w + 2, y: G - c.h * f - 3 })));
     }
-    return out;
-  };
-  const coolingPath = (t) => {
-    const top = G - t.h, x0 = t.x, x1 = t.x + t.w, inset = t.w * 0.17, waist = G - t.h * 0.42;
-    return `M${x0},${G} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset},${top + 18} L${x1 - inset},${top + 18} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${G} Z`;
-  };
-  const smokeFor = (cx, cy, baseR, count, seedBase) => Array.from({ length: compact ? Math.ceil(count * 0.5) : count }).map((_, i) => {
-    const seed = seedBase + i * 31;
-    return (
-      <circle key={i} className="skyline-svg-smoke" cx={cx} cy={cy} r={baseR + (i % 3) * 3} fill={`url(#${id('smoke')})`} filter={`url(#${id('blur')})`}
-        style={{ '--drift': `${(seededNoise(seed + 2) > 0.2 ? 1 : -1) * (60 + seededNoise(seed + 3) * 150)}px`, '--rise': `${170 + seededNoise(seed + 5) * 170}px`, '--end-scale': `${2.6 + seededNoise(seed + 8) * 1.6}`, '--max-opacity': `${0.35 + seededNoise(seed + 6) * 0.3}`, '--rise-duration': `${14 + seededNoise(seed + 4) * 9}s`, '--rise-delay': `-${seededNoise(seed + 11) * 23}s` }} />
-    );
-  });
-  const trees = compact ? SCENE_TREES.filter((_, i) => i % 2 === 0) : SCENE_TREES;
-  // 나무 무리 실루엣: 둥근 머리들을 한 경로로 이어 숲 덩어리로
-  const treeBlob = (list, yBase) => list.map((t) => `M${t.x - t.r},${yBase} A${t.r},${t.r} 0 0 1 ${t.x + t.r},${yBase} Z`).join(' ');
+    row(60, 250, G - 26, 38); row(1436, 1590, G - 22, 36);
+    lights.forEach((l, i) => { const c = seededNoise(i * 7 + 3); l.i = i; l.r = 0.7 + c * 0.5; l.cool = c > 0.74; });
+  }
+  const stacks = SCENE_STACKS.map((st) => ({ ...st, hh: Math.round(st.h * stackScale) }));
 
   return (
     <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        <radialGradient id={id('smoke')} cx="0.45" cy="0.4" r="0.55">
-          <stop offset="0" stopColor={pal.smoke[0]} />
-          <stop offset="1" stopColor={pal.smoke[1]} />
-        </radialGradient>
-        <linearGradient id={id('haze1')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.haze1} stopOpacity="0" />
-          <stop offset="1" stopColor={pal.haze1} />
+        <linearGradient id={id('cyl')} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={pal.plantLight} />
+          <stop offset="0.42" stopColor={pal.plant} />
+          <stop offset="1" stopColor={pal.plantShade} />
         </linearGradient>
-        <linearGradient id={id('haze2')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.haze2} stopOpacity="0" />
-          <stop offset="1" stopColor={pal.haze2} />
+        <linearGradient id={id('tower')} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={pal.tower} />
+          <stop offset="1" stopColor={pal.towerShade} />
         </linearGradient>
-        <linearGradient id={id('sunhaze')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.sunHaze} stopOpacity="0" />
-          <stop offset="0.8" stopColor={pal.sunHaze} />
-          <stop offset="1" stopColor={pal.sunHaze} stopOpacity="0" />
+        <linearGradient id={id('plume')} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={pal.plume} />
+          <stop offset="0.45" stopColor={pal.plume} stopOpacity="0.5" />
+          <stop offset="1" stopColor={pal.plume} stopOpacity="0" />
         </linearGradient>
-        <linearGradient id={id('ground')} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={pal.near} />
-          <stop offset="1" stopColor={pal.nearShade} />
+        <linearGradient id={id('mist')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.mist} stopOpacity="0" />
+          <stop offset="1" stopColor={pal.mist} />
         </linearGradient>
-        {pal.contrail && (
-          <linearGradient id={id('contrail')} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor={pal.contrail} stopOpacity="0" />
-            <stop offset="1" stopColor={pal.contrail} />
-          </linearGradient>
-        )}
-        {pal.lamp && (
-          <radialGradient id={id('lampglow')} cx="0.5" cy="0" r="0.75">
-            <stop offset="0" stopColor={pal.lamp} stopOpacity="0.55" />
-            <stop offset="1" stopColor={pal.lamp} stopOpacity="0" />
-          </radialGradient>
-        )}
-        <filter id={id('blur')} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" /></filter>
-        <filter id={id('soft')} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.2" /></filter>
-        <filter id={id('wide')} x="-20%" y="-100%" width="140%" height="300%"><feGaussianBlur stdDeviation="9" /></filter>
+        <linearGradient id={id('glow')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.glow} stopOpacity="0" />
+          <stop offset="0.75" stopColor={pal.glow} />
+          <stop offset="1" stopColor={pal.glow} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={id('water')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.water0} />
+          <stop offset="1" stopColor={pal.water1} />
+        </linearGradient>
+        <linearGradient id={id('refl')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.plant} stopOpacity="0.5" />
+          <stop offset="1" stopColor={pal.plant} stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={id('bank')} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={pal.bank} />
+          <stop offset="1" stopColor={pal.bankShade} />
+        </linearGradient>
+        <filter id={id('blur')} x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation={compact ? 5 : 8} /></filter>
+        <filter id={id('soft')} x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.6" /></filter>
+        <filter id={id('halo')} x="-400%" y="-400%" width="900%" height="900%"><feGaussianBlur stdDeviation="2.6" /></filter>
       </defs>
 
-      {/* 하늘 아래 빛 띠와 권운 */}
-      <rect x="0" y="140" width="1600" height="190" fill={`url(#${id('sunhaze')})`} />
-      {[[120, 48, 420, 7], [640, 92, 300, 5], [980, 36, 520, 8], [1380, 118, 260, 5]].map(([x, y, w, h], i) => (
-        <ellipse key={`cirrus-${i}`} cx={x + w / 2} cy={y} rx={w / 2} ry={h / 2} fill={pal.cirrus} filter={`url(#${id('wide')})`} />
-      ))}
+      {/* 지평선 가까이의 옅은 빛 */}
+      <rect x="0" y="150" width="1600" height="230" fill={`url(#${id('glow')})`} />
 
-      {/* 1층: 먼 산 */}
-      <path d="M0,296 L70,262 L130,280 L210,226 L290,268 L350,246 L430,286 L520,214 L600,262 L660,244 L740,282 L830,228 L900,268 L960,250 L1040,292 L1130,230 L1200,266 L1260,238 L1340,288 L1420,224 L1500,264 L1560,250 L1600,270 L1600,520 L0,520 Z" fill={pal.far} />
-      <path d="M520,214 L498,236 L545,234 Z M830,228 L808,248 L852,246 Z M1420,224 L1398,246 L1442,244 Z M210,226 L190,246 L232,244 Z" fill={pal.farDetail} opacity="0.9" />
-      <rect x="0" y="230" width="1600" height="120" fill={`url(#${id('haze1')})`} />
+      {/* 먼 산 두 겹: 뒤가 더 옅다 */}
+      <path d="M0,318 C120,296 210,276 330,292 C450,308 520,262 660,270 C790,278 860,312 990,300 C1120,288 1210,250 1340,264 C1440,274 1520,300 1600,290 L1600,520 L0,520 Z" fill={pal.ridge1} />
+      <path d="M0,352 C140,340 240,318 380,330 C500,340 600,356 740,344 C880,332 960,316 1100,326 C1240,336 1330,360 1460,346 C1520,340 1570,334 1600,336 L1600,520 L0,520 Z" fill={pal.ridge2} />
+      <rect x="0" y="300" width="1600" height="110" fill={`url(#${id('mist')})`} opacity="0.7" />
 
-      {/* 2층: 도시 실루엣 */}
-      <g>
-        {SCENE_CITY.map((b, i) => (
-          <g key={`city-${i}`}>
-            <rect x={b.x} y={318 - b.h} width={b.w} height={b.h + 60} fill={pal.city} />
-            {b.antenna && <rect x={b.x + b.w / 2 - 1} y={318 - b.h - 18} width="2" height="18" fill={pal.city} />}
-            {(night ? i % 2 === 0 : i % 3 === 0) && [0, 1, 2].map((k) => (
-              <rect key={k} x={b.x + 3} y={318 - b.h + 6 + k * 12} width={Math.max(4, b.w - 6)} height="2" fill={pal.cityWin} opacity={night ? 0.55 : 0.8} />
-            ))}
-          </g>
-        ))}
+      {/* 먼 공단: 가는 굴뚝 몇 개와 냉각탑, 옅은 연기 */}
+      <g fill={pal.far}>
+        {SCENE_FAR_STACKS.map((st, i) => <path key={`far-${i}`} d={`M${st.x - st.w / 2},${G} L${st.x - st.w * 0.3},${G - st.h} L${st.x + st.w * 0.3},${G - st.h} L${st.x + st.w / 2},${G} Z`} />)}
+        <rect x="40" y={G - 30} width="230" height="30" />
+        <rect x="1420" y={G - 26} width="180" height="26" />
       </g>
-      <rect x="0" y="300" width="1600" height="150" fill={`url(#${id('haze2')})`} />
-
-      {/* 3층: 공단. 한 색조의 실루엣, 오른쪽 그늘면만 어둡게 */}
-      {!compact && (() => {
-        const c = SCENE_CRANE;
+      {!compact && SCENE_FAR_STACKS.filter((_, i) => i % 2 === 0).map((st, i) => plume(`far-plume-${i}`, st.x, G - st.h, 130, i + 11, 0.6))}
+      {SCENE_COOLING.map((t, i) => {
+        const top = G - t.h, x0 = t.x, x1 = t.x + t.w, inset = t.w * 0.18, waist = G - t.h * 0.44;
         return (
-          <g stroke={pal.plantShade} strokeWidth="2" fill="none" strokeLinecap="round">
-            <path d={`M${c.x - 7},${G} L${c.x - 7},${c.top} M${c.x + 7},${G} L${c.x + 7},${c.top}`} />
-            <path d={Array.from({ length: 11 }).map((_, i) => `M${c.x - 7},${c.top + 14 + i * 26} L${c.x + 7},${c.top + i * 26}`).join(' ')} strokeWidth="1.2" />
-            <path d={`M${c.x - c.counter},${c.top - 10} L${c.x + c.jib},${c.top - 10}`} strokeWidth="3" />
-            <path d={`M${c.x - c.counter},${c.top - 10} L${c.x},${c.top - 36} L${c.x + c.jib},${c.top - 10} M${c.x},${c.top - 36} L${c.x},${c.top - 18}`} strokeWidth="1.2" />
-            <rect x={c.x - c.counter + 6} y={c.top - 10} width="24" height="14" fill={pal.plantShade} stroke="none" />
-            <path d={`M${c.x + c.hookX},${c.top - 10} L${c.x + c.hookX},${c.top + 150}`} strokeWidth="1" />
-            <rect x={c.x + c.hookX - 10} y={c.top + 150} width="20" height="16" fill={pal.plantShade} stroke="none" />
-            {pal.beacon && <circle className="skyline-beacon" cx={c.x} cy={c.top - 38} r="3" fill={pal.beacon} stroke="none" style={{ '--beacon-delay': '-1.6s' }} />}
+          <g key={`cooling-${i}`}>
+            <path d={`M${x0},${G} C${x0 + inset * 0.3},${waist} ${x0 + inset},${waist} ${x0 + inset * 0.86},${top} L${x1 - inset * 0.86},${top} C${x1 - inset},${waist} ${x1 - inset * 0.3},${waist} ${x1},${G} Z`} fill={`url(#${id('tower')})`} />
+            <ellipse cx={t.x + t.w / 2} cy={top} rx={t.w / 2 - inset * 0.86} ry="3" fill={pal.towerShade} />
+            {plume(`cool-plume-${i}`, t.x + t.w * 0.42, top + 4, t.w * 2.6, i + 3, 0.9)}
           </g>
         );
-      })()}
-      {SCENE_BLOCKS.map((b, i) => box(`block-${i}`, b.x, G - b.h, b.w, b.h, windowsFor(b.x, G - b.h, b.w, b.h, i * 131)))}
-      {SCENE_HALLS.map((f, i) => {
-        const tw = f.w / f.teeth;
-        const roof = Array.from({ length: f.teeth }).map((_, k) => `L${f.x + k * tw},${G - f.h} L${f.x + k * tw + tw * 0.62},${G - f.h - 22} L${f.x + (k + 1) * tw},${G - f.h}`).join(' ');
-        return box(`hall-${i}`, f.x, G - f.h, f.w, f.h, (
-          <>
-            <path d={`M${f.x},${G - f.h} ${roof} Z`} fill={pal.plantLight} />
-            <path d={Array.from({ length: f.teeth }).map((_, k) => `M${f.x + k * tw + tw * 0.62},${G - f.h - 22} L${f.x + (k + 1) * tw},${G - f.h} L${f.x + k * tw + tw * 0.62},${G - f.h} Z`).join(' ')} fill={pal.plantShade} />
-            <rect x={f.x + 14} y={G - f.h * 0.62} width={f.w - 28} height="6" fill={pal.plantWin} opacity={night ? 0.9 : 1} className={night ? 'skyline-window-night' : undefined} style={night ? { '--glow-duration': `${5 + i}s`, '--glow-delay': `-${i * 2}s` } : undefined} />
-          </>
-        ));
       })}
-      {!compact && (() => {
-        const s = SCENE_SPHERE;
-        return (
-          <g key="sphere">
-            <path d={`M${s.cx - s.r * 0.6},${G} L${s.cx - s.r * 0.45},${s.cy + s.r * 0.5} M${s.cx + s.r * 0.6},${G} L${s.cx + s.r * 0.45},${s.cy + s.r * 0.5} M${s.cx - s.r * 0.18},${G} L${s.cx - s.r * 0.14},${s.cy + s.r * 0.92} M${s.cx + s.r * 0.18},${G} L${s.cx + s.r * 0.14},${s.cy + s.r * 0.92}`} stroke={pal.plantShade} strokeWidth="2.5" fill="none" />
-            <circle cx={s.cx} cy={s.cy} r={s.r} fill={pal.plant} />
-            <path d={`M${s.cx + s.r * 0.25},${s.cy - s.r * 0.97} A${s.r},${s.r} 0 0 1 ${s.cx + s.r * 0.25},${s.cy + s.r * 0.97} A${s.r * 0.55},${s.r} 0 0 0 ${s.cx + s.r * 0.25},${s.cy - s.r * 0.97} Z`} fill={pal.plantShade} />
-            <ellipse cx={s.cx} cy={s.cy} rx={s.r} ry={s.r * 0.16} fill="none" stroke={pal.plantLight} strokeWidth="1.5" opacity="0.8" />
-          </g>
-        );
-      })()}
-      {SCENE_TANKS.map((t, i) => box(`tank-${i}`, t.x, G - t.h, t.w, t.h, (
-        <>
-          <ellipse cx={t.x + t.w / 2} cy={G - t.h} rx={t.w / 2} ry="5" fill={pal.plantLight} />
-          <rect x={t.x} y={G - t.h * 0.5} width={t.w} height="3" fill={pal.plantBand} opacity="0.7" />
-        </>
-      )))}
-      {SCENE_COOLING.map((t, i) => (
-        <g key={`cooling-${i}`}>
-          <path d={coolingPath(t)} fill={pal.plant} />
-          <path d={`M${t.x + t.w * 0.62},${G} C${t.x + t.w * 0.66},${G - t.h * 0.42} ${t.x + t.w * 0.72},${G - t.h * 0.42} ${t.x + t.w * 0.72},${G - t.h + 18} L${t.x + t.w - t.w * 0.17},${G - t.h + 18} C${t.x + t.w - t.w * 0.17},${G - t.h * 0.42} ${t.x + t.w - t.w * 0.05},${G - t.h * 0.42} ${t.x + t.w},${G} Z`} fill={pal.plantShade} />
-          <ellipse cx={t.x + t.w / 2} cy={G - t.h + 18} rx={t.w * 0.33} ry="5" fill={pal.plantShade} />
-          {smokeFor(t.x + t.w / 2, G - t.h + 14, 16, 5, i * 53)}
+      <rect x="0" y={G - 120} width="1600" height="122" fill={`url(#${id('mist')})`} opacity="0.85" />
+
+      {/* 공단: 낮은 건물·탱크·증류탑·배관 받침 */}
+      <g fill={pal.plant}>
+        {SCENE_HALLS.map((f, i) => {
+          const tw = f.teeth ? f.w / f.teeth : 0;
+          const roof = f.teeth
+            ? Array.from({ length: f.teeth }).map((_, k) => `L${f.x + k * tw},${G - f.h} L${f.x + k * tw + tw * 0.6},${G - f.h - 14} L${f.x + (k + 1) * tw},${G - f.h}`).join(' ')
+            : `L${f.x},${G - f.h} L${f.x + f.w},${G - f.h}`;
+          return <path key={`hall-${i}`} d={`M${f.x},${G} ${roof} L${f.x + f.w},${G} Z`} />;
+        })}
+      </g>
+      {SCENE_TANKS.map((t, i) => (
+        <g key={`tank-${i}`}>
+          <path d={`M${t.x},${G} L${t.x},${G - t.h + 6} Q${t.x + t.w / 2},${G - t.h - 6} ${t.x + t.w},${G - t.h + 6} L${t.x + t.w},${G} Z`} fill={cyl} />
+          <path d={`M${t.x + t.w - 5},${G} L${t.x + t.w - 5},${G - t.h + 10}`} stroke={pal.plantShade} strokeWidth="1" />
         </g>
       ))}
-      {SCENE_STACKS.map((st, i) => {
-        const h = Math.round(st.h * stackScale), top = G - h;
+      {!compact && SCENE_COLUMNS.map((c, i) => (
+        <g key={`col-${i}`}>
+          <path d={`M${c.x},${G} L${c.x},${G - c.h + c.w / 2} A${c.w / 2},${c.w / 2} 0 0 1 ${c.x + c.w},${G - c.h + c.w / 2} L${c.x + c.w},${G} Z`} fill={cyl} />
+          {[0.3, 0.55, 0.8].map((f) => <rect key={f} x={c.x - 3} y={G - c.h * f} width={c.w + 6} height="1.6" fill={pal.plantShade} />)}
+          <path d={`M${c.x + c.w / 2},${G - c.h} L${c.x + c.w / 2},${G - c.h - 12}`} stroke={pal.plantShade} strokeWidth="1.2" />
+        </g>
+      ))}
+      {!compact && (() => {
+        const r = SCENE_PIPE_RACK, y = G - r.y;
+        return (
+          <g stroke={pal.plantShade} fill="none">
+            <path d={`M${r.x0},${y} L${r.x1},${y} M${r.x0},${y + 5} L${r.x1},${y + 5}`} strokeWidth="1.8" />
+            <path d={Array.from({ length: 10 }).map((_, k) => `M${r.x0 + 8 + k * 29},${y} L${r.x0 + 8 + k * 29},${G}`).join(' ')} strokeWidth="1.2" />
+          </g>
+        );
+      })()}
+
+      {/* 굴뚝: 연기 → 몸통 → 띠 → 작업대(난간·받침) → 사다리 */}
+      {stacks.map((st, i) => {
+        const top = G - st.hh, ht = halfAt(st, 1);
         return (
           <g key={`stack-${i}`}>
-            <rect x={st.x} y={top} width={st.w} height={h} fill={pal.plant} />
-            <rect x={st.x + st.w - shadeW(st.w)} y={top} width={shadeW(st.w)} height={h} fill={pal.plantShade} />
-            <rect x={st.x - 3} y={top} width={st.w + 6} height="7" fill={pal.plantShade} />
-            <rect x={st.x} y={top + 24} width={st.w} height="8" fill={pal.plantBand} />
-            <rect x={st.x} y={top + 48} width={st.w} height="8" fill={pal.plantBand} />
-            {pal.beacon && <circle className="skyline-beacon" cx={st.x + st.w / 2} cy={top - 4} r="3.2" fill={pal.beacon} style={{ '--beacon-delay': `-${i * 0.9}s` }} />}
-            {smokeFor(st.x + st.w / 2, top - 2, st.w * 0.32, st.smoke, i * 97)}
+            {plume(`plume-${i}`, st.x, top - 1, st.plume * (compact ? 0.7 : 1), i)}
+            {stackShape(st, st.hh, cyl)}
+            <rect x={st.x - ht - 2} y={top} width={ht * 2 + 4} height="4" fill={pal.plantShade} />
+            {[16, 32].map((dy) => {
+              const hw = halfAt(st, 1 - dy / st.hh);
+              return <rect key={dy} x={st.x - hw} y={top + dy} width={hw * 2} height="6" fill={pal.band} opacity={night ? 0.9 : 0.55} />;
+            })}
+            {st.plat.map((f) => {
+              const y = G - st.hh * f, hw = halfAt(st, f) + 8;
+              return (
+                <g key={f} stroke={pal.plantShade} fill="none">
+                  <rect x={st.x - hw} y={y} width={hw * 2} height="2.6" fill={pal.plantShade} stroke="none" />
+                  <path d={`M${st.x - hw},${y - 8} L${st.x + hw},${y - 8}`} strokeWidth="1" />
+                  <path d={Array.from({ length: Math.floor((hw * 2) / 6) + 1 }).map((_, k) => `M${st.x - hw + k * 6},${y} L${st.x - hw + k * 6},${y - 8}`).join(' ')} strokeWidth="0.7" />
+                  <path d={`M${st.x - hw},${y + 2.6} L${st.x - hw + 8},${y + 12} M${st.x + hw},${y + 2.6} L${st.x + hw - 8},${y + 12}`} strokeWidth="1" />
+                  {night && <circle cx={st.x - hw + 2} cy={y - 10} r="1.3" fill={pal.light} stroke="none" />}
+                </g>
+              );
+            })}
+            <path d={`M${st.x + st.w / 2 - 1},${G} L${st.x + halfAt(st, st.plat[st.plat.length - 1]) - 1},${G - st.hh * st.plat[st.plat.length - 1]}`} stroke={pal.plantShade} strokeWidth="1" opacity="0.8" />
+            {pal.beacon && <circle className="skyline-beacon" cx={st.x} cy={top - 4} r="2.2" fill={pal.beacon} style={{ '--beacon-delay': `-${i * 0.8}s` }} />}
           </g>
         );
       })}
-      {SCENE_PYLONS.map((py, i) => {
-        const top = G - py.h, next = SCENE_PYLONS[i + 1];
-        return (
-          <g key={`pylon-${i}`} stroke={pal.plantShade} strokeWidth="2" fill="none" strokeLinecap="round">
-            <path d={`M${py.x - 16},${G} L${py.x - 4},${top} L${py.x + 4},${top} L${py.x + 16},${G}`} />
-            <path d={`M${py.x - 12},${G - 30} L${py.x + 12},${G - 30} M${py.x - 9},${G - 62} L${py.x + 9},${G - 62} M${py.x - 13},${top + 22} L${py.x + 13},${top + 22} M${py.x - 22},${top + 46} L${py.x + 22},${top + 46}`} />
-            {next && [[22, 46], [13, 22]].map(([dx, dy], k) => (
-              <path key={k} d={`M${py.x + dx},${top + dy} Q${(py.x + next.x) / 2},${Math.max(top, G - next.h) + dy + 46} ${next.x - dx},${G - next.h + dy} M${py.x - dx},${top + dy} Q${(py.x + next.x) / 2},${Math.max(top, G - next.h) + dy + 46} ${next.x + dx},${G - next.h + dy}`} strokeWidth="1" opacity="0.7" />
-            ))}
-          </g>
-        );
-      })}
-      {/* 공단 밑동을 땅에 묻는 접지 안개 */}
-      <rect x="0" y={G - 40} width="1600" height="44" fill={`url(#${id('haze2')})`} />
 
-      {/* 4층: 앞 땅. 언덕 + 숲 덩어리 + 도로 + 철길, 전부 한 색조 */}
-      <path d={`M0,${G - 14} C180,${G - 36} 300,${G} 480,${G - 24} C660,${G - 48} 820,${G - 8} 1000,${G - 30} C1180,${G - 52} 1320,${G - 10} 1600,${G - 36} L1600,520 L0,520 Z`} fill={`url(#${id('ground')})`} />
-      <path d={treeBlob(trees, G + 6)} fill={pal.nearLight} transform={`translate(0 ${-26})`} />
-      <path d={treeBlob(trees.map((t) => ({ ...t, r: t.r * 0.72, x: t.x + 3 })), G + 6)} fill={pal.nearShade} transform={`translate(0 ${-22})`} opacity="0.55" />
-      <rect x="0" y={G + 6} width="1600" height="100" fill={pal.near} />
-      <rect x="0" y={G + 6} width="1600" height="18" fill={pal.nearLight} opacity="0.35" />
-      {/* 도로 */}
-      <rect x="0" y={SCENE_ROAD_Y - 8} width="1600" height="16" fill={pal.road} />
-      <path d={`M0,${SCENE_ROAD_Y} L1600,${SCENE_ROAD_Y}`} stroke={pal.roadLine} strokeWidth="1.3" strokeDasharray="14 12" />
-      {SCENE_LAMPS.map((x, i) => (
-        <g key={`lamp-${i}`}>
-          {pal.lamp && <ellipse cx={x + 10} cy={SCENE_ROAD_Y - 34} rx="36" ry="46" fill={`url(#${id('lampglow')})`} />}
-          <path d={`M${x},${SCENE_ROAD_Y - 10} L${x},${SCENE_ROAD_Y - 40} Q${x},${SCENE_ROAD_Y - 46} ${x + 6},${SCENE_ROAD_Y - 46} L${x + 12},${SCENE_ROAD_Y - 46}`} fill="none" stroke={pal.nearShade} strokeWidth="2" strokeLinecap="round" />
-          <rect x={x + 8} y={SCENE_ROAD_Y - 48} width="8" height="4" fill={pal.lamp || pal.nearLight} />
-        </g>
-      ))}
-      {/* 뒤 차선(왼쪽으로 가는 차)을 먼저 그려, 엇갈릴 때 앞 차선 차가 위에 오게 한다 */}
-      {[...SCENE_CARS.map((car, i) => ({ car, i }))].sort((a, b) => a.car.dir - b.car.dir).map(({ car, i }) => {
-        const lane = car.dir > 0 ? 3 : -4;
-        return (
-          <g key={`car-${i}`}>
-            <g transform={`translate(0 ${SCENE_ROAD_Y + lane}) scale(${car.dir} 1)`}>
-              <rect x={-car.len / 2} y={-5} width={car.len} height="6" rx="2" fill={pal.nearShade} />
-              <rect x={-car.len / 2 + 5} y={-9} width={car.len * 0.55} height="5" rx="2" fill={pal.nearShade} />
-              {pal.headlight && <path d={`M${car.len / 2},-3 L${car.len / 2 + 34},-9 L${car.len / 2 + 34},4 Z`} fill={pal.headlight} opacity="0.2" />}
-              {pal.headlight && <rect x={car.len / 2 - 1.5} y={-3.5} width="2.5" height="2.5" fill={pal.headlight} />}
-              {pal.headlight && <rect x={-car.len / 2 - 1} y={-3.5} width="2.5" height="2.5" fill="#ff4d3d" />}
-            </g>
-            <animateMotion dur={`${car.dur}s`} begin={`${car.delay}s`} repeatCount="indefinite" path="M-60,0 L1660,0" keyPoints={car.dir > 0 ? '0;1' : '1;0'} keyTimes="0;1" calcMode="linear" />
+      {/* 밤: 공단 조명 (번진 빛 + 또렷한 점) */}
+      {night && (
+        <>
+          <g filter={`url(#${id('halo')})`} opacity="0.55">
+            {lights.map((l) => <circle key={`h-${l.i}`} cx={l.x} cy={l.y} r={l.r * 2.4} fill={l.cool ? '#dfe9ff' : pal.light} />)}
           </g>
-        );
-      })}
-      {/* 철길과 화물열차 실루엣 */}
-      <path d={`M0,${SCENE_RAIL_Y + 6} L1600,${SCENE_RAIL_Y + 6}`} stroke={pal.rail} strokeWidth="5" strokeDasharray="3 9" />
-      <path d={`M0,${SCENE_RAIL_Y + 3.5} L1600,${SCENE_RAIL_Y + 3.5} M0,${SCENE_RAIL_Y + 8.5} L1600,${SCENE_RAIL_Y + 8.5}`} stroke={pal.rail} strokeWidth="1.4" />
-      {(() => {
-        let offset = 0;
-        const trainLength = SCENE_TRAIN.cars.reduce((sum, w) => sum + w + 5, 0);
-        const cars = SCENE_TRAIN.cars.map((w, i) => {
-          // 기관차(i=0)를 진행 방향(오른쪽) 맨 앞에 두고 화차를 그 뒤로 잇는다 → 전조등이 앞을 비춘다
-          const x = trainLength - offset - w; offset += w + 5;
-          const h = i === 0 ? 16 : 13;
-          const y = SCENE_RAIL_Y + 3 - h;
-          return (
-            <g key={`train-${i}`}>
-              <rect x={x} y={y} width={w} height={h} rx={i % 3 === 1 ? 6 : 1.5} fill={pal.nearShade} />
-              {i === 0 && <rect x={x + w - 16} y={y - 6} width="14" height="7" fill={pal.nearShade} />}
-              {i === 0 && pal.headlight && <path d={`M${x + w},${y + 4} L${x + w + 46},${y - 6} L${x + w + 46},${y + 14} Z`} fill={pal.headlight} opacity="0.22" />}
-              <circle cx={x + 7} cy={SCENE_RAIL_Y + 3.5} r="2.4" fill={pal.rail} />
-              <circle cx={x + w - 7} cy={SCENE_RAIL_Y + 3.5} r="2.4" fill={pal.rail} />
-            </g>
-          );
-        });
-        return (
-          <g>
-            <g transform={`translate(${-offset} 0)`}>{cars}</g>
-            <animateMotion dur={`${SCENE_TRAIN.dur}s`} begin={`${SCENE_TRAIN.delay}s`} repeatCount="indefinite" path={`M-60,0 L${1600 + offset + 60},0`} />
-          </g>
-        );
-      })()}
-
-      {/* 새 떼 (낮·아침)와 비행기 */}
-      {pal.bird && SCENE_BIRD_FLOCKS.slice(0, compact ? 1 : 2).map((flock, fi) => (
-        <g key={`flock-${fi}`} fill="none" stroke={pal.bird} strokeWidth="1.6" strokeLinecap="round">
-          {flock.birds.map(([bx, by], bi) => (
-            <path key={bi} className="skyline-bird" d={`M${bx - 6},${by} Q${bx - 3},${by - 5} ${bx},${by} Q${bx + 3},${by - 5} ${bx + 6},${by}`} style={{ '--flap-duration': `${0.7 + (bi % 3) * 0.12}s`, '--flap-delay': `-${(bi * 0.23) % 0.8}s` }} />
+          {lights.map((l) => (
+            <circle key={`l-${l.i}`} className={l.i % 4 === 0 ? 'skyline-light' : undefined} cx={l.x} cy={l.y} r={l.r} fill={l.cool ? '#eef3ff' : pal.light}
+              style={l.i % 4 === 0 ? { '--glow-duration': `${5 + (l.i % 5)}s`, '--glow-delay': `-${l.i % 7}s` } : undefined} />
           ))}
-          <animateMotion dur={`${flock.dur}s`} begin={`${flock.delay}s`} repeatCount="indefinite" path={flock.path} />
-        </g>
-      ))}
-      {!compact && (
-        <g>
-          {pal.contrail && <rect x="-230" y="-1.2" width="212" height="2.4" rx="1.2" fill={`url(#${id('contrail')})`} />}
-          <path d="M-14,0 L8,0 Q14,0 14,2.5 L-14,2.5 Z M-8,0 L-6,-7 L-2,-7 L2,0 Z M-10,2.5 L-14,8 L-9,8 L-3,2.5 Z" fill={pal.plane} />
-          {!pal.contrail && <circle className="skyline-beacon" cx="-12" cy="0" r="1.8" fill="#ff5a4a" />}
-          {!pal.contrail && <circle className="skyline-beacon" cx="-4" cy="-7" r="1.8" fill="#8bf0a0" style={{ '--beacon-delay': '-1.2s' }} />}
-          <animateMotion dur={`${SCENE_PLANE.dur}s`} begin={`${SCENE_PLANE.delay}s`} repeatCount="indefinite" path={SCENE_PLANE.path} rotate="auto" />
-        </g>
+        </>
       )}
+
+      {/* 강기슭 안개 → 강물과 비친 그림자 */}
+      <rect x="0" y={G - 46} width="1600" height="48" fill={`url(#${id('mist')})`} opacity="0.8" />
+      <rect x="0" y={G} width="1600" height="80" fill={`url(#${id('water')})`} />
+      <g filter={`url(#${id('soft')})`}>
+        {stacks.map((st, i) => <rect key={`refl-${i}`} x={st.x - st.w / 2} y={G} width={st.w} height={Math.min(44, st.hh * 0.14)} fill={`url(#${id('refl')})`} />)}
+        {SCENE_COOLING.map((t, i) => <rect key={`reflc-${i}`} x={t.x} y={G} width={t.w} height="20" fill={`url(#${id('refl')})`} opacity="0.6" />)}
+        {night && lights.filter((l) => l.i % 3 === 0).map((l) => <rect key={`rl-${l.i}`} x={l.x - 0.8} y={G + 1} width="1.6" height={10 + (l.i % 5) * 4} fill={l.cool ? '#dfe9ff' : pal.light} opacity="0.3" />)}
+      </g>
+      {[[90, 6, 260], [520, 12, 340], [980, 8, 220], [1260, 15, 280], [300, 20, 180], [780, 24, 300]].map(([x, dy, w], i) => (
+        <path key={`ripple-${i}`} d={`M${x},${G + dy} L${x + w},${G + dy}`} stroke={pal.ripple} strokeWidth="1" strokeLinecap="round" />
+      ))}
+
+      {/* 앞 강둑: 양옆이 올라오는 어두운 땅과 나무 */}
+      <path d={`M0,${G + 30} C200,${G + 22} 380,${G + 46} 620,${G + 48} C860,${G + 50} 1080,${G + 44} 1300,${G + 34} C1420,${G + 28} 1520,${G + 22} 1600,${G + 18} L1600,520 L0,520 Z`} fill={`url(#${id('bank')})`} />
+      <g fill={pal.bank}>
+        {(compact ? SCENE_TREES.filter((_, i) => i % 2 === 0) : SCENE_TREES).map((t, i) => (
+          <circle key={`tree-${i}`} cx={t.x} cy={G + 32 - t.r * 0.45} r={t.r} />
+        ))}
+      </g>
     </svg>
   );
 };
@@ -9397,33 +9240,32 @@ export default function App() {
   const isMorningSky = resolvedSkyMode === 'morning';
   const skyOrbClass = isNightSky ? 'skyline-moon' : (isMorningSky ? '' : 'skyline-sun');
   const menuSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
+    ? 'bg-gradient-to-b from-[#060a13] via-[#111c33] to-[#39405a]'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'
-      : 'bg-gradient-to-b from-[#dff3ff] via-[#bee5ff] to-[#ffe8be]');
+      ? 'bg-gradient-to-b from-[#7f9bb8] via-[#cbbfc6] to-[#f4dcc2]'
+      : 'bg-gradient-to-b from-[#b4cbdc] via-[#dbe6ec] to-[#f1ece2]');
   const menuSkyOverlayClass = isNightSky
     ? 'bg-gradient-to-b from-[#040915]/45 via-[#1d2f64]/15 to-transparent'
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#fff2cc]/38 via-[#ffdca5]/20 to-transparent'
       : 'bg-gradient-to-b from-white/42 via-sky-100/12 to-transparent');
   const menuSkyGlowLeftClass = isNightSky
-    ? 'bg-indigo-300/20'
-    : (isMorningSky ? 'bg-amber-100/70' : 'bg-white/85');
+    ? 'bg-slate-400/10'
+    : (isMorningSky ? 'bg-amber-50/40' : 'bg-white/60');
   const menuSkyGlowRightClass = isNightSky
-    ? 'bg-violet-400/15'
-    : (isMorningSky ? 'bg-orange-200/45' : 'bg-sky-200/70');
+    ? 'bg-slate-500/10'
+    : (isMorningSky ? 'bg-rose-100/30' : 'bg-sky-100/40');
   const sheetSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#050914] via-[#264284] to-[#7a5a8c]'
+    ? 'bg-gradient-to-b from-[#060a13] via-[#111c33] to-[#39405a]'
     : (isMorningSky
-      ? 'bg-gradient-to-b from-[#99ceff] via-[#8ab8ef] to-[#f1b7c8]'
-      : 'bg-gradient-to-b from-[#dff3ff] via-[#bee5ff] to-[#ffe8be]');
+      ? 'bg-gradient-to-b from-[#7f9bb8] via-[#cbbfc6] to-[#f4dcc2]'
+      : 'bg-gradient-to-b from-[#b4cbdc] via-[#dbe6ec] to-[#f1ece2]');
   const sheetSkyOverlayClass = isNightSky
     ? 'bg-gradient-to-b from-[#040915]/42 via-[#1d2f64]/16 to-transparent'
     : (isMorningSky
       ? 'bg-gradient-to-b from-[#fff3d6]/34 via-[#ffe4b8]/16 to-transparent'
       : 'bg-gradient-to-b from-white/34 via-sky-100/10 to-transparent');
-  const sceneCloudColor = isNightSky ? 'rgba(190, 200, 235, 0.09)' : (isMorningSky ? 'rgba(255, 243, 230, 0.9)' : 'rgba(255, 255, 255, 0.93)');
-  const sceneCloudShadow = isNightSky ? 'rgba(0, 0, 0, 0)' : (isMorningSky ? 'rgba(240, 150, 120, 0.2)' : 'rgba(120, 140, 170, 0.2)');
+  const sceneCloudColor = isNightSky ? 'rgba(170, 184, 220, 0.1)' : (isMorningSky ? 'rgba(255, 236, 220, 0.7)' : 'rgba(255, 255, 255, 0.8)');
   const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 4) : SKYLINE_CLOUDS;
   // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
   const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
@@ -9441,16 +9283,9 @@ export default function App() {
             '--cloud-duration': `${cloud.duration}s`,
             '--cloud-delay': `${cloud.delay}s`,
             '--cloud-color': sceneCloudColor,
-            '--cloud-shadow': sceneCloudShadow,
           }}
         />
       ))}
-      {isNightSky && (
-        <>
-          <div className="skyline-shooting-star" style={{ top: '9%', left: '72%', '--shoot-duration': '14s', '--shoot-delay': '-3s' }} />
-          <div className="skyline-shooting-star" style={{ top: '18%', left: '38%', '--shoot-duration': '23s', '--shoot-delay': '-15s' }} />
-        </>
-      )}
     </>
   );
   const isMobileLightMode = isMobileViewport;
