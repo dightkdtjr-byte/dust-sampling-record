@@ -8250,6 +8250,23 @@ export default function App() {
           }));
         } catch (error) { console.error('계산식 아래 묶음 숨기기 실패:', error); }
       }
+      // 연소가스 시트의 그래프 정리: 굵은 검은 점선 눈금·검은 테두리를 연한 회색 실선으로, 가로축 시각이 0으로만 나오던
+      // 표시 형식(#,##0)을 시:분으로, 120칸마다 하나만 보이던 가로축 눈금을 측정값마다 보이게 한다. 자료 선의 색은 그대로 둔다
+      try {
+        for (const path of Object.keys(zip.files).filter((name) => /^xl\/charts\/chart\d+\.xml$/.test(name))) {
+          const chartXml = await zip.file(path).async('string');
+          const tidy = chartXml
+            .replace(/<c:majorGridlines>[\s\S]*?<\/c:majorGridlines>/g, () => '<c:majorGridlines><c:spPr><a:ln w="3175"><a:solidFill><a:srgbClr val="E3E3E3"/></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr></c:majorGridlines>')
+            .replace(/<a:ln w="3175"><a:solidFill><a:srgbClr val="000000"\/>/g, () => '<a:ln w="3175"><a:solidFill><a:srgbClr val="BFBFBF"/>')
+            .replace(/<a:ln w="12700"><a:solidFill><a:srgbClr val="808080"\/>/g, () => '<a:ln w="3175"><a:solidFill><a:srgbClr val="BFBFBF"/>')
+            .replace(/<c:numFmt formatCode="#,##0_\);\[Red\]\\\(#,##0\\\)" sourceLinked="0"\/>/g, () => '<c:numFmt formatCode="h:mm" sourceLinked="0"/>')
+            .replace(/<c:(tickLblSkip|tickMarkSkip) val="120"\/>/g, (w, tag) => `<c:${tag} val="1"/>`)
+            // 가로축 이름: 축에는 측정 시각이 나오는데 이름은 'time (min)'이었다 → '측정 시각'
+            .replace(/<a:t>time \(min\)<\/a:t>/g, () => '<a:t>측정 시각</a:t>')
+            .replace(/<a:t>time<\/a:t>/g, () => '<a:t>측정 시각</a:t>').replace(/<a:t>(?: \(|min|\))<\/a:t>/g, () => '<a:t></a:t>');
+          if (tidy !== chartXml) zip.file(path, tidy);
+        }
+      } catch (error) { console.error('그래프 정리 실패:', error); }
       // 시트 보기 정리: 양식은 시트마다 배율(70~100%)·보기 방식(일반/페이지 나누기 미리 보기)·선택 칸·스크롤 위치가 제각각이라
       // 파일을 열면 시트마다 모양이 달랐다 → 모든 시트를 일반 보기, 같은 배율, 눈금선 없이, 맨 위 A1에서 열리게 맞춘다
       try {
