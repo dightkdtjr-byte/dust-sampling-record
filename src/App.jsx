@@ -5654,8 +5654,9 @@ export default function App() {
 
   const getRawVmStd = () => {
     const factors = getRawPostMoistureFactors();
-    // 먼지농도·표시용 표준 건조가스량: 가스미터 지시값 기준 (보정계수 Yd를 곱하지 않는다, ES 01301.1 식 9)
-    return factors ? factors.vmStdL / (Number.isFinite(factors.yd) && factors.yd > 0 ? factors.yd : 1) : 0;
+    // 먼지농도·표시용 표준 건조가스량: 가스미터 지시값 × 보정계수 Yd(실제 부피)를 표준상태로 환산한 값.
+    // 회사 양식(기록지 채취량 = 지시값 차 × Yd)과 같다
+    return factors ? factors.vmStdL : 0;
   };
 
   const getRawDustWeightDiff = () => {
@@ -5893,8 +5894,8 @@ export default function App() {
     const Dn_best = bestNozzle.d;
     const An = Math.PI * Math.pow(Dn_best / 2000, 2);
     const Ps_abs = Pm + avgSp / 13.6;
-    const bestQm = (Vs * An * 60 * 1000 * ((Tm + 273) / (Ts + 273)) * (Ps_abs / Pm) * (1 - Xw / 100)) / Yd;
-    const Q_sl = bestQm * Yd * (273 / (Tm + 273)) * (Pm / 760);
+    // 표준상태 건조 유량(SL/min) = 노즐 단면적 × 유속 × (1 − 수분) × 273/(273+Ts) × 굴뚝 절대압/760
+    const Q_sl = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (Ts + 273)) * (Ps_abs / 760);
     
     let fastestTime = Math.ceil(targetVol / Q_sl);
     if (fastestTime <= 0 || !isFinite(fastestTime)) fastestTime = 65;
@@ -6015,7 +6016,7 @@ export default function App() {
 
     // 엑셀 L열 수식과 동일한 누적 순간등속 (온도·오리피스 평균은 18행부터)
     const postTerm = (0.00346 * vicCum)
-      + ((VmCum / 1000) / (273 + TmAvg)) * PmAbs; // 가스미터 지시값 그대로 (ES 01301.1 식 8)
+      + ((VmCum * Y / 1000) / (273 + TmAvg)) * PmAbs; // 가스미터 보정계수 Yd를 곱한 실제 부피 (회사 양식과 같다)
     const rate = ((273 + TsAvg) * postTerm)
       / (Ps * thetaCum * Vs * (Math.PI / 4) * Math.pow(DnCm, 2))
       * 16670;
@@ -6133,7 +6134,7 @@ export default function App() {
         const Vic = getRawTotalMoistureWeight();
         const Vm_m3 = Vm / 1000;
         const part1 = 0.00346 * Vic;
-        const part2 = (Vm_m3 * Pm_abs) / (Tm + 273); // 가스미터 지시값 그대로 (ES 01301.1 식 8)
+        const part2 = (Vm_m3 * Y * Pm_abs) / (Tm + 273); // 가스미터 보정계수 Yd를 곱한 실제 부피 (회사 양식과 같다)
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(2);
       } else {
@@ -6147,7 +6148,7 @@ export default function App() {
         const VicPre = ((Vm * Y * (273 / (273 + Tm)) * (Pm_abs / 760) * Xw) / (100 - Xw)) * (18 / 22.4);
         const Vm_m3 = Vm / 1000;
         const part1 = 0.00346 * VicPre;
-        const part2 = (Vm_m3 * Pm_abs) / (Tm + 273); // 가스미터 지시값 그대로 (ES 01301.1 식 8)
+        const part2 = (Vm_m3 * Y * Pm_abs) / (Tm + 273); // 가스미터 보정계수 Yd를 곱한 실제 부피 (회사 양식과 같다)
         const I = ((Ts + 273) * (part1 + part2)) / (Ps * theta * Vs * AnCm2) * 16670;
         return I.toFixed(2);
       }
@@ -7571,7 +7572,7 @@ export default function App() {
       // K와 ΔH가 실제보다 크게 나왔다 (프로그램 화면의 계산은 원래 Tm/Ts를 쓴다)
       // 노즐별 예상 채취량: 프로그램의 노즐 예측표와 같은 식으로 계산한다.
       //  노즐로 들어오는 가스(유속×노즐 단면적)를 건조 기준으로 바꿔
-      //   · (L)  가스미터가 가리킬 양 = …×(Tm+273)/(Ts+273)×(굴뚝 절대압/대기압)÷Yd
+      //   · (L)  가스미터가 가리킬 양 = …×(Tm+273)/(Ts+273)×(굴뚝 절대압/(대기압+ΔH/13.6))÷Yd
       //   · (SL) 표준상태 양       = …×273/(273+Ts)×(굴뚝 절대압/760)
       //  양식은 (L)에 온도·압력 환산 없이 Yd를 곱하고, (SL)에는 굴뚝 압력 대신 가스미터 압력(대기압+ΔH)을 써서
       //  프로그램 화면의 예측표와 값이 달랐다 ((L)은 30% 안팎, (SL)·예상시간은 1% 안팎)
@@ -7581,7 +7582,7 @@ export default function App() {
         const row = 39 + i;
         addUpdate('노즐산정', `D${row}`, { formula: `8.001*10^-5*C${row}^4*$F$8*$C$10^2*(1-$C$15/100)^2*($H$8/$I$8)*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)` });
         if (exportSheetId !== 'flow') {
-          addUpdate('노즐산정', `H${row}`, { formula: `${nozzleDryFlow(`C${row}`)}*$A$39*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/$B$8)/$G$8` });
+          addUpdate('노즐산정', `H${row}`, { formula: `${nozzleDryFlow(`C${row}`)}*$A$39*((AVERAGE($D$15,$F$15)+273)/($G$15+273))*(($B$8+$I$15/13.6)/($B$8+F${row}/13.6))/$G$8` });
           addUpdate('노즐산정', `I${row}`, { formula: `${nozzleStdFlow(`C${row}`)}*$A$39` });
         }
       }
@@ -7863,9 +7864,8 @@ export default function App() {
         const firstRow = layout.meterStartRow;
         const lastRow = layout.meterStartRow + Math.max(1, gasMeters.length - 1);
         addUpdate(recordSheet, `J${lastRow + 1}`, { formula: `IFERROR(AVERAGE(J${firstRow}:J${lastRow}),"")` });
-        // 가스시료채취량 V'm: 공정시험기준(ES 01301.1 식 8·9)은 가스미터 지시값을 그대로 쓴다 → 보정계수 Yd를 곱하지 않는다
-        // (수분량 계산의 가스채취량은 수분량 시트에서 따로 Yd를 곱한다)
-        addUpdate(recordSheet, `G${lastRow + 1}`, { formula: `(MAX(G${firstRow}:G${lastRow})-MIN(G${firstRow}:G${lastRow}))/1000` });
+        // 가스시료채취량: 회사 양식대로 가스미터 지시값 차 × 보정계수 Yd (실제 부피). 표준 채취량·등속흡입계수·먼지농도가 이 칸을 쓴다
+        addUpdate(recordSheet, `G${lastRow + 1}`, { formula: `((MAX(G${firstRow}:G${lastRow})-MIN(G${firstRow}:G${lastRow}))/1000)*노즐산정!G8` });
         // 인쇄 범위 밖 줄별 계산 칸(L~Q열) 정리: 양식에는 빨간 글씨 메모('26년 추가'), 정압 열만 다른 색·빨간 글씨,
         // 이름 없는 평균 칸, 머리글 없는 색칠 칸이 남아 있었다 → 다른 열과 같은 서식으로 맞추고 이름을 붙인다
         const headRow = firstRow - 2;
@@ -7882,7 +7882,7 @@ export default function App() {
           for (let row = firstRow; row <= lastRow; row++) restyle(recordSheet, `Q${row}`, `M${row}`);
         }
         for (let row = firstRow + 1; row <= lastRow; row++) {
-          addUpdate(recordSheet, `L${row}`, { formula: `((273+AVERAGE($D$${firstRow + 1}:D${row}))*((0.00346*O${row}+((G${row}-$G$${firstRow})/1000)/(273+AVERAGE($H$${firstRow + 1}:I${row}))*(Pa+AVERAGE($F$${firstRow + 1}:F${row})/13.6)))/((Pa+Ps)*B${row}*M${row}*(PI()/4)*Dn^2))*16670` });
+          addUpdate(recordSheet, `L${row}`, { formula: `((273+AVERAGE($D$${firstRow + 1}:D${row}))*((0.00346*O${row}+((G${row}-$G$${firstRow})*노즐산정!$G$8/1000)/(273+AVERAGE($H$${firstRow + 1}:I${row}))*(Pa+AVERAGE($F$${firstRow + 1}:F${row})/13.6)))/((Pa+Ps)*B${row}*M${row}*(PI()/4)*Dn^2))*16670` });
         }
       }
       // 3) 피토관을 고르지 않으면 흡인관 길이(J10)가 #VALUE!로 찍힌다 → 빈칸
@@ -9139,8 +9139,8 @@ export default function App() {
             const d = parseFloat(n.d);
             const k = 8.001e-5 * Math.pow(d, 4) * dHAt * Math.pow(cp, 2) * Math.pow(1 - gas.Xw / 100, 2) * (gas.Md / gas.Ms) * ((tmPre + 273) / (tsPre + 273)) * psRatio;
             const an = Math.PI * Math.pow(d / 2000, 2);
-            const qm = (vsPre * an * 60000 * ((tmPre + 273) / (tsPre + 273)) * (preAbs / Pa) * (1 - gas.Xw / 100)) / yd;
-            const qsl = qm * yd * (273 / (tmPre + 273)) * (Pa / 760);
+            const qsl = vsPre * an * 60000 * (1 - gas.Xw / 100) * (273 / (tsPre + 273)) * (preAbs / 760);
+            const qm = qsl * ((tmPre + 273) / 273) * (760 / (Pa + (k * dpPre) / 13.6)) / yd;
             return { num: num(n.num), d: num(d), k: num(k), dH: num(k * dpPre), qm: num(qm), qsl: num(qsl), time: num(Math.ceil((parseFloat(formData.targetVolume) || 1000) / qsl)) };
           });
           const sampling = formData.gasMeters.map((row, idx) => ({ row, idx })).filter(({ row, idx }) => isActiveMeterRow(row, idx) && idx > 0);
@@ -9151,7 +9151,7 @@ export default function App() {
             nozzles,
             meterAvg: {
               minutes: num(getSamplingMinutes()), vacuum: avg(sampling.map(({ row }) => row.vacuum)), ts: avg(sampling.map(({ row }) => row.stackTemp)), dp: avg(sampling.map(({ row }) => row.dp)),
-              orifice: num(getRawAvgOrifice()), volumeM3: num(getRawGasMeterVolDiff() / 1000), tm: num(getRawAvgTm()), impingerTemp: avg(sampling.map(({ row }) => row.impingerTemp)),
+              orifice: num(getRawAvgOrifice()), volumeM3: num((getRawGasMeterVolDiff() / 1000) * yd), tm: num(getRawAvgTm()), impingerTemp: avg(sampling.map(({ row }) => row.impingerTemp)),
               spAbs: num(getRawSamplingStackPressure()), vmStdM3: num(getRawVmStd() / 1000),
             },
             rowOrifice: formData.gasMeters.map((row) => num(getRawOrificePressureFromRow(row))),
@@ -9310,8 +9310,11 @@ export default function App() {
 
     if (!isNaN(d) && !isNaN(Vs) && Vs > 0 && !isNaN(Ts) && !isNaN(Tm) && !isNaN(Ps) && Pm > 0 && !isNaN(Xw)) {
         const An = Math.PI * Math.pow(d / 2000, 2);
-        const Q_m = (Vs * An * 60 * 1000 * ((Tm + 273) / (Ts + 273)) * (Ps / Pm) * (1 - Xw / 100)) / Yd;
-        const Q_sl = Q_m * Yd * (273 / (273 + Tm)) * (Pm / 760);
+        // (SL) 표준상태 건조 유량 = 노즐 단면적 × 유속 × (1 − 수분) × 273/(273+Ts) × 굴뚝 절대압/760
+        // (L)  가스미터가 가리킬 유량 = (SL) × (273+Tm)/273 × 760/(대기압 + ΔH/13.6) ÷ Yd
+        const dhRaw = !isNaN(k) && !isNaN(dp) ? k * dp : 0;
+        const Q_sl = Vs * An * 60 * 1000 * (1 - Xw / 100) * (273 / (273 + Ts)) * (Ps / 760);
+        const Q_m = Q_sl * ((273 + Tm) / 273) * (760 / (Pm + dhRaw / 13.6)) / Yd;
         
         const calcTime = Math.ceil(targetVol / Q_sl);
         if (isFinite(calcTime) && calcTime > 0) {
@@ -11698,8 +11701,8 @@ export default function App() {
                                 k = formatKFactorDisplay(k_val);
                                 dh = calcExpectedOrificeDH(k_val, getRawAvgDp());
                                 const an = Math.PI * Math.pow(Dn/2000, 2);
-                                const q_m = (vs * an * 60000 * ((tm+273)/(ts+273)) * (ps/pm) * (1-Xw/100)) / y;
-                                const q_sl = q_m * y * (273/(tm+273)) * (pm/760);
+                                const q_sl = vs * an * 60000 * (1-Xw/100) * (273/(ts+273)) * (ps/760);
+                                const q_m = q_sl * ((tm+273)/273) * (760/(pm + (k_val * getRawAvgDp())/13.6)) / y;
                                 
                                 let time = Math.ceil((parseFloat(formData.targetVolume) || 1000) / q_sl);
                                 if (!isFinite(time) || time <= 0) time = 0;
