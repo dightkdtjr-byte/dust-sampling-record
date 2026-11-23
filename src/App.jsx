@@ -5311,12 +5311,12 @@ export default function App() {
     const sox = getAnalyzerAvg('sox');
     const nox = getAnalyzerAvg('nox');
     
-    // 엑셀(노즐산정!E28) 호환: CO = AVERAGE(D8:D10) / 1000
-    const coPercent = co / 1000; 
-    const n2 = 100 - co2 - o2 - coPercent; 
-    
-    // 엑셀(노즐산정!D28) 호환: CO 분자량 38 사용
-    const M_O2 = 32, M_CO2 = 44, M_CO = 38, M_N2 = 28;
+    // CO는 ppm으로 적으므로 vol% = ppm ÷ 10000, 분자량은 28 (추출하는 엑셀의 노즐산정!C28·D28과 같다.
+    // 회사 양식 원본은 ÷1000과 분자량 38로 잘못 들어 있어 추출할 때 고쳐 쓰는데, 화면 계산만 옛 값을 따르고 있었다)
+    const coPercent = co / 10000;
+    const n2 = 100 - co2 - o2 - coPercent;
+
+    const M_O2 = 32, M_CO2 = 44, M_CO = 28, M_N2 = 28;
     const sumMx = (M_O2 * o2) + (M_CO2 * co2) + (M_CO * coPercent) + (M_N2 * n2);
 
     const Md = sumMx / 100;
@@ -5398,6 +5398,23 @@ export default function App() {
     return !isNaN(Pa) ? Pa + (avgPs / 13.6) : NaN;
   };
 
+  // 본 측정(시료채취) 중의 배출가스 정압 = 대기압 + 기록표 줄별 정압의 평균 ÷ 13.6  (엑셀 기록지 '배출가스정압' 칸과 같다)
+  //  - 줄에 정압을 적지 않았으면 그 줄은 예비조사(측정점) 평균 정압으로 본다 (엑셀 보조 칸 P열과 같은 규칙)
+  //  - 등속흡입계수·배출가스 밀도·유속·유량처럼 본 측정 결과를 내는 식은 이 정압(사후 정압)을 쓴다
+  //  - 유량 기록부와 기록표가 비어 있을 때는 예비조사 평균 정압 그대로다
+  const getRawSamplingStackPressure = () => {
+    const pre = getRawStackPressure();
+    if (isFlowRecordSheet) return pre;
+    const Pa = parseFloat(formData.atmPressure);
+    const rows = getMeterRowsWithVolume().filter((row) => row !== formData.gasMeters[0]);
+    if (isNaN(Pa) || rows.length === 0) return pre;
+    const preSps = formData.points.map((p) => parseFloat(p.sp)).filter((v) => !isNaN(v));
+    const preAvg = preSps.length === 0 ? NaN : preSps.reduce((a, b) => a + b, 0) / preSps.length;
+    const values = rows.map((row) => { const v = parseFloat(row.sp); return Number.isFinite(v) ? v : preAvg; }).filter((v) => Number.isFinite(v));
+    if (values.length === 0) return pre;
+    return Pa + (values.reduce((a, b) => a + b, 0) / values.length) / 13.6;
+  };
+
   const getRawGasVelocity = (cpOverride = null) => {
     const avgTs = getRawAvgTs(), P = getRawStackPressure();
     const C = Number.isFinite(cpOverride) && cpOverride > 0 ? cpOverride : (parseFloat(formData.pitotFactor) || 0.84);
@@ -5443,7 +5460,7 @@ export default function App() {
 
   const getRawCorrectedDensityFromAvgTs = (avgTs) => {
     const gasComp = getGasComposition();
-    const Ps = getRawStackPressure();
+    const Ps = getRawSamplingStackPressure();
     if (!Number.isFinite(avgTs) || !Number.isFinite(Ps) || Ps <= 0 || !Number.isFinite(gasComp.r0) || gasComp.r0 <= 0) return NaN;
     const density = gasComp.r0 * (273 / (273 + avgTs)) * (Ps / 760);
     return Number.isFinite(density) && density > 0 ? density : NaN;
@@ -5745,7 +5762,7 @@ export default function App() {
 
   const getRawGasFlowFactors = () => {
     // 표준가스 유량:
-    // 정압은 본 측정 전(측정점) 평균 정압,
+    // 정압은 본 측정 중 기록표의 평균 정압(없으면 측정점 평균 정압),
     // 유속은 적산유량계 기록표 평균 동압으로 구한 값 사용
     // 건조 유량의 수분량(Xw)은 사후 수분량(임핀저 무게법) 기준
     const pointSp = formData.points.map((p) => parseFloat(p.sp)).filter((v) => Number.isFinite(v));
@@ -5760,8 +5777,10 @@ export default function App() {
     }
 
     const spAvg = pointSp.reduce((a, b) => a + b, 0) / pointSp.length;
-    const Ps = spAvg / 13.6;
-    const absPressure = Pa + Ps;
+    // 본 측정 결과(유량)는 본 측정 중 정압(사후 정압)을 쓴다. 기록표에 정압이 없으면 예비조사 평균 정압과 같다
+    const samplingAbs = getRawSamplingStackPressure();
+    const absPressure = Number.isFinite(samplingAbs) ? samplingAbs : Pa + spAvg / 13.6;
+    const Ps = absPressure - Pa;
 
     if (!Number.isFinite(absPressure) || absPressure <= 0) return null;
 
@@ -5974,7 +5993,7 @@ export default function App() {
     const PmAvg = pmValues.reduce((a, b) => a + b, 0) / pmValues.length;
 
     const Pa = parseFloat(formData.atmPressure);
-    const Ps = getRawStackPressure();
+    const Ps = getRawSamplingStackPressure();
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
     if (!Number.isFinite(Pa) || !Number.isFinite(Ps) || Ps <= 0) return '-';
     const PmAbs = Pa + (PmAvg / 13.6);
@@ -6097,7 +6116,7 @@ export default function App() {
     const Y = parseFloat(formData.gasMeterFactor) || 1.0;
     const Pa = parseFloat(formData.atmPressure);
     const dH_avg = getRawAvgOrifice();
-    const Ps = getRawStackPressure();
+    const Ps = getRawSamplingStackPressure();
 
     if (Vm > 0 && Dn > 0 && Vs > 0 && theta > 0 && !isNaN(Ts) && !isNaN(Pa) && !isNaN(dH_avg) && !isNaN(Ps)) {
       const DnCm = Dn / 10;
@@ -7809,7 +7828,9 @@ export default function App() {
         addUpdate('연소가스자료', `${col}6`, { formula: `IF(COUNT(${col}8:${col}42)=0,"",MAX(${col}8:${col}42))` });
         addUpdate('연소가스자료', `${col}7`, { formula: `IF(COUNT(${col}8:${col}42)=0,"",MIN(${col}8:${col}42))` });
       });
-      addUpdate('노즐산정', 'H8', { formula: '(0.32*N($A$15)+0.44*N($B$15)+0.28*(100-N($A$15)-N($B$15)))' });
+      // 건조가스 분자량: 아래 조성 표(O2·CO2·CO·N2)의 합으로 계산한다 (프로그램 화면과 같은 식).
+      // 양식은 둘째 자리로 반올림한 O2와 CO를 뺀 조성으로 따로 계산해 K factor가 화면과 소수 끝자리에서 달랐다
+      addUpdate('노즐산정', 'H8', { formula: '$G$26/100' });
       addUpdate('노즐산정', 'D26', { formula: 'IFERROR(AVERAGE(연소가스자료!B8:B10),0)' });
       addUpdate('노즐산정', 'D27', { formula: 'IFERROR(AVERAGE(연소가스자료!C8:C10),0)' });
       // CO는 ppm으로 적으므로 vol%로는 /10000 (양식은 /1000), 분자량은 28 (양식은 38로 적혀 있었다)
@@ -9078,7 +9099,7 @@ export default function App() {
         area: num(calcStackArea(formData)), diameter: num(formData.stackDiameter),
         points: sp ? { rect: Boolean(sp.rect), perRadius: sp.perRadius, lines: sp.lines || null, total: sp.total ?? null, reduced: sp.reduced ?? null, isCenterOnly: Boolean(sp.isCenterOnly), near: (sp.nearInsertion || []).map(num), far: (sp.farInsertion || []).map(num), wall: (sp.wallDistances || []).map(num), ports: (sp.portPositions || []).map(num) } : null,
         traverse: { avgDp: num(getRawAvgDp()), avgTs: num(getRawAvgTs()), stackPressure: num(getRawStackPressure()), velocity: num(getRawGasVelocity()), density: num(getRawCorrectedDensityFromAvgTs(getRawAvgTs())) },
-        meter: { volumeL: num(getRawGasMeterVolDiff()), avgTm: num(getRawAvgTm()), avgTs: num(getRawAvgSamplingTs()), avgOrifice: num(getRawAvgOrifice()), minutes: num(getSamplingMinutes()), velocity: num(getRawGasVelocityFromMeterRows()), vmStdL: num(getRawVmStd()) },
+        meter: { volumeL: num(getRawGasMeterVolDiff()), avgTm: num(getRawAvgTm()), avgTs: num(getRawAvgSamplingTs()), avgOrifice: num(getRawAvgOrifice()), minutes: num(getSamplingMinutes()), velocity: num(getRawGasVelocityFromMeterRows()), stackPressure: num(getRawSamplingStackPressure()), density: num(getRawAvgCorrectedDensityFromMeterRows()), vmStdL: num(getRawVmStd()) },
         moisture: { pre: num(calcMoisture()), post: num(calcPostMoisture()), water: num(getRawTotalMoistureWeight()) },
         isokinetic: num(calcIsokineticRate(true)), flowWet: num(flows.wetRaw), flowDry: num(flows.dryRaw),
         o2Factor: num(calcO2CorrectionFactor()), dustWeight: num(getRawDustWeightDiff()), concActual: num(conc.actualC), concCorrected: num(conc.correctedC),
