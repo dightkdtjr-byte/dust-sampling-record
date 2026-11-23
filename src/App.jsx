@@ -1223,10 +1223,42 @@ const SCENE_STACKS = [
   { x: 918, w: 26, h: 214, plat: [0.62], plume: 0 },
   { x: 318, w: 22, h: 190, plat: [0.64], plume: 0.6 },
 ];
-const SCENE_FAR_STACKS = [{ x: 1392, w: 10, h: 132 }, { x: 1428, w: 8, h: 104 }, { x: 96, w: 9, h: 96 }];
+const SCENE_FAR_STACKS = [{ x: 1452, w: 10, h: 132 }, { x: 1486, w: 8, h: 104 }, { x: 96, w: 9, h: 96 }, { x: 128, w: 7, h: 74 }];
 const SCENE_TANKS = [{ x: 1010, w: 96, h: 58 }, { x: 1118, w: 96, h: 58 }, { x: 1226, w: 70, h: 44 }];
 const SCENE_COLUMNS = [{ x: 838, w: 14, h: 150 }, { x: 862, w: 18, h: 118 }, { x: 962, w: 13, h: 132 }];
 const SCENE_HALLS = [{ x: 520, w: 150, h: 46, teeth: 4 }, { x: 352, w: 130, h: 30, teeth: 0 }];
+const SCENE_SILOS = [{ x: 214, w: 22, h: 74 }, { x: 240, w: 22, h: 74 }, { x: 266, w: 22, h: 74 }];
+const SCENE_FLARE = { x: 1336, h: 236 };
+// 앞 둑의 윗선 (x, 물가에서 내려온 높이). 풀은 이 선을 따라 심는다
+const SCENE_BANK = [[0, 10], [140, 16], [300, 34], [520, 44], [1000, 50], [1320, 46], [1600, 30]];
+const sceneBankY = (x) => {
+  for (let i = 1; i < SCENE_BANK.length; i += 1) {
+    const [x0, y0] = SCENE_BANK[i - 1], [x1, y1] = SCENE_BANK[i];
+    if (x <= x1) return SCENE_GROUND + y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }
+  return SCENE_GROUND + SCENE_BANK[SCENE_BANK.length - 1][1];
+};
+// 풀잎 한 장: 밑동이 넓고 끝이 뾰족한 휜 잎
+const sceneBlade = (x, y, h, lean, w) => `M${x - w / 2},${y} Q${x + lean * 0.2 - w / 2},${y - h * 0.62} ${x + lean},${y - h} Q${x + lean * 0.4 + w / 2},${y - h * 0.5} ${x + w / 2},${y} Z`;
+// 풀포기: 한 뿌리에서 부채꼴로 퍼지는 잎 여러 장
+const sceneTuft = (x, size, seed) => {
+  const y = sceneBankY(x) + 5, n = 5 + Math.floor(seededNoise(seed) * 4);
+  return Array.from({ length: n }).map((_, k) => {
+    const t = n === 1 ? 0 : k / (n - 1) - 0.5;
+    const h = size * (0.55 + seededNoise(seed + k * 3 + 1) * 0.5) * (1 - Math.abs(t) * 0.5);
+    return sceneBlade(x + t * size * 0.22, y, h, t * size * (0.7 + seededNoise(seed + k * 5 + 2) * 0.5), 2.2 + size * 0.035);
+  }).join(' ');
+};
+const SCENE_TUFTS = [
+  ...Array.from({ length: 24 }, (_, i) => ({ x: 6 + i * 13 + seededNoise(i * 3 + 7) * 8, size: 26 + seededNoise(i * 5 + 1) * 34, back: i % 3 === 1 })),
+  ...Array.from({ length: 16 }, (_, i) => ({ x: 340 + i * 62 + seededNoise(i * 7 + 4) * 40, size: 12 + seededNoise(i * 11 + 2) * 14, back: false })),
+  ...Array.from({ length: 18 }, (_, i) => ({ x: 1370 + i * 13 + seededNoise(i * 3 + 9) * 8, size: 22 + seededNoise(i * 5 + 6) * 32, back: i % 3 === 0 })),
+];
+// 부들: 길고 가는 줄기 끝에 통통한 이삭
+const SCENE_CATTAILS = [
+  ...Array.from({ length: 9 }, (_, i) => ({ x: 14 + i * 27 + seededNoise(i * 9 + 5) * 12, h: 62 + seededNoise(i * 4 + 8) * 40, lean: seededNoise(i * 6 + 3) * 16 - 4 })),
+  ...Array.from({ length: 6 }, (_, i) => ({ x: 1436 + i * 29 + seededNoise(i * 8 + 1) * 12, h: 54 + seededNoise(i * 5 + 4) * 38, lean: seededNoise(i * 7 + 2) * -16 + 4 })),
+];
 
 const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
@@ -1236,6 +1268,8 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
   const night = Boolean(pal.light);
   const cut = `url(#${id('cut')})`;
   const halfAt = (st, t) => (st.w / 2) * (1 - 0.36 * t);
+  // 창: 낮에는 한 단계 밝은 잉크, 밤에는 몇 칸만 불이 켜진다
+  const windowFill = (seed) => (night ? (seededNoise(seed) > 0.42 ? pal.light : pal.mid) : pal.mid);
 
   // 연기: 목판화 구름처럼 세 번 굽이치는 납작한 덩어리 + 아랫면 그늘 한 판
   const plumePath = (cx, top, s) => {
@@ -1247,11 +1281,14 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
     return `M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`;
   };
   const stacks = SCENE_STACKS.map((st) => ({ ...st, hh: Math.round(st.h * stackScale) }));
+  const tufts = compact ? SCENE_TUFTS.filter((_, i) => i % 2 === 0) : SCENE_TUFTS;
+  const cattails = compact ? SCENE_CATTAILS.filter((_, i) => i % 2 === 0) : SCENE_CATTAILS;
+  const flareTop = G - SCENE_FLARE.h * stackScale;
 
   return (
     <svg className="skyline-svg" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        {/* 손으로 오린 가장자리: 윤곽을 2~3px 흔든다 */}
+        {/* 손으로 오린 가장자리: 윤곽을 살짝 흔든다 */}
         <filter id={id('cut')} x="-2%" y="-2%" width="104%" height="104%">
           <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="7" result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale={compact ? 1.4 : 2} xChannelSelector="R" yChannelSelector="G" />
@@ -1262,12 +1299,22 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
       <g filter={cut}>
         <path d="M0,356 L90,330 L170,342 L260,300 L340,328 L420,312 L520,344 L640,322 L760,350 L900,318 L1010,340 L1120,296 L1230,332 L1330,306 L1450,338 L1540,320 L1600,330 L1600,520 L0,520 Z" fill={pal.ridge1} />
         <path d="M0,392 L120,372 L250,384 L360,360 L470,382 L600,396 L1010,396 L1130,372 L1260,350 L1380,366 L1480,344 L1600,358 L1600,520 L0,520 Z" fill={pal.ridge2} />
-        {/* 먼 굴뚝과 낮은 건물 */}
+        {/* 먼 공단: 굴뚝, 낮은 건물, 탱크 줄 */}
         <g fill={pal.far}>
           {SCENE_FAR_STACKS.map((st, i) => <rect key={`far-${i}`} x={st.x - st.w / 2} y={G - st.h} width={st.w} height={st.h} />)}
-          <path d={`M1340,${G} L1340,${G - 30} L1470,${G - 30} L1470,${G - 18} L1560,${G - 18} L1560,${G} Z M40,${G} L40,${G - 22} L150,${G - 22} L150,${G} Z`} />
+          <path d={`M1400,${G} L1400,${G - 30} L1440,${G - 40} L1440,${G - 30} L1530,${G - 30} L1530,${G - 18} L1600,${G - 18} L1600,${G} Z M40,${G} L40,${G - 22} L84,${G - 22} L84,${G - 30} L150,${G - 30} L150,${G} Z`} />
+          {[1540, 1566].map((x) => <path key={x} d={`M${x},${G} L${x},${G - 24} Q${x + 11},${G - 32} ${x + 22},${G - 24} L${x + 22},${G} Z`} />)}
         </g>
       </g>
+      {/* 먼 송전탑과 전선 */}
+      {!compact && (
+        <g stroke={pal.far} fill="none" strokeWidth="1.2" strokeLinecap="round">
+          {[[1180, 66], [1272, 60]].map(([x, h]) => (
+            <path key={x} d={`M${x - 9},${G - 22} L${x - 2},${G - 22 - h} L${x + 2},${G - 22 - h} L${x + 9},${G - 22} M${x - 12},${G - 22 - h + 12} L${x + 12},${G - 22 - h + 12} M${x - 9},${G - 22 - h + 24} L${x + 9},${G - 22 - h + 24} M${x - 6},${G - 40} L${x + 6},${G - 52} M${x + 6},${G - 40} L${x - 6},${G - 52}`} />
+          ))}
+          <path d={`M1090,${G - 62} Q1136,${G - 60} 1168,${G - 76} M1192,${G - 76} Q1230,${G - 60} 1260,${G - 70} M1284,${G - 70} Q1340,${G - 52} 1400,${G - 58}`} strokeWidth="0.8" />
+        </g>
+      )}
 
       {/* 연기 (굴뚝 뒤) */}
       {stacks.filter((st) => st.plume > 0).map((st, i) => {
@@ -1282,6 +1329,14 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
 
       {/* 공단: 잉크 한 판 + 왼쪽 밝은 면 한 판 */}
       <g filter={cut}>
+        {/* 굴뚝으로 들어가는 연도(덕트) */}
+        <path d={`M664,${G - 72} L684,${G - 72} L684,${G - 54} L664,${G - 54} Z M744,${G - 66} L762,${G - 66} L762,${G - 50} L744,${G - 50} Z`} fill={pal.ink} />
+        {SCENE_SILOS.map((sl, i) => (
+          <g key={`silo-${i}`}>
+            <path d={`M${sl.x},${G} L${sl.x},${G - sl.h + 10} L${sl.x + sl.w / 2},${G - sl.h} L${sl.x + sl.w},${G - sl.h + 10} L${sl.x + sl.w},${G} Z`} fill={pal.ink} />
+            <path d={`M${sl.x},${G} L${sl.x},${G - sl.h + 10} L${sl.x + 6},${G - sl.h + 6} L${sl.x + 6},${G} Z`} fill={pal.mid} />
+          </g>
+        ))}
         {SCENE_HALLS.map((f, i) => {
           const tw = f.teeth ? f.w / f.teeth : 0;
           const roof = f.teeth
@@ -1289,6 +1344,8 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
             : `L${f.x},${G - f.h} L${f.x + f.w},${G - f.h}`;
           return <path key={`hall-${i}`} d={`M${f.x},${G} L${f.x},${G - f.h} ${roof} L${f.x + f.w},${G} Z`} fill={pal.ink} />;
         })}
+        {/* 낮은 건물 지붕의 환기구와 굴뚝관 */}
+        <path d={`M372,${G - 30} L372,${G - 38} L386,${G - 38} L386,${G - 30} Z M440,${G - 30} L440,${G - 52} L447,${G - 52} L447,${G - 30} Z M436,${G - 54} L451,${G - 54} L451,${G - 51} L436,${G - 51} Z`} fill={pal.ink} />
         {SCENE_TANKS.map((t, i) => (
           <g key={`tank-${i}`}>
             <path d={`M${t.x},${G} L${t.x},${G - t.h + 8} Q${t.x + t.w / 2},${G - t.h - 8} ${t.x + t.w},${G - t.h + 8} L${t.x + t.w},${G} Z`} fill={pal.ink} />
@@ -1298,13 +1355,14 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         {SCENE_COLUMNS.map((c, i) => (
           <g key={`col-${i}`}>
             <path d={`M${c.x},${G} L${c.x},${G - c.h + c.w / 2} A${c.w / 2},${c.w / 2} 0 0 1 ${c.x + c.w},${G - c.h + c.w / 2} L${c.x + c.w},${G} Z`} fill={pal.ink} />
-            {[0.34, 0.62, 0.86].map((f) => <rect key={f} x={c.x - 4} y={G - c.h * f} width={c.w + 8} height="2" fill={pal.ink} />)}
+            <path d={`M${c.x},${G} L${c.x},${G - c.h + c.w / 2} Q${c.x + 1},${G - c.h + 3} ${c.x + 4},${G - c.h + 1} L${c.x + 4},${G} Z`} fill={pal.mid} />
           </g>
         ))}
         {stacks.map((st, i) => {
           const top = G - st.hh, ht = halfAt(st, 1);
           return (
             <g key={`stack-${i}`}>
+              <path d={`M${st.x - st.w / 2 - 4},${G} L${st.x - st.w / 2 - 4},${G - 10} L${st.x + st.w / 2 + 4},${G - 10} L${st.x + st.w / 2 + 4},${G} Z`} fill={pal.ink} />
               <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x + ht},${top} L${st.x + st.w / 2},${G} Z`} fill={pal.ink} />
               <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x - ht * 0.3},${top} L${st.x - st.w * 0.16},${G} Z`} fill={pal.mid} />
               {[14, 34].map((dy) => {
@@ -1317,29 +1375,87 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         })}
       </g>
 
-      {/* 가는 선: 작업대 난간·받침, 사다리, 배관 받침 (선은 흔들지 않고 또렷하게) */}
-      <g stroke={pal.ink} fill="none" strokeLinecap="round">
-        {stacks.map((st, i) => st.plat.map((f) => {
-          const y = G - st.hh * f, hw = halfAt(st, f) + 9;
-          return (
-            <g key={`plat-${i}-${f}`}>
-              <path d={`M${st.x - hw},${y} L${st.x + hw},${y}`} strokeWidth="3" />
-              <path d={`M${st.x - hw},${y - 9} L${st.x + hw},${y - 9}`} strokeWidth="1.2" />
-              <path d={Array.from({ length: Math.floor((hw * 2) / 7) + 1 }).map((_, k) => `M${st.x - hw + k * 7},${y} L${st.x - hw + k * 7},${y - 9}`).join(' ')} strokeWidth="0.9" />
-              <path d={`M${st.x - hw},${y + 2} L${st.x - hw + 9},${y + 13} M${st.x + hw},${y + 2} L${st.x + hw - 9},${y + 13}`} strokeWidth="1.2" />
-            </g>
-          );
-        }))}
-        {!compact && <path d={`M586,${G - 34} L690,${G - 34} M586,${G - 28} L690,${G - 28} ${[0, 1, 2, 3].map((k) => `M${596 + k * 28},${G - 34} L${596 + k * 28},${G}`).join(' ')}`} strokeWidth="1.6" />}
-        {!compact && <path d={`M${SCENE_STACKS[0].x + 60},${G} L${SCENE_STACKS[0].x + halfAt(SCENE_STACKS[0], 0.82) + 6},${G - SCENE_STACKS[0].h * 0.82}`} strokeWidth="0.8" />}
+      {/* 건물 창·문 (또렷한 사각형) */}
+      <g>
+        {Array.from({ length: 9 }).map((_, k) => <rect key={`wa-${k}`} x={528 + k * 15} y={G - 34} width="9" height="7" fill={windowFill(k * 3 + 1)} />)}
+        <rect x="532" y={G - 18} width="22" height="18" fill={pal.mid} />
+        <path d={`M543,${G - 18} L543,${G}`} stroke={pal.ink} strokeWidth="1" />
+        {Array.from({ length: 6 }).map((_, k) => <rect key={`wb-${k}`} x={362 + k * 14} y={G - 22} width="7" height="5" fill={windowFill(k * 5 + 2)} />)}
+        <rect x="456" y={G - 14} width="16" height="14" fill={pal.mid} />
       </g>
 
-      {/* 밤: 불 켜진 창과 경고등 */}
+      {/* 가는 선: 난간·사다리·테두리·배관·울타리 (선은 흔들지 않고 또렷하게) */}
+      <g stroke={pal.ink} fill="none" strokeLinecap="round">
+        {stacks.map((st, i) => {
+          const topF = st.plat[st.plat.length - 1];
+          return (
+            <g key={`st-line-${i}`}>
+              {st.plat.map((f) => {
+                const y = G - st.hh * f, hw = halfAt(st, f) + 9;
+                return (
+                  <g key={f}>
+                    <path d={`M${st.x - hw},${y} L${st.x + hw},${y}`} strokeWidth="3" />
+                    <path d={`M${st.x - hw},${y - 9} L${st.x + hw},${y - 9} M${st.x - hw},${y - 4.5} L${st.x + hw},${y - 4.5}`} strokeWidth="0.9" />
+                    <path d={Array.from({ length: Math.floor((hw * 2) / 7) + 1 }).map((_, k) => `M${st.x - hw + k * 7},${y} L${st.x - hw + k * 7},${y - 9}`).join(' ')} strokeWidth="0.9" />
+                    <path d={`M${st.x - hw},${y + 2} L${st.x - hw + 9},${y + 13} M${st.x + hw},${y + 2} L${st.x + hw - 9},${y + 13}`} strokeWidth="1.2" />
+                  </g>
+                );
+              })}
+              {/* 사다리: 오른쪽 면을 따라 맨 위 작업대까지, 등받이 고리 눈금 */}
+              <path d={`M${st.x + st.w / 2 + 2},${G - 10} L${st.x + halfAt(st, topF) + 2},${G - st.hh * topF}`} strokeWidth="0.9" />
+              {!compact && <path d={Array.from({ length: Math.floor((st.hh * topF) / 14) }).map((_, k) => { const t = (k * 14 + 16) / st.hh; return `M${st.x + halfAt(st, t) + 2},${G - st.hh * t} l4,0`; }).join(' ')} strokeWidth="0.8" />}
+              {/* 이음 띠와 피뢰침 */}
+              {!compact && [0.2, 0.36].map((f) => <path key={f} d={`M${st.x - halfAt(st, f)},${G - st.hh * f} L${st.x + halfAt(st, f)},${G - st.hh * f}`} stroke={pal.mid} strokeWidth="1" />)}
+              <path d={`M${st.x + halfAt(st, 1) - 2},${G - st.hh} l0,-12`} strokeWidth="0.9" />
+            </g>
+          );
+        })}
+        {/* 탱크: 지붕 난간, 나선 계단, 몸통 띠 */}
+        {SCENE_TANKS.map((t, i) => (
+          <g key={`tank-line-${i}`}>
+            <path d={`M${t.x + 2},${G - t.h + 1} L${t.x + t.w - 2},${G - t.h + 1}`} strokeWidth="0.9" />
+            {!compact && <path d={Array.from({ length: Math.floor(t.w / 8) }).map((_, k) => `M${t.x + 4 + k * 8},${G - t.h + 1} l0,${k < 2 || k > t.w / 8 - 3 ? 6 : 3}`).join(' ')} strokeWidth="0.7" />}
+            <path d={`M${t.x + t.w * 0.36},${G} L${t.x + t.w - 3},${G - t.h + 10}`} stroke={pal.mid} strokeWidth="1.6" />
+            <path d={`M${t.x + t.w * 0.3},${G - t.h * 0.45} L${t.x + t.w},${G - t.h * 0.45}`} stroke={pal.mid} strokeWidth="0.8" />
+          </g>
+        ))}
+        {/* 증류탑: 층마다 작업대, 꼭대기에서 휘어 내려오는 배관 */}
+        {SCENE_COLUMNS.map((c, i) => (
+          <g key={`col-line-${i}`}>
+            {[0.34, 0.62, 0.86].map((f) => (
+              <path key={f} d={`M${c.x - 5},${G - c.h * f} L${c.x + c.w + 5},${G - c.h * f} M${c.x - 5},${G - c.h * f - 6} L${c.x + c.w + 5},${G - c.h * f - 6} M${c.x - 5},${G - c.h * f} l0,-6 M${c.x + c.w + 5},${G - c.h * f} l0,-6`} strokeWidth={1} />
+            ))}
+            <path d={`M${c.x + c.w / 2},${G - c.h} l0,-8 q0,-5 6,-5 l${c.w / 2 + 2},0 q5,0 5,5 L${c.x + c.w + 13},${G - c.h * 0.3}`} strokeWidth="1.3" />
+          </g>
+        ))}
+        {/* 사일로 위 통로와 건물로 내려가는 컨베이어 */}
+        <path d={`M210,${G - 78} L292,${G - 78} M210,${G - 84} L292,${G - 84} ${[0, 1, 2, 3, 4, 5].map((k) => `M${214 + k * 15},${G - 78} l0,-6`).join(' ')}`} strokeWidth="0.9" />
+        {!compact && <path d={`M290,${G - 76} L352,${G - 34} M294,${G - 82} L356,${G - 40} M306,${G - 66} l0,66 M338,${G - 44} l0,44 M306,${G - 30} L338,${G - 44} M306,${G - 66} L338,${G - 20}`} strokeWidth="1.1" />}
+        {/* 배관 받침대: 건물~큰 굴뚝, 증류탑~탱크 */}
+        {!compact && <path d={`M586,${G - 34} L690,${G - 34} M586,${G - 28} L690,${G - 28} ${[0, 1, 2, 3].map((k) => `M${596 + k * 28},${G - 34} L${596 + k * 28},${G}`).join(' ')}`} strokeWidth="1.6" />}
+        {!compact && <path d={`M880,${G - 22} L1010,${G - 22} M880,${G - 17} L1010,${G - 17} ${[0, 1, 2, 3, 4].map((k) => `M${888 + k * 28},${G - 22} l0,22`).join(' ')} M936,${G - 22} l0,-9 l14,0 l0,9`} strokeWidth="1.3" />}
+        {/* 큰 굴뚝 버팀줄 */}
+        {!compact && <path d={`M${SCENE_STACKS[0].x + 60},${G} L${SCENE_STACKS[0].x + halfAt(SCENE_STACKS[0], 0.82) + 6},${G - SCENE_STACKS[0].h * 0.82}`} strokeWidth="0.8" />}
+        {/* 플레어 스택: 가는 철탑 */}
+        <path d={`M${SCENE_FLARE.x - 12},${G} L${SCENE_FLARE.x - 2},${flareTop} M${SCENE_FLARE.x + 12},${G} L${SCENE_FLARE.x + 2},${flareTop} ${Array.from({ length: compact ? 5 : 9 }).map((_, k, arr) => {
+          const n = arr.length, y0 = G - ((G - flareTop) * k) / n, y1 = G - ((G - flareTop) * (k + 1)) / n;
+          const w0 = 12 - (10 * k) / n, w1 = 12 - (10 * (k + 1)) / n;
+          return `M${SCENE_FLARE.x - w0},${y0} L${SCENE_FLARE.x + w1},${y1} M${SCENE_FLARE.x + w0},${y0} L${SCENE_FLARE.x - w1},${y1} M${SCENE_FLARE.x - w1},${y1} L${SCENE_FLARE.x + w1},${y1}`;
+        }).join(' ')}`} strokeWidth="1" />
+        <path d={`M${SCENE_FLARE.x},${G} L${SCENE_FLARE.x},${flareTop - 8}`} strokeWidth="2.2" />
+        {/* 물가 울타리와 가로등 */}
+        {!compact && <path d={`M190,${G - 9} L1310,${G - 9} ${Array.from({ length: 57 }).map((_, k) => `M${190 + k * 20},${G} l0,-9`).join(' ')}`} strokeWidth="0.7" opacity="0.8" />}
+        {!compact && [498, 804, 1000, 1306].map((x) => <path key={x} d={`M${x},${G} l0,-26 q0,-4 5,-4 l4,0`} strokeWidth="1.1" />)}
+      </g>
+
+      {/* 플레어 불꽃, 밤의 불빛과 경고등 */}
+      <path d={`M${SCENE_FLARE.x},${flareTop - 8} q-6,-8 0,-18 q2,6 5,8 q3,4 -5,10 Z`} fill={night ? pal.light : pal.band} />
       {night && (
         <g fill={pal.light}>
-          {[[534, 30], [556, 30], [600, 30], [644, 30], [366, 16], [410, 16], [454, 16], [1024, 30], [1060, 30], [1132, 30], [1190, 30], [1240, 22], [844, 60], [868, 44], [968, 52], [1356, 16], [1410, 16], [70, 10]].map(([x, dy], i) => (
-            <rect key={`win-${i}`} x={x} y={G - dy} width="5" height="4" />
+          {[[1024, 30], [1060, 30], [1132, 30], [1190, 30], [1240, 22], [844, 60], [868, 44], [968, 52], [1416, 16], [1500, 12], [70, 10], [224, 40], [276, 40]].map(([x, dy], i) => (
+            <rect key={`win-${i}`} x={x} y={G - dy} width="4" height="4" />
           ))}
+          {!compact && [498, 804, 1000, 1306].map((x) => <rect key={`lamp-${x}`} x={x + 6} y={G - 31} width="5" height="3" />)}
           {stacks.map((st, i) => st.plat.map((f) => <rect key={`pl-${i}-${f}`} x={st.x - halfAt(st, f) - 9} y={G - st.hh * f - 14} width="3" height="3" />))}
         </g>
       )}
@@ -1347,27 +1463,47 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         <circle key={`beacon-${i}`} className="skyline-beacon" cx={st.x} cy={G - st.hh - 6} r="2.6" fill={pal.beacon} style={{ '--beacon-delay': `-${i * 0.7}s` }} />
       ))}
 
-      {/* 물: 한 판의 색면 위에 붓으로 그은 듯한 가로 획과 굴뚝 그림자 */}
+      {/* 물: 한 판의 색면 위에 붓으로 그은 가로 획과 비친 그림자 */}
       <rect x="0" y={G} width="1600" height="70" fill={pal.water} />
-      <g fill={pal.ink} opacity="0.32">
+      <g fill={pal.ink} opacity="0.3">
         {stacks.map((st, i) => <path key={`refl-${i}`} d={`M${st.x - st.w / 2},${G} L${st.x + st.w / 2},${G} L${st.x + st.w * 0.3},${G + Math.min(40, st.hh * 0.11)} L${st.x - st.w * 0.3},${G + Math.min(40, st.hh * 0.11)} Z`} />)}
+        {SCENE_TANKS.map((t, i) => <path key={`reflt-${i}`} d={`M${t.x},${G} L${t.x + t.w},${G} L${t.x + t.w - 6},${G + 9} L${t.x + 6},${G + 9} Z`} />)}
+        {SCENE_HALLS.map((f, i) => <path key={`reflh-${i}`} d={`M${f.x},${G} L${f.x + f.w},${G} L${f.x + f.w - 5},${G + 7} L${f.x + 5},${G + 7} Z`} />)}
       </g>
-      <g stroke={pal.stroke} strokeWidth="2.2" strokeLinecap="round" fill="none">
-        <path d={`M120,${G + 9} L330,${G + 9} M560,${G + 15} L860,${G + 15} M640,${G + 23} L760,${G + 23} M980,${G + 8} L1190,${G + 8} M1280,${G + 18} L1470,${G + 18} M260,${G + 24} L420,${G + 24}`} />
+      <g stroke={pal.stroke} strokeLinecap="round" fill="none">
+        <path d={`M120,${G + 9} L330,${G + 9} M560,${G + 15} L860,${G + 15} M980,${G + 8} L1190,${G + 8} M1280,${G + 18} L1470,${G + 18}`} strokeWidth="2.2" />
+        <path d={`M640,${G + 23} L760,${G + 23} M260,${G + 24} L420,${G + 24} M1040,${G + 27} L1150,${G + 27} M420,${G + 5} L500,${G + 5} M1350,${G + 6} L1420,${G + 6}`} strokeWidth="1.2" />
       </g>
 
-      {/* 앞 둑: 왼쪽이 높은 어두운 땅과 갈대 */}
+      {/* 앞 둑: 뒷줄 풀(한 단계 밝게) → 어두운 땅 → 앞줄 풀·부들·들꽃·돌 */}
+      <path d={tufts.filter((t) => t.back).map((t, i) => sceneTuft(t.x, t.size * 1.25, i * 17 + 5)).join(' ')} fill={pal.ink} transform="translate(0 -3)" />
       <g filter={cut}>
-        <path d={`M0,${G + 10} L140,${G + 16} L300,${G + 34} L520,${G + 44} L1000,${G + 50} L1600,${G + 46} L1600,580 L0,580 Z`} fill={pal.bank} />
+        <path d={`M${SCENE_BANK.map(([x, dy]) => `${x},${G + dy}`).join(' L')} L1600,580 L0,580 Z`} fill={pal.bank} />
       </g>
-      <g stroke={pal.bank} strokeWidth="2" strokeLinecap="round" fill="none">
-        {Array.from({ length: compact ? 14 : 30 }).map((_, i) => {
-          const x = 12 + i * 9 + ((i * 7) % 6), h = 22 + ((i * 13) % 26), lean = ((i * 5) % 9) - 3;
-          return <path key={`reed-${i}`} d={`M${x},${G + 22} Q${x + lean * 0.3},${G + 22 - h * 0.6} ${x + lean},${G + 14 - h}`} />;
+      <g fill={pal.bank}>
+        <path d={tufts.filter((t) => !t.back).map((t, i) => sceneTuft(t.x, t.size, i * 13 + 3)).join(' ')} />
+        {!compact && [[468, 9, 4], [486, 6, 3], [826, 10, 4], [1108, 8, 3.5], [1126, 5, 2.5]].map(([x, rx, ry]) => (
+          <ellipse key={`stone-${x}`} cx={x} cy={sceneBankY(x) + 1} rx={rx} ry={ry} />
+        ))}
+      </g>
+      <g stroke={pal.bank} fill="none" strokeLinecap="round">
+        {cattails.map((c, i) => {
+          const y = sceneBankY(c.x) + 4, tx = c.x + c.lean, ty = y - c.h;
+          return (
+            <g key={`cattail-${i}`}>
+              <path d={`M${c.x},${y} Q${c.x + c.lean * 0.2},${y - c.h * 0.6} ${tx},${ty}`} strokeWidth="1.4" />
+              <path d={`M${c.x + c.lean * 0.62},${y - c.h * 0.84} L${c.x + c.lean * 0.86},${y - c.h * 0.95}`} strokeWidth="4.6" />
+            </g>
+          );
         })}
-        {Array.from({ length: compact ? 6 : 12 }).map((_, i) => {
-          const x = 1596 - i * 10 - ((i * 5) % 7), h = 18 + ((i * 11) % 20), lean = -(((i * 3) % 7) - 2);
-          return <path key={`reedr-${i}`} d={`M${x},${G + 52} Q${x + lean * 0.3},${G + 52 - h * 0.6} ${x + lean},${G + 44 - h}`} />;
+        {!compact && [[150, 44], [176, 36], [1402, 40], [330, 26]].map(([x, h], i) => {
+          const y = sceneBankY(x) + 4;
+          return (
+            <g key={`umbel-${i}`}>
+              <path d={`M${x},${y} L${x + 3},${y - h} M${x + 3},${y - h} l-6,-7 M${x + 3},${y - h} l1,-9 M${x + 3},${y - h} l7,-6`} strokeWidth="1" />
+              <path d={`M${x - 3},${y - h - 7} l0,0 M${x + 4},${y - h - 9} l0,0 M${x + 10},${y - h - 6} l0,0`} strokeWidth="3.4" />
+            </g>
+          );
         })}
       </g>
     </svg>
