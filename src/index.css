@@ -1093,7 +1093,8 @@ html:has(.ds-actionbar) { scroll-padding-bottom: 84px; }
   --ds-calc: #f3f4f3;
   border: 1px solid rgba(42, 57, 68, 0.22);
   border-radius: 14px;
-  overflow: hidden;
+  /* hidden은 아래 고정 버튼 줄(sticky)을 못 쓰게 만들므로 clip으로 모서리만 자른다 */
+  overflow: clip;
   box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 36px -22px rgba(20, 28, 34, 0.55) !important;
 }
 .ds-page div.bg-white.shadow-sm, .ds-page div.bg-white.shadow-md { background-color: rgba(255, 255, 255, 0.97) !important; }
