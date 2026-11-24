@@ -424,7 +424,7 @@ const StackpilotWordmark = ({ tone, className = '', stackI = true }) => {
       </defs>
       {stackI && (
         <>
-          <path d={`M${ix - 2},${top - 1} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${ix + 2},${top - 1} Z`} fill={c.plume} />
+          <path d={`M${ix - 4},${top + 2} L${ix - 4},${top - 1} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${ix + 4},${top - 1} L${ix + 4},${top + 2} Z`} fill={c.plume} />
           <path d={`M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`} fill={c.plumeShade} />
         </>
       )}
@@ -1229,8 +1229,8 @@ const SKYLINE_FLYER_CSS = `
   mix-blend-mode: multiply;
 }
 @keyframes skylinePlume {
-  from { transform: translateX(0); }
-  to { transform: translateX(14px); }
+  from { transform: skewX(0deg); }
+  to { transform: skewX(-6deg); }
 }
 .skyline-plume {
   animation: skylinePlume var(--plume-duration, 16s) ease-in-out infinite alternate;
@@ -1244,6 +1244,64 @@ const SKYLINE_FLYER_CSS = `
   animation: skylineBeacon 2.8s linear infinite;
   animation-delay: var(--beacon-delay, 0s);
 }
+/* 학: 세 마리가 줄지어 하늘을 오른쪽에서 왼쪽으로 가로지른다. 한 번 지나가면 한동안 쉰다 */
+@keyframes skylineCraneFly {
+  0% { transform: translate(112vw, 7vh); }
+  15% { transform: translate(74vw, 0.6vh); }
+  62%, 100% { transform: translate(-45vw, -0.6vh); }
+}
+@keyframes skylineCraneFlap {
+  from { transform: scaleY(1); }
+  to { transform: scaleY(-0.78); }
+}
+@keyframes skylineCraneBob {
+  from { transform: translateY(-2%); }
+  to { transform: translateY(3%); }
+}
+.skyline-cranes {
+  position: absolute;
+  left: 0;
+  top: 0.6%;
+  width: clamp(170px, 19vw, 280px);
+  aspect-ratio: 3.4;
+  animation: skylineCraneFly 64s linear infinite;
+  animation-delay: -8s;
+  will-change: transform;
+}
+.skyline-crane { position: absolute; animation: skylineCraneBob 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
+.skyline-crane svg { display: block; width: 100%; height: auto; overflow: visible; }
+.skyline-crane-wing { transform-origin: 60px 31px; animation: skylineCraneFlap 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
+@keyframes skylineFrogHop {
+  0%, 88%, 100% { transform: translateY(0) scaleY(1); }
+  90% { transform: translateY(0) scaleY(0.88); }
+  94% { transform: translateY(-9px) scaleY(1.06); }
+  98% { transform: translateY(0) scaleY(0.94); }
+}
+/* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀고, 그때마다 입 앞에 소리 물결이 번진다 */
+@keyframes skylineFrogCroak {
+  0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
+  20.5%, 29.5%, 38.5% { transform: scale(1); }
+}
+@keyframes skylineFrogCall {
+  0%, 17%, 25%, 26%, 34%, 35%, 43%, 100% { opacity: 0; }
+  20.5%, 29.5%, 38.5% { opacity: 0.85; }
+}
+.skyline-frog-sac {
+  transform: scale(0);
+  animation: skylineFrogCroak var(--frog-duration, 9s) ease-in-out infinite;
+  animation-delay: var(--frog-delay, 0s);
+}
+.skyline-frog-call {
+  opacity: 0;
+  animation: skylineFrogCall var(--frog-duration, 9s) ease-out infinite;
+  animation-delay: var(--frog-delay, 0s);
+}
+.skyline-frog {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: skylineFrogHop var(--frog-duration, 9s) ease-in-out infinite;
+  animation-delay: var(--frog-delay, 0s);
+}
 .skyline-svg {
   position: absolute;
   left: 0;
@@ -1255,7 +1313,8 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-frog, .skyline-frog-sac, .skyline-frog-call, .skyline-crane, .skyline-crane-wing { animation: none; }
+  .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
 /* ── 첫 화면의 패널·버튼·카드: 흰 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
 .sp-menu, .sp-modal { --sp-paper: #ffffff; --sp-paper-2: #f3f4f3; --sp-ink: #2a3944; --sp-soft: #66747c; --sp-line: rgba(42, 57, 68, 0.22); --sp-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 10px 24px -14px rgba(20, 28, 34, 0.55); }
@@ -1460,6 +1519,36 @@ const SCENE_CATTAILS = [
   ...Array.from({ length: 9 }, (_, i) => ({ x: 14 + i * 27 + seededNoise(i * 9 + 5) * 12, h: 62 + seededNoise(i * 4 + 8) * 40, lean: seededNoise(i * 6 + 3) * 16 - 4 })),
   ...Array.from({ length: 6 }, (_, i) => ({ x: 1436 + i * 29 + seededNoise(i * 8 + 1) * 12, h: 54 + seededNoise(i * 5 + 4) * 38, lean: seededNoise(i * 7 + 2) * -16 + 4 })),
 ];
+// 개구리: 앞 둑 위. dir은 보는 방향(1 오른쪽, -1 왼쪽), every는 뛰는 간격(초)
+const SCENE_FROGS = [
+  { x: 692, size: 1.35, dir: 1, every: 9, delay: 2 },
+  { x: 1186, size: 1, dir: -1, every: 13, delay: 7 },
+];
+// 학(두루미) 무리: 맨 앞이 가장 크고, 뒤따르는 두 마리는 조금 작게 위·아래로 어긋나 난다
+const SCENE_CRANES = [
+  { left: '0%', top: '20%', width: '44%', delay: 0 },
+  { left: '40%', top: '0%', width: '36%', delay: -0.22 },
+  { left: '66%', top: '42%', width: '32%', delay: -0.41 },
+];
+// 학 한 마리: 흰 몸, 검은 목·날개 끝·다리, 붉은 정수리. 목은 앞으로, 다리는 뒤로 곧게 뻗는다
+const renderSceneCrane = (pal) => (
+  <svg viewBox="0 0 120 64" aria-hidden="true">
+    <g className="skyline-crane-wing">
+      <path d="M56,31 Q62,13 80,5 Q83,17 78,31 Z" fill={pal.plumeShade} />
+    </g>
+    <path d="M76,32 L112,36 M112,36 l6,-1.2 M112,36 l6,2" stroke={pal.ink} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+    <path d="M44,31 Q54,25 68,27 Q78,28 84,32 Q72,37 58,36 Q49,35 44,31 Z" fill={pal.plume} />
+    <path d="M70,28.5 Q81,28.5 90,33.5 Q79,35.5 72,34 Z" fill={pal.ink} />
+    <path d="M47,29.2 L20,25.6 L20,28.6 L46,33.2 Z" fill={pal.ink} />
+    <ellipse cx="18" cy="27" rx="4.2" ry="3.1" fill={pal.plume} />
+    <circle cx="18.6" cy="24.6" r="1.8" fill={pal.band} />
+    <path d="M15,25.8 L2,28 L15,28.8 Z" fill={pal.ink} />
+    <g className="skyline-crane-wing">
+      <path d="M49,31 Q51,15 71,0 Q78,10 73,31 Z" fill={pal.plume} />
+      <path d="M71,0 Q78,10 73,31 L67,31 Q71,16 64,6 Z" fill={pal.ink} />
+    </g>
+  </svg>
+);
 
 const renderSkylineSvg = ({ pal, scope, compact = false }) => {
   const id = (name) => `${scope}-sky-${name}`;
@@ -1472,9 +1561,10 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
   const windowFill = (seed) => (night ? (seededNoise(seed) > 0.42 ? pal.light : pal.mid) : pal.mid);
 
   // 연기: 목판화 구름처럼 세 번 굽이치는 납작한 덩어리 + 아랫면 그늘 한 판
-  const plumePath = (cx, top, s) => {
+  // 밑동은 굴뚝 구멍 너비(b)만큼 벌리고 굴뚝 꼭대기 테 안쪽에서 시작한다 → 연기가 굴뚝 입구에 꼭 맞는다
+  const plumePath = (cx, top, s, b) => {
     const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
-    return `M${cx - 4},${top} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${cx + 4},${top} Z`;
+    return `M${cx - b},${top + 5} L${cx - b},${top} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${cx + b},${top} L${cx + b},${top + 5} Z`;
   };
   const plumeShadePath = (cx, top, s) => {
     const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
@@ -1520,8 +1610,8 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
       {stacks.filter((st) => st.plume > 0).map((st, i) => {
         const s = st.plume * (compact ? 0.7 : 1), top = G - st.hh;
         return (
-          <g key={`plume-${i}`} className="skyline-plume" style={{ '--plume-duration': `${15 + i * 4}s`, '--plume-delay': `-${i * 5}s` }}>
-            <path d={plumePath(st.x, top, s)} fill={pal.plume} />
+          <g key={`plume-${i}`} className="skyline-plume" style={{ '--plume-duration': `${15 + i * 4}s`, '--plume-delay': `-${i * 5}s`, transformOrigin: `${st.x}px ${top}px` }}>
+            <path d={plumePath(st.x, top, s, Math.max(3, halfAt(st, 1) - 1.5))} fill={pal.plume} />
             <path d={plumeShadePath(st.x, top, s)} fill={pal.plumeShade} />
           </g>
         );
@@ -1530,7 +1620,7 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
       {/* 공단: 잉크 한 판 + 왼쪽 밝은 면 한 판 */}
       <g filter={cut}>
         {/* 굴뚝으로 들어가는 연도(덕트) */}
-        <path d={`M664,${G - 72} L684,${G - 72} L684,${G - 54} L664,${G - 54} Z M744,${G - 66} L762,${G - 66} L762,${G - 50} L744,${G - 50} Z`} fill={pal.ink} />
+        <path d={`M664,${G - 72} L684,${G - 72} L684,${G - 54} L664,${G - 54} Z M744,${G - 66} L762,${G - 66} L762,${G - 50} L744,${G - 50} Z M326,${G - 27} L354,${G - 27} L354,${G - 15} L326,${G - 15} Z`} fill={pal.ink} />
         {SCENE_SILOS.map((sl, i) => (
           <g key={`silo-${i}`}>
             <path d={`M${sl.x},${G} L${sl.x},${G - sl.h + 10} L${sl.x + sl.w / 2},${G - sl.h} L${sl.x + sl.w},${G - sl.h + 10} L${sl.x + sl.w},${G} Z`} fill={pal.ink} />
@@ -1636,9 +1726,10 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
             <path d={`M${c.x + c.w / 2},${G - c.h} l0,-8 q0,-5 6,-5 l${c.w / 2 + 2},0 q5,0 5,5 L${c.x + c.w + 13},${G - c.h * 0.3}`} strokeWidth="1.3" />
           </g>
         ))}
-        {/* 사일로 위 통로와 건물로 내려가는 컨베이어 */}
-        <path d={`M210,${G - 78} L292,${G - 78} M210,${G - 84} L292,${G - 84} ${[0, 1, 2, 3, 4, 5].map((k) => `M${214 + k * 15},${G - 78} l0,-6`).join(' ')}`} strokeWidth="0.9" />
-        {!compact && <path d={`M290,${G - 76} L352,${G - 34} M294,${G - 82} L356,${G - 40} M306,${G - 66} l0,66 M338,${G - 44} l0,44 M306,${G - 30} L338,${G - 44} M306,${G - 66} L338,${G - 20}`} strokeWidth="1.1" />}
+        {/* 사일로 위 통로: 지붕 꼭대기에 얹힌 바닥판 + 난간, 왼쪽 끝으로 내려오는 사다리 */}
+        <path d={`M216,${G - 74.5} L286,${G - 74.5}`} strokeWidth="2.2" />
+        <path d={`M216,${G - 82} L286,${G - 82} ${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `M${216 + k * 10},${G - 74} l0,-8`).join(' ')}`} strokeWidth="0.9" />
+        {!compact && <path d={`M211,${G} L211,${G - 76} L216,${G - 76} ${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `M211,${G - 8 - k * 9} l3,0`).join(' ')}`} strokeWidth="0.8" />}
         {/* 배관 받침대: 건물~큰 굴뚝, 증류탑~탱크 */}
         {!compact && <path d={`M586,${G - 34} L690,${G - 34} M586,${G - 28} L690,${G - 28} ${[0, 1, 2, 3].map((k) => `M${596 + k * 28},${G - 34} L${596 + k * 28},${G}`).join(' ')}`} strokeWidth="1.6" />}
         {!compact && <path d={`M880,${G - 22} L1010,${G - 22} M880,${G - 17} L1010,${G - 17} ${[0, 1, 2, 3, 4].map((k) => `M${888 + k * 28},${G - 22} l0,22`).join(' ')} M936,${G - 22} l0,-9 l14,0 l0,9`} strokeWidth="1.3" />}
@@ -1716,6 +1807,18 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
           <ellipse key={`stone-${x}`} cx={x} cy={sceneBankY(x) + 1} rx={rx} ry={ry} />
         ))}
       </g>
+      {/* 개구리: 둑 위에 앉아 울다가(울음주머니·소리 물결) 가끔 제자리에서 폴짝 뛴다 */}
+      {SCENE_FROGS.slice(0, compact ? 1 : SCENE_FROGS.length).map((f, i) => (
+        <g key={`frog-${i}`} transform={`translate(${f.x} ${sceneBankY(f.x) + 2}) scale(${f.dir * f.size} ${f.size})`}>
+          <g className="skyline-frog" style={{ '--frog-duration': `${f.every}s`, '--frog-delay': `-${f.delay}s` }}>
+            <g transform="translate(11.5 -7.5)"><circle className="skyline-frog-sac" cx="3.6" cy="1.2" r="5.2" fill={pal.plume} /></g>
+            <path className="skyline-frog-call" d="M22.5,-15 q3,3.5 0,7.5 M26.5,-17.5 q4.8,6 0,12.5" stroke={pal.bank} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+            <path d="M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z" fill={pal.bank} />
+            <path d="M-13,-1.5 Q-10,-10 -3,-7.5 Q1,-6 1,-4" stroke={pal.water} strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.55" />
+            <circle cx="6.8" cy="-19" r="1.5" fill={pal.water} />
+          </g>
+        </g>
+      ))}
       <g stroke={pal.bank} fill="none" strokeLinecap="round">
         {cattails.map((c, i) => {
           const y = sceneBankY(c.x) + 4, tx = c.x + c.lean, ty = y - c.h;
@@ -9550,6 +9653,15 @@ export default function App() {
     <>
       <div className="skyline-grain" style={{ '--grain-opacity': skyTheme.grain }} />
       {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} style={skyOrbStyle} />}
+      {scope === 'menu' && (
+        <div className="skyline-cranes">
+          {SCENE_CRANES.map((crane, i) => (
+            <div key={`crane-${i}`} className="skyline-crane" style={{ left: crane.left, top: crane.top, width: crane.width, '--crane-delay': `${crane.delay}s` }}>
+              {renderSceneCrane(skyTheme.pal)}
+            </div>
+          ))}
+        </div>
+      )}
       {sceneClouds.slice(0, cloudCount).map((cloud) => (
         <div
           key={`${scope}-${cloud.id}`}
