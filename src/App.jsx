@@ -391,24 +391,36 @@ const WORDMARK_GLYPHS = {
   L: 'M5.5,-5.5 V48 H38',
   O: 'M17,0 H23 a15,15 0 0 1 15,15 V33 a15,15 0 0 1 -15,15 H17 a15,15 0 0 1 -15,-15 V15 a15,15 0 0 1 15,-15 Z',
 };
-const StackpilotWordmark = ({ tone = 'day', className = '', stackI = false }) => {
+const StackpilotWordmark = ({ tone = 'day', className = '', stackI = true }) => {
   const c = WORDMARK_TONES[tone] || WORDMARK_TONES.day;
   const letters = 'STACKPILOT'.split('');
-  const step = 58, x0 = 10, y0 = 30;
-  const ix = x0 + 6 * step + 20, base = y0 + 53.5, top = stackI ? 8 : y0 - 5.5;
+  // 글자마다 실제 너비가 달라서(I는 기둥 하나) 칸을 똑같이 나누면 I 양옆만 벌어진다.
+  // 글자의 왼쪽·오른쪽 끝을 재서 틈을 맞추고, 짝마다 눈에 보이는 틈이 같도록 조금씩 당기거나 민다
+  // (곧은 획끼리 만나는 I·L은 넓히고, 한쪽이 트인 C·K·L·T 옆은 좁힌다)
+  const y0 = 30, gap = 21;
+  const extents = { S: [-4.5, 44.5], T: [0, 40], A: [-3, 43], C: [-6.5, 38], K: [-1, 45], P: [-1, 45], I: [13.5, 26.5], L: [-1, 38], O: [-4.5, 44.5] };
+  const tighten = { ST: 3, TA: 9, AC: 3, CK: 5, KP: 4, PI: -2, IL: -6, LO: 5, OT: 2 };
+  const offsets = [];
+  letters.reduce((pen, ch, i) => {
+    const kern = i > 0 ? (tighten[letters[i - 1] + ch] || 0) : 0;
+    offsets.push(pen - kern - extents[ch][0]);
+    return pen - kern + (extents[ch][1] - extents[ch][0]) + gap;
+  }, 6);
+  const total = offsets[9] + extents.T[1] + 6;
+  const ix = offsets[6] + 20, base = y0 + 53.5, top = stackI ? 8 : y0 - 5.5;
   // 'I': 다른 글자와 같은 굵기의 기둥. 굴뚝일 때는 위로 조금 더 솟고 살짝 가늘어진다
   const pillar = stackI ? `M${ix - 6.5},${base} L${ix - 5},${top} L${ix + 5},${top} L${ix + 6.5},${base} Z` : `M${ix - 6.5},${base} L${ix - 6.5},${top} L${ix + 6.5},${top} L${ix + 6.5},${base} Z`;
   const layer = (color) => (
     <g>
       <g stroke={color} strokeWidth="13" fill="none" strokeLinejoin="miter" strokeMiterlimit="2">
-        {letters.map((ch, i) => (ch === 'I' ? null : <path key={i} d={WORDMARK_GLYPHS[ch]} transform={`translate(${x0 + i * step} ${y0})`} />))}
+        {letters.map((ch, i) => (ch === 'I' ? null : <path key={i} d={WORDMARK_GLYPHS[ch]} transform={`translate(${offsets[i]} ${y0})`} />))}
       </g>
       <path d={pillar} fill={color} />
     </g>
   );
   const p = (dx, dy) => `${ix + dx * 0.26},${top - 1 - dy * 0.26}`;
   return (
-    <svg className={className} viewBox="0 -24 600 112" role="img" aria-label="STACKPILOT">
+    <svg className={className} viewBox={`0 -24 ${total + 3} 112`} role="img" aria-label="STACKPILOT">
       <defs>
         <filter id="wordmark-cut" x="-2%" y="-5%" width="104%" height="110%">
           <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="4" result="n" />
@@ -1191,33 +1203,22 @@ const SKYLINE_FLYER_CSS = `
   width: clamp(90px, 11vw, 160px);
   height: clamp(90px, 11vw, 160px);
 }
-/* 구름: 목판화의 가로 띠 구름. 끝이 둥근 납작한 띠 두 줄 */
+/* 구름: 밑이 평평하고 위가 올록볼록한 납작한 구름 (연기와 같은 판화 모양, 색은 하늘에 가깝게 옅게) */
 @keyframes skylineCloudDrift {
-  from { transform: translateX(-45vw) scale(var(--cloud-scale, 1)); }
+  from { transform: translateX(-30vw) scale(var(--cloud-scale, 1)); }
   to { transform: translateX(125vw) scale(var(--cloud-scale, 1)); }
 }
 .skyline-cloud {
   position: absolute;
   left: 0;
-  width: 300px;
-  height: 7px;
-  border-radius: 9999px;
-  background: var(--cloud-color, #f6f1e4);
+  width: 200px;
+  height: 56px;
   transform-origin: left center;
   animation: skylineCloudDrift calc(var(--cloud-duration, 160s) * 2) linear infinite;
   animation-delay: var(--cloud-delay, 0s);
   will-change: transform;
 }
-.skyline-cloud::after {
-  content: '';
-  position: absolute;
-  left: 22%;
-  top: 14px;
-  width: 64%;
-  height: 5px;
-  border-radius: 9999px;
-  background: var(--cloud-color, #f6f1e4);
-}
+.skyline-cloud svg { display: block; width: 100%; height: 100%; overflow: visible; }
 /* 종이 결: 화면 전체에 깔리는 고운 알갱이 */
 .skyline-grain {
   position: absolute;
@@ -8814,7 +8815,14 @@ export default function App() {
         add(`Q${r}`, numOrText(row.duration));
         add(`S${r}`, numOrText(row.testPeriod));
         // 표준 채취량(V): 게이지압(N)이 비면 양식 수식이 #VALUE!를 내므로 빈 압력은 0으로 본다
-        if (r >= 14) add(`V${r}`, { formula: `IF(K${r}="","",K${r}*(273/(273+$L${r}))*($I$6+N($N${r}))/760)` });
+        if (r >= 14) {
+          // 게이지압(N): 양식은 가스 샘플러 줄에만 수식이 있어서, 다른 줄(금속·수은·이황화탄소·VOCs 등)은 압력을 적어도
+          // 표준 채취량에 반영되지 않았다 → 모든 줄에 같은 수식을 둔다
+          add(`N${r}`, { formula: `IF(M${r}="","",M${r}/13.6)` });
+          // 대기압: 양식은 어느 날 채취했든 1일차 값(I6)을 썼다 → 그 줄을 채취한 날의 대기압을 쓴다 (그날 값이 비면 1일차)
+          const dayRow = on && String(day?.pressure ?? '').trim() ? 6 + row.dayIndex : 6;
+          add(`V${r}`, { formula: `IF(K${r}="","",K${r}*(273/(273+$L${r}))*($I$${dayRow}+N($N${r}))/760)` });
+        }
       });
 
       // 시료채취자: 1일차는 58·59행(직급·이름), 2일차는 60·61행. 3·4일차는 양식에 자리가 없어 인쇄 범위 밖 64~67행에 둔다
@@ -9380,8 +9388,9 @@ export default function App() {
     : (isMorningSky
       ? 'hidden'
       : 'hidden');
-  const sceneCloudColor = isNightSky ? '#2a3f54' : (isMorningSky ? '#f9ecd5' : '#f7f2e5');
-  const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 4) : SKYLINE_CLOUDS;
+  const sceneCloudColor = isNightSky ? '#22364a' : (isMorningSky ? '#f4dfbe' : '#e4e9e1');
+  const sceneCloudShade = isNightSky ? '#1c2e40' : (isMorningSky ? '#ecd0a8' : '#d5ddd6');
+  const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 2) : SKYLINE_CLOUDS.slice(0, 4);
   // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
   const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
     <>
@@ -9397,9 +9406,13 @@ export default function App() {
             '--cloud-scale': cloud.scale,
             '--cloud-duration': `${cloud.duration}s`,
             '--cloud-delay': `${cloud.delay}s`,
-            '--cloud-color': sceneCloudColor,
           }}
-        />
+        >
+          <svg viewBox="0 0 200 56" aria-hidden="true">
+            <path d="M14,50 C1,50 2,36 16,35 C15,22 36,15 50,24 C56,7 86,3 100,18 C112,7 139,10 142,26 C158,19 177,28 172,38 C189,36 199,50 184,50 Z" fill={sceneCloudColor} />
+            <path d="M44,50 C66,43 92,47 120,42 C148,37 170,43 190,46 C191,48 188,50 184,50 Z" fill={sceneCloudShade} />
+          </svg>
+        </div>
       ))}
     </>
   );

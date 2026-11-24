@@ -80,9 +80,9 @@ for f in sorted(glob.glob(d + '/lo/*.xlsx')):
             cmp(tag, '측정위치', f'{i+1}번 벽에서 거리', pv[f'C{dr+3+i}'].value, w, 2)
         for i, w in enumerate(pts['near']):
             cmp(tag, '측정위치', f'{i+1}번 삽입 길이', pv[f'D{dr+3+i}'].value, w, 2)
-        if not pts['rect']:
-            for i, w in enumerate(pts['far']):
-                cmp(tag, '측정위치', f'{i+1}번 반대편', pv[f'E{dr+3+i}'].value, w, 2)
+        # 원형은 반대편 측정공에서의 삽입 길이, 사각은 세로 방향(측정공 줄) 위치
+        for i, w in enumerate(pts['far']):
+            cmp(tag, '측정위치', f"{i+1}번 {'세로 위치' if pts['rect'] else '반대편'}", pv[f'E{dr+3+i}'].value, w, 2)
     # ── 수분량
     mv = wv['수분량']; M = F['moisture']
     if M['method'] == 'auto': cmp(tag, '수분량', '자동측정 평균', mv['B15'].value, M['pre'])

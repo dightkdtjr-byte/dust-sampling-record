@@ -12,3 +12,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; OUT="$(mkdir -p "$1" && cd "$1" && pwd)";
 node "$HERE/export-scenarios.cjs" "$OUT" "$@"
 (cd "$OUT" && for f in *.xlsm; do timeout 240 soffice -env:UserInstallation=file://$OUT/.lo-profile --headless --convert-to xlsx --outdir lo "$f" >/dev/null 2>&1; done)
 python3 "$HERE/compare.py" "$OUT"
+# 조건을 따로 고르지 않았으면 통합시료채취기록부도 함께 본다
+if [ $# -eq 0 ]; then
+  node "$HERE/sampling-log.cjs" "$OUT"
+  (cd "$OUT" && timeout 240 soffice -env:UserInstallation=file://$OUT/.lo-profile --headless --convert-to xlsx --outdir lo-log samplinglog.xlsx >/dev/null 2>&1)
+  python3 "$HERE/compare-sampling-log.py" "$OUT"
+fi

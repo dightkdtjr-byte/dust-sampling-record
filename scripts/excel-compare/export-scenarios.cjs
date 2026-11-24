@@ -20,11 +20,19 @@ const S = [
   { n: 'flow-auto-c2', sheet: 'flow', method: 'auto', shape: 'circle', sp: 'same', o2: true, rowsPer: 1 },
   { n: 'flow-imp2-c5', sheet: 'flow', method: 'imp2', shape: 'big', sp: 'same', o2: false, rowsPer: 1 },
   { n: 'flow-impinger-rect', sheet: 'flow', method: 'impinger', shape: 'rect', sp: 'same', o2: true, rowsPer: 1 },
+  // 측정점이 한 줄에 6개 이상인 큰 사각 굴뚝(가로 6칸 × 세로 4칸), 세로로 긴 사각 굴뚝(가로 2칸 × 세로 6칸)
+  { n: 'dust-auto-rect6', sheet: 'dust', method: 'auto', shape: 'rect6', sp: 'diff', o2: true, rowsPer: 1 },
+  { n: 'dust-auto-rectwide', sheet: 'dust', method: 'auto', shape: 'rectwide', sp: 'blank', o2: false, rowsPer: 2 },
+  { n: 'flow-auto-rect6', sheet: 'flow', method: 'auto', shape: 'rect6', sp: 'same', o2: true, rowsPer: 1 },
+  { n: 'flow-auto-rect8', sheet: 'flow', method: 'auto', shape: 'rect8', sp: 'same', o2: false, rowsPer: 1 },
 ];
 const build = (sc) => {
   const geo = { circle: { total: '1.45', flange: '0.25', shape: 'circle', orient: 'vertical', pts: 2 }, big: { total: '4.95', flange: '0.25', shape: 'circle', orient: 'vertical', pts: 5 },
     small: { total: '0.75', flange: '0.25', shape: 'circle', orient: 'vertical', pts: 1 }, horizontal: { total: '2.35', flange: '0.25', shape: 'circle', orient: 'horizontal', pts: 3 },
-    rect: { total: '1.75', flange: '0.25', shape: 'rect', orient: 'vertical', side: '1.3', pts: 3 } }[sc.shape];
+    rect: { total: '1.75', flange: '0.25', shape: 'rect', orient: 'vertical', side: '1.3', pts: 3 },
+    rect6: { total: '6.05', flange: '0.25', shape: 'rect', orient: 'vertical', side: '4.0', pts: 5 },
+    rect8: { total: '8.25', flange: '0.25', shape: 'rect', orient: 'vertical', side: '7.2', pts: 5 },
+    rectwide: { total: '1.75', flange: '0.25', shape: 'rect', orient: 'vertical', side: '5.6', pts: 2 } }[sc.shape];
   const pts = Array.from({ length: geo.pts }, (_, i) => { const sp = Number(r(-6, -1, 1)); const dp = Number(r(4, 12, 1)); return { id: i + 1, tp: (sp + dp).toFixed(1), sp: String(sp), dp: String(dp), ts: r(120, 180, 1) }; });
   const meters = [{ id: 0, pointNum: '시작', time: '0', stackTemp: '', dp: '', sp: '', pressure: '', volume: '1250.37', tmIn: '', tmOut: '', vacuum: '', impingerTemp: '' }];
   let vol = 1250.37, t = 0, id = 1;
