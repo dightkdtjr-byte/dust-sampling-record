@@ -1229,9 +1229,20 @@ const SKYLINE_FLYER_CSS = `
   mix-blend-mode: multiply;
 }
 @keyframes skylinePlume {
-  from { transform: skewX(0deg); }
-  to { transform: skewX(-6deg); }
+  from { transform: skewX(2deg); }
+  to { transform: skewX(-7deg); }
 }
+/* 플레어 불꽃: 밑동은 붙인 채 길어졌다 짧아졌다 좌우로 일렁인다 */
+@keyframes skylineFlare {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); }
+  14% { transform: scale(0.88, 1.28) skewX(-7deg); }
+  30% { transform: scale(1.1, 0.86) skewX(5deg); }
+  46% { transform: scale(0.92, 1.4) skewX(-3deg); }
+  62% { transform: scale(1.06, 0.95) skewX(8deg); }
+  80% { transform: scale(0.9, 1.2) skewX(-5deg); }
+}
+.skyline-flare { animation: skylineFlare 1.7s ease-in-out infinite; }
+.skyline-flare-core { animation: skylineFlare 1.1s ease-in-out infinite reverse; }
 .skyline-plume {
   animation: skylinePlume var(--plume-duration, 16s) ease-in-out infinite alternate;
   animation-delay: var(--plume-delay, 0s);
@@ -1313,7 +1324,7 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-frog, .skyline-frog-sac, .skyline-frog-call, .skyline-crane, .skyline-crane-wing { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog, .skyline-frog-sac, .skyline-frog-call, .skyline-crane, .skyline-crane-wing { animation: none; }
   .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
 /* ── 첫 화면의 패널·버튼·카드: 흰 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
@@ -1562,14 +1573,24 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
 
   // 연기: 목판화 구름처럼 세 번 굽이치는 납작한 덩어리 + 아랫면 그늘 한 판
   // 밑동은 굴뚝 구멍 너비(b)만큼 벌리고 굴뚝 꼭대기 테 안쪽에서 시작한다 → 연기가 굴뚝 입구에 꼭 맞는다
-  const plumePath = (cx, top, s, b) => {
+  // [a, c, t]: 첫째·둘째 봉우리가 솟는 정도와 꼬리가 늘어나는 정도. 이 값을 바꿔 가며 연기가 피어오르게 한다
+  const plumePath = (cx, top, s, b, [a, c, t] = [0, 0, 0]) => {
     const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
-    return `M${cx - b},${top + 5} L${cx - b},${top} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${cx + b},${top} L${cx + b},${top + 5} Z`;
+    return `M${cx - b},${top + 5} L${cx - b},${top} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90 + a)} ${p(98, 100 + a)} ${p(122, 78 + (a + c) / 4)} C${p(152, 106 + c)} ${p(216, 106 + c)} ${p(230 + t / 2, 72 + c / 4)} C${p(266 + t, 86)} ${p(306 + t, 64)} ${p(300 + t, 42)} C${p(252 + t / 2, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${cx + b},${top} L${cx + b},${top + 5} Z`;
   };
-  const plumeShadePath = (cx, top, s) => {
+  const plumeShadePath = (cx, top, s, [, , t] = [0, 0, 0]) => {
     const p = (dx, dy) => `${cx + dx * s},${top - dy * s}`;
-    return `M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`;
+    return `M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250 + t / 2, 52)} ${p(300 + t, 42)} C${p(252 + t / 2, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`;
   };
+  // 꼬리 끝에서 떨어져 나가는 작은 연기 덩이
+  const plumePuffPath = (cx, top, s) => {
+    const x = cx + 286 * s, y = top - 44 * s, q = (v) => v * s;
+    return `M${x},${y} c${q(-10)},0 ${q(-10)},${q(-12)} ${q(2)},${q(-12)} c${q(3)},${q(-12)} ${q(24)},${q(-14)} ${q(31)},${q(-4)} c${q(12)},${q(-5)} ${q(24)},${q(5)} ${q(17)},${q(12)} c${q(5)},${q(2)} ${q(2)},${q(7)} ${q(-5)},${q(7)} Z`;
+  };
+  const PLUME_FRAMES = [[0, 0, 0], [13, -9, 18], [-7, 12, 6], [0, 0, 0]];
+  const plumeAnim = (values, dur) => (
+    <animate attributeName="d" dur={`${dur}s`} repeatCount="indefinite" calcMode="spline" keyTimes="0;0.34;0.68;1" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1" values={values.join(';')} />
+  );
   const stacks = SCENE_STACKS.map((st) => ({ ...st, hh: Math.round(st.h * stackScale) }));
   const tufts = compact ? SCENE_TUFTS.filter((_, i) => i % 2 === 0) : SCENE_TUFTS;
   const cattails = compact ? SCENE_CATTAILS.filter((_, i) => i % 2 === 0) : SCENE_CATTAILS;
@@ -1608,11 +1629,21 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
 
       {/* 연기 (굴뚝 뒤) */}
       {stacks.filter((st) => st.plume > 0).map((st, i) => {
-        const s = st.plume * (compact ? 0.7 : 1), top = G - st.hh;
+        const s = st.plume * (compact ? 0.7 : 1), top = G - st.hh, b = Math.max(3, halfAt(st, 1) - 1.5);
         return (
-          <g key={`plume-${i}`} className="skyline-plume" style={{ '--plume-duration': `${15 + i * 4}s`, '--plume-delay': `-${i * 5}s`, transformOrigin: `${st.x}px ${top}px` }}>
-            <path d={plumePath(st.x, top, s, Math.max(3, halfAt(st, 1) - 1.5))} fill={pal.plume} />
-            <path d={plumeShadePath(st.x, top, s)} fill={pal.plumeShade} />
+          <g key={`plume-${i}`} className="skyline-plume" style={{ '--plume-duration': `${6 + i * 2}s`, '--plume-delay': `-${i * 3}s`, transformOrigin: `${st.x}px ${top}px` }}>
+            {/* 꼬리에서 떨어져 바람에 실려 가며 옅어지는 덩이 */}
+            <g opacity="0">
+              <path d={plumePuffPath(st.x, top, s)} fill={pal.plume} />
+              <animateTransform attributeName="transform" type="translate" values={`0 0;${150 * s} ${-18 * s}`} dur={`${9 + i * 2}s`} begin={`-${i * 4}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;0.9;0.75;0" keyTimes="0;0.12;0.55;1" dur={`${9 + i * 2}s`} begin={`-${i * 4}s`} repeatCount="indefinite" />
+            </g>
+            <path d={plumePath(st.x, top, s, b)} fill={pal.plume}>
+              {plumeAnim(PLUME_FRAMES.map((v) => plumePath(st.x, top, s, b, v)), 7 + i * 2)}
+            </path>
+            <path d={plumeShadePath(st.x, top, s)} fill={pal.plumeShade}>
+              {plumeAnim(PLUME_FRAMES.map((v) => plumeShadePath(st.x, top, s, v)), 7 + i * 2)}
+            </path>
           </g>
         );
       })}
@@ -1748,7 +1779,8 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
       </g>
 
       {/* 플레어 불꽃, 밤의 불빛과 경고등 */}
-      <path d={`M${SCENE_FLARE.x},${flareTop - 8} q-6,-8 0,-18 q2,6 5,8 q3,4 -5,10 Z`} fill={night ? pal.light : pal.band} />
+      <path className="skyline-flare" style={{ transformOrigin: `${SCENE_FLARE.x}px ${flareTop - 8}px` }} d={`M${SCENE_FLARE.x},${flareTop - 8} q-8,-10 0,-24 q2,8 6,11 q4,6 -6,13 Z`} fill={night ? pal.light : pal.band} />
+      <path className="skyline-flare-core" style={{ transformOrigin: `${SCENE_FLARE.x}px ${flareTop - 8}px` }} d={`M${SCENE_FLARE.x + 0.5},${flareTop - 8} q-3.5,-5 0,-11 q1,3 2.6,5 q1.6,3 -2.6,6 Z`} fill={pal.plume} />
       {night && (
         <g fill={pal.light}>
           {[[1024, 30], [1060, 30], [1132, 30], [1190, 30], [1240, 22], [844, 60], [868, 44], [968, 52], [1416, 16], [1500, 12], [70, 10], [224, 40], [276, 40]].map(([x, dy], i) => (
