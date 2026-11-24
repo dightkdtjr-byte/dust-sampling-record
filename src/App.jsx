@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import mainLogoImage from './assets/mainlogo.svg';
-import mainLogoClayImage from './assets/mainlogo-clay.svg';
 import JSZip from 'jszip';
 import { recalcWorkbookCaches } from './xlsxRecalc.js';
 import { tidyWorkbook, rowsAt, hideRowBlocks, moveRowCells, readSheetCellText, centerSheetPictures, fitPictureInBox, setPictureSourceAspect, boxSheetRanges, addSourcePictures, replaceSourcePictures, clearRowBlocks, deleteSheetRows } from './xlsxTidy.js';
@@ -373,7 +371,7 @@ const sanitizeLeakTest = (value) => {
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
 const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
-// 첫 화면 기록부 카드의 띠 색: 배경 판화의 잉크처럼 채도를 낮춘 색
+// 첫 화면 기록부 카드에서 이름 앞에 찍는 점의 색: 배경 판화의 잉크처럼 채도를 낮춘 색
 const SHEET_CARD_INKS = { dust: '#4f7a5a', metal: '#c79a3a', mercury: '#3f6a94', pahs: '#7a5a8c', flow: '#3d8a96', samplinglog: '#c4523a' };
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
 // 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
@@ -1254,51 +1252,77 @@ const SKYLINE_FLYER_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon { animation: none; }
 }
-/* ── 첫 화면의 패널·버튼·카드: 종이색 면, 잉크 테두리, 어긋나게 찍힌 붉은 판(글자 로고와 같은 방식) ── */
-.sp-menu { --sp-paper: #f8f4e9; --sp-paper-2: #efe9da; --sp-ink: #22313c; --sp-soft: #5c6b74; }
+/* ── 첫 화면의 패널·버튼·카드: 종이색 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
+.sp-menu, .sp-modal { --sp-paper: #f9f5ea; --sp-paper-2: #f0eadb; --sp-ink: #2a3944; --sp-soft: #66747c; --sp-line: rgba(42, 57, 68, 0.22); --sp-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 10px 24px -14px rgba(20, 28, 34, 0.55); }
+.sp-modal { --sp-accent: #c4523a; }
 .sp-panel {
   background: var(--sp-paper);
-  border: 2px solid var(--sp-ink);
-  border-radius: 6px;
-  box-shadow: 6px 6px 0 var(--sp-accent);
+  border: 1px solid var(--sp-line);
+  border-radius: 16px;
+  box-shadow: var(--sp-shadow);
   color: var(--sp-ink);
 }
-.sp-kicker { font-size: 0.72rem; font-weight: 700; color: var(--sp-soft); }
-.sp-title { font-weight: 900; color: var(--sp-ink); letter-spacing: -0.01em; }
+.sp-kicker { font-size: 0.74rem; font-weight: 600; color: var(--sp-soft); }
+.sp-title { font-weight: 800; color: var(--sp-ink); letter-spacing: -0.01em; }
 .sp-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 0.42rem 0.85rem;
-  border: 1.5px solid var(--sp-ink); border-radius: 4px;
+  padding: 0.45rem 0.95rem;
+  border: 1px solid var(--sp-line); border-radius: 999px;
   background: var(--sp-paper); color: var(--sp-ink);
-  font-size: 0.75rem; font-weight: 800; line-height: 1.2;
-  box-shadow: 2px 2px 0 var(--sp-ink);
-  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.12s ease;
+  font-size: 0.76rem; font-weight: 700; line-height: 1.2; white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
-.sp-btn:hover { background: var(--sp-paper-2); transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--sp-ink); }
-.sp-btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sp-ink); }
-.sp-btn-fill { background: var(--sp-ink); color: var(--sp-paper); box-shadow: 2px 2px 0 var(--sp-accent); }
-.sp-btn-fill:hover { background: #162129; box-shadow: 3px 3px 0 var(--sp-accent); }
-.sp-btn-lg { padding: 0.6rem 1.3rem; font-size: 0.875rem; }
+.sp-btn:hover { background: var(--sp-paper-2); border-color: rgba(42, 57, 68, 0.4); }
+.sp-btn:active { transform: scale(0.97); }
+.sp-btn-fill { background: var(--sp-ink); color: var(--sp-paper); border-color: var(--sp-ink); }
+.sp-btn-fill:hover { background: #1f2c35; border-color: #1f2c35; }
+.sp-btn-lg { padding: 0.7rem 1.6rem; font-size: 0.9rem; }
 .sp-btn:focus-visible, .sp-card:focus-visible { outline: 3px solid var(--sp-accent); outline-offset: 2px; }
-.sp-avatar { border: 2px solid var(--sp-ink) !important; border-radius: 6px !important; box-shadow: 3px 3px 0 var(--sp-accent); }
+.sp-avatar { border: 1px solid var(--sp-line) !important; border-radius: 999px !important; }
 .sp-menu .menu-avatar-fallback { background: var(--sp-ink) !important; color: var(--sp-paper) !important; }
+/* 기록부 카드: 이름 앞의 작은 잉크 점 하나로만 종류를 구분한다 */
 .sp-card {
-  position: relative; overflow: hidden; text-align: left;
-  padding: 1.05rem 1.1rem 0.95rem 1.7rem;
+  display: block; text-align: left;
+  padding: 1.1rem 1.25rem 1rem;
   background: var(--sp-paper);
-  border: 2px solid var(--sp-ink); border-radius: 6px;
-  box-shadow: 5px 5px 0 var(--sp-accent);
+  border: 1px solid var(--sp-line); border-radius: 16px;
+  box-shadow: var(--sp-shadow);
   color: var(--sp-ink);
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
-.sp-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: var(--sp-card-color, var(--sp-ink)); border-right: 2px solid var(--sp-ink); }
-.sp-card:hover { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 var(--sp-accent); }
-.sp-card:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--sp-accent); }
-.sp-card-open { margin-top: 0.9rem; padding-top: 0.55rem; border-top: 1.5px dashed var(--sp-ink); font-size: 0.7rem; font-weight: 800; color: var(--sp-soft); display: flex; justify-content: space-between; }
+.sp-card:hover { transform: translateY(-3px); background: #fffcf3; box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 30px -16px rgba(20, 28, 34, 0.6); }
+.sp-card:active { transform: translateY(0); }
+.sp-card-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 999px; margin-right: 0.5rem; background: var(--sp-card-color, var(--sp-ink)); vertical-align: 0.05em; }
+.sp-card-open { margin-top: 0.85rem; font-size: 0.72rem; font-weight: 600; color: var(--sp-soft); display: flex; justify-content: space-between; gap: 0.5rem; }
 .sp-card:hover .sp-card-open { color: var(--sp-ink); }
-.sp-tile { padding: 0.5rem; border: 1.5px solid var(--sp-ink); border-radius: 4px; background: var(--sp-paper-2); text-align: center; }
-.sp-empty { padding: 1.25rem; text-align: center; font-size: 0.75rem; color: var(--sp-soft); border: 1.5px dashed var(--sp-ink); border-radius: 4px; }
-@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card { transition: none; } }
+.sp-empty { padding: 1.4rem; text-align: center; font-size: 0.78rem; color: var(--sp-soft); background: var(--sp-paper-2); border-radius: 12px; }
+/* 설정·별명·로그인 창: 같은 종이 패널 */
+div.sp-modal.sp-modal {
+  background: var(--sp-paper) !important; color: var(--sp-ink);
+  border: 1px solid var(--sp-line) !important; border-radius: 18px !important;
+  box-shadow: 0 30px 60px -20px rgba(10, 16, 20, 0.6) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+.sp-modal div[class*="bg-slate-50"], .sp-modal div.bg-white, .sp-modal div[class*="bg-emerald-50"], .sp-modal div[class*="bg-blue-50"] {
+  background: var(--sp-paper-2) !important; border-color: transparent !important; border-radius: 12px !important; box-shadow: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+.sp-modal div[class*="bg-red-50"] { border-radius: 12px !important; }
+.sp-modal button { border-radius: 999px !important; background-image: none !important; box-shadow: none !important; transition: background-color 0.15s ease, transform 0.15s ease; }
+.sp-modal button.bg-white, .sp-modal button[class*="border-slate"], .sp-modal label[class*="border-slate"] {
+  background: var(--sp-paper) !important; color: var(--sp-ink) !important; border: 1px solid var(--sp-line) !important;
+}
+.sp-modal button.bg-white:hover, .sp-modal button[class*="border-slate"]:hover { background: #fffcf3 !important; }
+.sp-modal button[class*="bg-emerald-6"], .sp-modal button[class*="bg-slate-7"], .sp-modal button[class*="bg-slate-8"], .sp-modal button[class*="bg-blue-6"] {
+  background: var(--sp-ink) !important; color: var(--sp-paper) !important; border: 1px solid var(--sp-ink) !important;
+}
+.sp-modal button:not(:disabled):active { transform: scale(0.97); }
+.sp-modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), .sp-modal select, .sp-modal textarea {
+  background: #fffdf6 !important; border: 1px solid var(--sp-line) !important; border-radius: 10px !important; color: var(--sp-ink);
+}
+.sp-modal input:focus, .sp-modal select:focus, .sp-modal textarea:focus { border-color: var(--sp-ink) !important; box-shadow: 0 0 0 3px rgba(196, 82, 58, 0.28) !important; }
+.sp-modal h3 { color: var(--sp-ink); }
+@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card, .sp-modal button { transition: none; } }
 `;
 
 // ── 판화 포스터풍 공단 풍경 ──
@@ -2822,15 +2846,6 @@ export default function App() {
     setPalette(value);
     try { localStorage.setItem(PALETTE_STORAGE_KEY, value); } catch (error) { console.error(error); }
   };
-  const logoCandidates = [
-    palette === 'earth' ? mainLogoClayImage : mainLogoImage,
-    `${import.meta.env.BASE_URL}mainlogo.png`,
-    `${import.meta.env.BASE_URL}app-logo.png`,
-    `${import.meta.env.BASE_URL}mainlogo.jpg`,
-    `${import.meta.env.BASE_URL}app-logo.jpg`,
-  ];
-  const [logoIndex, setLogoIndex] = useState(0);
-  const mainLogoSrc = logoCandidates[Math.min(logoIndex, logoCandidates.length - 1)];
   // 기록부 종류별 엑셀 양식 (먼지와 금속은 같은 양식 사용)
   const getTemplateUrlForSheet = (sheetId) => {
     const layout = EXPORT_TEMPLATE_LAYOUTS[sheetId] || EXPORT_TEMPLATE_LAYOUTS.dust;
@@ -9662,9 +9677,9 @@ export default function App() {
               <StackpilotWordmark tone={skyTheme.wm} className="h-[3.8rem] md:h-[6.4rem] w-auto select-none" />
             </h1>
           </div>
-          <div className="mb-7 relative">
+          <div className="mb-6 relative">
             {!isUserUnlocked ? (
-              <div className="sp-panel mx-auto max-w-xl p-6 text-center">
+              <div className="sp-panel mx-auto max-w-xl p-8 text-center">
                 <p className="sp-title text-lg">굴뚝 시료채취 기록부</p>
                 <p className="sp-kicker mt-1">회원가입 없이 기본 계정(user)으로 바로 시작합니다.</p>
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -9686,7 +9701,7 @@ export default function App() {
 
                 {authModal === 'admin' && typeof document !== 'undefined' && createPortal(
                   <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-full max-w-md max-h-[85vh] overflow-y-auto sp-modal bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">관리자 로그인</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -9729,16 +9744,16 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-4 flex flex-col items-center">
-                <div className="sp-panel w-full max-w-3xl p-5 relative">
+                <div className="sp-panel w-full px-5 py-3 relative">
                   <button
                     type="button"
                     aria-label="설정 열기"
                     onClick={() => setAuthModal('settings')}
-                    className="sp-btn absolute right-4 top-4 z-10"
+                    className="sp-btn absolute right-4 top-3 md:top-1/2 md:-translate-y-1/2 z-10"
                   >
-                    ⚙ 설정
+                    설정
                   </button>
-                  <div className="flex flex-col items-center md:flex-row md:items-center gap-4 justify-center">
+                  <div className="flex flex-col items-center md:flex-row md:items-center gap-3 md:gap-4 justify-center">
                     <div className="shrink-0 flex flex-col items-center gap-2">
                       <input ref={avatarFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarFile} />
                       <button
@@ -9746,25 +9761,26 @@ export default function App() {
                         onClick={() => avatarFileInputRef.current && avatarFileInputRef.current.click()}
                         title="프로필 사진 바꾸기"
                         aria-label="프로필 사진 바꾸기"
-                        className="sp-avatar group relative w-24 h-24 bg-white overflow-hidden flex items-center justify-center cursor-pointer p-0"
+                        className="sp-avatar group relative w-14 h-14 bg-white overflow-hidden flex items-center justify-center cursor-pointer p-0"
                       >
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="menu-avatar-fallback w-full h-full flex items-center justify-center bg-emerald-600 text-white text-4xl font-black select-none">
+                          <span className="menu-avatar-fallback w-full h-full flex items-center justify-center bg-emerald-600 text-white text-2xl font-black select-none">
                             {String(displayUserNameWithFallback || '').trim().charAt(0).toUpperCase() || '?'}
                           </span>
                         )}
-                        <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[11px] font-bold py-1 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">사진 바꾸기</span>
+                        <span className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] font-bold py-0.5 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">사진 바꾸기</span>
                       </button>
                     </div>
-                    <div className="flex-1 text-center md:text-left">
-                      <p className="sp-kicker">현재 사용자</p>
-                      <p className="sp-title text-2xl">{displayUserNameWithFallback}</p>
-                      <p className="sp-kicker mt-1">
-                        로그인됨 · 저장한 기록 <span className="font-black" style={{ color: 'var(--sp-ink)' }}>{savedData.length}</span>건
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center justify-center md:justify-start gap-2">
+                    <div className="flex-1 text-center md:text-left md:flex md:items-center md:justify-between md:gap-4 md:pr-24">
+                      <div>
+                        <p className="sp-title text-xl leading-tight">{displayUserNameWithFallback}</p>
+                        <p className="sp-kicker">
+                          저장한 기록 <span className="font-black" style={{ color: 'var(--sp-ink)' }}>{savedData.length}</span>건
+                        </p>
+                      </div>
+                      <div className="mt-3 md:mt-0 flex flex-wrap items-center justify-center md:justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => setAuthModal('nickname')}
@@ -9802,7 +9818,7 @@ export default function App() {
 
                 {authModal === 'nickname' && typeof document !== 'undefined' && createPortal(
                   <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto sp-modal bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">별명 설정</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -9836,7 +9852,7 @@ export default function App() {
 
                 {authModal === 'settings' && typeof document !== 'undefined' && createPortal(
                   <div className="fixed inset-0 z-[9999] bg-black/40 p-4 flex items-center justify-center" onClick={() => setAuthModal('')}>
-                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto sp-modal bg-white rounded-2xl border border-slate-200 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-black text-slate-900">설정</h3>
                         <button type="button" onClick={() => setAuthModal('')} className="px-2 py-1 rounded hover:bg-slate-100 text-slate-600 text-xs font-bold">
@@ -10060,7 +10076,7 @@ export default function App() {
             )}
           </div>
           {isUserUnlocked && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {SHEET_MENU.map((sheet) => {
                 return (
                   <button
@@ -10070,12 +10086,12 @@ export default function App() {
                     className="sp-card"
                     style={{ '--sp-card-color': SHEET_CARD_INKS[sheet.id] }}
                   >
-                    <h2 className="sp-title text-base">{sheet.title}</h2>
+                    <h2 className="sp-title text-base"><span className="sp-card-dot" />{sheet.title}</h2>
                     <p className="sp-kicker mt-1">{sheet.desc}</p>
-                    <div className="sp-card-open">
+                    <span className="sp-card-open">
                       <span>새 창으로 열기</span>
                       <span>저장 {profileSheetCounts[sheet.id] || 0}건</span>
-                    </div>
+                    </span>
                   </button>
                 );
               })}
@@ -10083,7 +10099,7 @@ export default function App() {
           )}
 
           {isUserUnlocked && (
-            <div className="sp-panel mt-8 p-5">
+            <div className="sp-panel mt-7 p-5">
               <div className="flex items-baseline justify-between gap-2 mb-3">
                 <h3 className="sp-title text-base">저장한 기록</h3>
                 <span className="sp-kicker">모두 {profileCombinedReports.length}건</span>
@@ -10661,7 +10677,7 @@ export default function App() {
         <div className="relative z-10 max-w-[1400px] mx-auto space-y-6 ds-page">
           <div className={`relative bg-white p-6 rounded-xl shadow-sm border-t-4 ${activeTheme.headerBorder} text-center`}>
             <h1 className="text-2xl font-black text-slate-900">
-              <img src={mainLogoSrc} alt="STACKPILOT" className="h-[2.2rem] md:h-[3.2rem] w-auto select-none mx-auto" />
+              <StackpilotWordmark className="h-[3rem] md:h-[4.2rem] w-auto select-none mx-auto" />
             </h1>
             <p className="ds-sheet-title">
               <span>통합시료채취기록부</span>
@@ -10694,12 +10710,7 @@ export default function App() {
         <div className={`bg-white p-6 rounded-xl shadow-md border-t-4 relative ${activeTheme.headerBorder}`}>
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl font-black text-slate-900">
-              <img
-                src={mainLogoSrc}
-                alt="STACKPILOT"
-                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
-                className="h-[2.2rem] md:h-[3.2rem] w-auto select-none"
-              />
+              <StackpilotWordmark className="h-[3rem] md:h-[4.2rem] w-auto select-none" />
             </h1>
             <p className="ds-sheet-title">
               <span>{activeSheet?.title || '먼지시료채취기록부'}</span>
