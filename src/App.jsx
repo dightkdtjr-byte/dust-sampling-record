@@ -551,7 +551,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 30, code: 'M', name: '아연', kind: 'particle', testPeriod: '6' },
   { row: 31, code: 'M', name: '베릴륨', kind: 'particle', testPeriod: '6' },
   { row: 32, code: 'M', name: '비소(입자상)', species: '비소', part: '입자상', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
-  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일' },
+  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일', testPeriod: '9' },
   { row: 34, code: 'Hg', name: '수은', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
   { row: 35, code: 'ALD-1', name: '알데히드-1', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '1회차', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
   { row: 36, code: 'ALD-2', name: '알데히드-2', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '2회차', kind: 'gas', suctionRate: '1', targetVolume: '10' },
@@ -629,6 +629,11 @@ const normalizeSiteName = (value) => String(value || '').trim().replace(/\s+/g, 
 // 통합시료채취기록부 일차 칸 수
 const SAMPLING_LOG_DAY_SLOTS = 4;
 // 통합시료채취기록부 엑셀: 날짜별 시트 열 → 입력 시트('시료채취 작성') 열
+// 통합시료채취기록부 채취유량(K) 수식에서 고른 샘플러의 Yd를 표(O6:T10)에서 찾는 부분 (양식 원본의 수식과 같다)
+const SAMPLING_LOG_YD_LOOKUP = {
+  particle: 'IFERROR(INDEX($Q$6:$Q$10,MATCH("#"&SUBSTITUTE($P$3,"입자샘플러",""),$O$6:$O$10,0)),1)',
+  gas: 'IFERROR(INDEX($T$6:$T$10,MATCH("#"&SUBSTITUTE($R$3,"가스샘플러",""),$R$6:$R$10,0)),1)',
+};
 const DAY_SHEET_INPUT_COLUMNS = { B: 'D', C: 'E', D: 'G', E: 'H', F: 'I', G: 'J', H: 'K', I: 'L', J: 'M', K: 'N' };
 // includeBlank: 사업장·배출구·날짜를 하나도 안 적은 기록도 "정보 없음" 묶음으로 보여 준다 (저장 목록용)
 const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOURCE_SHEETS, { includeBlank = false } = {}) => {
@@ -8935,11 +8940,16 @@ export default function App() {
         add(`P${r}`, ps ? extractSerialFromName(ps.name) : null);
         add(`Q${r}`, ps ? toNumber(ps.yd) : null);
         const gs = gasSamplers[i];
-        add(`R${r}`, gs ? `#${i + 1}` : null);
+        add(`R${r}`, gs ? `#${gs.id}` : null);
         // 가스 샘플러 일련번호가 숫자뿐이면 숫자로 (엑셀의 '텍스트 형식 숫자' 표시 방지)
         add(`S${r}`, gs ? (/^\d+$/.test(String(gs.sn || '').trim()) ? Number(gs.sn) : gs.sn) : null);
         add(`T${r}`, gs ? toNumber(gs.yd) : null);
       }
+
+      // 고른 샘플러가 표(6~10행)에 들어 있을 때 표에 적히는 Yd (없으면 NaN)
+      const particleTableYd = particleIndex >= 0 && particleIndex < 5 ? toNumber(samplers[particleIndex].yd) : NaN;
+      const gasIndex = gasSamplers.findIndex((item) => String(item.id) === String(log.gasSamplerId));
+      const gasTableYd = gasIndex >= 0 && gasIndex < 5 ? toNumber(gasSamplers[gasIndex].yd) : NaN;
 
       // sampler No.: 제 줄의 의뢰 칸을 보고, 샘플러를 고르지 않았으면 0이 아니라 빈칸으로 (양식은 알데히드 2·3회차가 1회차 줄을 보았다)
       Object.entries(SAMPLING_LOG_SAMPLER_NAME_ROWS).forEach(([col, list]) => list.forEach((r) => add(`E${r}`, { formula: `IF(OR(C${r}="",$${col}$3=""),"",$${col}$3)` })));
@@ -8963,8 +8973,19 @@ export default function App() {
         add(`H${r}`, on ? toExcelTimeFraction(row.end) : null);
         add(`I${r}`, on ? toNumber(row.meterStart) : null);
         add(`J${r}`, on ? toNumber(row.meterEnd) : null);
-        const vol = on ? calcSamplingLogVolume(log, sub) : NaN;
-        add(`K${r}`, Number.isFinite(vol) ? Math.round(vol * 100) / 100 : null);
+        // 채취유량(K): 숫자를 박지 않고 수식으로 둔다 → 엑셀에서 시작·종료값을 고치면 따라 바뀐다.
+        // 양식은 고른 샘플러와 상관없이 입자 4번(Q9)·가스 1번(T6)의 Yd만 곱했다 → 고른 샘플러의 Yd를 곱한다.
+        // 고른 샘플러가 표(O6:T10)에 있고 그 Yd를 그대로 쓰면 양식 원본의 '표에서 찾는' 수식을 두고,
+        // Yd를 직접 적었거나 표 밖의 샘플러면 그 값을 수식 안에 적는다. 화면과 같이 소수 둘째 자리로 반올림한다.
+        const kKind = sub.kind === 'particle' ? 'particle' : (sub.kind === 'gas' || row?.collector === '흡수액') ? 'gas' : (sub.kind === 'box' || sub.kind === 'plain') ? 'diff' : '';
+        if (kKind === 'diff') add(`K${r}`, { formula: `IF(OR(I${r}="",J${r}=""),"",ROUND(J${r}-I${r},2))` });
+        else if (kKind) {
+          const used = parseFloat(kKind === 'particle' ? log.particleSamplerYd : log.gasSamplerYd);
+          const yd = Number.isFinite(used) && used > 0 ? used : 1;
+          const lookup = kKind === 'particle' ? SAMPLING_LOG_YD_LOOKUP.particle : SAMPLING_LOG_YD_LOOKUP.gas;
+          const tableYd = kKind === 'particle' ? particleTableYd : gasTableYd;
+          add(`K${r}`, { formula: `IF(OR(I${r}="",J${r}=""),"",ROUND((J${r}-I${r})*${tableYd === yd ? lookup : yd},2))` });
+        }
         add(`L${r}`, on ? toNumber(row.temp) : null);
         add(`M${r}`, on ? toNumber(row.pressureH2O) : null);
         add(`O${r}`, numOrText(row.suctionRate));
@@ -8978,7 +8999,8 @@ export default function App() {
           add(`N${r}`, { formula: `IF(M${r}="","",M${r}/13.6)` });
           // 대기압: 그 줄을 채취한 날의 대기압을 쓴다 (그날 값이 비면 1일차). 양식 원본도 날짜(F)로 그날 기압을 찾도록 고쳐 두었다
           const dayRow = on && String(day?.pressure ?? '').trim() ? 6 + row.dayIndex : 6;
-          add(`V${r}`, { formula: `IF(K${r}="","",K${r}*(273/(273+$L${r}))*($I$${dayRow}+N($N${r}))/760)` });
+          // 온도(L)를 적지 않은 줄은 0 ℃로 계산하지 않고 비워 둔다
+          add(`V${r}`, { formula: `IF(OR(K${r}="",$L${r}=""),"",K${r}*(273/(273+$L${r}))*($I$${dayRow}+N($N${r}))/760)` });
         }
       });
 
@@ -9019,8 +9041,6 @@ export default function App() {
         const buildDaySheetXml = (dayIdx) => firstDayXml
           // 입력 시트의 날짜 행 참조 6 → 6+일차
           .replace(new RegExp(`('${inputRef}'!\\$?[A-Z]{1,3}\\$?)6(?!\\d)`, 'g'), `$1${6 + dayIdx}`)
-          // 분석 기한(N열)은 같은 행의 M열을 보도록 (양식 N16이 M17을 보던 것 바로잡음)
-          .replace(/(<c r="N(\d+)"[^>]*><f>[^<]*?DAY\(M)\d+(\))/g, '$1$2$3')
           // 복사본에 남은 1일차 계산값은 지운다 (열 때 다시 계산)
           .replace(/(<c\b[^>]*?)\s+t="(?:str|e|n|b)"([^>]*>(?:<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>))<v>[^<]*<\/v>/g, '$1$2')
           .replace(/(<c\b[^>]*>(?:<f\b[^>]*>[^<]*<\/f>|<f\b[^>]*\/>))<v>[^<]*<\/v>/g, '$1')
