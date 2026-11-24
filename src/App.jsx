@@ -1252,8 +1252,8 @@ const SKYLINE_FLYER_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon { animation: none; }
 }
-/* ── 첫 화면의 패널·버튼·카드: 종이색 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
-.sp-menu, .sp-modal { --sp-paper: #f9f5ea; --sp-paper-2: #f0eadb; --sp-ink: #2a3944; --sp-soft: #66747c; --sp-line: rgba(42, 57, 68, 0.22); --sp-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 10px 24px -14px rgba(20, 28, 34, 0.55); }
+/* ── 첫 화면의 패널·버튼·카드: 흰 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
+.sp-menu, .sp-modal { --sp-paper: #ffffff; --sp-paper-2: #f3f4f3; --sp-ink: #2a3944; --sp-soft: #66747c; --sp-line: rgba(42, 57, 68, 0.22); --sp-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 10px 24px -14px rgba(20, 28, 34, 0.55); }
 .sp-modal { --sp-accent: #c4523a; }
 .sp-panel {
   background: var(--sp-paper);
@@ -1290,7 +1290,7 @@ const SKYLINE_FLYER_CSS = `
   color: var(--sp-ink);
   transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
-.sp-card:hover { transform: translateY(-3px); background: #fffcf3; box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 30px -16px rgba(20, 28, 34, 0.6); }
+.sp-card:hover { transform: translateY(-3px); background: #ffffff; box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 30px -16px rgba(20, 28, 34, 0.6); }
 .sp-card:active { transform: translateY(0); }
 .sp-card-mark {
   display: block; width: 100%; height: 0.42rem; margin: 0.35rem 0 0.5rem;
@@ -1317,13 +1317,13 @@ div.sp-modal.sp-modal {
 .sp-modal button.bg-white, .sp-modal button[class*="border-slate"], .sp-modal label[class*="border-slate"] {
   background: var(--sp-paper) !important; color: var(--sp-ink) !important; border: 1px solid var(--sp-line) !important;
 }
-.sp-modal button.bg-white:hover, .sp-modal button[class*="border-slate"]:hover { background: #fffcf3 !important; }
+.sp-modal button.bg-white:hover, .sp-modal button[class*="border-slate"]:hover { background: #f7f8f7 !important; }
 .sp-modal button[class*="bg-emerald-6"], .sp-modal button[class*="bg-slate-7"], .sp-modal button[class*="bg-slate-8"], .sp-modal button[class*="bg-blue-6"] {
   background: var(--sp-ink) !important; color: var(--sp-paper) !important; border: 1px solid var(--sp-ink) !important;
 }
 .sp-modal button:not(:disabled):active { transform: scale(0.97); }
 .sp-modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), .sp-modal select, .sp-modal textarea {
-  background: #fffdf6 !important; border: 1px solid var(--sp-line) !important; border-radius: 10px !important; color: var(--sp-ink);
+  background: #ffffff !important; border: 1px solid var(--sp-line) !important; border-radius: 10px !important; color: var(--sp-ink);
 }
 .sp-modal input:focus, .sp-modal select:focus, .sp-modal textarea:focus { border-color: var(--sp-ink) !important; box-shadow: 0 0 0 3px rgba(196, 82, 58, 0.28) !important; }
 .sp-modal h3 { color: var(--sp-ink); }
