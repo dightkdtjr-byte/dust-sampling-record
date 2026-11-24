@@ -7,10 +7,11 @@
 #   ⑤ 정렬·글꼴이 원본과 같은가 (--ref)
 #   ⑥ 문서번호가 인쇄되는 모든 시트의 바닥글에 있고, PDF 모든 쪽에 찍히는가 (--pdf)
 # 원본과 정리본은 파일 이름 앞부분(확장자·'labtest-' 뺀 것)으로 짝짓는다.
-import sys, os, re, glob, subprocess, warnings
+import sys, os, re, glob, subprocess, warnings, zipfile
 import openpyxl
 from openpyxl.utils import get_column_letter as CL, range_boundaries
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from form_style import raw_borders
 from std import SIGN_W, TOTAL_PX, ROW1, ROW2, MARGINS, PAGE_PT, DOCNO, px, text_px, wrap_lines
 
 warnings.filterwarnings('ignore')
@@ -68,6 +69,23 @@ def breaks_of(ws):
     return sorted(b.id for b in ws.row_breaks.brk)
 
 
+def first_sheet_borders(path):
+    z = zipfile.ZipFile(path)
+    wbx = z.read('xl/workbook.xml').decode('utf8'); rels = z.read('xl/_rels/workbook.xml.rels').decode('utf8')
+    rid = re.search(r'<sheet\b[^>]*r:id="([^"]+)"', wbx).group(1)
+    tgt = re.search(rf'<Relationship\b[^>]*Id="{rid}"[^>]*Target="([^"]+)"', rels) or re.search(rf'<Relationship\b[^>]*Target="([^"]+)"[^>]*Id="{rid}"', rels)
+    part = 'xl/' + re.sub(r'^/?xl/', '', tgt.group(1))
+    return raw_borders(z.read(part).decode('utf8'), z.read('xl/styles.xml').decode('utf8'))
+
+
+class _Side:
+    def __init__(self, st): self.style = st
+
+
+class _Bd:
+    def __init__(self, t): self.left, self.right, self.top, self.bottom = (_Side(x) for x in t)
+
+
 def footer_docno(ws):
     t = (ws.oddFooter.right.text or '') + (ws.oddFooter.center.text or '') + (ws.oddFooter.left.text or '')
     m = DOCNO.search(t)
@@ -81,6 +99,8 @@ for f in files:
     ws = wb.worksheets[0]
     c1, r1, c2, r2 = area_of(ws)
     M = merges_of(ws)
+    RB = first_sheet_borders(f)
+    BD = lambda r, c: _Bd(RB(r, c))
 
     # ① 서명란·배율
     sign = []
@@ -127,13 +147,13 @@ for f in files:
     # ③ 테두리: 표 밖(인쇄 범위 아래·오른쪽)에 남은 선, 내용 없이 선만 있는 맨 아래 줄
     for r in range(r2 + 1, min(ws.max_row, r2 + 20) + 1):
         for c in range(c1, c2 + 1):
-            b = ws.cell(r, c).border
+            b = BD(r, c)
             if any(getattr(b, s).style for s in ('left', 'right', 'top', 'bottom')):
                 bad(form, '③', f'인쇄 범위 밖 {CL(c)}{r}에 테두리가 남음'); break
     # 표 아래쪽 내용 없는 줄에 남은 가로선: 맨 아래 테두리 한 줄 말고는 없어야 한다
     def hline(r):  # r행 아래 경계에 선이 그어진 열
         return {c for c in range(c1, c2 + 1)
-                if ws.cell(r, c).border.bottom.style or (r < r2 and ws.cell(r + 1, c).border.top.style)}
+                if BD(r, c).bottom.style or (r < r2 and BD(r + 1, c).top.style)}
     last_content = max((r for r in range(r1, r2 + 1) if any(ws.cell(r, c).value is not None for c in range(c1, c2 + 1))), default=r1)
     lines = [(r, hline(r)) for r in range(last_content, r2 + 1)]
     lines = [(r, cols) for r, cols in lines if cols]
@@ -174,15 +194,47 @@ for f in files:
                 if len(lines) > 1 and len(lines) * lh > avail + 1:
                     bad(form, '④', f'{CL(c)}{r} "{v[:16].strip()}" {len(lines)}줄 > 칸 높이 {avail:.0f}pt')
 
+    # ③ 테두리 굵기 규칙: 바깥·쪽 경계 = 굵은 선, 안쪽 = 가는 선만
+    brk = set(b for b in breaks_of(ws) if r1 <= b < r2)
+    wrong = []
+    for r in range(r1, r2 + 1):
+        for c in range(c1, c2 + 1):
+            a, top, z, bot = M.get((r, c), (c, r, c, r))
+            bd = BD(r, c)
+            want = {'left': 'medium' if c == c1 else None, 'right': 'medium' if c == c2 else None,
+                    'top': 'medium' if (r == r1 or (r - 1) in brk) else None,
+                    'bottom': 'medium' if (r == r2 or r in brk) else None}
+            for side, w in want.items():
+                st = getattr(bd, side).style
+                edge = (side == 'left' and c == a) or (side == 'right' and c == z) or (side == 'top' and r == top) or (side == 'bottom' and r == bot)
+                if not edge:
+                    continue
+                if w and st != w:
+                    wrong.append(f'{CL(c)}{r} {side} {st}(굵은 선이어야 함)')
+                elif not w and st not in (None, 'thin'):
+                    wrong.append(f'{CL(c)}{r} {side} {st}(가는 선이어야 함)')
+    if wrong:
+        bad(form, '③', f'테두리 굵기가 규칙과 다른 곳 {len(wrong)}군데: ' + ', '.join(wrong[:5]))
+    # ⑤ 서식 통일: 제목 글꼴, 서명란 글자, 한 줄 머리 정렬
+    t = ws.cell(r1, c1)
+    row['title'] = (t.font.name, t.font.sz, bool(t.font.b))
+    row['signtext'] = tuple(str(ws.cell(r1, c).value) for c in range(c1, c2 + 1) if isinstance(ws.cell(r1, c).value, str) and re.sub(r'\s', '', ws.cell(r1, c).value) in SIGN_WORDS)
+    for r in range(r1 + 2, r2 + 1):
+        if re.fullmatch(r'\d{1,2}', str(ws.cell(r, c1).value or '').strip()):
+            a, top, z, bot = M.get((r, c1 + 1), (c1 + 1, r, c1 + 1, r))
+            lab = ws.cell(top, a)
+            if z == c2 and top == bot and isinstance(lab.value, str) and lab.alignment.horizontal != 'left':
+                bad(form, '⑤', f'{CL(a)}{r} "{lab.value[:12]}" 한 줄 머리가 왼쪽 정렬이 아님')
+
     # ③·⑤ 원본과 비교
     if form in refs:
-        rb = openpyxl.load_workbook(refs[form]); rw = rb.worksheets[0]
+        rb = openpyxl.load_workbook(refs[form]); rw = rb.worksheets[0]; RR = first_sheet_borders(refs[form])
         nb = nf = na = 0; ex = {'b': [], 'f': [], 'a': []}
         for r in range(r1, r2 + 1):
             for c in range(c1, c2 + 1):
                 x, y = ws.cell(r, c), rw.cell(r, c)
-                bx = tuple(getattr(x.border, s).style for s in ('left', 'right', 'top', 'bottom'))
-                by = tuple(getattr(y.border, s).style for s in ('left', 'right', 'top', 'bottom'))
+                bx = tuple(getattr(BD(r, c), s).style for s in ('left', 'right', 'top', 'bottom'))
+                by = tuple(getattr(_Bd(RR(r, c)), s).style for s in ('left', 'right', 'top', 'bottom'))
                 if bx != by:
                     nb += 1; ex['b'].append(f'{CL(c)}{r} {by}→{bx}')
                 fx, fy = (x.font.name, x.font.sz, x.font.b, x.font.i), (y.font.name, y.font.sz, y.font.b, y.font.i)
@@ -216,6 +268,11 @@ print('양식        서명칸(px)     서명줄(pt)    열합(px) 배율      �
 for s in summary:
     print(f'{s["form"]:<10} {str(s["sign"]):<14} {s["h1"]}/{s["h2"]:<8} {s["total"]:<7} {s["fit"]:<8} {s["margin"]}')
 same = len({(tuple(s['sign']), s['h1'], s['h2'], s['total'], s['fit'], s['margin']) for s in summary}) == 1
+for k, label in (('title', '제목 글꼴'), ('signtext', '서명란 글자')):
+    vals = {s[k] for s in summary}
+    if len(vals) > 1:
+        for s_ in summary:
+            bad(s_['form'], '⑤', f'{label}가 양식마다 다름: {s_[k]}')
 print('→ 서명란·배율', '모두 같음' if same else '양식마다 다름')
 print()
 for crit in '①②③④⑤⑥':
