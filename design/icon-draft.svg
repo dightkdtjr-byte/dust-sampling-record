@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="r"><rect width="512" height="512" rx="112"/></clipPath>
+    <filter id="cut" x="-2%" y="-2%" width="104%" height="104%"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2"/><feColorMatrix values="0 0 0 0 .1 0 0 0 0 .1 0 0 0 0 .1 0 0 0 .6 -.2"/></filter>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="512" height="512" fill="#edd2a8"/>
+    <circle cx="356" cy="286" r="112" fill="#d9603b"/>
+    <path d="M196,150 C196,128 204,118 222,116 C214,84 256,64 282,86 C298,52 358,50 374,86 C404,74 434,96 422,120 C444,122 446,140 426,140 L236,140 C222,140 214,144 212,150 Z" fill="#f9ecd5"/>
+    <g filter="url(#cut)">
+      <path d="M-10,380 L70,340 L150,366 L250,318 L340,358 L430,330 L530,362 L530,530 L-10,530 Z" fill="#bf8672"/>
+      <path d="M150,470 L168,150 L224,150 L242,470 Z" fill="#2b2436"/>
+      <path d="M150,470 L168,150 L186,150 L176,470 Z" fill="#54425c"/>
+      <path d="M165,190 h62 l1.5,30 h-65 Z M162,244 h68 l1.5,30 h-71 Z" fill="#f9ecd5"/>
+      <rect x="158" y="138" width="76" height="18" fill="#2b2436"/>
+      <path d="M-10,446 L120,452 L300,462 L530,456 L530,530 L-10,530 Z" fill="#1b1624"/>
+    </g>
+    <g stroke="#2b2436" fill="none" stroke-linecap="round">
+      <path d="M132,330 H260" stroke-width="9"/>
+      <path d="M132,306 H260 M132,330 V306 M164,330 V306 M196,330 V306 M228,330 V306 M260,330 V306" stroke-width="4"/>
+      <path d="M134,334 L156,364 M258,334 L236,364" stroke-width="5"/>
+    </g>
+    <rect width="512" height="512" filter="url(#grain)" opacity=".45" style="mix-blend-mode:multiply"/>
+  </g>
+</svg>

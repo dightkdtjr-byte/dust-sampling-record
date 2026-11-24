@@ -375,11 +375,11 @@ const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은',
 const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
 // 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
-// 'I'는 붉은 띠를 두른 굴뚝이고 꼭대기에서 연기 한 덩이가 흐른다.
+// 'I'는 띠를 두른 굴뚝이고(띠는 뒤에 겹친 붉은 판과 헷갈리지 않게 종이색) 꼭대기에서 연기 한 덩이가 흐른다.
 const WORDMARK_TONES = {
-  day: { ink: '#2c4150', mid: '#4f6875', accent: '#c4523a', plume: '#f7f2e5', plumeShade: '#dcd9ca' },
-  morning: { ink: '#2b2436', mid: '#54425c', accent: '#d9603b', plume: '#f9ecd5', plumeShade: '#e9c9a5' },
-  night: { ink: '#e9dfc6', mid: '#bdb39a', accent: '#e5503f', plume: '#3b536a', plumeShade: '#2f4459' },
+  day: { ink: '#2c4150', mid: '#4f6875', accent: '#c4523a', band: '#f7f2e5', plume: '#f7f2e5', plumeShade: '#dcd9ca' },
+  morning: { ink: '#2b2436', mid: '#54425c', accent: '#d9603b', band: '#f9ecd5', plume: '#f9ecd5', plumeShade: '#e9c9a5' },
+  night: { ink: '#e9dfc6', mid: '#bdb39a', accent: '#e5503f', band: '#1c2e40', plume: '#3b536a', plumeShade: '#2f4459' },
 };
 const WORDMARK_GLYPHS = {
   S: 'M38,0 H14 a12,12 0 0 0 0,24 H26 a12,12 0 0 1 0,24 H2',
@@ -438,7 +438,7 @@ const StackpilotWordmark = ({ tone = 'day', className = '', stackI = true }) => 
         {layer(c.ink)}
         {stackI && (
           <>
-            <path d={`M${ix - 5.3},${top + 8} h10.6 l0.2,6 h-11 Z M${ix - 5.6},${top + 19} h11.2 l0.2,6 h-11.6 Z`} fill={c.accent} />
+            <path d={`M${ix - 5.3},${top + 8} h10.6 l0.2,6 h-11 Z M${ix - 5.6},${top + 19} h11.2 l0.2,6 h-11.6 Z`} fill={c.band} />
             <rect x={ix - 7} y={top - 2} width="14" height="4" fill={c.ink} />
           </>
         )}
@@ -1536,6 +1536,28 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
         <path d={`M120,${G + 9} L330,${G + 9} M560,${G + 15} L860,${G + 15} M980,${G + 8} L1190,${G + 8} M1280,${G + 18} L1470,${G + 18}`} strokeWidth="2.2" />
         <path d={`M640,${G + 23} L760,${G + 23} M260,${G + 24} L420,${G + 24} M1040,${G + 27} L1150,${G + 27} M420,${G + 5} L500,${G + 5} M1350,${G + 6} L1420,${G + 6}`} strokeWidth="1.2" />
       </g>
+
+      {/* 오리: 어미 뒤로 새끼들이 한 줄로 따라가며 강을 천천히 건넌다. 반대쪽으로 가는 한 쌍도 있다 */}
+      {[
+        { y: G + 21, dur: 170, delay: -60, dir: 1, sizes: [1, 0.55, 0.55, 0.5, 0.55] },
+        { y: G + 12, dur: 210, delay: -150, dir: -1, sizes: [0.8, 0.8] },
+      ].slice(0, compact ? 1 : 2).map((flock, fi) => (
+        <g key={`ducks-${fi}`}>
+          <g transform={`translate(0 ${flock.y}) scale(${flock.dir} 1)`}>
+            {flock.sizes.map((sz, k) => {
+              const x = -flock.sizes.slice(0, k).reduce((sum, v) => sum + 14 + v * 22, 0);
+              return (
+                <g key={k} transform={`translate(${x} 0) scale(${sz})`}>
+                  <path d="M-34,3.5 L-17,3.5 M-28,0.5 L-18,1.5" stroke={pal.stroke} strokeWidth={1.4 / sz} strokeLinecap="round" fill="none" />
+                  <path d="M-12,0 L-16,-6 L-9,-2.5 Q-2,-4.5 4,-2.5 L4,-9 a4.3,4.3 0 1 1 6.6,3.6 L10.6,-2 Q12,3.5 6,4 L-8,4 Q-12,3.2 -12,0 Z" fill={pal.bank} />
+                  <path d="M11.4,-10 l5.6,1.2 l-5.4,1.8 Z" fill={pal.band} />
+                </g>
+              );
+            })}
+          </g>
+          <animateMotion dur={`${flock.dur}s`} begin={`${flock.delay}s`} repeatCount="indefinite" path="M-140,0 L1740,0" keyPoints={flock.dir > 0 ? '0;1' : '1;0'} keyTimes="0;1" calcMode="linear" />
+        </g>
+      ))}
 
       {/* 앞 둑: 뒷줄 풀(한 단계 밝게) → 어두운 땅 → 앞줄 풀·부들·들꽃·돌 */}
       <path d={tufts.filter((t) => t.back).map((t, i) => sceneTuft(t.x, t.size * 1.25, i * 17 + 5)).join(' ')} fill={pal.ink} transform="translate(0 -3)" />
