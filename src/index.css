@@ -1098,3 +1098,31 @@ html:has(.ds-actionbar) { scroll-padding-bottom: 84px; }
   box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 36px -22px rgba(20, 28, 34, 0.55) !important;
 }
 .ds-page div.bg-white.shadow-sm, .ds-page div.bg-white.shadow-md { background-color: rgba(255, 255, 255, 0.97) !important; }
+
+/* ── 기록부 화면의 버튼·강조색을 첫 화면에 맞춘다: 초록 대신 먹색, 버튼은 둥글게 ── */
+.ds-page.ds-page, :is(.theme-metal, .theme-mercury, .theme-pahs, .theme-flow, .theme-samplinglog) .ds-page.ds-page {
+  --ds-accent: #2a3944;
+  --ds-accent-soft: #eef0f1;
+  --ds-ok: #3f6b55;
+}
+.ds-page.ds-page button { border-radius: 999px !important; transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
+.ds-page.ds-page button:not(:disabled):active { transform: scale(0.97); }
+.ds-page.ds-page td > button, .ds-page.ds-page button.w-full { border-radius: 10px !important; }
+.ds-page.ds-page button[class*="bg-emerald-6"]:hover, .ds-page.ds-page button[class*="bg-emerald-7"]:hover, .ds-page.ds-page button[class*="bg-teal-6"]:hover,
+.ds-page.ds-page button[class*="bg-cyan-6"]:hover, .ds-page.ds-page button[class*="bg-orange-6"]:hover, .ds-page.ds-page button[class*="bg-blue-6"]:hover,
+.ds-page.ds-page button[class*="bg-purple-6"]:hover, .ds-page.ds-page button[class*="bg-yellow-6"]:hover,
+.ds-page.ds-page button.ds-btn-primary:hover, .ds-page.ds-page button[type="submit"]:hover { background-color: #1f2c35 !important; border-color: #1f2c35 !important; }
+.ds-page.ds-page button.bg-white, .ds-page.ds-page button[class*="bg-slate-50"], .ds-page.ds-page button[class*="bg-slate-100"] { border-color: rgba(42, 57, 68, 0.3) !important; }
+.ds-page.ds-page button:focus-visible, .ds-page.ds-page summary:focus-visible { outline: 3px solid #c4523a; outline-offset: 2px; }
+.ds-page.ds-page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus, .ds-page.ds-page select:focus, .ds-page.ds-page textarea:focus {
+  box-shadow: 0 0 0 2px rgba(42, 57, 68, 0.18) !important;
+}
+.ds-page.ds-page td > input:not([type="checkbox"]):focus, .ds-page.ds-page td > select:focus, .ds-page.ds-page td > div > input:not([type="checkbox"]):focus {
+  box-shadow: inset 0 -2px 0 var(--ds-accent), 0 0 0 2px rgba(42, 57, 68, 0.14) !important;
+}
+.ds-page.ds-page tbody tr:hover > td:not([class*="bg-"]) { background-color: rgba(42, 57, 68, 0.04); }
+/* '적합' 표시만은 뜻이 있는 색이라 차분한 초록으로 남긴다 */
+.ds-page.ds-page .ds-meta-ok { color: var(--ds-ok) !important; }
+.ds-page.ds-page .ds-ledger-status.is-ok strong, .ds-page.ds-page .ds-ledger-status.is-ok .ds-ledger-status-note { color: var(--ds-ok); border-color: var(--ds-ok); }
+.ds-page.ds-page .ds-iso-band { background: var(--ds-ok); }
+@media (prefers-reduced-motion: reduce) { .ds-page.ds-page button { transition: none; } }
