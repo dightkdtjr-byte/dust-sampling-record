@@ -374,6 +374,56 @@ const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
 const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
+// 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
+// 'I'는 붉은 띠를 두른 굴뚝이고 꼭대기에서 연기 한 덩이가 흐른다.
+const WORDMARK_TONES = {
+  day: { ink: '#2c4150', mid: '#4f6875', accent: '#c4523a', plume: '#f7f2e5', plumeShade: '#dcd9ca' },
+  morning: { ink: '#2b2436', mid: '#54425c', accent: '#d9603b', plume: '#f9ecd5', plumeShade: '#e9c9a5' },
+  night: { ink: '#e9dfc6', mid: '#bdb39a', accent: '#e5503f', plume: '#3b536a', plumeShade: '#2f4459' },
+};
+const WORDMARK_GLYPHS = {
+  S: 'M38,0 H14 a12,12 0 0 0 0,24 H26 a12,12 0 0 1 0,24 H2',
+  T: 'M0,0 H40 M20,0 V53.5',
+  A: 'M3,53.5 L20,-2 L37,53.5 M10,34 H30',
+  C: 'M38,0 H24 a24,24 0 0 0 0,48 H38',
+  K: 'M5.5,-5.5 V53.5 M39,-5.5 L8,27 M18,18 L39,53.5',
+  P: 'M5.5,53.5 V0 H25 a13.5,13.5 0 0 1 0,27 H5.5',
+  L: 'M5.5,-5.5 V48 H38',
+  O: 'M17,0 H23 a15,15 0 0 1 15,15 V33 a15,15 0 0 1 -15,15 H17 a15,15 0 0 1 -15,-15 V15 a15,15 0 0 1 15,-15 Z',
+};
+const StackpilotWordmark = ({ tone = 'day', className = '' }) => {
+  const c = WORDMARK_TONES[tone] || WORDMARK_TONES.day;
+  const letters = 'STACKPILOT'.split('');
+  const step = 58, x0 = 10, y0 = 30;
+  const strokes = (color) => (
+    <g stroke={color} strokeWidth="13" fill="none" strokeLinejoin="miter" strokeMiterlimit="2">
+      {letters.map((ch, i) => (ch === 'I' ? null : <path key={i} d={WORDMARK_GLYPHS[ch]} transform={`translate(${x0 + i * step} ${y0})`} />))}
+    </g>
+  );
+  const ix = x0 + 6 * step + 20;
+  const p = (dx, dy) => `${ix + dx * 0.22},${4 - dy * 0.22}`;
+  return (
+    <svg className={className} viewBox="0 -22 600 110" role="img" aria-label="STACKPILOT">
+      <defs>
+        <filter id="wordmark-cut" x="-2%" y="-5%" width="104%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="4" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+      <path d={`M${ix - 1},4 C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${ix + 1},4 Z`} fill={c.plume} />
+      <path d={`M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`} fill={c.plumeShade} />
+      <g filter="url(#wordmark-cut)">
+        <g transform="translate(3 3)">{strokes(c.accent)}</g>
+        {strokes(c.ink)}
+        <path d={`M${ix - 11},${y0 + 53.5} L${ix - 7},6 L${ix + 7},6 L${ix + 11},${y0 + 53.5} Z`} fill={c.ink} />
+        <path d={`M${ix - 11},${y0 + 53.5} L${ix - 7},6 L${ix - 2.5},6 L${ix - 4},${y0 + 53.5} Z`} fill={c.mid} />
+        <path d={`M${ix - 7.6},15 h15.2 v7 h-15.8 Z M${ix - 8.6},28 h17.2 v7 h-17.8 Z`} fill={c.accent} />
+        <rect x={ix - 9} y="3" width="18" height="4.5" fill={c.ink} />
+      </g>
+    </svg>
+  );
+};
+
 const SheetBadge = ({ sheetId, title }) => (
   <span
     className="inline-flex items-center justify-center min-w-[2.6rem] px-1.5 py-0.5 rounded-md text-[11px] font-bold text-white whitespace-nowrap shadow-sm"
@@ -9468,12 +9518,7 @@ export default function App() {
         <div className="relative z-30 max-w-6xl mx-auto">
           <div className="mb-6 p-2 text-center">
             <h1 className="text-slate-900 tracking-tight flex justify-center">
-              <img
-                src={mainLogoSrc}
-                alt="STACKPILOT"
-                onError={() => setLogoIndex((prev) => Math.min(prev + 1, logoCandidates.length - 1))}
-                className="h-[2.6rem] md:h-[4rem] w-auto select-none"
-              />
+              <StackpilotWordmark tone={resolvedSkyMode} className="h-[3.8rem] md:h-[6.4rem] w-auto select-none" />
             </h1>
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
