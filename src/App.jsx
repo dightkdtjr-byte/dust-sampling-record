@@ -605,8 +605,10 @@ const buildSamplingLogValuesFromReport = (report) => {
   const clean = (v) => (v === undefined || v === null || v === '-' ? '' : String(v));
   const totalMinutes = parseFloat(report?.totalSamplingMinutes);
   const start = clean(report?.samplingStartTime);
-  // 종료 시각을 직접 적었으면 그 값을, 비웠으면 시작 + 총 채취시간
-  const end = clean(report?.samplingEndTime) || (start && Number.isFinite(totalMinutes) && totalMinutes > 0 ? addMinutesToClock(start, totalMinutes) : '');
+  // 종료 시각은 기록부에 적은 값('지금' 버튼 또는 직접 입력)을 그대로 쓴다. 계산해서 채우지 않는다.
+  // 종료 칸이 생기기 전에 저장한 기록(종료 칸 자체가 없는 것)만 예전처럼 시작 + 총 채취시간으로 채운다
+  const hasEndField = report && Object.prototype.hasOwnProperty.call(report, 'samplingEndTime');
+  const end = hasEndField ? clean(report.samplingEndTime) : (start && Number.isFinite(totalMinutes) && totalMinutes > 0 ? addMinutesToClock(start, totalMinutes) : '');
   return {
     start,
     end,
@@ -12120,7 +12122,7 @@ export default function App() {
               <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
                 <h3 className="text-sm font-bold text-slate-800 whitespace-nowrap shrink-0">{isFlowSheet ? '측정점별 동압·온도 기록표' : '2단계 적산유량계 기록표'}</h3>
                 <div className="flex flex-wrap items-center gap-2 justify-end">
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합시료채취기록부의 시작·종료 시각에 쓰입니다 (종료 = 시작 + 총 시간)">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합시료채취기록부의 시작 시각에 쓰입니다">
                       채취 시작
                       <input
                         type="time"
@@ -12131,7 +12133,7 @@ export default function App() {
                       />
                       <button type="button" className={NOW_BUTTON_CLASS} title="지금 시각을 채취 시작에 넣습니다" onClick={(e) => { e.preventDefault(); unsavedRef.current = true; handleChange({ target: { name: 'samplingStartTime', value: nowClock() } }); }}>지금</button>
                     </label>
-                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="비워 두면 시작 + 총 시간으로 계산한 시각을 씁니다">
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="통합시료채취기록부의 종료 시각에 쓰입니다">
                       {isFlowSheet ? '측정 종료' : '채취 종료'}
                       <input
                         type="time"
@@ -12141,9 +12143,6 @@ export default function App() {
                         className="p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                       />
                       <button type="button" className={NOW_BUTTON_CLASS} title="지금 시각을 종료에 넣습니다" onClick={(e) => { e.preventDefault(); unsavedRef.current = true; handleChange({ target: { name: 'samplingEndTime', value: nowClock() } }); }}>지금</button>
-                      {!formData.samplingEndTime && formData.samplingStartTime && getSamplingMinutes() > 0 && (
-                        <span className="text-slate-500 font-normal">계산 {addMinutesToClock(formData.samplingStartTime, getSamplingMinutes())}</span>
-                      )}
                     </label>
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
                       {isFlowSheet ? '총 측정시간' : '총 채취시간'}
