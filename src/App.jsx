@@ -1280,7 +1280,7 @@ const SKYLINE_FLYER_CSS = `
 .sp-btn:focus-visible, .sp-card:focus-visible { outline: 3px solid var(--sp-accent); outline-offset: 2px; }
 .sp-avatar { border: 1px solid var(--sp-line) !important; border-radius: 999px !important; }
 .sp-menu .menu-avatar-fallback { background: var(--sp-ink) !important; color: var(--sp-paper) !important; }
-/* 기록부 카드: 이름 아래에 붓으로 한 번 그은 듯한 색 획으로 종류를 구분한다 (올려놓으면 획이 길어진다) */
+/* 기록부 카드: 이름 아래에 붓으로 끝까지 한 번 그은 듯한 색 획으로 종류를 구분한다 */
 .sp-card {
   display: block; text-align: left;
   padding: 1.1rem 1.25rem 1rem;
@@ -1293,13 +1293,11 @@ const SKYLINE_FLYER_CSS = `
 .sp-card:hover { transform: translateY(-3px); background: #fffcf3; box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 30px -16px rgba(20, 28, 34, 0.6); }
 .sp-card:active { transform: translateY(0); }
 .sp-card-mark {
-  display: block; width: 3.4rem; height: 0.5rem; margin: 0.3rem 0 0.45rem -0.1rem;
+  display: block; width: 100%; height: 0.42rem; margin: 0.35rem 0 0.5rem;
   background: var(--sp-card-color, var(--sp-ink));
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  transition: width 0.25s ease;
 }
-.sp-card:hover .sp-card-mark { width: 6.2rem; }
 .sp-card-open { margin-top: 0.85rem; font-size: 0.72rem; font-weight: 600; color: var(--sp-soft); display: flex; justify-content: space-between; gap: 0.5rem; }
 .sp-card:hover .sp-card-open { color: var(--sp-ink); }
 .sp-empty { padding: 1.4rem; text-align: center; font-size: 0.78rem; color: var(--sp-soft); background: var(--sp-paper-2); border-radius: 12px; }
@@ -1329,7 +1327,7 @@ div.sp-modal.sp-modal {
 }
 .sp-modal input:focus, .sp-modal select:focus, .sp-modal textarea:focus { border-color: var(--sp-ink) !important; box-shadow: 0 0 0 3px rgba(196, 82, 58, 0.28) !important; }
 .sp-modal h3 { color: var(--sp-ink); }
-@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card, .sp-card-mark, .sp-modal button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card, .sp-modal button { transition: none; } }
 `;
 
 // ── 판화 포스터풍 공단 풍경 ──
