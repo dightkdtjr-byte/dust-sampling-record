@@ -376,15 +376,6 @@ const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563e
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
 // 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
 // 'I'는 띠를 두른 굴뚝이고(띠는 뒤에 겹친 붉은 판과 헷갈리지 않게 종이색) 꼭대기에서 연기 한 덩이가 흐른다.
-const WORDMARK_TONES = {
-  day: { ink: '#2c4150', mid: '#4f6875', accent: '#c4523a', band: '#f7f2e5', plume: '#f7f2e5', plumeShade: '#dcd9ca' },
-  morning: { ink: '#2b2436', mid: '#54425c', accent: '#d9603b', band: '#f9ecd5', plume: '#f9ecd5', plumeShade: '#e9c9a5' },
-  night: { ink: '#e9dfc6', mid: '#bdb39a', accent: '#e5503f', band: '#1c2e40', plume: '#3b536a', plumeShade: '#2f4459' },
-  dusk: { ink: '#f6e3c8', mid: '#cdb79c', accent: '#e2603f', band: '#3a3358', plume: '#8a5a72', plumeShade: '#74486a' },
-  fog: { ink: '#3b494d', mid: '#5f7074', accent: '#b56a55', band: '#f6f7f2', plume: '#f6f7f2', plumeShade: '#e3e6e0' },
-  sepia: { ink: '#47311f', mid: '#6d5137', accent: '#b5452c', band: '#fbf4e0', plume: '#fbf4e0', plumeShade: '#e9dcbd' },
-  blueprint: { ink: '#eaf2f8', mid: '#b3cbe0', accent: '#f2b84b', band: '#1d4b76', plume: '#4f84b4', plumeShade: '#42759f' },
-};
 const WORDMARK_GLYPHS = {
   S: 'M38,0 H14 a12,12 0 0 0 0,24 H26 a12,12 0 0 1 0,24 H2',
   T: 'M0,0 H40 M20,0 V53.5',
@@ -395,8 +386,8 @@ const WORDMARK_GLYPHS = {
   L: 'M5.5,-5.5 V48 H38',
   O: 'M17,0 H23 a15,15 0 0 1 15,15 V33 a15,15 0 0 1 -15,15 H17 a15,15 0 0 1 -15,-15 V15 a15,15 0 0 1 15,-15 Z',
 };
-const StackpilotWordmark = ({ tone = 'day', className = '', stackI = true }) => {
-  const c = WORDMARK_TONES[tone] || WORDMARK_TONES.day;
+const StackpilotWordmark = ({ tone, className = '', stackI = true }) => {
+  const c = tone || SCENE_THEMES.basic.day.wm;
   const letters = 'STACKPILOT'.split('');
   // 글자마다 실제 너비가 달라서(I는 기둥 하나) 칸을 똑같이 나누면 I 양옆만 벌어진다.
   // 글자의 왼쪽·오른쪽 끝을 재서 틈을 맞추고, 짝마다 눈에 보이는 틈이 같도록 조금씩 당기거나 민다
@@ -868,6 +859,7 @@ const getSkyPhaseByHour = (date = new Date()) => {
   const hour = date.getHours();
   if (hour >= 6 && hour < 11) return 'morning';
   if (hour >= 11 && hour < 16) return 'day';
+  if (hour >= 16 && hour < 19) return 'dusk';
   return 'night';
 };
 
@@ -900,24 +892,9 @@ const SKY_PREVIEW_OPTIONS = [
   { id: 'auto', label: '자동' },
   { id: 'morning', label: '아침' },
   { id: 'day', label: '낮' },
-  { id: 'night', label: '밤' },
   { id: 'dusk', label: '노을' },
-  { id: 'fog', label: '안개' },
-  { id: 'sepia', label: '세피아' },
-  { id: 'blueprint', label: '청사진' },
+  { id: 'night', label: '밤' },
 ];
-// 배경 테마별 하늘·해·구름. 풍경 색은 SKYLINE_PALETTES, 글자 로고 색은 WORDMARK_TONES에 같은 이름으로 있다
-//  orb: sun(작은 해) · bigsun(산 위의 큰 해) · moon(초승달) · none,  stars: 별,  grain: 종이 결 세기
-const SKY_THEME_META = {
-  day: { bg: 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]', orb: 'sun', orbColor: '#f7f1df', cloud: ['#e4e9e1', '#d5ddd6'], grain: 0.45 },
-  morning: { bg: 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]', orb: 'bigsun', orbColor: '#d9603b', cloud: ['#f4dfbe', '#ecd0a8'], grain: 0.45 },
-  night: { bg: 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]', orb: 'moon', orbColor: '#e9dfc6', stars: true, cloud: ['#22364a', '#1c2e40'], grain: 0.4 },
-  dusk: { bg: 'bg-gradient-to-b from-[#3a3358] to-[#e08a5e]', orb: 'bigsun', orbColor: '#f7c873', stars: true, cloud: ['#8a5a72', '#74486a'], grain: 0.45 },
-  fog: { bg: 'bg-gradient-to-b from-[#d6dbd4] to-[#eef0ea]', orb: 'sun', orbColor: '#f6f5ec', cloud: ['#e6e9e3', '#d9ddd6'], grain: 0.5 },
-  sepia: { bg: 'bg-gradient-to-b from-[#e3d2ac] to-[#f4ebd3]', orb: 'sun', orbColor: '#c9612f', cloud: ['#efe3c4', '#e3d3ac'], grain: 0.55 },
-  blueprint: { bg: 'bg-gradient-to-b from-[#1d4b76] to-[#2d6698]', orb: 'none', orbColor: '#eaf2f8', cloud: ['#356fa0', '#2d6494'], grain: 0.35 },
-};
-
 const sanitizeSkyPreviewMode = (value) => {
   const mode = String(value || '').trim();
   return SKY_PREVIEW_OPTIONS.some((opt) => opt.id === mode) ? mode : 'auto';
@@ -1278,42 +1255,84 @@ const SKYLINE_FLYER_CSS = `
 `;
 
 // ── 판화 포스터풍 공단 풍경 ──
-// 모드마다 잉크 다섯 가지쯤만 쓴다. 그라데이션·번짐 없이 납작한 색면과 가는 선으로만 그리고,
+// 잉크 다섯 가지쯤만 쓴다. 그라데이션·번짐 없이 납작한 색면과 가는 선으로만 그리고,
 // 가장자리는 손으로 오린 듯 살짝 흔들리게, 화면은 한쪽(가운데 오른편)으로 몰아 비대칭으로 짠다.
-const SKYLINE_PALETTES = {
-  day: {
-    ridge1: '#b9c8c4', ridge2: '#93aaaa', far: '#7b949a', ink: '#2c4150', mid: '#4f6875', band: '#c4523a',
-    plume: '#f7f2e5', plumeShade: '#dcd9ca', water: '#d5dcd0', stroke: '#f7f2e5', bank: '#1d2c36', light: null, beacon: null,
+// ── 배경 테마 × 시간대 ──
+// 테마(기본·안개·세피아·청사진)마다 아침·낮·노을·밤 네 벌이 있다. 한 벌은 하늘, 해·달, 구름, 풍경 잉크, 글자 로고 색을 한꺼번에 정한다.
+//  sky: 하늘 위·아래 색,  orb: sun(작은 해) · bigsun(산 위의 큰 해) · moon(초승달) · none,  stars: 별,  grain: 종이 결 세기
+//  pal: 풍경 잉크 (light·beacon이 있으면 창에 불이 켜지고 굴뚝 경고등이 깜박인다),  wm: 글자 로고
+const scene = (sky, orb, orbColor, cloud, pal, wm, extra = {}) => ({ sky, orb, orbColor, cloud, pal, wm, grain: 0.45, ...extra });
+const ink = (ridge1, ridge2, far, inkColor, mid, band, plume, plumeShade, water, stroke, bank, light = null, beacon = null) => ({ ridge1, ridge2, far, ink: inkColor, mid, band, plume, plumeShade, water, stroke, bank, light, beacon });
+const mark = (inkColor, mid, accent, band, plume, plumeShade) => ({ ink: inkColor, mid, accent, band, plume, plumeShade });
+const SCENE_THEMES = {
+  basic: {
+    morning: scene(['#e6c296', '#f4e1c3'], 'bigsun', '#d9603b', ['#f4dfbe', '#ecd0a8'],
+      ink('#e0ae8b', '#bf8672', '#93676a', '#2b2436', '#54425c', '#d9603b', '#f9ecd5', '#e9c9a5', '#eecda3', '#f9ecd5', '#1b1624'),
+      mark('#2b2436', '#54425c', '#d9603b', '#f9ecd5', '#f9ecd5', '#e9c9a5')),
+    day: scene(['#c5d3d2', '#ece6d6'], 'sun', '#f7f1df', ['#e4e9e1', '#d5ddd6'],
+      ink('#b9c8c4', '#93aaaa', '#7b949a', '#2c4150', '#4f6875', '#c4523a', '#f7f2e5', '#dcd9ca', '#d5dcd0', '#f7f2e5', '#1d2c36'),
+      mark('#2c4150', '#4f6875', '#c4523a', '#f7f2e5', '#f7f2e5', '#dcd9ca')),
+    dusk: scene(['#3a3358', '#e08a5e'], 'bigsun', '#f7c873', ['#8a5a72', '#74486a'],
+      ink('#9a5a6e', '#6f3f5e', '#55304f', '#1d1630', '#3a2a4c', '#f0a35e', '#f2c79f', '#d89a7c', '#de9668', '#f6d3aa', '#130d1d', '#ffd9a3', '#e5503f'),
+      mark('#f6e3c8', '#cdb79c', '#e2603f', '#3a3358', '#8a5a72', '#74486a'), { stars: true }),
+    night: scene(['#0f1b2a', '#24384c'], 'moon', '#e9dfc6', ['#22364a', '#1c2e40'],
+      ink('#1e3348', '#18293b', '#132334', '#060c14', '#101c2a', '#7c2f29', '#34495e', '#2a3c50', '#1a2b3c', '#3b536a', '#03070c', '#e9b867', '#e5503f'),
+      mark('#e9dfc6', '#bdb39a', '#e5503f', '#1c2e40', '#3b536a', '#2f4459'), { stars: true, grain: 0.4 }),
   },
-  morning: {
-    ridge1: '#e0ae8b', ridge2: '#bf8672', far: '#93676a', ink: '#2b2436', mid: '#54425c', band: '#d9603b',
-    plume: '#f9ecd5', plumeShade: '#e9c9a5', water: '#eecda3', stroke: '#f9ecd5', bank: '#1b1624', light: null, beacon: null,
-  },
-  night: {
-    ridge1: '#1e3348', ridge2: '#18293b', far: '#132334', ink: '#060c14', mid: '#101c2a', band: '#7c2f29',
-    plume: '#34495e', plumeShade: '#2a3c50', water: '#1a2b3c', stroke: '#3b536a', bank: '#03070c', light: '#e9b867', beacon: '#e5503f',
-  },
-  // 노을: 보랏빛 하늘 아래 주황 지평선. 공장은 불을 켜기 시작한다
-  dusk: {
-    ridge1: '#9a5a6e', ridge2: '#6f3f5e', far: '#55304f', ink: '#1d1630', mid: '#3a2a4c', band: '#f0a35e',
-    plume: '#f2c79f', plumeShade: '#d89a7c', water: '#de9668', stroke: '#f6d3aa', bank: '#130d1d', light: '#ffd9a3', beacon: '#e5503f',
-  },
-  // 안개: 색을 거의 뺀 잿빛 한 가지 계열
+  // 안개: 색을 거의 뺀 잿빛 한 계열. 시간대는 밝기와 온기만 바뀐다
   fog: {
-    ridge1: '#cfd5cf', ridge2: '#bcc6c0', far: '#a8b4af', ink: '#55666a', mid: '#75878b', band: '#b56a55',
-    plume: '#f6f7f2', plumeShade: '#e3e6e0', water: '#dfe4de', stroke: '#f6f7f2', bank: '#3b494d', light: null, beacon: null,
+    morning: scene(['#e2dbd0', '#f3eee5'], 'bigsun', '#e7bfa8', ['#ece6dc', '#dfd8cd'],
+      ink('#d6cfc6', '#c4bcb4', '#b0a8a2', '#5e5a5c', '#7d787a', '#b56a55', '#f8f5ee', '#e6e0d6', '#e6e0d6', '#f8f5ee', '#423f42'),
+      mark('#423f42', '#6a6668', '#b56a55', '#f8f5ee', '#f8f5ee', '#e6e0d6'), { grain: 0.5 }),
+    day: scene(['#d6dbd4', '#eef0ea'], 'sun', '#f6f5ec', ['#e6e9e3', '#d9ddd6'],
+      ink('#cfd5cf', '#bcc6c0', '#a8b4af', '#55666a', '#75878b', '#b56a55', '#f6f7f2', '#e3e6e0', '#dfe4de', '#f6f7f2', '#3b494d'),
+      mark('#3b494d', '#5f7074', '#b56a55', '#f6f7f2', '#f6f7f2', '#e3e6e0'), { grain: 0.5 }),
+    dusk: scene(['#8d8894', '#cfc3bf'], 'bigsun', '#e8ccb0', ['#aaa2aa', '#9a929b'],
+      ink('#a79fa8', '#8f8792', '#7b7480', '#3d3a45', '#58545f', '#c07a5e', '#ddd3d0', '#c5bab8', '#c2b6b4', '#e2d9d6', '#26242c', '#f3d6a8', '#d9604a'),
+      mark('#f1ebe6', '#c9c1bd', '#c07a5e', '#58545f', '#aaa2aa', '#9a929b'), { grain: 0.5 }),
+    night: scene(['#2a2f34', '#454c52'], 'moon', '#dcdcd2', ['#3a4147', '#333a40'],
+      ink('#3a4147', '#333a40', '#2c3238', '#15191d', '#232a30', '#6d3a33', '#4b545b', '#40484f', '#353c42', '#566068', '#0c0f12', '#e6c48a', '#d9604a'),
+      mark('#dcdcd2', '#aeb0a8', '#c07a5e', '#2a2f34', '#4b545b', '#40484f'), { stars: true, grain: 0.4 }),
   },
-  // 세피아: 오래된 인쇄물 같은 갈색 한 가지 계열에 붉은 띠
+  // 세피아: 오래된 인쇄물 같은 갈색 한 계열에 붉은 띠
   sepia: {
-    ridge1: '#d9bb8c', ridge2: '#c49a64', far: '#a67f50', ink: '#47311f', mid: '#6d5137', band: '#b5452c',
-    plume: '#fbf4e0', plumeShade: '#e9dcbd', water: '#e2d1a5', stroke: '#fbf4e0', bank: '#2b1e14', light: null, beacon: null,
+    morning: scene(['#efd2a4', '#f8ecd0'], 'bigsun', '#c9612f', ['#f6e3bd', '#ecd3a4'],
+      ink('#e3b98a', '#cf9764', '#b07a4e', '#4a2f1e', '#714e36', '#c2502f', '#fdf5e2', '#eeddb9', '#efd6a6', '#fdf5e2', '#2c1c12'),
+      mark('#4a2f1e', '#714e36', '#c2502f', '#fdf5e2', '#fdf5e2', '#eeddb9'), { grain: 0.55 }),
+    day: scene(['#e3d2ac', '#f4ebd3'], 'sun', '#c9612f', ['#efe3c4', '#e3d3ac'],
+      ink('#d9bb8c', '#c49a64', '#a67f50', '#47311f', '#6d5137', '#b5452c', '#fbf4e0', '#e9dcbd', '#e2d1a5', '#fbf4e0', '#2b1e14'),
+      mark('#47311f', '#6d5137', '#b5452c', '#fbf4e0', '#fbf4e0', '#e9dcbd'), { grain: 0.55 }),
+    dusk: scene(['#7a4a34', '#e0a064'], 'bigsun', '#f3c873', ['#a8683f', '#93582f'],
+      ink('#a8683f', '#86502f', '#6b3e26', '#2a170e', '#4a2c1c', '#e8a85a', '#edc48e', '#d3a070', '#d99a5e', '#f3d2a0', '#1a0e08', '#ffd9a3', '#d9482f'),
+      mark('#f8e6c4', '#d3bd98', '#d9482f', '#7a4a34', '#a8683f', '#93582f'), { grain: 0.55 }),
+    night: scene(['#24170f', '#4a3322'], 'moon', '#ecdcb8', ['#3b2a1c', '#322317'],
+      ink('#3b2a1c', '#322317', '#2a1d13', '#120b06', '#20150d', '#7a3220', '#4f3a28', '#433021', '#33241a', '#5e4630', '#0b0603', '#e9b867', '#d9482f'),
+      mark('#ecdcb8', '#bfae8c', '#c2502f', '#24170f', '#4f3a28', '#433021'), { stars: true, grain: 0.45 }),
   },
   // 청사진: 파란 바탕에 흰 잉크로 찍은 도면
   blueprint: {
-    ridge1: '#2a5f90', ridge2: '#245684', far: '#4f82b0', ink: '#eaf2f8', mid: '#b3cbe0', band: '#f2b84b',
-    plume: '#4f84b4', plumeShade: '#42759f', water: '#1a456e', stroke: '#6f9dc4', bank: '#0f3152', light: null, beacon: null,
+    morning: scene(['#5b8fc0', '#9cc3e2'], 'bigsun', '#fbe7ad', ['#8db6da', '#7ea9d0'],
+      ink('#79a8d2', '#6898c6', '#a9c9e4', '#ffffff', '#d5e5f2', '#f2b84b', '#c4dcf0', '#b0cde6', '#4f84b8', '#cfe2f2', '#2a5f94'),
+      mark('#ffffff', '#d5e5f2', '#f2b84b', '#2a5f94', '#c4dcf0', '#b0cde6'), { grain: 0.35 }),
+    day: scene(['#1d4b76', '#2d6698'], 'none', '#eaf2f8', ['#356fa0', '#2d6494'],
+      ink('#2a5f90', '#245684', '#4f82b0', '#eaf2f8', '#b3cbe0', '#f2b84b', '#4f84b4', '#42759f', '#1a456e', '#6f9dc4', '#0f3152'),
+      mark('#eaf2f8', '#b3cbe0', '#f2b84b', '#1d4b76', '#4f84b4', '#42759f'), { grain: 0.35 }),
+    dusk: scene(['#2a2f6a', '#5a5aa8'], 'bigsun', '#f2a04b', ['#4a4e98', '#40448a'],
+      ink('#3b3f86', '#33377a', '#5b60a8', '#eef0fb', '#b9bde6', '#f2a04b', '#5d62ad', '#5055a0', '#262a62', '#7f84c8', '#171a47', '#ffe0a0', '#ff7a5a'),
+      mark('#eef0fb', '#b9bde6', '#f2a04b', '#2a2f6a', '#5d62ad', '#5055a0'), { stars: true, grain: 0.35 }),
+    night: scene(['#0b1e36', '#16365a'], 'moon', '#eaf2f8', ['#1c4470', '#183b62'],
+      ink('#173a60', '#143354', '#2a5586', '#cfe0ee', '#94b2cc', '#e0a43f', '#244d78', '#1f436b', '#0c2440', '#3f6c98', '#07182c', '#ffe0a0', '#ff7a5a'),
+      mark('#cfe0ee', '#94b2cc', '#e0a43f', '#0b1e36', '#244d78', '#1f436b'), { stars: true, grain: 0.35 }),
   },
 };
+const getSceneTheme = (theme, time) => (SCENE_THEMES[theme] || SCENE_THEMES.basic)[time] || SCENE_THEMES.basic.day;
+const SKY_THEME_OPTIONS = [
+  { id: 'basic', label: '기본' },
+  { id: 'fog', label: '안개' },
+  { id: 'sepia', label: '세피아' },
+  { id: 'blueprint', label: '청사진' },
+];
+const sanitizeSkyTheme = (value) => (SKY_THEME_OPTIONS.some((opt) => opt.id === value) ? value : 'basic');
 
 // 물가(공단 바닥) 높이
 const SCENE_GROUND = 452;
@@ -1361,8 +1380,7 @@ const SCENE_CATTAILS = [
   ...Array.from({ length: 6 }, (_, i) => ({ x: 1436 + i * 29 + seededNoise(i * 8 + 1) * 12, h: 54 + seededNoise(i * 5 + 4) * 38, lean: seededNoise(i * 7 + 2) * -16 + 4 })),
 ];
 
-const renderSkylineSvg = ({ mode, scope, compact = false }) => {
-  const pal = SKYLINE_PALETTES[mode] || SKYLINE_PALETTES.day;
+const renderSkylineSvg = ({ pal, scope, compact = false }) => {
   const id = (name) => `${scope}-sky-${name}`;
   const G = SCENE_GROUND;
   const stackScale = compact ? 0.66 : 1;
@@ -1755,6 +1773,7 @@ const STORAGE_KEYS = {
   lastLoginId: 'dust-sampling.last-login-id.v1',
   sessionAuth: 'dust-sampling.session-auth.v1',
   skyPreviewMode: 'dust-sampling.sky-preview-mode.v1',
+  skyTheme: 'dust-sampling.sky-theme.v1',
   cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
   samplingLogDraftPrefix: 'dust-sampling.samplinglog-draft.v1.',
   sheetContext: 'dust-sampling.sheet-context.v1',
@@ -3018,6 +3037,14 @@ export default function App() {
     setRecommendations(null);
   };
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
+  const [skyThemeId, setSkyThemeId] = useState(() => {
+    try { return sanitizeSkyTheme(localStorage.getItem(STORAGE_KEYS.skyTheme)); } catch { return 'basic'; }
+  });
+  const changeSkyTheme = (id) => {
+    const next = sanitizeSkyTheme(id);
+    setSkyThemeId(next);
+    try { localStorage.setItem(STORAGE_KEYS.skyTheme, next); } catch { /* 저장 못 해도 이번 화면엔 쓴다 */ }
+  };
   const [skyPreviewMode, setSkyPreviewMode] = useState(() => {
     try {
       return sanitizeSkyPreviewMode(localStorage.getItem(STORAGE_KEYS.skyPreviewMode));
@@ -9428,13 +9455,12 @@ export default function App() {
   const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
   const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
   const resolvedSkyMode = skyPreviewMode === 'auto' ? skyPhase : skyPreviewMode;
-  const skyTheme = SKY_THEME_META[resolvedSkyMode] || SKY_THEME_META.day;
+  const skyTheme = getSceneTheme(skyThemeId, resolvedSkyMode);
   const isNightSky = Boolean(skyTheme.stars);
   const isMorningSky = skyTheme.orb === 'bigsun';
   const skyOrbClass = skyTheme.orb === 'moon' ? 'skyline-moon' : (skyTheme.orb === 'sun' ? 'skyline-sun' : '');
   const skyOrbStyle = { background: skyTheme.orbColor };
-  const menuSkyBgClass = skyTheme.bg;
-  const sheetSkyBgClass = skyTheme.bg;
+  const skyBgStyle = { background: `linear-gradient(to bottom, ${skyTheme.sky[0]}, ${skyTheme.sky[1]})` };
   const sceneCloudColor = skyTheme.cloud[0];
   const sceneCloudShade = skyTheme.cloud[1];
   const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 2) : SKYLINE_CLOUDS.slice(0, 4);
@@ -9555,7 +9581,7 @@ export default function App() {
 
   if (!selectedSheet) {
     return (
-      <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${menuSkyBgClass}`}>
+      <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800`} style={skyBgStyle}>
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
         {skyOrbClass && <div className={skyOrbClass} style={skyOrbStyle} />}
@@ -9579,14 +9605,14 @@ export default function App() {
             </div>
           )}
           <div className="absolute bottom-0 left-0 right-0 h-[22rem] md:h-[32rem]">
-            {renderSkylineSvg({ mode: resolvedSkyMode, scope: 'menu' })}
+            {renderSkylineSvg({ pal: skyTheme.pal, scope: 'menu' })}
           </div>
         </div>
 
         <div className="relative z-30 max-w-6xl mx-auto">
           <div className="mb-6 p-2 text-center">
             <h1 className="text-slate-900 tracking-tight flex justify-center">
-              <StackpilotWordmark tone={resolvedSkyMode} className="h-[3.8rem] md:h-[6.4rem] w-auto select-none" />
+              <StackpilotWordmark tone={skyTheme.wm} className="h-[3.8rem] md:h-[6.4rem] w-auto select-none" />
             </h1>
           </div>
           <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
@@ -9870,8 +9896,25 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 테마를 고릅니다. 자동은 시간에 따라 아침·낮·밤으로 바뀝니다.</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] text-slate-600 mt-1">배경 테마</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            {SKY_THEME_OPTIONS.map((opt) => (
+                              <button
+                                key={`settings-theme-${opt.id}`}
+                                type="button"
+                                onClick={() => changeSkyTheme(opt.id)}
+                                className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
+                                  skyThemeId === opt.id
+                                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-3">시간대 (자동은 시각에 따라 아침·낮·노을·밤으로 바뀝니다)</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
                             {SKY_PREVIEW_OPTIONS.map((opt) => {
                               const selected = skyPreviewMode === opt.id;
                               return (
@@ -10567,14 +10610,14 @@ export default function App() {
           />
         ))}
         <div className="absolute bottom-0 left-0 right-0 h-[16rem] md:h-[19rem]">
-          {renderSkylineSvg({ mode: resolvedSkyMode, scope: 'sheet', compact: true })}
+          {renderSkylineSvg({ pal: skyTheme.pal, scope: 'sheet', compact: true })}
         </div>
       </div>
   );
 
   if (selectedSheet === 'samplinglog') {
     return (
-      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+      <div className={`theme-samplinglog relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection}`} style={skyBgStyle}>
         <style>{SKYLINE_FLYER_CSS}</style>
         {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
         {renderSheetSkyScene()}
@@ -10603,7 +10646,7 @@ export default function App() {
   }
 
   return (
-    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection} ${sheetSkyBgClass}`}>
+    <div className={`theme-${selectedSheet} relative min-h-screen p-4 md:p-8 font-sans text-slate-800 ${activeTheme.selection}`} style={skyBgStyle}>
       <style>{SKYLINE_FLYER_CSS}</style>
       {selectedSheet !== 'dust' && <style>{THEME_OVERRIDE_CSS}</style>}
       {activeTheme.pageTint && <div className={`pointer-events-none fixed inset-0 z-0 ${activeTheme.pageTint}`} />}
