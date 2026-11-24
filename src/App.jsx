@@ -583,6 +583,13 @@ const SAMPLING_LOG_SUBSTANCES = [
 const SHEET_TO_LOG_ROWS = { dust: [13], metal: [25, 26, 27, 28, 29, 30, 31, 32], mercury: [34], pahs: [41] };
 const LOG_SOURCE_SHEETS = ['dust', 'metal', 'mercury', 'pahs', 'flow'];
 
+// 지금 시각을 시간 칸에 넣을 꼴(HH:MM)로
+const nowClock = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const NOW_BUTTON_CLASS = 'shrink-0 px-1.5 py-1 rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-40 whitespace-nowrap';
+
 const addMinutesToClock = (hhmm, minutes) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
   if (!m || !Number.isFinite(minutes)) return '';
@@ -598,7 +605,8 @@ const buildSamplingLogValuesFromReport = (report) => {
   const clean = (v) => (v === undefined || v === null || v === '-' ? '' : String(v));
   const totalMinutes = parseFloat(report?.totalSamplingMinutes);
   const start = clean(report?.samplingStartTime);
-  const end = start && Number.isFinite(totalMinutes) && totalMinutes > 0 ? addMinutesToClock(start, totalMinutes) : '';
+  // 종료 시각을 직접 적었으면 그 값을, 비웠으면 시작 + 총 채취시간
+  const end = clean(report?.samplingEndTime) || (start && Number.isFinite(totalMinutes) && totalMinutes > 0 ? addMinutesToClock(start, totalMinutes) : '');
   return {
     start,
     end,
@@ -3027,7 +3035,7 @@ export default function App() {
       { id: 3, tp: '', sp: '', dp: '', ts: '' }, { id: 4, tp: '', sp: '', dp: '', ts: '' },
       { id: 5, tp: '', sp: '', dp: '', ts: '' },
     ],
-    samplerId: '', targetVolume: '1000', planSamplingTime: '65', samplingStartTime: '',
+    samplerId: '', targetVolume: '1000', planSamplingTime: '65', samplingStartTime: '', samplingEndTime: '',
     leakTest: createEmptyLeakTest(),
     gasMeterFactor: IS_DESKTOP_BUILD ? '' : '0.991', deltaHAt: IS_DESKTOP_BUILD ? '' : '47.6079',
     recommendedNozzleNum: '', recommendedNozzleDia: '', usedNozzleNum: '',
@@ -10710,8 +10718,18 @@ export default function App() {
                                   {log.days.map((day, idx) => <option key={idx} value={idx}>{idx + 1}일차{day.date ? ` (${day.date.slice(5)})` : ''}</option>)}
                                 </select>
                               </td>
-                              <td className="p-1 border border-slate-200"><input type="time" value={row.start} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'start', e.target.value)} className={cellInput} /></td>
-                              <td className="p-1 border border-slate-200"><input type="time" value={row.end} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'end', e.target.value)} className={cellInput} /></td>
+                              <td className="p-1 border border-slate-200">
+                                <div className="flex items-center gap-1">
+                                  <input type="time" value={row.start} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'start', e.target.value)} className={`${cellInput} min-w-0`} />
+                                  <button type="button" disabled={!on} className={NOW_BUTTON_CLASS} title="지금 시각 넣기" onClick={() => { unsavedRef.current = true; updateSamplingLogRow(String(sub.row), 'start', nowClock()); }}>지금</button>
+                                </div>
+                              </td>
+                              <td className="p-1 border border-slate-200">
+                                <div className="flex items-center gap-1">
+                                  <input type="time" value={row.end} disabled={!on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'end', e.target.value)} className={`${cellInput} min-w-0`} />
+                                  <button type="button" disabled={!on} className={NOW_BUTTON_CLASS} title="지금 시각 넣기" onClick={() => { unsavedRef.current = true; updateSamplingLogRow(String(sub.row), 'end', nowClock()); }}>지금</button>
+                                </div>
+                              </td>
                               <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterStart} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterStart', e.target.value)} className={cellInput} /></td>
                               <td className="p-1 border border-slate-200"><input type="number" step="0.01" value={row.meterEnd} disabled={!on || !isMeter} onChange={(e) => updateSamplingLogRow(String(sub.row), 'meterEnd', e.target.value)} className={cellInput} /></td>
                               <td className={`p-1 border border-slate-200 font-black ${on && Number.isFinite(volume) ? 'text-orange-800 bg-orange-100/70' : ''}`}>{on && Number.isFinite(volume) ? volume.toFixed(2) : '-'}</td>
@@ -12111,8 +12129,20 @@ export default function App() {
                         onChange={handleChange}
                         className="p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                       />
-                      {formData.samplingStartTime && getSamplingMinutes() > 0 && (
-                        <span className="text-slate-500 font-normal">~ {addMinutesToClock(formData.samplingStartTime, getSamplingMinutes())}</span>
+                      <button type="button" className={NOW_BUTTON_CLASS} title="지금 시각을 채취 시작에 넣습니다" onClick={(e) => { e.preventDefault(); unsavedRef.current = true; handleChange({ target: { name: 'samplingStartTime', value: nowClock() } }); }}>지금</button>
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1" title="비워 두면 시작 + 총 시간으로 계산한 시각을 씁니다">
+                      {isFlowSheet ? '측정 종료' : '채취 종료'}
+                      <input
+                        type="time"
+                        name="samplingEndTime"
+                        value={formData.samplingEndTime || ''}
+                        onChange={handleChange}
+                        className="p-1 border border-slate-300 rounded text-center text-xs outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                      />
+                      <button type="button" className={NOW_BUTTON_CLASS} title="지금 시각을 종료에 넣습니다" onClick={(e) => { e.preventDefault(); unsavedRef.current = true; handleChange({ target: { name: 'samplingEndTime', value: nowClock() } }); }}>지금</button>
+                      {!formData.samplingEndTime && formData.samplingStartTime && getSamplingMinutes() > 0 && (
+                        <span className="text-slate-500 font-normal">계산 {addMinutesToClock(formData.samplingStartTime, getSamplingMinutes())}</span>
                       )}
                     </label>
                     <label className="flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
