@@ -1282,35 +1282,14 @@ const SKYLINE_FLYER_CSS = `
 .skyline-crane { position: absolute; animation: skylineCraneBob 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
 .skyline-crane svg { display: block; width: 100%; height: auto; overflow: visible; }
 .skyline-crane-wing { transform-origin: 60px 31px; animation: skylineCraneFlap 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
-@keyframes skylineFrogHop {
-  0%, 88%, 100% { transform: translateY(0) scaleY(1); }
-  90% { transform: translateY(0) scaleY(0.88); }
-  94% { transform: translateY(-9px) scaleY(1.06); }
-  98% { transform: translateY(0) scaleY(0.94); }
-}
-/* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀고, 그때마다 입 앞에 소리 물결이 번진다 */
+/* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
   20.5%, 29.5%, 38.5% { transform: scale(1); }
 }
-@keyframes skylineFrogCall {
-  0%, 17%, 25%, 26%, 34%, 35%, 43%, 100% { opacity: 0; }
-  20.5%, 29.5%, 38.5% { opacity: 0.85; }
-}
 .skyline-frog-sac {
   transform: scale(0);
   animation: skylineFrogCroak var(--frog-duration, 9s) ease-in-out infinite;
-  animation-delay: var(--frog-delay, 0s);
-}
-.skyline-frog-call {
-  opacity: 0;
-  animation: skylineFrogCall var(--frog-duration, 9s) ease-out infinite;
-  animation-delay: var(--frog-delay, 0s);
-}
-.skyline-frog {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: skylineFrogHop var(--frog-duration, 9s) ease-in-out infinite;
   animation-delay: var(--frog-delay, 0s);
 }
 .skyline-svg {
@@ -1324,7 +1303,7 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog, .skyline-frog-sac, .skyline-frog-call, .skyline-crane, .skyline-crane-wing { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing { animation: none; }
   .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
 /* ── 첫 화면의 패널·버튼·카드: 흰 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
@@ -1533,7 +1512,7 @@ const SCENE_CATTAILS = [
   ...Array.from({ length: 9 }, (_, i) => ({ x: 14 + i * 27 + seededNoise(i * 9 + 5) * 12, h: 62 + seededNoise(i * 4 + 8) * 40, lean: seededNoise(i * 6 + 3) * 16 - 4 })),
   ...Array.from({ length: 6 }, (_, i) => ({ x: 1436 + i * 29 + seededNoise(i * 8 + 1) * 12, h: 54 + seededNoise(i * 5 + 4) * 38, lean: seededNoise(i * 7 + 2) * -16 + 4 })),
 ];
-// 개구리: 앞 둑 위. dir은 보는 방향(1 오른쪽, -1 왼쪽), every는 뛰는 간격(초)
+// 개구리: 앞 둑 위. dir은 보는 방향(1 오른쪽, -1 왼쪽), every는 우는 간격(초)
 const SCENE_FROGS = [
   { x: 692, size: 1.35, dir: 1, every: 9, delay: 2 },
   { x: 1186, size: 1, dir: -1, every: 13, delay: 7 },
@@ -1842,12 +1821,11 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
           <ellipse key={`stone-${x}`} cx={x} cy={sceneBankY(x) + 1} rx={rx} ry={ry} />
         ))}
       </g>
-      {/* 개구리: 둑 위에 앉아 울다가(울음주머니·소리 물결) 가끔 제자리에서 폴짝 뛴다 */}
+      {/* 개구리: 둑 위에 앉아 가끔 울음주머니를 부풀리며 운다 */}
       {SCENE_FROGS.slice(0, compact ? 1 : SCENE_FROGS.length).map((f, i) => (
         <g key={`frog-${i}`} transform={`translate(${f.x} ${sceneBankY(f.x) + 2}) scale(${f.dir * f.size} ${f.size})`}>
           <g className="skyline-frog" style={{ '--frog-duration': `${f.every}s`, '--frog-delay': `-${f.delay}s` }}>
             <g transform="translate(11.5 -7.5)"><circle className="skyline-frog-sac" cx="3.6" cy="1.2" r="5.2" fill={pal.plume} /></g>
-            <path className="skyline-frog-call" d="M22.5,-15 q3,3.5 0,7.5 M26.5,-17.5 q4.8,6 0,12.5" stroke={pal.bank} strokeWidth="1.1" strokeLinecap="round" fill="none" />
             <path d="M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z" fill={pal.bank} />
             <path d="M-13,-1.5 Q-10,-10 -3,-7.5 Q1,-6 1,-4" stroke={pal.water} strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.55" />
             <circle cx="6.8" cy="-19" r="1.5" fill={pal.water} />
