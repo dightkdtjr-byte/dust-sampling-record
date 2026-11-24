@@ -1397,6 +1397,9 @@ div.sp-modal.sp-modal {
   background: var(--sp-ink) !important; color: var(--sp-paper) !important; border: 1px solid var(--sp-ink) !important;
 }
 .sp-modal button:not(:disabled):active { transform: scale(0.97); }
+/* 고른 테마 카드: 먹색 굵은 테두리 */
+.sp-modal button.sp-theme-card { border-radius: 14px !important; }
+.sp-modal button.sp-theme-card[aria-pressed="true"] { border-color: var(--sp-ink) !important; box-shadow: 0 0 0 2px var(--sp-ink) !important; background: #ffffff !important; }
 .sp-modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), .sp-modal select, .sp-modal textarea {
   background: #ffffff !important; border: 1px solid var(--sp-line) !important; border-radius: 10px !important; color: var(--sp-ink);
 }
@@ -2573,6 +2576,18 @@ const fillValueInto = async (targets, value) => {
 };
 
 const PALETTE_STORAGE_KEY = 'dust-sampling.palette.v1';
+// 테마 하나가 화면 배경(하늘·풍경)과 기록부 색을 함께 정한다. 세피아만 흙빛(어스) 색을 쓰고 나머지는 기본 색.
+const APP_THEME_PALETTES = { basic: 'default', fog: 'default', sepia: 'earth', blueprint: 'default' };
+// 예전에는 배경과 색을 따로 골랐다. 저장된 값을 테마 하나로 맞춘다 (기본 배경 + 어스 색 → 세피아)
+const readStoredAppTheme = () => {
+  let sky = 'basic', storedPalette = 'default';
+  try {
+    sky = sanitizeSkyTheme(localStorage.getItem(STORAGE_KEYS.skyTheme));
+    storedPalette = localStorage.getItem(PALETTE_STORAGE_KEY) === 'earth' ? 'earth' : 'default';
+  } catch { /* 저장소를 못 쓰면 기본 테마 */ }
+  if (sky === 'basic' && storedPalette === 'earth') sky = 'sepia';
+  return { sky, palette: APP_THEME_PALETTES[sky] || 'default' };
+};
 
 // 기상청 종관(ASOS) 관측 지점: [지점번호, 이름] (가나다순). 기상청 날씨누리 "도시별관측"에 나오는 지점
 const KMA_STATIONS = [['105', '강릉'], ['259', '강진군'], ['201', '강화'], ['294', '거제'], ['284', '거창'], ['283', '경주시'], ['185', '고산'], ['172', '고창'], ['251', '고창군'], ['262', '고흥'], ['266', '광양시'], ['156', '광주'], ['279', '구미'], ['140', '군산'], ['238', '금산'], ['253', '김해시'], ['247', '남원'], ['295', '남해'], ['100', '대관령'], ['143', '대구'], ['133', '대전'], ['98', '동두천'], ['106', '동해'], ['165', '목포'], ['273', '문경'], ['288', '밀양'], ['102', '백령도'], ['235', '보령'], ['258', '보성군'], ['226', '보은'], ['271', '봉화'], ['159', '부산'], ['243', '부안'], ['236', '부여'], ['104', '북강릉'], ['296', '북부산'], ['255', '북창원'], ['93', '북춘천'], ['289', '산청'], ['137', '상주'], ['189', '서귀포'], ['129', '서산'], ['108', '서울'], ['181', '서청주'], ['188', '성산'], ['239', '세종'], ['90', '속초'], ['119', '수원'], ['254', '순창군'], ['174', '순천'], ['136', '안동'], ['257', '양산시'], ['202', '양평'], ['168', '여수'], ['252', '영광군'], ['277', '영덕'], ['121', '영월'], ['272', '영주'], ['281', '영천'], ['170', '완도'], ['115', '울릉도'], ['152', '울산'], ['130', '울진'], ['114', '원주'], ['263', '의령군'], ['278', '의성'], ['203', '이천'], ['211', '인제'], ['112', '인천'], ['244', '임실'], ['248', '장수'], ['260', '장흥'], ['146', '전주'], ['217', '정선군'], ['245', '정읍'], ['184', '제주'], ['221', '제천'], ['268', '진도군'], ['192', '진주'], ['155', '창원'], ['232', '천안'], ['95', '철원'], ['276', '청송군'], ['131', '청주'], ['135', '추풍령'], ['101', '춘천'], ['127', '충주'], ['216', '태백'], ['162', '통영'], ['99', '파주'], ['138', '포항'], ['264', '함양군'], ['285', '합천'], ['261', '해남'], ['177', '홍성'], ['212', '홍천'], ['169', '흑산도']];
@@ -2751,9 +2766,7 @@ const SheetSectionNav = ({ scope }) => {
 
 export default function App() {
   // 색 테마: 'default'(기본) | 'earth'(세이지·베이지·테라코타). 이 기기에 저장하고 모든 창에 같이 적용
-  const [palette, setPalette] = useState(() => {
-    try { return localStorage.getItem(PALETTE_STORAGE_KEY) === 'earth' ? 'earth' : 'default'; } catch { return 'default'; }
-  });
+  const [palette, setPalette] = useState(() => readStoredAppTheme().palette);
   useEffect(() => {
     if (palette === 'earth') document.documentElement.dataset.palette = 'earth';
     else delete document.documentElement.dataset.palette;
@@ -3238,14 +3251,28 @@ export default function App() {
     setRecommendations(null);
   };
   const [skyPhase, setSkyPhase] = useState(() => getSkyPhaseByHour());
-  const [skyThemeId, setSkyThemeId] = useState(() => {
-    try { return sanitizeSkyTheme(localStorage.getItem(STORAGE_KEYS.skyTheme)); } catch { return 'basic'; }
-  });
-  const changeSkyTheme = (id) => {
+  const [skyThemeId, setSkyThemeId] = useState(() => readStoredAppTheme().sky);
+  // 테마를 고르면 배경과 기록부 색이 함께 바뀐다
+  const changeAppTheme = (id) => {
     const next = sanitizeSkyTheme(id);
     setSkyThemeId(next);
     try { localStorage.setItem(STORAGE_KEYS.skyTheme, next); } catch { /* 저장 못 해도 이번 화면엔 쓴다 */ }
+    changePalette(APP_THEME_PALETTES[next]);
   };
+  useEffect(() => {
+    // 예전에 따로 저장된 배경·색을 테마 하나로 맞춰 다시 적어 둔다
+    try {
+      const stored = readStoredAppTheme();
+      if (localStorage.getItem(STORAGE_KEYS.skyTheme) !== stored.sky) localStorage.setItem(STORAGE_KEYS.skyTheme, stored.sky);
+      if ((localStorage.getItem(PALETTE_STORAGE_KEY) || 'default') !== stored.palette) localStorage.setItem(PALETTE_STORAGE_KEY, stored.palette);
+    } catch { /* 저장 못 해도 이번 화면엔 쓴다 */ }
+    // 다른 창에서 테마를 바꾸면 이 창의 배경도 따라 바뀐다
+    const onThemeStorage = (event) => {
+      if (event.key === STORAGE_KEYS.skyTheme) setSkyThemeId(sanitizeSkyTheme(event.newValue));
+    };
+    window.addEventListener('storage', onThemeStorage);
+    return () => window.removeEventListener('storage', onThemeStorage);
+  }, []);
   const [skyPreviewMode, setSkyPreviewMode] = useState(() => {
     try {
       return sanitizeSkyPreviewMode(localStorage.getItem(STORAGE_KEYS.skyPreviewMode));
@@ -10023,28 +10050,50 @@ export default function App() {
                         </button>
                       </div>
                       <div className="mb-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
-                        <p className="text-xs font-black text-slate-800">색 테마</p>
-                        <p className="text-[11px] text-slate-600 mt-1">열려 있는 모든 창에 바로 적용됩니다.</p>
+                        <p className="text-xs font-black text-slate-800">테마</p>
+                        <p className="text-[11px] text-slate-600 mt-1">화면 배경과 기록부 색이 함께 바뀝니다. 열려 있는 모든 창에 바로 적용됩니다.</p>
                         <div className="mt-2 grid grid-cols-2 gap-2">
-                          {[
-                            { id: 'default', label: '기본', swatches: ['#059669', '#f8fafc', '#1e293b'] },
-                            { id: 'earth', label: '어스 (세이지·베이지·테라코타)', swatches: ['#9caf88', '#e3d9c6', '#c8643c'] },
-                          ].map((item) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              aria-pressed={palette === item.id}
-                              onClick={() => changePalette(item.id)}
-                              className={`px-3 py-2 rounded border text-left text-xs font-bold ${palette === item.id ? 'border-slate-800 bg-white text-slate-900 ring-2 ring-slate-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-                            >
-                              <span className="flex items-center gap-1 mb-1">
-                                {item.swatches.map((color) => (
-                                  <span key={color} className="palette-swatch inline-block w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />
-                                ))}
-                              </span>
-                              {item.label}{palette === item.id ? ' ✓' : ''}
-                            </button>
-                          ))}
+                          {SKY_THEME_OPTIONS.map((opt) => {
+                            const day = getSceneTheme(opt.id, 'day');
+                            const selected = skyThemeId === opt.id;
+                            return (
+                              <button
+                                key={`settings-theme-${opt.id}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => changeAppTheme(opt.id)}
+                                className={`sp-theme-card px-3 py-2 rounded border text-left text-xs font-bold ${selected ? 'border-slate-800 bg-white text-slate-900 ring-2 ring-slate-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                              >
+                                <span className="flex items-center gap-1 mb-1">
+                                  {[day.sky[0], day.pal.ink, day.wm.accent].map((color, i) => (
+                                    <span key={i} className="palette-swatch inline-block w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />
+                                  ))}
+                                </span>
+                                {opt.label}{selected ? ' ✓' : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-3">시간대 (자동은 시각에 따라 아침·낮·노을·밤으로 바뀝니다)</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {SKY_PREVIEW_OPTIONS.map((opt) => {
+                            const selected = skyPreviewMode === opt.id;
+                            return (
+                              <button
+                                key={`settings-sky-${opt.id}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => setSkyPreviewMode(opt.id)}
+                                className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
+                                  selected
+                                    ? 'border-slate-800 bg-slate-800 text-white'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                       {canSetExportBase && (
@@ -10117,46 +10166,6 @@ export default function App() {
                           >
                             전체 초기화 (모든 데이터 삭제)
                           </button>
-                        </div>
-                        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
-                          <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 테마</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            {SKY_THEME_OPTIONS.map((opt) => (
-                              <button
-                                key={`settings-theme-${opt.id}`}
-                                type="button"
-                                onClick={() => changeSkyTheme(opt.id)}
-                                className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
-                                  skyThemeId === opt.id
-                                    ? 'border-emerald-600 bg-emerald-600 text-white'
-                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-[11px] text-slate-600 mt-3">시간대 (자동은 시각에 따라 아침·낮·노을·밤으로 바뀝니다)</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            {SKY_PREVIEW_OPTIONS.map((opt) => {
-                              const selected = skyPreviewMode === opt.id;
-                              return (
-                                <button
-                                  key={`settings-sky-${opt.id}`}
-                                  type="button"
-                                  onClick={() => setSkyPreviewMode(opt.id)}
-                                  className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
-                                    selected
-                                      ? 'border-emerald-600 bg-emerald-600 text-white'
-                                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              );
-                            })}
-                          </div>
                         </div>
                         {!isDesktopApp && (
                           <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
