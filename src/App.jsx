@@ -373,6 +373,8 @@ const sanitizeLeakTest = (value) => {
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
 const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
+// 첫 화면 기록부 카드의 띠 색: 배경 판화의 잉크처럼 채도를 낮춘 색
+const SHEET_CARD_INKS = { dust: '#4f7a5a', metal: '#c79a3a', mercury: '#3f6a94', pahs: '#7a5a8c', flow: '#3d8a96', samplinglog: '#c4523a' };
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
 // 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
 // 'I'는 띠를 두른 굴뚝이고(띠는 뒤에 겹친 붉은 판과 헷갈리지 않게 종이색) 꼭대기에서 연기 한 덩이가 흐른다.
@@ -1252,6 +1254,51 @@ const SKYLINE_FLYER_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon { animation: none; }
 }
+/* ── 첫 화면의 패널·버튼·카드: 종이색 면, 잉크 테두리, 어긋나게 찍힌 붉은 판(글자 로고와 같은 방식) ── */
+.sp-menu { --sp-paper: #f8f4e9; --sp-paper-2: #efe9da; --sp-ink: #22313c; --sp-soft: #5c6b74; }
+.sp-panel {
+  background: var(--sp-paper);
+  border: 2px solid var(--sp-ink);
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 var(--sp-accent);
+  color: var(--sp-ink);
+}
+.sp-kicker { font-size: 0.72rem; font-weight: 700; color: var(--sp-soft); }
+.sp-title { font-weight: 900; color: var(--sp-ink); letter-spacing: -0.01em; }
+.sp-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.42rem 0.85rem;
+  border: 1.5px solid var(--sp-ink); border-radius: 4px;
+  background: var(--sp-paper); color: var(--sp-ink);
+  font-size: 0.75rem; font-weight: 800; line-height: 1.2;
+  box-shadow: 2px 2px 0 var(--sp-ink);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.12s ease;
+}
+.sp-btn:hover { background: var(--sp-paper-2); transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--sp-ink); }
+.sp-btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sp-ink); }
+.sp-btn-fill { background: var(--sp-ink); color: var(--sp-paper); box-shadow: 2px 2px 0 var(--sp-accent); }
+.sp-btn-fill:hover { background: #162129; box-shadow: 3px 3px 0 var(--sp-accent); }
+.sp-btn-lg { padding: 0.6rem 1.3rem; font-size: 0.875rem; }
+.sp-btn:focus-visible, .sp-card:focus-visible { outline: 3px solid var(--sp-accent); outline-offset: 2px; }
+.sp-avatar { border: 2px solid var(--sp-ink) !important; border-radius: 6px !important; box-shadow: 3px 3px 0 var(--sp-accent); }
+.sp-menu .menu-avatar-fallback { background: var(--sp-ink) !important; color: var(--sp-paper) !important; }
+.sp-card {
+  position: relative; overflow: hidden; text-align: left;
+  padding: 1.05rem 1.1rem 0.95rem 1.7rem;
+  background: var(--sp-paper);
+  border: 2px solid var(--sp-ink); border-radius: 6px;
+  box-shadow: 5px 5px 0 var(--sp-accent);
+  color: var(--sp-ink);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.sp-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 10px; background: var(--sp-card-color, var(--sp-ink)); border-right: 2px solid var(--sp-ink); }
+.sp-card:hover { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 var(--sp-accent); }
+.sp-card:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--sp-accent); }
+.sp-card-open { margin-top: 0.9rem; padding-top: 0.55rem; border-top: 1.5px dashed var(--sp-ink); font-size: 0.7rem; font-weight: 800; color: var(--sp-soft); display: flex; justify-content: space-between; }
+.sp-card:hover .sp-card-open { color: var(--sp-ink); }
+.sp-tile { padding: 0.5rem; border: 1.5px solid var(--sp-ink); border-radius: 4px; background: var(--sp-paper-2); text-align: center; }
+.sp-empty { padding: 1.25rem; text-align: center; font-size: 0.75rem; color: var(--sp-soft); border: 1.5px dashed var(--sp-ink); border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card { transition: none; } }
 `;
 
 // ── 판화 포스터풍 공단 풍경 ──
@@ -9581,7 +9628,7 @@ export default function App() {
 
   if (!selectedSheet) {
     return (
-      <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800`} style={skyBgStyle}>
+      <div className="sp-menu relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800" style={{ ...skyBgStyle, '--sp-accent': skyTheme.wm.accent }}>
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
         {skyOrbClass && <div className={skyOrbClass} style={skyOrbStyle} />}
@@ -9615,24 +9662,23 @@ export default function App() {
               <StackpilotWordmark tone={skyTheme.wm} className="h-[3.8rem] md:h-[6.4rem] w-auto select-none" />
             </h1>
           </div>
-          <div className="bg-white/85 backdrop-blur p-4 rounded-2xl shadow-lg border border-white/70 mb-6 relative">
+          <div className="mb-7 relative">
             {!isUserUnlocked ? (
-              <div className="relative overflow-hidden border border-emerald-200 rounded-2xl p-5 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70 shadow-inner text-center">
-                <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-200/70 blur-2xl" />
-                <p className="text-sm font-black text-emerald-900">베타 접속</p>
-                <p className="text-xs text-emerald-800 mt-1">회원가입 없이 기본 계정(user)으로 바로 사용합니다.</p>
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <div className="sp-panel mx-auto max-w-xl p-6 text-center">
+                <p className="sp-title text-lg">굴뚝 시료채취 기록부</p>
+                <p className="sp-kicker mt-1">회원가입 없이 기본 계정(user)으로 바로 시작합니다.</p>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                   <button
                     type="button"
                     onClick={handleBetaQuickLogin}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm"
+                    className="sp-btn sp-btn-fill sp-btn-lg"
                   >
                     user 로그인
                   </button>
                   <button
                     type="button"
                     onClick={openAdminLoginModal}
-                    className="px-4 py-2 bg-slate-700 text-white rounded-lg font-bold text-sm hover:bg-slate-800 shadow-sm"
+                    className="sp-btn sp-btn-lg"
                   >
                     관리자 로그인
                   </button>
@@ -9683,12 +9729,12 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-4 flex flex-col items-center">
-                <div className="w-full max-w-3xl border border-slate-200 rounded-xl p-4 bg-white relative shadow-sm">
+                <div className="sp-panel w-full max-w-3xl p-5 relative">
                   <button
                     type="button"
                     aria-label="설정 열기"
                     onClick={() => setAuthModal('settings')}
-                    className="absolute right-3 top-3 px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs z-10"
+                    className="sp-btn absolute right-4 top-4 z-10"
                   >
                     ⚙ 설정
                   </button>
@@ -9700,7 +9746,7 @@ export default function App() {
                         onClick={() => avatarFileInputRef.current && avatarFileInputRef.current.click()}
                         title="프로필 사진 바꾸기"
                         aria-label="프로필 사진 바꾸기"
-                        className="group relative w-24 h-24 rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden flex items-center justify-center cursor-pointer p-0"
+                        className="sp-avatar group relative w-24 h-24 bg-white overflow-hidden flex items-center justify-center cursor-pointer p-0"
                       >
                         {profileAvatarUrl ? (
                           <img src={profileAvatarUrl} alt={`${displayUserNameWithFallback} 프로필`} className="w-full h-full object-cover" />
@@ -9713,24 +9759,23 @@ export default function App() {
                       </button>
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                      <p className="text-sm text-slate-600">현재 사용자</p>
-                      <p className="text-xl font-black text-slate-900">{displayUserNameWithFallback}</p>
-                      <p className="text-xs text-slate-600 mt-1">
-                        상태: <span className="font-black text-emerald-700">로그인됨</span>
-                        {' '}| 저장 건수: <span className="font-black text-emerald-700">{savedData.length}</span>건
+                      <p className="sp-kicker">현재 사용자</p>
+                      <p className="sp-title text-2xl">{displayUserNameWithFallback}</p>
+                      <p className="sp-kicker mt-1">
+                        로그인됨 · 저장한 기록 <span className="font-black" style={{ color: 'var(--sp-ink)' }}>{savedData.length}</span>건
                       </p>
                       <div className="mt-3 flex flex-wrap items-center justify-center md:justify-start gap-2">
                         <button
                           type="button"
                           onClick={() => setAuthModal('nickname')}
-                          className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                          className="sp-btn"
                         >
                           별명 설정
                         </button>
                         <button
                           type="button"
                           onClick={() => avatarFileInputRef.current && avatarFileInputRef.current.click()}
-                          className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                          className="sp-btn"
                         >
                           사진 변경
                         </button>
@@ -9738,7 +9783,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={handleRemoveProfileAvatar}
-                            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 font-bold text-xs"
+                            className="sp-btn"
                           >
                             사진 지우기
                           </button>
@@ -9746,7 +9791,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleLockActiveUser}
-                          className="px-3 py-1.5 rounded bg-slate-700 text-white hover:bg-slate-800 font-bold text-xs"
+                          className="sp-btn sp-btn-fill"
                         >
                           로그아웃
                         </button>
@@ -10022,13 +10067,14 @@ export default function App() {
                     key={sheet.id}
                     type="button"
                     onClick={() => navigateToSheet(sheet.id)}
-                    className="group relative overflow-hidden text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5"
+                    className="sp-card"
+                    style={{ '--sp-card-color': SHEET_CARD_INKS[sheet.id] }}
                   >
-                    <div className={`absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br ${sheet.toneClass} blur-sm group-hover:scale-110 transition-transform`} />
-                    <h2 className="text-base font-black text-slate-900">{sheet.title}</h2>
-                    <p className="text-xs text-slate-600 mt-1">{sheet.desc}</p>
-                    <div className={`mt-4 flex items-center text-[11px] font-bold text-slate-500 transition-colors ${sheet.hoverTextClass}`}>
-                      새 창으로 열기
+                    <h2 className="sp-title text-base">{sheet.title}</h2>
+                    <p className="sp-kicker mt-1">{sheet.desc}</p>
+                    <div className="sp-card-open">
+                      <span>새 창으로 열기</span>
+                      <span>저장 {profileSheetCounts[sheet.id] || 0}건</span>
                     </div>
                   </button>
                 );
@@ -10037,24 +10083,15 @@ export default function App() {
           )}
 
           {isUserUnlocked && (
-            <div className="mt-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <h3 className="text-sm font-black text-slate-900">저장된 리포트 종합 (먼지/금속/수은/PAHs/유량/통합시료채취)</h3>
-                <span className="text-xs font-bold text-slate-600">총 {profileCombinedReports.length}건</span>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                {SHEET_MENU.map((sheet) => (
-                  <div key={sheet.id} className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-center">
-                    <p className="text-[11px] font-bold text-slate-600">{sheet.title}</p>
-                    <p className="text-lg font-black text-slate-900">{profileSheetCounts[sheet.id] || 0}</p>
-                  </div>
-                ))}
+            <div className="sp-panel mt-8 p-5">
+              <div className="flex items-baseline justify-between gap-2 mb-3">
+                <h3 className="sp-title text-base">저장한 기록</h3>
+                <span className="sp-kicker">모두 {profileCombinedReports.length}건</span>
               </div>
 
               {profileCombinedReports.length === 0 ? (
-                <div className="p-5 text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-lg">
-                  저장된 통합 리포트가 없습니다.
+                <div className="sp-empty">
+                  아직 저장한 기록이 없습니다. 위에서 기록부를 열어 작성한 뒤 저장하면 여기에 모입니다.
                 </div>
               ) : (
                 <div>
