@@ -380,6 +380,10 @@ const WORDMARK_TONES = {
   day: { ink: '#2c4150', mid: '#4f6875', accent: '#c4523a', band: '#f7f2e5', plume: '#f7f2e5', plumeShade: '#dcd9ca' },
   morning: { ink: '#2b2436', mid: '#54425c', accent: '#d9603b', band: '#f9ecd5', plume: '#f9ecd5', plumeShade: '#e9c9a5' },
   night: { ink: '#e9dfc6', mid: '#bdb39a', accent: '#e5503f', band: '#1c2e40', plume: '#3b536a', plumeShade: '#2f4459' },
+  dusk: { ink: '#f6e3c8', mid: '#cdb79c', accent: '#e2603f', band: '#3a3358', plume: '#8a5a72', plumeShade: '#74486a' },
+  fog: { ink: '#3b494d', mid: '#5f7074', accent: '#b56a55', band: '#f6f7f2', plume: '#f6f7f2', plumeShade: '#e3e6e0' },
+  sepia: { ink: '#47311f', mid: '#6d5137', accent: '#b5452c', band: '#fbf4e0', plume: '#fbf4e0', plumeShade: '#e9dcbd' },
+  blueprint: { ink: '#eaf2f8', mid: '#b3cbe0', accent: '#f2b84b', band: '#1d4b76', plume: '#4f84b4', plumeShade: '#42759f' },
 };
 const WORDMARK_GLYPHS = {
   S: 'M38,0 H14 a12,12 0 0 0 0,24 H26 a12,12 0 0 1 0,24 H2',
@@ -436,13 +440,13 @@ const StackpilotWordmark = ({ tone = 'day', className = '', stackI = true }) => 
       <g filter="url(#wordmark-cut)">
         <g transform="translate(3 3)">{layer(c.accent)}</g>
         {layer(c.ink)}
-        {stackI && (
-          <>
-            <path d={`M${ix - 5.3},${top + 8} h10.6 l0.2,6 h-11 Z M${ix - 5.6},${top + 19} h11.2 l0.2,6 h-11.6 Z`} fill={c.band} />
-            <rect x={ix - 7} y={top - 2} width="14" height="4" fill={c.ink} />
-          </>
-        )}
       </g>
+      {stackI && (
+        <>
+          <path d={`M${ix - 6.2},${top + 8} h12.4 l0.2,6 h-12.8 Z M${ix - 6.5},${top + 19} h13 l0.2,6 h-13.4 Z`} fill={c.band} />
+          <rect x={ix - 7.5} y={top - 2.5} width="15" height="5" fill={c.ink} />
+        </>
+      )}
     </svg>
   );
 };
@@ -897,7 +901,22 @@ const SKY_PREVIEW_OPTIONS = [
   { id: 'morning', label: '아침' },
   { id: 'day', label: '낮' },
   { id: 'night', label: '밤' },
+  { id: 'dusk', label: '노을' },
+  { id: 'fog', label: '안개' },
+  { id: 'sepia', label: '세피아' },
+  { id: 'blueprint', label: '청사진' },
 ];
+// 배경 테마별 하늘·해·구름. 풍경 색은 SKYLINE_PALETTES, 글자 로고 색은 WORDMARK_TONES에 같은 이름으로 있다
+//  orb: sun(작은 해) · bigsun(산 위의 큰 해) · moon(초승달) · none,  stars: 별,  grain: 종이 결 세기
+const SKY_THEME_META = {
+  day: { bg: 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]', orb: 'sun', orbColor: '#f7f1df', cloud: ['#e4e9e1', '#d5ddd6'], grain: 0.45 },
+  morning: { bg: 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]', orb: 'bigsun', orbColor: '#d9603b', cloud: ['#f4dfbe', '#ecd0a8'], grain: 0.45 },
+  night: { bg: 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]', orb: 'moon', orbColor: '#e9dfc6', stars: true, cloud: ['#22364a', '#1c2e40'], grain: 0.4 },
+  dusk: { bg: 'bg-gradient-to-b from-[#3a3358] to-[#e08a5e]', orb: 'bigsun', orbColor: '#f7c873', stars: true, cloud: ['#8a5a72', '#74486a'], grain: 0.45 },
+  fog: { bg: 'bg-gradient-to-b from-[#d6dbd4] to-[#eef0ea]', orb: 'sun', orbColor: '#f6f5ec', cloud: ['#e6e9e3', '#d9ddd6'], grain: 0.5 },
+  sepia: { bg: 'bg-gradient-to-b from-[#e3d2ac] to-[#f4ebd3]', orb: 'sun', orbColor: '#c9612f', cloud: ['#efe3c4', '#e3d3ac'], grain: 0.55 },
+  blueprint: { bg: 'bg-gradient-to-b from-[#1d4b76] to-[#2d6698]', orb: 'none', orbColor: '#eaf2f8', cloud: ['#356fa0', '#2d6494'], grain: 0.35 },
+};
 
 const sanitizeSkyPreviewMode = (value) => {
   const mode = String(value || '').trim();
@@ -1274,6 +1293,26 @@ const SKYLINE_PALETTES = {
     ridge1: '#1e3348', ridge2: '#18293b', far: '#132334', ink: '#060c14', mid: '#101c2a', band: '#7c2f29',
     plume: '#34495e', plumeShade: '#2a3c50', water: '#1a2b3c', stroke: '#3b536a', bank: '#03070c', light: '#e9b867', beacon: '#e5503f',
   },
+  // 노을: 보랏빛 하늘 아래 주황 지평선. 공장은 불을 켜기 시작한다
+  dusk: {
+    ridge1: '#9a5a6e', ridge2: '#6f3f5e', far: '#55304f', ink: '#1d1630', mid: '#3a2a4c', band: '#f0a35e',
+    plume: '#f2c79f', plumeShade: '#d89a7c', water: '#de9668', stroke: '#f6d3aa', bank: '#130d1d', light: '#ffd9a3', beacon: '#e5503f',
+  },
+  // 안개: 색을 거의 뺀 잿빛 한 가지 계열
+  fog: {
+    ridge1: '#cfd5cf', ridge2: '#bcc6c0', far: '#a8b4af', ink: '#55666a', mid: '#75878b', band: '#b56a55',
+    plume: '#f6f7f2', plumeShade: '#e3e6e0', water: '#dfe4de', stroke: '#f6f7f2', bank: '#3b494d', light: null, beacon: null,
+  },
+  // 세피아: 오래된 인쇄물 같은 갈색 한 가지 계열에 붉은 띠
+  sepia: {
+    ridge1: '#d9bb8c', ridge2: '#c49a64', far: '#a67f50', ink: '#47311f', mid: '#6d5137', band: '#b5452c',
+    plume: '#fbf4e0', plumeShade: '#e9dcbd', water: '#e2d1a5', stroke: '#fbf4e0', bank: '#2b1e14', light: null, beacon: null,
+  },
+  // 청사진: 파란 바탕에 흰 잉크로 찍은 도면
+  blueprint: {
+    ridge1: '#2a5f90', ridge2: '#245684', far: '#4f82b0', ink: '#eaf2f8', mid: '#b3cbe0', band: '#f2b84b',
+    plume: '#4f84b4', plumeShade: '#42759f', water: '#1a456e', stroke: '#6f9dc4', bank: '#0f3152', light: null, beacon: null,
+  },
 };
 
 // 물가(공단 바닥) 높이
@@ -1427,15 +1466,23 @@ const renderSkylineSvg = ({ mode, scope, compact = false }) => {
               <path d={`M${st.x - st.w / 2 - 4},${G} L${st.x - st.w / 2 - 4},${G - 10} L${st.x + st.w / 2 + 4},${G - 10} L${st.x + st.w / 2 + 4},${G} Z`} fill={pal.ink} />
               <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x + ht},${top} L${st.x + st.w / 2},${G} Z`} fill={pal.ink} />
               <path d={`M${st.x - st.w / 2},${G} L${st.x - ht},${top} L${st.x - ht * 0.3},${top} L${st.x - st.w * 0.16},${G} Z`} fill={pal.mid} />
-              {[14, 34].map((dy) => {
-                const hw = halfAt(st, 1 - dy / st.hh);
-                return <rect key={dy} x={st.x - hw} y={top + dy} width={hw * 2} height="9" fill={pal.band} />;
-              })}
-              <rect x={st.x - ht - 3} y={top - 1} width={ht * 2 + 6} height="5" fill={pal.ink} />
             </g>
           );
         })}
       </g>
+      {/* 굴뚝 띠와 꼭대기 테: 가장자리를 흔드는 필터 밖에서 그려 반듯한 수평선으로 */}
+      {stacks.map((st, i) => {
+        const top = G - st.hh, ht = halfAt(st, 1);
+        return (
+          <g key={`stack-band-${i}`}>
+            {[14, 34].map((dy) => {
+              const h0 = halfAt(st, 1 - dy / st.hh) + 0.8, h1 = halfAt(st, 1 - (dy + 9) / st.hh) + 0.8;
+              return <path key={dy} d={`M${st.x - h0},${top + dy} L${st.x + h0},${top + dy} L${st.x + h1},${top + dy + 9} L${st.x - h1},${top + dy + 9} Z`} fill={pal.band} />;
+            })}
+            <rect x={st.x - ht - 3.5} y={top - 2} width={ht * 2 + 7} height="6" fill={pal.ink} />
+          </g>
+        );
+      })}
 
       {/* 건물 창·문 (또렷한 사각형) */}
       <g>
@@ -9381,43 +9428,21 @@ export default function App() {
   const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
   const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
   const resolvedSkyMode = skyPreviewMode === 'auto' ? skyPhase : skyPreviewMode;
-  const isNightSky = resolvedSkyMode === 'night';
-  const isMorningSky = resolvedSkyMode === 'morning';
-  const skyOrbClass = isNightSky ? 'skyline-moon' : (isMorningSky ? '' : 'skyline-sun');
-  const menuSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]'
-      : 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]');
-  const menuSkyOverlayClass = isNightSky
-    ? 'hidden'
-    : (isMorningSky
-      ? 'hidden'
-      : 'hidden');
-  const menuSkyGlowLeftClass = isNightSky
-    ? 'hidden'
-    : 'hidden';
-  const menuSkyGlowRightClass = isNightSky
-    ? 'hidden'
-    : 'hidden';
-  const sheetSkyBgClass = isNightSky
-    ? 'bg-gradient-to-b from-[#0f1b2a] to-[#24384c]'
-    : (isMorningSky
-      ? 'bg-gradient-to-b from-[#e6c296] to-[#f4e1c3]'
-      : 'bg-gradient-to-b from-[#c5d3d2] to-[#ece6d6]');
-  const sheetSkyOverlayClass = isNightSky
-    ? 'hidden'
-    : (isMorningSky
-      ? 'hidden'
-      : 'hidden');
-  const sceneCloudColor = isNightSky ? '#22364a' : (isMorningSky ? '#f4dfbe' : '#e4e9e1');
-  const sceneCloudShade = isNightSky ? '#1c2e40' : (isMorningSky ? '#ecd0a8' : '#d5ddd6');
+  const skyTheme = SKY_THEME_META[resolvedSkyMode] || SKY_THEME_META.day;
+  const isNightSky = Boolean(skyTheme.stars);
+  const isMorningSky = skyTheme.orb === 'bigsun';
+  const skyOrbClass = skyTheme.orb === 'moon' ? 'skyline-moon' : (skyTheme.orb === 'sun' ? 'skyline-sun' : '');
+  const skyOrbStyle = { background: skyTheme.orbColor };
+  const menuSkyBgClass = skyTheme.bg;
+  const sheetSkyBgClass = skyTheme.bg;
+  const sceneCloudColor = skyTheme.cloud[0];
+  const sceneCloudShade = skyTheme.cloud[1];
   const sceneClouds = isMobileViewport ? SKYLINE_CLOUDS.slice(0, 2) : SKYLINE_CLOUDS.slice(0, 4);
   // 하늘 장식: 구름, (밤) 달무리·별똥별 — 메뉴와 기록부 화면이 공용으로 사용
   const renderSkyDecor = (scope, cloudCount = sceneClouds.length) => (
     <>
-      <div className="skyline-grain" style={{ '--grain-opacity': isNightSky ? 0.4 : 0.45 }} />
-      {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} />}
+      <div className="skyline-grain" style={{ '--grain-opacity': skyTheme.grain }} />
+      {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} style={skyOrbStyle} />}
       {sceneClouds.slice(0, cloudCount).map((cloud) => (
         <div
           key={`${scope}-${cloud.id}`}
@@ -9533,10 +9558,7 @@ export default function App() {
       <div className={`relative min-h-screen overflow-hidden p-6 md:p-10 font-sans text-slate-800 ${menuSkyBgClass}`}>
         <style>{SKYLINE_FLYER_CSS}</style>
       <div className="pointer-events-none absolute inset-0 z-0">
-        <div className={`absolute inset-0 ${menuSkyOverlayClass}`} />
-        <div className={`absolute -left-20 -top-24 h-80 w-80 rounded-full blur-3xl ${menuSkyGlowLeftClass}`} />
-        <div className={`absolute right-4 top-2 h-72 w-72 rounded-full blur-3xl ${menuSkyGlowRightClass}`} />
-        {skyOrbClass && <div className={skyOrbClass} />}
+        {skyOrbClass && <div className={skyOrbClass} style={skyOrbStyle} />}
         {renderSkyDecor('menu')}
           {isNightSky && (
             <div className="absolute inset-0">
@@ -9848,7 +9870,7 @@ export default function App() {
                         </div>
                         <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                           <p className="text-xs font-black text-slate-800">앱 설정</p>
-                          <p className="text-[11px] text-slate-600 mt-1">배경 시간대(아침/낮/밤) 표시를 선택합니다.</p>
+                          <p className="text-[11px] text-slate-600 mt-1">배경 테마를 고릅니다. 자동은 시간에 따라 아침·낮·밤으로 바뀝니다.</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {SKY_PREVIEW_OPTIONS.map((opt) => {
                               const selected = skyPreviewMode === opt.id;
@@ -10528,8 +10550,7 @@ export default function App() {
   // 기록부 화면 공통 배경(하늘·굴뚝 풍경): 화면에 고정되어 스크롤해도 끊기지 않음
   const renderSheetSkyScene = () => (
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-[0.45]">
-        <div className={`absolute inset-0 ${sheetSkyOverlayClass}`} />
-        {skyOrbClass && <div className={skyOrbClass} />}
+        {skyOrbClass && <div className={skyOrbClass} style={skyOrbStyle} />}
         {renderSkyDecor('sheet', 5)}
         {isNightSky && sceneStarsSheet.map((star) => (
           <span
