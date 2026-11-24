@@ -391,34 +391,45 @@ const WORDMARK_GLYPHS = {
   L: 'M5.5,-5.5 V48 H38',
   O: 'M17,0 H23 a15,15 0 0 1 15,15 V33 a15,15 0 0 1 -15,15 H17 a15,15 0 0 1 -15,-15 V15 a15,15 0 0 1 15,-15 Z',
 };
-const StackpilotWordmark = ({ tone = 'day', className = '' }) => {
+const StackpilotWordmark = ({ tone = 'day', className = '', stackI = false }) => {
   const c = WORDMARK_TONES[tone] || WORDMARK_TONES.day;
   const letters = 'STACKPILOT'.split('');
   const step = 58, x0 = 10, y0 = 30;
-  const strokes = (color) => (
-    <g stroke={color} strokeWidth="13" fill="none" strokeLinejoin="miter" strokeMiterlimit="2">
-      {letters.map((ch, i) => (ch === 'I' ? null : <path key={i} d={WORDMARK_GLYPHS[ch]} transform={`translate(${x0 + i * step} ${y0})`} />))}
+  const ix = x0 + 6 * step + 20, base = y0 + 53.5, top = stackI ? 8 : y0 - 5.5;
+  // 'I': 다른 글자와 같은 굵기의 기둥. 굴뚝일 때는 위로 조금 더 솟고 살짝 가늘어진다
+  const pillar = stackI ? `M${ix - 6.5},${base} L${ix - 5},${top} L${ix + 5},${top} L${ix + 6.5},${base} Z` : `M${ix - 6.5},${base} L${ix - 6.5},${top} L${ix + 6.5},${top} L${ix + 6.5},${base} Z`;
+  const layer = (color) => (
+    <g>
+      <g stroke={color} strokeWidth="13" fill="none" strokeLinejoin="miter" strokeMiterlimit="2">
+        {letters.map((ch, i) => (ch === 'I' ? null : <path key={i} d={WORDMARK_GLYPHS[ch]} transform={`translate(${x0 + i * step} ${y0})`} />))}
+      </g>
+      <path d={pillar} fill={color} />
     </g>
   );
-  const ix = x0 + 6 * step + 20;
-  const p = (dx, dy) => `${ix + dx * 0.22},${4 - dy * 0.22}`;
+  const p = (dx, dy) => `${ix + dx * 0.26},${top - 1 - dy * 0.26}`;
   return (
-    <svg className={className} viewBox="0 -22 600 110" role="img" aria-label="STACKPILOT">
+    <svg className={className} viewBox="0 -24 600 112" role="img" aria-label="STACKPILOT">
       <defs>
         <filter id="wordmark-cut" x="-2%" y="-5%" width="104%" height="110%">
           <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="4" result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </defs>
-      <path d={`M${ix - 1},4 C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${ix + 1},4 Z`} fill={c.plume} />
-      <path d={`M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`} fill={c.plumeShade} />
+      {stackI && (
+        <>
+          <path d={`M${ix - 2},${top - 1} C${p(-12, 30)} ${p(8, 60)} ${p(44, 62)} C${p(50, 90)} ${p(98, 100)} ${p(122, 78)} C${p(152, 106)} ${p(216, 106)} ${p(230, 72)} C${p(266, 86)} ${p(306, 64)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(40, 34)} ${ix + 2},${top - 1} Z`} fill={c.plume} />
+          <path d={`M${p(40, 44)} C${p(90, 52)} ${p(120, 44)} ${p(150, 52)} C${p(200, 64)} ${p(250, 52)} ${p(300, 42)} C${p(252, 28)} ${p(192, 40)} ${p(150, 33)} C${p(100, 25)} ${p(60, 32)} ${p(40, 44)} Z`} fill={c.plumeShade} />
+        </>
+      )}
       <g filter="url(#wordmark-cut)">
-        <g transform="translate(3 3)">{strokes(c.accent)}</g>
-        {strokes(c.ink)}
-        <path d={`M${ix - 11},${y0 + 53.5} L${ix - 7},6 L${ix + 7},6 L${ix + 11},${y0 + 53.5} Z`} fill={c.ink} />
-        <path d={`M${ix - 11},${y0 + 53.5} L${ix - 7},6 L${ix - 2.5},6 L${ix - 4},${y0 + 53.5} Z`} fill={c.mid} />
-        <path d={`M${ix - 7.6},15 h15.2 v7 h-15.8 Z M${ix - 8.6},28 h17.2 v7 h-17.8 Z`} fill={c.accent} />
-        <rect x={ix - 9} y="3" width="18" height="4.5" fill={c.ink} />
+        <g transform="translate(3 3)">{layer(c.accent)}</g>
+        {layer(c.ink)}
+        {stackI && (
+          <>
+            <path d={`M${ix - 5.3},${top + 8} h10.6 l0.2,6 h-11 Z M${ix - 5.6},${top + 19} h11.2 l0.2,6 h-11.6 Z`} fill={c.accent} />
+            <rect x={ix - 7} y={top - 2} width="14" height="4" fill={c.ink} />
+          </>
+        )}
       </g>
     </svg>
   );
