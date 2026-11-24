@@ -373,6 +373,13 @@ def find_docno(b, sheet):
         for c in row:
             if isinstance(c.value, str) and DOCNO.search(c.value) and len(c.value) < 40:
                 return c.value.strip()
+    # 이미 정리한 양식: 문서번호가 칸에서 바닥글로 옮겨져 있다. 다시 돌려도 바닥글을 잃지 않게 바닥글에서 찾는다
+    m = re.search(r'<oddFooter>(.*?)</oddFooter>', b.sx(sheet), re.S)
+    if m:
+        t = re.sub(r'&amp;(?:"[^"]*"|\d+|[A-Z])', '', m.group(1))
+        k = DOCNO.search(t)
+        if k:
+            return t[max(0, t.rfind('■', 0, k.start())):k.end()].strip()
     return None
 
 
