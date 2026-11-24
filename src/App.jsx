@@ -371,7 +371,7 @@ const sanitizeLeakTest = (value) => {
 const SAMPLING_LOG_TEMPLATE_FILE = 'samplinglog-template.xlsx';
 const SHEET_SHORT_LABELS = { dust: '먼지', metal: '금속', mercury: '수은', pahs: 'PAHs', flow: '유량', samplinglog: '종합' };
 const SHEET_BADGE_COLORS = { dust: '#16a34a', metal: '#ca8a04', mercury: '#2563eb', pahs: '#9333ea', flow: '#0891b2', samplinglog: '#ea580c' };
-// 첫 화면 기록부 카드에서 이름 앞에 찍는 점의 색: 배경 판화의 잉크처럼 채도를 낮춘 색
+// 첫 화면 기록부 카드에서 이름 아래에 긋는 붓 획의 색: 배경 판화의 잉크처럼 채도를 낮춘 색
 const SHEET_CARD_INKS = { dust: '#4f7a5a', metal: '#c79a3a', mercury: '#3f6a94', pahs: '#7a5a8c', flow: '#3d8a96', samplinglog: '#c4523a' };
 // 기록부 종류 아이콘 배지: 종류별 색 + 짧은 이름
 // 글자 로고: 배경과 같은 판화풍. 굵은 한 획 글자를 잉크 한 판으로 찍고, 붉은 판을 살짝 어긋나게 겹친다.
@@ -1280,7 +1280,7 @@ const SKYLINE_FLYER_CSS = `
 .sp-btn:focus-visible, .sp-card:focus-visible { outline: 3px solid var(--sp-accent); outline-offset: 2px; }
 .sp-avatar { border: 1px solid var(--sp-line) !important; border-radius: 999px !important; }
 .sp-menu .menu-avatar-fallback { background: var(--sp-ink) !important; color: var(--sp-paper) !important; }
-/* 기록부 카드: 이름 앞의 작은 잉크 점 하나로만 종류를 구분한다 */
+/* 기록부 카드: 이름 아래에 붓으로 한 번 그은 듯한 색 획으로 종류를 구분한다 (올려놓으면 획이 길어진다) */
 .sp-card {
   display: block; text-align: left;
   padding: 1.1rem 1.25rem 1rem;
@@ -1292,7 +1292,14 @@ const SKYLINE_FLYER_CSS = `
 }
 .sp-card:hover { transform: translateY(-3px); background: #fffcf3; box-shadow: 0 1px 0 rgba(42, 57, 68, 0.1), 0 18px 30px -16px rgba(20, 28, 34, 0.6); }
 .sp-card:active { transform: translateY(0); }
-.sp-card-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 999px; margin-right: 0.5rem; background: var(--sp-card-color, var(--sp-ink)); vertical-align: 0.05em; }
+.sp-card-mark {
+  display: block; width: 3.4rem; height: 0.5rem; margin: 0.3rem 0 0.45rem -0.1rem;
+  background: var(--sp-card-color, var(--sp-ink));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  transition: width 0.25s ease;
+}
+.sp-card:hover .sp-card-mark { width: 6.2rem; }
 .sp-card-open { margin-top: 0.85rem; font-size: 0.72rem; font-weight: 600; color: var(--sp-soft); display: flex; justify-content: space-between; gap: 0.5rem; }
 .sp-card:hover .sp-card-open { color: var(--sp-ink); }
 .sp-empty { padding: 1.4rem; text-align: center; font-size: 0.78rem; color: var(--sp-soft); background: var(--sp-paper-2); border-radius: 12px; }
@@ -1322,7 +1329,7 @@ div.sp-modal.sp-modal {
 }
 .sp-modal input:focus, .sp-modal select:focus, .sp-modal textarea:focus { border-color: var(--sp-ink) !important; box-shadow: 0 0 0 3px rgba(196, 82, 58, 0.28) !important; }
 .sp-modal h3 { color: var(--sp-ink); }
-@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card, .sp-modal button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sp-btn, .sp-card, .sp-card-mark, .sp-modal button { transition: none; } }
 `;
 
 // ── 판화 포스터풍 공단 풍경 ──
@@ -2603,12 +2610,6 @@ const SheetSectionNav = ({ scope }) => {
     </nav>
   );
 };
-
-const SignatureBadge = () => (
-  <div className="fixed right-4 bottom-4 z-30 px-3 py-1.5 rounded-full border border-slate-300 bg-white/95 backdrop-blur shadow-sm text-xs font-bold text-slate-700">
-    sangseok
-  </div>
-);
 
 export default function App() {
   // 색 테마: 'default'(기본) | 'earth'(세이지·베이지·테라코타). 이 기기에 저장하고 모든 창에 같이 적용
@@ -10086,8 +10087,9 @@ export default function App() {
                     className="sp-card"
                     style={{ '--sp-card-color': SHEET_CARD_INKS[sheet.id] }}
                   >
-                    <h2 className="sp-title text-base"><span className="sp-card-dot" />{sheet.title}</h2>
-                    <p className="sp-kicker mt-1">{sheet.desc}</p>
+                    <h2 className="sp-title text-base">{sheet.title}</h2>
+                    <span className="sp-card-mark" />
+                    <p className="sp-kicker">{sheet.desc}</p>
                     <span className="sp-card-open">
                       <span>새 창으로 열기</span>
                       <span>저장 {profileSheetCounts[sheet.id] || 0}건</span>
@@ -10158,7 +10160,6 @@ export default function App() {
             </div>
           )}
         </div>
-        <SignatureBadge />
       </div>
     );
   }
