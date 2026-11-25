@@ -915,6 +915,23 @@ const getSkyPhaseByHour = (date = new Date()) => {
   return 'night';
 };
 
+// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학)
+const SKY_SEASON_OPTIONS = [
+  { id: 'auto', label: '자동' },
+  { id: 'spring', label: '봄' },
+  { id: 'summer', label: '여름' },
+  { id: 'autumn', label: '가을' },
+  { id: 'winter', label: '겨울' },
+];
+const sanitizeSkySeason = (value) => (SKY_SEASON_OPTIONS.some((opt) => opt.id === value) ? value : 'auto');
+const getSeasonByDate = (date = new Date()) => {
+  const month = date.getMonth() + 1;
+  if (month >= 3 && month <= 5) return 'spring';
+  if (month >= 6 && month <= 8) return 'summer';
+  if (month >= 9 && month <= 11) return 'autumn';
+  return 'winter';
+};
+
 const seededNoise = (seed) => {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
   return x - Math.floor(x);
@@ -1329,6 +1346,51 @@ const SKYLINE_FLYER_CSS = `
 .skyline-crane { position: absolute; animation: skylineCraneBob 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
 .skyline-crane svg { display: block; width: 100%; height: auto; overflow: visible; }
 .skyline-crane-wing { transform-origin: 60px 31px; animation: skylineCraneFlap 0.5s ease-in-out infinite alternate; animation-delay: var(--crane-delay, 0s); }
+/* 기러기: 일곱 마리가 ㅅ자로 하늘을 왼쪽에서 오른쪽으로 건넌다 */
+@keyframes skylineGeeseFly {
+  0% { transform: translate(-32vw, 5vh); }
+  22% { transform: translate(12vw, 0.8vh); }
+  62%, 100% { transform: translate(118vw, -0.6vh); }
+}
+.skyline-geese {
+  position: absolute;
+  left: 0;
+  top: 2.2%;
+  width: clamp(170px, 18vw, 270px);
+  aspect-ratio: 3.4;
+  animation: skylineGeeseFly 76s linear infinite;
+  animation-delay: -9s;
+  will-change: transform;
+}
+/* 나비: 둘레를 맴도는 길 + 날갯짓 */
+@keyframes skylineFlutter {
+  0%, 100% { transform: translate(0, 0); }
+  14% { transform: translate(16px, -13px); }
+  30% { transform: translate(34px, -3px); }
+  46% { transform: translate(22px, -24px); }
+  62% { transform: translate(-4px, -15px); }
+  80% { transform: translate(-20px, -4px); }
+}
+@keyframes skylineWingbeat {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0.16); }
+}
+.skyline-flutter { animation: skylineFlutter var(--flutter-duration, 12s) ease-in-out infinite; animation-delay: var(--flutter-delay, 0s); }
+.skyline-wingbeat { transform-box: fill-box; transform-origin: 50% 50%; animation: skylineWingbeat var(--beat, 0.28s) ease-in-out infinite alternate; }
+/* 잠자리: 한자리에 떠 있다가 휙 옮겨 간다 + 날개 떨림 */
+@keyframes skylineDart {
+  0%, 17% { transform: translate(0, 0); }
+  21%, 38% { transform: translate(52px, -12px); }
+  42%, 60% { transform: translate(22px, -30px); }
+  64%, 82% { transform: translate(-34px, -9px); }
+  86%, 100% { transform: translate(0, 0); }
+}
+@keyframes skylineShimmer {
+  from { opacity: 0.9; }
+  to { opacity: 0.45; }
+}
+.skyline-dart { animation: skylineDart var(--dart-duration, 14s) ease-in-out infinite; animation-delay: var(--dart-delay, 0s); }
+.skyline-shimmer { animation: skylineShimmer 0.09s linear infinite alternate; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
@@ -1350,7 +1412,8 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing, .skyline-flutter, .skyline-wingbeat, .skyline-dart, .skyline-shimmer { animation: none; }
+  .skyline-geese { animation: none; transform: translate(60vw, 1vh); }
   .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
 /* ── 첫 화면의 패널·버튼·카드: 흰 면을 부드럽게. 둥근 모서리, 가는 테두리, 낮게 깔리는 그림자 ── */
@@ -1422,6 +1485,8 @@ div.sp-modal.sp-modal {
 .sp-modal button[class*="bg-emerald-6"], .sp-modal button[class*="bg-slate-7"], .sp-modal button[class*="bg-slate-8"], .sp-modal button[class*="bg-blue-6"] {
   background: var(--sp-ink) !important; color: var(--sp-paper) !important; border: 1px solid var(--sp-ink) !important;
 }
+/* 고른(먹색) 버튼은 마우스를 올려도 먹색 그대로: 흰 바탕으로 바뀌면 흰 글자가 안 보였다 */
+.sp-modal button[class*="bg-emerald-6"]:hover, .sp-modal button[class*="bg-slate-7"]:hover, .sp-modal button[class*="bg-slate-8"]:hover, .sp-modal button[class*="bg-blue-6"]:hover { background: #1f2c35 !important; }
 .sp-modal button:not(:disabled):active { transform: scale(0.97); }
 /* 고른 테마 카드: 먹색 굵은 테두리 */
 .sp-modal button.sp-theme-card { border-radius: 14px !important; }
@@ -1559,11 +1624,103 @@ const SCENE_CATTAILS = [
   ...Array.from({ length: 9 }, (_, i) => ({ x: 14 + i * 27 + seededNoise(i * 9 + 5) * 12, h: 62 + seededNoise(i * 4 + 8) * 40, lean: seededNoise(i * 6 + 3) * 16 - 4 })),
   ...Array.from({ length: 6 }, (_, i) => ({ x: 1436 + i * 29 + seededNoise(i * 8 + 1) * 12, h: 54 + seededNoise(i * 5 + 4) * 38, lean: seededNoise(i * 7 + 2) * -16 + 4 })),
 ];
-// 개구리: 앞 둑 위. dir은 보는 방향(1 오른쪽, -1 왼쪽), every는 우는 간격(초)
-const SCENE_FROGS = [
-  { x: 692, size: 1.35, dir: 1, every: 9, delay: 2 },
-  { x: 1186, size: 1, dir: -1, every: 13, delay: 7 },
+// 개구리: 앞 둑 위를 폴짝폴짝 뛰어 왼쪽 풀숲과 오른쪽 풀숲 사이를 오간다.
+// 착지점마다 잠깐 앉아 쉬고(가끔 길게 쉬며 운다), 포물선으로 뛰어 다음 착지점으로 간다. 끝까지 가면 돌아선다.
+const SCENE_FROG_RANGE = [258, 1412];
+const buildFrogTrack = (seed) => {
+  const [x0, x1] = SCENE_FROG_RANGE;
+  const xs = [];
+  for (let x = x0, k = 0; x < x1 - 30; k += 1) { xs.push(x); x += 46 + seededNoise(seed + k * 7) * 26; }
+  xs.push(x1);
+  const pts = xs.map((x) => [x, sceneBankY(x) + 2]);
+  // 가는 길 + 오는 길
+  const stops = [...pts, ...pts.slice(0, -1).reverse()];
+  const arc = (a, b) => {
+    const dist = Math.abs(b[0] - a[0]);
+    return [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) - (20 + dist * 0.42)];
+  };
+  const f = (v) => v.toFixed(1);
+  let path = `M${f(stops[0][0])},${f(stops[0][1])}`;
+  const lengths = [0];
+  for (let i = 1; i < stops.length; i += 1) {
+    const a = stops[i - 1], b = stops[i], c = arc(a, b);
+    path += ` Q${f(c[0])},${f(c[1])} ${f(b[0])},${f(b[1])}`;
+    let len = 0, px = a[0], py = a[1];
+    for (let k = 1; k <= 16; k += 1) {
+      const t = k / 16, u = 1 - t;
+      const x = u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], y = u * u * a[1] + 2 * u * t * c[1] + t * t * b[1];
+      len += Math.hypot(x - px, y - py); px = x; py = y;
+    }
+    lengths.push(lengths[i - 1] + len);
+  }
+  const total = lengths[lengths.length - 1];
+  const HOP = 0.5;
+  const motion = [], sit = [[0, 1]], up = [[0, 0]], down = [[0, 0]];
+  let t = 0, turnAt = 0;
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    // 쉬는 시간: 보통 1~2초, 네댓 번에 한 번은 길게, 돌아설 때도 길게
+    let rest = 0.9 + seededNoise(seed + i * 13 + 5) * 1.3;
+    if (i % 5 === 3) rest += 2.6;
+    if (i === pts.length - 1) { rest += 2.4; turnAt = t + rest * 0.5; }
+    motion.push([t, lengths[i] / total]);
+    t += rest;
+    motion.push([t, lengths[i] / total]);
+    up.push([t, 1]); sit.push([t, 0]);
+    up.push([t + HOP * 0.5, 0]); down.push([t + HOP * 0.5, 1]);
+    t += HOP;
+    down.push([t, 0]); sit.push([t, 1]);
+  }
+  motion.push([t, 1]);
+  const T = t + 2.2;                    // 제자리로 돌아와 잠깐 쉰 뒤 다시 출발
+  motion.push([T, 1]);
+  const times = (list) => list.map(([time]) => (time / T).toFixed(5)).join(';');
+  const vals = (list) => list.map(([, v]) => (typeof v === 'number' && v % 1 !== 0 ? v.toFixed(5) : v)).join(';');
+  return {
+    path, dur: T, turn: (turnAt / T).toFixed(5),
+    motion: { keyTimes: times(motion), keyPoints: vals(motion) },
+    sit: { keyTimes: times(sit), values: vals(sit) },
+    up: { keyTimes: times(up), values: vals(up) },
+    down: { keyTimes: times(down), values: vals(down) },
+  };
+};
+const SCENE_FROG_TRACKS = [
+  { ...buildFrogTrack(3), size: 0.82, phase: 0.04, croak: 9 },
+  { ...buildFrogTrack(11), size: 0.68, phase: 0.55, croak: 13 },
 ];
+// 앉은 모습(오른쪽을 본다)과 뛰는 모습(몸을 쭉 펴고 뒷다리를 뻗는다)
+const SCENE_FROG_SIT = 'M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z';
+const SCENE_FROG_LEAP = 'M-30,-3 L-27,-6.5 L-15,-9 Q-6,-14.5 5,-14 a4,4 0 0 1 7.4,0.8 L20,-9.5 Q21.6,-7.6 19,-6.4 L14,-5 L17.5,-0.5 L14.5,0.5 L10.5,-4 Q2,-2.4 -6,-3.4 L-14,-4.2 L-27,-1.2 L-31,0.6 Z';
+// 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
+const SCENE_BUTTERFLIES = [
+  { x: 166, up: 58, dur: 11, delay: 2, beat: 0.26 }, { x: 322, up: 38, dur: 14, delay: 6, beat: 0.31 },
+  { x: 640, up: 26, dur: 16, delay: 9, beat: 0.24 }, { x: 1404, up: 52, dur: 12, delay: 4, beat: 0.29 },
+];
+const SCENE_DRAGONFLIES = [
+  { x: 438, up: 34, dur: 13, delay: 3, dir: 1 }, { x: 912, up: 52, dur: 17, delay: 8, dir: -1 }, { x: 1248, up: 30, dur: 15, delay: 11, dir: 1 },
+];
+// 기러기(가을): 일곱 마리가 ㅅ자 대형으로 하늘을 가로지른다 (맨 앞이 오른쪽)
+const SCENE_GEESE = [
+  { left: '84%', top: '38%', delay: 0 },
+  { left: '67%', top: '20%', delay: -0.14 }, { left: '67%', top: '58%', delay: -0.31 },
+  { left: '50%', top: '4%', delay: -0.22 }, { left: '50%', top: '76%', delay: -0.08 },
+  { left: '33%', top: '-10%', delay: -0.37 }, { left: '16%', top: '-24%', delay: -0.19 },
+];
+const renderSceneGoose = (pal) => (
+  <svg viewBox="0 0 120 64" aria-hidden="true">
+    <g transform="translate(120 0) scale(-1 1)">
+      <g className="skyline-crane-wing">
+        <path d="M56,31 Q62,15 79,8 Q82,18 77,31 Z" fill={pal.mid} />
+      </g>
+      <path d="M44,31 Q54,25 68,27 Q79,28 88,32 Q74,37 58,36 Q49,35 44,31 Z" fill={pal.ink} />
+      <path d="M47,29 L27,26 L27,29.2 L46,33 Z" fill={pal.ink} />
+      <ellipse cx="25" cy="27.6" rx="4" ry="2.9" fill={pal.ink} />
+      <path d="M22,26.6 L14,28 L22,29 Z" fill={pal.ink} />
+      <g className="skyline-crane-wing">
+        <path d="M49,31 Q52,16 70,3 Q77,12 73,31 Z" fill={pal.ink} />
+      </g>
+    </g>
+  </svg>
+);
 // 학(두루미) 무리: 맨 앞이 가장 크고, 뒤따르는 두 마리는 조금 작게 위·아래로 어긋나 난다
 const SCENE_CRANES = [
   { left: '0%', top: '20%', width: '44%', delay: 0 },
@@ -1590,8 +1747,10 @@ const renderSceneCrane = (pal) => (
   </svg>
 );
 
-const renderSkylineSvg = ({ pal, scope, compact = false }) => {
+const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) => {
   const id = (name) => `${scope}-sky-${name}`;
+  const warm = season === 'spring' || season === 'summer';      // 개구리·새끼 오리가 나오는 철
+  const stillScene = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
   const G = SCENE_GROUND;
   const stackScale = compact ? 0.66 : 1;
   const night = Boolean(pal.light);
@@ -1835,9 +1994,9 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
         <path d={`M640,${G + 23} L760,${G + 23} M260,${G + 24} L420,${G + 24} M1040,${G + 27} L1150,${G + 27} M420,${G + 5} L500,${G + 5} M1350,${G + 6} L1420,${G + 6}`} strokeWidth="1.2" />
       </g>
 
-      {/* 오리: 어미 뒤로 새끼들이 한 줄로 따라가며 강을 천천히 건넌다. 반대쪽으로 가는 한 쌍도 있다 */}
+      {/* 오리: 봄·여름에는 어미 뒤로 새끼들이 한 줄로 따라가고, 가을·겨울에는 다 자란 오리만 지나간다. 반대쪽으로 가는 한 쌍도 있다 */}
       {[
-        { y: G + 21, dur: 170, delay: -60, dir: 1, sizes: [1, 0.55, 0.55, 0.5, 0.55] },
+        { y: G + 21, dur: 170, delay: -60, dir: 1, sizes: warm ? [1, 0.55, 0.55, 0.5, 0.55] : [1, 0.9, 0.86] },
         { y: G + 12, dur: 210, delay: -150, dir: -1, sizes: [0.8, 0.8] },
       ].slice(0, compact ? 1 : 2).map((flock, fi) => (
         <g key={`ducks-${fi}`}>
@@ -1862,23 +2021,45 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
       <g filter={cut}>
         <path d={`M${SCENE_BANK.map(([x, dy]) => `${x},${G + dy}`).join(' L')} L1600,580 L0,580 Z`} fill={pal.bank} />
       </g>
+      {/* 개구리(봄·여름): 둑 위를 뛰어 왼쪽·오른쪽 풀숲 사이를 오간다. 앞줄 풀보다 먼저 그려 풀숲에 들어가면 가려진다 */}
+      {warm && SCENE_FROG_TRACKS.slice(0, compact ? 1 : SCENE_FROG_TRACKS.length).map((frog, i) => {
+        const timing = { dur: `${frog.dur.toFixed(2)}s`, begin: `-${(frog.dur * frog.phase).toFixed(2)}s`, repeatCount: 'indefinite' };
+        const sitting = (
+          <g>
+            <g transform="translate(11.5 -7.5)"><circle className="skyline-frog-sac" cx="3.6" cy="1.2" r="5.2" fill={pal.plume} style={{ '--frog-duration': `${frog.croak}s`, '--frog-delay': `-${i * 3}s` }} /></g>
+            <path d={SCENE_FROG_SIT} fill={pal.bank} />
+            <path d="M-13,-1.5 Q-10,-10 -3,-7.5 Q1,-6 1,-4" stroke={pal.water} strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.55" />
+            <circle cx="6.8" cy="-19" r="1.5" fill={pal.water} />
+          </g>
+        );
+        const leaping = (
+          <>
+            <path d={SCENE_FROG_LEAP} fill={pal.bank} />
+            <circle cx="8.6" cy="-14.4" r="1.5" fill={pal.water} />
+          </>
+        );
+        if (stillScene) return <g key={`frog-${i}`} transform={`translate(${i === 0 ? 692 : 1186} ${sceneBankY(i === 0 ? 692 : 1186) + 2}) scale(${frog.size})`}>{sitting}</g>;
+        return (
+          <g key={`frog-${i}`}>
+            <animateMotion {...timing} calcMode="linear" path={frog.path} keyPoints={frog.motion.keyPoints} keyTimes={frog.motion.keyTimes} />
+            <g transform={`scale(${frog.size})`}>
+              <g>
+                {/* 돌아올 때는 왼쪽을 본다 */}
+                <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="1 1;-1 1" keyTimes={`0;${frog.turn}`} {...timing} />
+                <g>{sitting}<animate attributeName="opacity" calcMode="discrete" values={frog.sit.values} keyTimes={frog.sit.keyTimes} {...timing} /></g>
+                <g opacity="0" transform="rotate(-26)">{leaping}<animate attributeName="opacity" calcMode="discrete" values={frog.up.values} keyTimes={frog.up.keyTimes} {...timing} /></g>
+                <g opacity="0" transform="rotate(22)">{leaping}<animate attributeName="opacity" calcMode="discrete" values={frog.down.values} keyTimes={frog.down.keyTimes} {...timing} /></g>
+              </g>
+            </g>
+          </g>
+        );
+      })}
       <g fill={pal.bank}>
         <path d={tufts.filter((t) => !t.back).map((t, i) => sceneTuft(t.x, t.size, i * 13 + 3)).join(' ')} />
         {!compact && [[468, 9, 4], [486, 6, 3], [826, 10, 4], [1108, 8, 3.5], [1126, 5, 2.5]].map(([x, rx, ry]) => (
           <ellipse key={`stone-${x}`} cx={x} cy={sceneBankY(x) + 1} rx={rx} ry={ry} />
         ))}
       </g>
-      {/* 개구리: 둑 위에 앉아 가끔 울음주머니를 부풀리며 운다 */}
-      {SCENE_FROGS.slice(0, compact ? 1 : SCENE_FROGS.length).map((f, i) => (
-        <g key={`frog-${i}`} transform={`translate(${f.x} ${sceneBankY(f.x) + 2}) scale(${f.dir * f.size} ${f.size})`}>
-          <g className="skyline-frog" style={{ '--frog-duration': `${f.every}s`, '--frog-delay': `-${f.delay}s` }}>
-            <g transform="translate(11.5 -7.5)"><circle className="skyline-frog-sac" cx="3.6" cy="1.2" r="5.2" fill={pal.plume} /></g>
-            <path d="M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z" fill={pal.bank} />
-            <path d="M-13,-1.5 Q-10,-10 -3,-7.5 Q1,-6 1,-4" stroke={pal.water} strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.55" />
-            <circle cx="6.8" cy="-19" r="1.5" fill={pal.water} />
-          </g>
-        </g>
-      ))}
       <g stroke={pal.bank} fill="none" strokeLinecap="round">
         {cattails.map((c, i) => {
           const y = sceneBankY(c.x) + 4, tx = c.x + c.lean, ty = y - c.h;
@@ -1899,6 +2080,27 @@ const renderSkylineSvg = ({ pal, scope, compact = false }) => {
           );
         })}
       </g>
+      {/* 나비(봄): 흰 날개를 팔랑이며 풀숲 둘레를 맴돈다 */}
+      {season === 'spring' && SCENE_BUTTERFLIES.slice(0, compact ? 2 : SCENE_BUTTERFLIES.length).map((bf, i) => (
+        <g key={`butterfly-${i}`} transform={`translate(${bf.x} ${sceneBankY(bf.x) - bf.up})`}>
+          <g className="skyline-flutter" style={{ '--flutter-duration': `${bf.dur}s`, '--flutter-delay': `-${bf.delay}s` }}>
+            <g className="skyline-wingbeat" style={{ '--beat': `${bf.beat}s` }}>
+              <path d="M0,0 Q-6,-10 -9,-4 Q-10,2 -1,1 Q-6,6 -2,6 Q0,4 0,1 Q0,4 2,6 Q6,6 1,1 Q10,2 9,-4 Q6,-10 0,0 Z" fill={pal.plume} stroke={pal.bank} strokeWidth="0.5" />
+            </g>
+            <path d="M0,-3 L0,4" stroke={pal.bank} strokeWidth="1.1" strokeLinecap="round" />
+          </g>
+        </g>
+      ))}
+      {/* 잠자리(여름·가을): 붉은 몸, 맑은 날개. 한자리에 떠 있다가 휙 옮겨 간다 */}
+      {(season === 'summer' || season === 'autumn') && SCENE_DRAGONFLIES.slice(0, compact ? 1 : SCENE_DRAGONFLIES.length).map((df, i) => (
+        <g key={`dragonfly-${i}`} transform={`translate(${df.x} ${sceneBankY(df.x) - df.up}) scale(${df.dir} 1)`}>
+          <g className="skyline-dart" style={{ '--dart-duration': `${df.dur}s`, '--dart-delay': `-${df.delay}s` }}>
+            <path className="skyline-shimmer" d="M1,-0.6 L-6,-8.5 L-2.5,-9 Z M2.5,-0.6 L6,-9.5 L9.5,-8.5 Z" fill={pal.plume} />
+            <path d="M-4,0 L12,0.6" stroke={pal.band} strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="-4.4" cy="-0.2" r="1.7" fill={pal.band} />
+          </g>
+        </g>
+      ))}
     </svg>
   );
 };
@@ -2017,6 +2219,7 @@ const STORAGE_KEYS = {
   lastLoginId: 'dust-sampling.last-login-id.v1',
   sessionAuth: 'dust-sampling.session-auth.v1',
   skyPreviewMode: 'dust-sampling.sky-preview-mode.v1',
+  skySeason: 'dust-sampling.sky-season.v1',
   skyTheme: 'dust-sampling.sky-theme.v1',
   cloudSyncPrefix: 'dust-sampling.cloud-sync.v1.',
   samplingLogDraftPrefix: 'dust-sampling.samplinglog-draft.v1.',
@@ -3306,6 +3509,14 @@ export default function App() {
       return 'auto';
     }
   });
+  const [skySeasonMode, setSkySeasonMode] = useState(() => {
+    try { return sanitizeSkySeason(localStorage.getItem(STORAGE_KEYS.skySeason)); } catch { return 'auto'; }
+  });
+  const changeSkySeason = (value) => {
+    const next = sanitizeSkySeason(value);
+    setSkySeasonMode(next);
+    try { localStorage.setItem(STORAGE_KEYS.skySeason, next); } catch { /* 저장 못 해도 이번 화면엔 쓴다 */ }
+  };
   const [isMobileViewport, setIsMobileViewport] = useState(() => isMobileViewportWidth());
   const [isKFactorEditing, setIsKFactorEditing] = useState(false);
   const displayUserName = String(profileNickname || '').trim() || activeUser || '';
@@ -9734,6 +9945,7 @@ export default function App() {
   const impingerStageCount = getImpingerStageCount(selectedSheet || 'dust');
   const visibleImpingers = normalizeImpingers(formData.impingers, impingerStageCount);
   const resolvedSkyMode = skyPreviewMode === 'auto' ? skyPhase : skyPreviewMode;
+  const skySeason = skySeasonMode === 'auto' ? getSeasonByDate() : skySeasonMode;
   const skyTheme = getSceneTheme(skyThemeId, resolvedSkyMode);
   const isNightSky = Boolean(skyTheme.stars);
   const isMorningSky = skyTheme.orb === 'bigsun';
@@ -9748,7 +9960,16 @@ export default function App() {
     <>
       <div className="skyline-grain" style={{ '--grain-opacity': skyTheme.grain }} />
       {isMorningSky && <div className={scope === 'menu' ? 'skyline-sunrise-mountain' : 'skyline-sunrise-mountain-sheet'} style={skyOrbStyle} />}
-      {scope === 'menu' && (
+      {scope === 'menu' && skySeason === 'autumn' && (
+        <div className="skyline-geese">
+          {SCENE_GEESE.map((goose, i) => (
+            <div key={`goose-${i}`} className="skyline-crane" style={{ left: goose.left, top: goose.top, width: '15%', '--crane-delay': `${goose.delay}s` }}>
+              {renderSceneGoose(skyTheme.pal)}
+            </div>
+          ))}
+        </div>
+      )}
+      {scope === 'menu' && skySeason === 'winter' && (
         <div className="skyline-cranes">
           {SCENE_CRANES.map((crane, i) => (
             <div key={`crane-${i}`} className="skyline-crane" style={{ left: crane.left, top: crane.top, width: crane.width, '--crane-delay': `${crane.delay}s` }}>
@@ -9893,7 +10114,7 @@ export default function App() {
             </div>
           )}
           <div className="absolute bottom-0 left-0 right-0 h-[22rem] md:h-[32rem]">
-            {renderSkylineSvg({ pal: skyTheme.pal, scope: 'menu' })}
+            {renderSkylineSvg({ pal: skyTheme.pal, scope: 'menu', season: skySeason })}
           </div>
         </div>
 
@@ -10120,6 +10341,27 @@ export default function App() {
                                 type="button"
                                 aria-pressed={selected}
                                 onClick={() => setSkyPreviewMode(opt.id)}
+                                className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
+                                  selected
+                                    ? 'border-slate-800 bg-slate-800 text-white'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-3">계절 (자동은 달력을 따릅니다 · 봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학)</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {SKY_SEASON_OPTIONS.map((opt) => {
+                            const selected = skySeasonMode === opt.id;
+                            return (
+                              <button
+                                key={`settings-season-${opt.id}`}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => changeSkySeason(opt.id)}
                                 className={`px-2.5 py-1 rounded border text-[11px] font-bold transition-colors ${
                                   selected
                                     ? 'border-slate-800 bg-slate-800 text-white'
@@ -10883,7 +11125,7 @@ export default function App() {
           />
         ))}
         <div className="absolute bottom-0 left-0 right-0 h-[16rem] md:h-[19rem]">
-          {renderSkylineSvg({ pal: skyTheme.pal, scope: 'sheet', compact: true })}
+          {renderSkylineSvg({ pal: skyTheme.pal, scope: 'sheet', compact: true, season: skySeason })}
         </div>
       </div>
   );
