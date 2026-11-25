@@ -551,7 +551,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 30, code: 'M', name: '아연', kind: 'particle', testPeriod: '6' },
   { row: 31, code: 'M', name: '베릴륨', kind: 'particle', testPeriod: '6' },
   { row: 32, code: 'M', name: '비소(입자상)', species: '비소', part: '입자상', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
-  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일', testPeriod: '9' },
+  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일', testPeriod: '9', sameAs: 32 },
   { row: 34, code: 'Hg', name: '수은', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
   { row: 35, code: 'ALD-1', name: '알데히드-1', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '1회차', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
   { row: 36, code: 'ALD-2', name: '알데히드-2', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '2회차', kind: 'gas', suctionRate: '1', targetVolume: '10' },
@@ -576,7 +576,8 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 55, code: 'AN', name: '아닐린', kind: 'plain' },
   // 이황화메틸: 저온농축 기체크로마토그래피 — 시료채취 주머니로만 채취한다
   { row: 56, code: 'DMS', name: '이황화메틸', kind: 'box' },
-  { row: 57, code: 'OX', name: '옥사이드', species: '에틸렌옥사이드 · 프로필렌옥사이드', options: ['에틸렌옥사이드', '프로필렌옥사이드'], kind: 'box', testPeriod: '9' },
+  { row: 57, code: 'EO', name: '에틸렌옥사이드', kind: 'box', testPeriod: '9' },
+  { row: 58, code: 'PO', name: '프로필렌옥사이드', kind: 'box', testPeriod: '9' },
 ];
 
 // 기록부(먼지·금속·수은·PAHs) 저장본을 통합시료채취기록부 행에 옮길 때의 대응표
@@ -699,11 +700,12 @@ const groupSheetReportsForLog = (reports, resolveSheetId, sheetFilter = LOG_SOUR
 // 양식에서 의뢰 칸(C열)이 윗행과 병합된 행: 18(암모니아), 33(비소), 36·37(알데히드). 황산화물·질소산화물(14·15)은 별개 종이라 추출 시 병합을 풀고 각각 O 표시
 // 프로그램에서는 줄마다 따로 의뢰하므로(암모니아 1·2, 비소 입자·가스, 알데히드 1~3회차), 추출할 때 병합을 모두 풀고 줄마다 O 표시를 한다.
 // 병합해 두면 알데히드-1만 의뢰해도 2·3회차 줄에 샘플러 번호가 찍혔다
-const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set();
-const SAMPLING_LOG_UNMERGE_ON_EXPORT = ['C14:C15', 'C17:C18', 'C32:C33', 'C35:C37'];
+// 비소(입자상·가스상)만은 한 번에 채취하는 한 물질이라 양식대로 병합해 두고 O를 하나만 적는다 → 의뢰 개수(COUNTA)에 1로 잡힌다
+const SAMPLING_LOG_MERGED_CHECK_ROWS = new Set(SAMPLING_LOG_SUBSTANCES.filter((item) => item.sameAs).map((item) => item.row));
+const SAMPLING_LOG_UNMERGE_ON_EXPORT = ['C14:C15', 'C17:C18', 'C35:C37'];
 // sampler No. 칸이 샘플러 이름 칸을 읽는 줄: 입자 샘플러(P3), 가스 샘플러(R3)
 const SAMPLING_LOG_SAMPLER_NAME_ROWS = { P: [13, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34], R: [17, 18, 19, 20, 21, 22, 23, 35, 36, 37, 38, 39] };
-// 두 종이 묶인 물질(알데히드·옥사이드)의 이름: 한 종만 의뢰하면 그 종의 이름으로, 둘 다이면 묶음 이름으로.
+// 두 종이 묶인 물질(알데히드)의 이름: 한 종만 의뢰하면 그 종의 이름으로, 둘 다이면 묶음 이름으로.
 // 회차 번호(알데히드-1의 '-1')는 그대로 붙인다
 const samplingLogSpeciesName = (sub, row) => {
   if (!Array.isArray(sub.options)) return sub.name;
@@ -735,7 +737,7 @@ const SAMPLING_LOG_GROUP_HEADER = {
   violet: 'bg-violet-50 text-violet-900 border-violet-200',
 };
 // 종(種) 단위: 같은 측정 건을 여러 행으로 적는 것(암모니아 흡수액 2종, 비소 입자상·가스상, 알데히드 3회차)은 한 종으로 센다.
-// 옥사이드 한 행은 에틸렌옥사이드·프로필렌옥사이드 2종, 알데히드는 포름·아세트 2종 → 전체 43종
+// 알데히드는 포름·아세트 2종. 에틸렌옥사이드·프로필렌옥사이드는 각각 한 줄 → 전체 43종
 const getSubstanceSpeciesKey = (sub) => sub.species || sub.name;
 const getSubstanceSpeciesCount = (sub, row = null) => {
   if (!Array.isArray(sub.options)) return 1;
@@ -756,8 +758,37 @@ const countSpecies = (subs, log = null) => {
 const SAMPLING_LOG_SPECIES_TOTAL = countSpecies(SAMPLING_LOG_SUBSTANCES);
 const getSamplingLogRowsOfSpecies = (sub) => SAMPLING_LOG_SUBSTANCES.filter((item) => getSubstanceSpeciesKey(item) === getSubstanceSpeciesKey(sub));
 
+// 다른 줄과 한 번에 채취하는 줄(비소 가스상 → 비소 입자상): 일차·시각·가스미터 값·온도·압력이 늘 같다
+const SAMPLING_LOG_LINKED_FIELDS = ['dayIndex', 'start', 'end', 'meterStart', 'meterEnd', 'temp', 'pressureH2O'];
+const getSamplingLogLinkedRowKeys = (rowKey) => {
+  const sub = SAMPLING_LOG_SUBSTANCES.find((item) => String(item.row) === String(rowKey));
+  if (!sub) return [String(rowKey)];
+  const leader = sub.sameAs || sub.row;
+  return SAMPLING_LOG_SUBSTANCES.filter((item) => item.row === leader || item.sameAs === leader).map((item) => String(item.row));
+};
+// 묶인 줄의 값을 맞춘다: 대표 줄(입자상)에 적힌 값을 쓰고, 대표 줄이 비어 있으면 따라가는 줄의 값을 쓴다
+const syncSamplingLogLinkedRows = (rows) => {
+  const next = { ...rows };
+  SAMPLING_LOG_SUBSTANCES.filter((item) => item.sameAs).forEach((item) => {
+    const followerKey = String(item.row), leaderKey = String(item.sameAs);
+    const leader = next[leaderKey], follower = next[followerKey];
+    if (!leader || !follower) return;
+    const leaderHas = SAMPLING_LOG_LINKED_FIELDS.some((field) => field !== 'dayIndex' && String(leader[field] ?? '').trim() !== '');
+    const merged = {};
+    SAMPLING_LOG_LINKED_FIELDS.forEach((field) => {
+      if (field === 'dayIndex') { merged.dayIndex = leaderHas || !follower.requested ? leader.dayIndex : follower.dayIndex; return; }
+      const a = String(leader[field] ?? ''), b = String(follower[field] ?? '');
+      merged[field] = a.trim() !== '' ? a : b;
+    });
+    next[leaderKey] = { ...leader, ...merged };
+    next[followerKey] = { ...follower, ...merged };
+  });
+  return next;
+};
+
 const getSamplingLogStats = (log) => {
-  const requested = SAMPLING_LOG_SUBSTANCES.filter((sub) => log.rows[String(sub.row)]?.requested);
+  // 다른 줄과 한 번에 채취하는 줄(비소 가스상)은 따로 세지 않는다
+  const requested = SAMPLING_LOG_SUBSTANCES.filter((sub) => !sub.sameAs && log.rows[String(sub.row)]?.requested);
   const filled = requested.filter((sub) => {
     const row = log.rows[String(sub.row)];
     return row && row.start && row.end;
@@ -777,7 +808,7 @@ const createEmptySamplingLogRow = (substance) => ({
   targetVolume: substance.targetVolume || '',
   duration: substance.duration || '',
   testPeriod: substance.testPeriod || '',
-  // 한 행에 두 종이 묶인 경우(알데히드, 옥사이드) 어느 종을 의뢰하는지
+  // 한 행에 두 종이 묶인 경우(알데히드) 어느 종을 의뢰하는지
   speciesSel: Array.isArray(substance.options) ? [...substance.options] : undefined,
   // 채취 기구를 고르는 물질(이황화탄소·이황화메틸): 흡착관 / 테들러백
   collector: Array.isArray(substance.collectors) ? (substance.collectorDefault || substance.collectors[0]) : undefined,
@@ -817,9 +848,14 @@ const sanitizeSamplingLog = (value) => {
     return Object.fromEntries(Object.keys(day).map((key) => [key, text(src[key])]));
   });
   next.staffByDay = base.staffByDay.map((list, idx) => sanitizeStaffList(Array.isArray(value.staffByDay) ? value.staffByDay[idx] : [], SAMPLING_LOG_STAFF_MAX));
+  // 예전 저장본에는 57행이 '옥사이드' 한 줄(두 종 중 고르기)이었다 → 고른 종에 따라 57행(에틸렌옥사이드)·58행(프로필렌옥사이드)으로 나눈다
+  const srcRows = value.rows && typeof value.rows === 'object' ? value.rows : {};
+  const legacyOxide = srcRows['57'] && srcRows['58'] === undefined ? srcRows['57'] : null;
+  const legacyOxidePicked = (name) => !Array.isArray(legacyOxide?.speciesSel) || legacyOxide.speciesSel.includes(name);
   next.rows = Object.fromEntries(SAMPLING_LOG_SUBSTANCES.map((item) => {
     const key = String(item.row);
-    const src = value.rows && typeof value.rows === 'object' ? value.rows[key] : null;
+    let src = srcRows[key] || null;
+    if (legacyOxide && (item.row === 57 || item.row === 58)) src = { ...legacyOxide, requested: Boolean(legacyOxide.requested) && legacyOxidePicked(item.name) };
     const row = createEmptySamplingLogRow(item);
     if (src && typeof src === 'object') {
       row.requested = Boolean(src.requested);
@@ -837,6 +873,7 @@ const sanitizeSamplingLog = (value) => {
     }
     return [key, row];
   }));
+  next.rows = syncSamplingLogLinkedRows(next.rows);
   return next;
 };
 
@@ -8837,6 +8874,7 @@ export default function App() {
           next.rows[key] = { ...next.rows[key], requested: true, dayIndex, ...filledValues };
         });
       });
+      next.rows = syncSamplingLogLinkedRows(next.rows);
       return next;
     });
     if (overflowDates.length > 0) {
@@ -8884,6 +8922,12 @@ export default function App() {
       const keys = sub ? getSamplingLogRowsOfSpecies(sub).map((item) => String(item.row)) : [String(rowKey)];
       const rows = { ...prev.rows };
       keys.forEach((k) => { rows[k] = { ...rows[k], [key]: value }; });
+      return { ...prev, rows };
+    }
+    if (SAMPLING_LOG_LINKED_FIELDS.includes(key)) {
+      // 한 번에 채취하는 줄(비소 입자상·가스상)은 일차·시각·가스미터 값·온도·압력을 함께 바꾼다
+      const rows = { ...prev.rows };
+      getSamplingLogLinkedRowKeys(rowKey).forEach((k) => { rows[k] = { ...rows[k], [key]: value }; });
       return { ...prev, rows };
     }
     return { ...prev, rows: { ...prev.rows, [rowKey]: { ...prev.rows[rowKey], [key]: value } } };
@@ -9102,7 +9146,11 @@ export default function App() {
       const gasTableYd = gasIndex >= 0 && gasIndex < 5 ? toNumber(gasSamplers[gasIndex].yd) : NaN;
 
       // sampler No.: 제 줄의 의뢰 칸을 보고, 샘플러를 고르지 않았으면 0이 아니라 빈칸으로 (양식은 알데히드 2·3회차가 1회차 줄을 보았다)
-      Object.entries(SAMPLING_LOG_SAMPLER_NAME_ROWS).forEach(([col, list]) => list.forEach((r) => add(`E${r}`, { formula: `IF(OR(C${r}="",$${col}$3=""),"",$${col}$3)` })));
+      Object.entries(SAMPLING_LOG_SAMPLER_NAME_ROWS).forEach(([col, list]) => list.forEach((r) => {
+        // 의뢰 칸이 윗줄과 병합된 줄(비소 가스상)은 윗줄의 의뢰 칸을 본다
+        const checkRow = SAMPLING_LOG_SUBSTANCES.find((item) => item.row === r)?.sameAs || r;
+        add(`E${r}`, { formula: `IF(OR(C${checkRow}="",$${col}$3=""),"",$${col}$3)` });
+      }));
       const longNameRows = new Map(); // 행 → 줄 수 (물질명을 여러 줄로 적은 행)
       SAMPLING_LOG_SUBSTANCES.forEach((sub) => {
         const r = sub.row;
@@ -9111,7 +9159,7 @@ export default function App() {
         const day = on ? log.days[row.dayIndex] : null;
         if (!SAMPLING_LOG_MERGED_CHECK_ROWS.has(r)) add(`C${r}`, on ? 'O' : null);
         if (Array.isArray(sub.options)) {
-          // 알데히드·옥사이드: 한 종만 의뢰하면 그 종의 이름, 둘 다이면 묶음 이름
+          // 알데히드: 한 종만 의뢰하면 그 종의 이름, 둘 다이면 묶음 이름
           add(`B${r}`, samplingLogSpeciesName(sub, row));
         }
         add(`D${r}`, on ? buildSamplingLogSampleNo(log, sub) : null);
@@ -9154,9 +9202,9 @@ export default function App() {
         }
       });
 
-      // 시료채취자: 1일차는 58·59행(직급·이름), 2일차는 60·61행. 3·4일차는 양식에 자리가 없어 인쇄 범위 밖 64~67행에 둔다
+      // 시료채취자: 1일차는 59·60행(직급·이름), 2일차는 61·62행. 3·4일차는 양식에 자리가 없어 일차별 시트에 글자로 적는다
       // (일차별 시트가 이 칸들을 읽는다). 고르지 않은 자리는 비운다 → 양식에 적혀 있던 예시 이름이 남지 않는다
-      const STAFF_ROWS = [58, 60];
+      const STAFF_ROWS = [59, 61];
       const STAFF_COLS = ['E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N'];
       const staffDayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date) || SAMPLING_LOG_SUBSTANCES.some((sub) => { const row = log.rows[String(sub.row)]; return row && row.requested && Number(row.dayIndex) === dayIdx; });
       // 그 일차에 고른 사람. 아무도 고르지 않았으면, 쓰는 일차에는 프로그램에 등록된 명단을 그대로 쓴다
@@ -9172,7 +9220,7 @@ export default function App() {
           add(`${col}${rankRow + 1}`, textOrNull(list[i]?.name));
         });
       });
-      add('C58', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
+      add('C59', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
       zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }))
@@ -9202,7 +9250,7 @@ export default function App() {
             new RegExp(`(<c r="([B-K])\\d+"[^>]*><f>IF\\(\\$J\\$7='${inputRef}'!\\$?F(\\d+),'${inputRef}'!)(?:\\$?[A-Z]{1,3}\\$?\\d+|#REF!)(,"")`, 'g'),
             (full, head, col, srcRow, tail) => `${head}${DAY_SHEET_INPUT_COLUMNS[col]}${srcRow}${tail}`,
           );
-        // 일차별 시트의 시료채취자 줄(57·58행): 직급 4칸·이름 5칸으로 어긋나 있고 이름 두 칸은 글자로 박혀 있었다
+        // 일차별 시트의 시료채취자 줄(58·59행): 직급 4칸·이름 5칸으로 어긋나 있고 이름 두 칸은 글자로 박혀 있었다
         // → 다섯 자리(D·F·H·J·K) 모두 입력 시트의 그 일차 직급·이름을 읽게 한다
         const withDayStaff = (xml, dayIdx) => {
           const src = (col, row) => `'${inputSheet}'!${col}${row}`;
@@ -9214,22 +9262,22 @@ export default function App() {
           const nameValue = (inCol, i) => (rankRow !== undefined ? { formula: `IF(${src(inCol, nameRow)}="","",${src(inCol, nameRow)}&" (인)")` } : (dayStaff[i]?.name ? `${dayStaff[i].name} (인)` : ''));
           [['D', 'E'], ['F', 'F'], ['H', 'G']].forEach(([dayCol, inCol], i) => {
             const signCol = String.fromCharCode(dayCol.charCodeAt(0) + 1);
-            slotUpdates.push({ ref: `${dayCol}57`, value: rankValue(inCol, i) });
+            slotUpdates.push({ ref: `${dayCol}58`, value: rankValue(inCol, i) });
             // 이름과 (인)을 한 칸으로 합친다 (직급 칸과 같은 폭, 가운데에 '이름 (인)')
-            slotUpdates.push({ ref: `${dayCol}58`, value: nameValue(inCol, i), styleFrom: 'H58' });
-            slotUpdates.push({ ref: `${signCol}58`, value: '', styleFrom: 'H58' });
+            slotUpdates.push({ ref: `${dayCol}59`, value: nameValue(inCol, i), styleFrom: 'H59' });
+            slotUpdates.push({ ref: `${signCol}59`, value: '', styleFrom: 'H59' });
           });
           // 네 번째·다섯 번째 자리(J·K열): 다섯 명일 때만 두 칸으로 나누고, 네 명 이하면 한 칸으로 합친다
           const fiveStaff = dayStaff.length >= 5;
-          slotUpdates.push({ ref: 'J57', value: rankValue('H', 3), styleFrom: 'H57' });
-          slotUpdates.push({ ref: 'J58', value: nameValue('H', 3), styleFrom: 'H58' });
-          slotUpdates.push({ ref: 'K57', value: fiveStaff ? rankValue('I', 4) : '', styleFrom: 'H57' });
-          slotUpdates.push({ ref: 'K58', value: fiveStaff ? nameValue('I', 4) : '', styleFrom: 'H58' });
-          // 알데히드·옥사이드 이름은 입력 시트의 물질명(한 종만 의뢰하면 그 종의 이름)을 따라간다. 일차별 시트의 물질 줄 = 입력 시트 줄 - 1
+          slotUpdates.push({ ref: 'J58', value: rankValue('H', 3), styleFrom: 'H58' });
+          slotUpdates.push({ ref: 'J59', value: nameValue('H', 3), styleFrom: 'H59' });
+          slotUpdates.push({ ref: 'K58', value: fiveStaff ? rankValue('I', 4) : '', styleFrom: 'H58' });
+          slotUpdates.push({ ref: 'K59', value: fiveStaff ? nameValue('I', 4) : '', styleFrom: 'H59' });
+          // 알데히드 이름은 입력 시트의 물질명(한 종만 의뢰하면 그 종의 이름)을 따라간다. 일차별 시트의 물질 줄 = 입력 시트 줄 - 1
           SAMPLING_LOG_SUBSTANCES.filter((sub) => Array.isArray(sub.options)).forEach((sub) => slotUpdates.push({ ref: `A${sub.row - 1}`, value: { formula: src('B', sub.row) } }));
           return patchWorksheetXml(xml, slotUpdates, fiveStaff
-            ? { removeMerges: ['J57:K57'], addMerges: ['D58:E58', 'F58:G58', 'H58:I58'] }
-            : { addMerges: ['D58:E58', 'F58:G58', 'H58:I58', 'J58:K58'] });
+            ? { removeMerges: ['J58:K58'], addMerges: ['D59:E59', 'F59:G59', 'H59:I59'] }
+            : { addMerges: ['D59:E59', 'F59:G59', 'H59:I59', 'J59:K59'] });
         };
         const dayInUse = (dayIdx) => Boolean(log.days[dayIdx]?.date)
           || SAMPLING_LOG_SUBSTANCES.some((sub) => {
@@ -9261,7 +9309,7 @@ export default function App() {
             const position = Array.from(workbookXml.matchAll(/<sheet\b/g)).length;
             const tempName = `${dayIdx + 1}일차`;
             workbookXml = workbookXml.replace('</sheets>', `<sheet name="${tempName}" sheetId="${Math.max(0, ...sheetIds) + 1}" r:id="${relId}"/></sheets>`);
-            const printArea = `<definedName name="_xlnm.Print_Area" localSheetId="${position}">'${tempName}'!$A$2:$K$59</definedName>`;
+            const printArea = `<definedName name="_xlnm.Print_Area" localSheetId="${position}">'${tempName}'!$A$2:$K$60</definedName>`;
             workbookXml = workbookXml.includes('</definedNames>')
               // 인쇄 범위 글에 '$'가 들어 있어 함수로 넘긴다 (문자열이면 '$' 기호가 특수하게 해석될 수 있다)
               ? workbookXml.replace('</definedNames>', () => `${printArea}</definedNames>`)
@@ -9348,32 +9396,32 @@ export default function App() {
           // 숫자 열은 자릿수를 하나로: 가스미터·채취유량 소수 둘째, 온도·게이지압(mmH2O) 소수 첫째, 압력(mmHg) 소수 둘째
           rules: (name) => (name === inputSheet
             ? {
-                rowHeights: { ...rowsAt(13, 57, 17.25), ...Object.fromEntries([...longNameRows].map(([r, lines]) => [r, lines * 14 + 6])) },
+                rowHeights: { ...rowsAt(13, 58, 17.25), ...Object.fromEntries([...longNameRows].map(([r, lines]) => [r, lines * 14 + 6])) },
                 wrap: [...longNameRows.keys()].map((r) => `B${r}`),
                 // 시료번호는 길어서 칸에 다 보이게 글자를 줄인다
-                fontSizes: [{ range: 'D13:D57', sz: 9 }],
+                fontSizes: [{ range: 'D13:D58', sz: 9 }],
                 numberFormats: [
                   { range: 'Q6:Q10', code: '0.0000' }, { range: 'T6:T10', code: '0.0000' },
-                  { range: 'I13:K57', code: '0.00' }, { range: 'L13:M57', code: '0.0' }, { range: 'N13:N57', code: '0.00' },
+                  { range: 'I13:K58', code: '0.00' }, { range: 'L13:M58', code: '0.0' }, { range: 'N13:N58', code: '0.00' },
                 ],
                 center: ['E6:M9'],
               }
             : {
-                numberFormats: [{ range: 'F12:H56', code: '0.00' }, { range: 'I12:J56', code: '0.0' }, { range: 'K12:K56', code: '0.00' }],
+                numberFormats: [{ range: 'F12:H57', code: '0.00' }, { range: 'I12:J57', code: '0.0' }, { range: 'K12:K57', code: '0.00' }],
               }),
         });
       } catch (error) { console.error('서식 정리 실패:', error); }
-      // 시료채취자 칸의 테두리: 입력 시트 B58:N61, 일차별 시트 A57:K58 (가는 선 + 굵은 둘레)
+      // 시료채취자 칸의 테두리: 입력 시트 B59:N62, 일차별 시트 A58:K59 (가는 선 + 굵은 둘레)
       try {
         const relsNow = await zip.file('xl/_rels/workbook.xml.rels').async('string');
         const staffBoxes = Array.from(workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"/g)).map((m) => {
           const target = (new RegExp(`Id="${m[2]}"[^>]*Target="([^"]+)"`).exec(relsNow) || new RegExp(`Target="([^"]+)"[^>]*Id="${m[2]}"`).exec(relsNow) || [])[1];
-          return target ? { path: `xl/${target.replace(/^\/?xl\//, '')}`, range: m[1] === inputSheet ? 'B58:N61' : 'A57:K58' } : null;
+          return target ? { path: `xl/${target.replace(/^\/?xl\//, '')}`, range: m[1] === inputSheet ? 'B59:N62' : 'A58:K59' } : null;
         }).filter(Boolean);
         await boxSheetRanges(zip, staffBoxes);
         // 병합을 푼 의뢰 칸(암모니아·비소·알데히드)은 줄 사이에 선이 없다 → 가는 선으로 칸을 나눈다
-        const inputBox = staffBoxes.find((box) => box.range === 'B58:N61');
-        if (inputBox) await boxSheetRanges(zip, ['C14:C15', 'C17:C18', 'C32:C33', 'C35:C37'].map((range) => ({ path: inputBox.path, range })), { outer: 'thin' });
+        const inputBox = staffBoxes.find((box) => box.range === 'B59:N62');
+        if (inputBox) await boxSheetRanges(zip, SAMPLING_LOG_UNMERGE_ON_EXPORT.map((range) => ({ path: inputBox.path, range })), { outer: 'thin' });
       } catch (error) { console.error('시료채취자 테두리 정리 실패:', error); }
       const output = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
       const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -10642,7 +10690,9 @@ export default function App() {
                   {SAMPLING_LOG_GROUPS.map((group) => {
                     const members = SAMPLING_LOG_SUBSTANCES.filter((sub) => group.kinds.includes(sub.kind));
                     const visible = samplingLogRequestedOnly ? members.filter((sub) => log.rows[String(sub.row)]?.requested) : members;
-                    const requestedInGroup = members.filter((sub) => log.rows[String(sub.row)]?.requested).length;
+                    // 줄 수가 아니라 물질 수로 센다 (비소 입자상·가스상은 한 물질)
+                    const requestedInGroup = countSpecies(members.filter((sub) => log.rows[String(sub.row)]?.requested), log);
+                    const speciesInGroup = countSpecies(members);
                     if (samplingLogRequestedOnly && visible.length === 0) return null;
                     return (
                       <React.Fragment key={`log-group-${group.id}`}>
@@ -10651,7 +10701,7 @@ export default function App() {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-black text-xs">{group.title}</span>
                               <span className="text-[10px] opacity-70">{group.note}</span>
-                              <span className="px-1.5 py-0.5 rounded-full bg-white/80 border border-current/20 text-[10px] font-bold">{requestedInGroup}/{members.length} 의뢰</span>
+                              <span className="px-1.5 py-0.5 rounded-full bg-white/80 border border-current/20 text-[10px] font-bold">{requestedInGroup}/{speciesInGroup} 의뢰</span>
                               <span className="flex gap-1">
                                 <button type="button" onClick={() => setGroupRequested(group, true)} className="px-2 py-0.5 rounded border border-current/30 bg-white/70 text-[10px] font-bold hover:bg-white">전체 의뢰</button>
                                 <button type="button" onClick={() => setGroupRequested(group, false)} className="px-2 py-0.5 rounded border border-current/30 bg-white/70 text-[10px] font-bold hover:bg-white">해제</button>

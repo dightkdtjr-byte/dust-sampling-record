@@ -6,7 +6,7 @@ let seed = Number(process.env.SEED || 1); const rnd = () => { seed = (seed * 110
 const r = (lo, hi, dec) => (lo + rnd() * (hi - lo)).toFixed(dec);
 // 줄 번호 → 종류: 입자 샘플러(먼지·금속·수은), 가스 샘플러(흡수액), 음압상자·테들러백, 그 밖
 // (thc: 현장측정이라 채취유량 없음. 23·31·53행은 양식의 일차별 시트에 시험검사기간이 빠져 있던 줄, 33·36행은 기간이 따로 없던 줄)
-const ROWS = { 13: 'particle', 19: 'gas', 20: 'gas', 21: 'gas', 23: 'gas', 24: 'gas-liquid', 25: 'particle', 31: 'particle', 33: 'particle', 34: 'particle', 35: 'gas', 36: 'gas', 38: 'gas', 40: 'thc', 41: 'plain', 42: 'box', 43: 'box', 53: 'box' };
+const ROWS = { 13: 'particle', 19: 'gas', 20: 'gas', 21: 'gas', 23: 'gas', 24: 'gas-liquid', 25: 'particle', 31: 'particle', 32: 'particle', 33: 'particle', 34: 'particle', 35: 'gas', 36: 'gas', 38: 'gas', 40: 'thc', 41: 'plain', 42: 'box', 43: 'box', 53: 'box', 57: 'box', 58: 'box' };
 const log = {
   company: '견본산업(주)', industry: '폐기물 소각', facility: '소각로 1호기', stackName: 'S1', siteAbbr: 'GB',
   particleSamplerId: '', particleSamplerYd: '0.991', particleSamplerYdManual: true, gasSamplerId: '', gasSamplerYd: '1.0127', gasSamplerYdManual: true,
@@ -19,6 +19,8 @@ Object.entries(ROWS).forEach(([row, kind], i) => {
   log.rows[row] = { requested: true, dayIndex: i % 2, start: `1${i % 6}:05`, end: `1${i % 6}:45`, meterStart: start.toFixed(2), meterEnd: end.toFixed(2),
     temp: i % 6 === 5 ? '' : r(12, 30, 1), pressureH2O: i % 3 === 2 ? '' : r(-40, 40, 1), ...(kind === 'gas-liquid' ? { collector: '흡수액' } : {}) };
 });
+// 비소(가스상, 33행)는 비소(입자상, 32행)와 한 번에 채취한다 → 일차·시각·가스미터 값·온도·압력이 같다
+log.rows[33] = { ...log.rows[32] };
 (async () => {
   const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1300, height: 1000 }, acceptDownloads: true }); const p = await ctx.newPage();
   p.on('dialog', (d) => { console.log('DIALOG', d.message().slice(0, 120)); d.accept(); });

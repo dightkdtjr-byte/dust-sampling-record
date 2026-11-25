@@ -50,10 +50,16 @@ for row, kind in kinds.items():
         if rd['pressureH2O']: cmp(f'{r}행 게이지압', nval, gauge)
         if rd['temp'] == '': same(f'{r}행 표준 채취량(온도 없음 → 빈칸)', ws[f'V{r}'].value, '')
         else: cmp(f'{r}행 표준 채취량', ws[f'V{r}'].value, k * 273 / (273 + float(rd['temp'])) * (pa + gauge) / 760)
+# 비소(입자상 32행·가스상 33행)는 한 물질: 의뢰 칸은 병합해 O 하나, 의뢰 개수에 1로 잡히고, 채취유량이 같다
+if '32' in kinds and '33' in kinds:
+    same('비소 가스상 의뢰 칸(병합이라 빈칸)', ws['C33'].value, '')
+    same('의뢰 개수(C63)', ws['C63'].value, len(kinds) - 1)
+    cmp('비소 입자상·가스상 채취유량이 같은지', ws['K33'].value, ws['K32'].value, 1e-9)
+    same('비소 가스상 sampler No.', blank(ws['E33'].value), blank(ws['E32'].value))
 # 일차별 시트
 for sheet in wv.worksheets[1:]:
     day = sheet['J7'].value; dues = []
-    for r in range(12, 57):
+    for r in range(12, 58):
         m = r + 1
         if m in due and due[m][0] == day:
             same(f'{sheet.title} {r}행 시험검사기간', sheet[f'M{r}'].value, due[m][1])
@@ -63,7 +69,7 @@ for sheet in wv.worksheets[1:]:
         else:
             same(f'{sheet.title} {r}행(그날 채취 아님) 분석기한', sheet[f'N{r}'].value, '')
     if dues:
-        same(f'{sheet.title} 가장 이른 기한', sheet['N57'].value, min(dues)); same(f'{sheet.title} 가장 늦은 기한', sheet['N58'].value, max(dues))
+        same(f'{sheet.title} 가장 이른 기한', sheet['N58'].value, min(dues)); same(f'{sheet.title} 가장 늦은 기한', sheet['N59'].value, max(dues))
 errs = [f'{s.title}!{c.coordinate}={c.value}' for s in wv.worksheets for rw in s.iter_rows() for c in rw if isinstance(c.value, str) and c.value[:1] == '#' and c.value[1:4] in ('VAL', 'DIV', 'REF', 'NAM', 'N/A', 'NUM', 'NUL')]
 n += 1
 if errs: bad += 1; print('  오류 칸:', errs[:10])
