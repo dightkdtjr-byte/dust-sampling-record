@@ -915,7 +915,7 @@ const getSkyPhaseByHour = (date = new Date()) => {
   return 'night';
 };
 
-// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학)
+// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리와 너구리는 사철 나온다
 const SKY_SEASON_OPTIONS = [
   { id: 'auto', label: '자동' },
   { id: 'spring', label: '봄' },
@@ -1391,6 +1391,18 @@ const SKYLINE_FLYER_CSS = `
 }
 .skyline-dart { animation: skylineDart var(--dart-duration, 14s) ease-in-out infinite; animation-delay: var(--dart-delay, 0s); }
 .skyline-shimmer { animation: skylineShimmer 0.09s linear infinite alternate; }
+/* 너구리 걸음: 다리 두 쌍이 엇갈려 앞뒤로 움직이고 몸이 살짝 들썩인다 */
+@keyframes skylineTrot {
+  from { transform: rotate(17deg); }
+  to { transform: rotate(-17deg); }
+}
+@keyframes skylineTrotBob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-0.9px); }
+}
+.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot 0.34s ease-in-out infinite alternate; }
+.skyline-trot-b { animation-direction: alternate-reverse; }
+.skyline-trot-bob { animation: skylineTrotBob 0.17s ease-in-out infinite alternate; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
@@ -1412,7 +1424,7 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing, .skyline-flutter, .skyline-wingbeat, .skyline-dart, .skyline-shimmer { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing, .skyline-flutter, .skyline-wingbeat, .skyline-dart, .skyline-shimmer, .skyline-trot-a, .skyline-trot-b, .skyline-trot-bob { animation: none; }
   .skyline-geese { animation: none; transform: translate(60vw, 1vh); }
   .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
@@ -1690,6 +1702,22 @@ const SCENE_FROG_TRACKS = [
 // 앉은 모습(오른쪽을 본다)과 뛰는 모습(몸을 쭉 펴고 뒷다리를 뻗는다)
 const SCENE_FROG_SIT = 'M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z';
 const SCENE_FROG_LEAP = 'M-30,-3 L-27,-6.5 L-15,-9 Q-6,-14.5 5,-14 a4,4 0 0 1 7.4,0.8 L20,-9.5 Q21.6,-7.6 19,-6.4 L14,-5 L17.5,-0.5 L14.5,0.5 L10.5,-4 Q2,-2.4 -6,-3.4 L-14,-4.2 L-27,-1.2 L-31,0.6 Z';
+// 너구리(사철): 오른쪽 풀숲에서 나와 둑 위를 종종걸음으로 건너 왼쪽 풀숲으로 들어갔다가, 한참 뒤 되돌아온다
+const SCENE_RACCOON = (() => {
+  const xs = [];
+  for (let x = 1452; x >= 214; x -= 38) xs.push(x);
+  const f = (v) => v.toFixed(1);
+  return {
+    path: `M${xs.map((x) => `${f(x)},${f(sceneBankY(x) + 2)}`).join(' L')}`,
+    dur: 168,
+    // 구간: 풀숲 속(0~4%) → 왼쪽으로 건넘(~40%) → 왼쪽 풀숲 속(~54%) → 오른쪽으로 건넘(~92%) → 풀숲 속
+    keyTimes: '0;0.04;0.4;0.54;0.92;1',
+    keyPoints: '0;0;1;1;0;0',
+    turn: '0.47',
+  };
+})();
+// 오른쪽을 보고 선 모습: 통통한 몸, 짧은 다리, 늘어진 굵은 꼬리, 뾰족한 주둥이
+const SCENE_RACCOON_BODY = 'M-33,-2 Q-40,-12 -27,-17.5 Q-20,-21.5 -12,-21.5 Q0,-24.5 10,-21.5 L12.6,-26.5 L16,-22 L18.8,-26 L21.4,-20.4 Q27.5,-17.5 30.5,-11.4 L31.6,-9.4 Q29.4,-7 24.4,-7 Q19.4,-6 17,-8.2 Q8,-5 -8,-6 Q-14,-5 -18,-9 Q-22,0 -33,-2 Z';
 // 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
 const SCENE_BUTTERFLIES = [
   { x: 166, up: 58, dur: 11, delay: 2, beat: 0.26 }, { x: 322, up: 38, dur: 14, delay: 6, beat: 0.31 },
@@ -2021,6 +2049,39 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
       <g filter={cut}>
         <path d={`M${SCENE_BANK.map(([x, dy]) => `${x},${G + dy}`).join(' L')} L1600,580 L0,580 Z`} fill={pal.bank} />
       </g>
+      {/* 너구리(사철): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
+      {(() => {
+        const timing = { dur: `${SCENE_RACCOON.dur}s`, begin: compact ? '-70s' : '-9s', repeatCount: 'indefinite' };
+        const legs = (
+          <>
+            <g className="skyline-trot-a"><path d="M10,-15 L9.4,-1 L8.6,0.4 L13.6,0.4 L13.2,-1 L14.4,-15 Z M-15.6,-15 L-16.6,-1 L-17.4,0.4 L-12.4,0.4 L-12.8,-1 L-11.4,-15 Z" fill={pal.bank} /></g>
+            <g className="skyline-trot-b"><path d="M4.8,-15 L4.4,-1 L3.6,0.4 L8.6,0.4 L8.2,-1 L9.2,-15 Z M-10.4,-15 L-11.2,-1 L-12,0.4 L-7,0.4 L-7.4,-1 L-6.4,-15 Z" fill={pal.bank} /></g>
+          </>
+        );
+        const body = (
+          <g transform="translate(0 -6)"><g className={stillScene ? undefined : 'skyline-trot-bob'}>
+            <path d={SCENE_RACCOON_BODY} fill={pal.bank} />
+            {/* 눈가의 밝은 털과 꼬리의 밝은 띠 */}
+            <path d="M15.4,-17.6 Q21.4,-19 26,-14 Q21.6,-12.6 17,-13.6 Z" fill={pal.water} opacity="0.5" />
+            <circle cx="22.2" cy="-15" r="1" fill={pal.bank} />
+            <path d="M-31.6,-10.6 Q-28,-13.6 -25,-15 M-33.6,-6.4 Q-29.4,-9.8 -26,-11" stroke={pal.water} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.45" />
+          </g></g>
+        );
+        if (stillScene) return <g key="raccoon" transform={`translate(1010 ${sceneBankY(1010) + 2}) scale(-0.8 0.8)`}>{legs}{body}</g>;
+        return (
+          <g key="raccoon">
+            <animateMotion {...timing} calcMode="linear" path={SCENE_RACCOON.path} keyPoints={SCENE_RACCOON.keyPoints} keyTimes={SCENE_RACCOON.keyTimes} />
+            <animate attributeName="opacity" calcMode="discrete" values="0;1;0;1;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
+            <g transform="scale(0.8)">
+              <g>
+                {/* 갈 때는 왼쪽을, 올 때는 오른쪽을 본다 */}
+                <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="-1 1;1 1" keyTimes={`0;${SCENE_RACCOON.turn}`} {...timing} />
+                {legs}{body}
+              </g>
+            </g>
+          </g>
+        );
+      })()}
       {/* 개구리(봄·여름): 둑 위를 뛰어 왼쪽·오른쪽 풀숲 사이를 오간다. 앞줄 풀보다 먼저 그려 풀숲에 들어가면 가려진다 */}
       {warm && SCENE_FROG_TRACKS.slice(0, compact ? 1 : SCENE_FROG_TRACKS.length).map((frog, i) => {
         const timing = { dur: `${frog.dur.toFixed(2)}s`, begin: `-${(frog.dur * frog.phase).toFixed(2)}s`, repeatCount: 'indefinite' };
