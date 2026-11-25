@@ -169,21 +169,23 @@ class Layout:
                 size = cell.font.sz or 11; bold = bool(cell.font.b); dotum = (cell.font.name or '') in ('돋움', '굴림', '바탕', '돋움체', '굴림체')
                 inner0 = sum(px(self.w0[k]) for k in range(a, z + 1)) - 6
                 inner1 = sum(px(self.w[k]) for k in range(a, z + 1)) - 6
-                if inner1 >= inner0:
-                    continue
                 wrap = bool(cell.alignment.wrap_text)
+                spill = (a == z and top == bot and c < self.c2 and cell.alignment.horizontal in (None, 'general', 'left')
+                         and self.ws.cell(r, c + 1).value is None and (r, c + 1) not in self.merge)
+                if inner1 >= inner0 and (spill or not self._overflows(v, inner1, size, bold, dotum, wrap, top, bot)):
+                    continue
                 lh = size * 1.45
                 avail = sum(self.h[k] for k in range(top, bot + 1))
                 if wrap:
                     l0 = wrap_lines(v, inner0, size, bold, dotum); l1 = wrap_lines(v, inner1, size, bold, dotum)
-                    if l1 > l0:
-                        add = max(0.0, min(l1 * lh + 3 - avail, (l1 - l0) * lh))
+                    if l1 > l0 or l1 * lh + 3 > avail:
+                        add = max(0.0, l1 * lh + 3 - avail)
                         if add > 0:
                             self.h[bot] += add
                             self.notes.append(f'{CL(c)}{r} "{v[:14].strip()}…" 줄 수 {l0}→{l1}, {bot}행 +{add:.1f}pt')
                 else:
                     longest = max(text_px(line, size, bold, dotum) for line in v.split('\n'))
-                    if longest <= inner0 and longest > inner1:
+                    if longest > inner1 and not spill:
                         l1 = wrap_lines(v, inner1, size, bold, dotum)
                         add = max(0.0, l1 * lh + 3 - avail)
                         wrap_cells.append(f'{CL(c)}{r}')
@@ -191,6 +193,12 @@ class Layout:
                             self.h[bot] += add
                         self.notes.append(f'{CL(c)}{r} "{v[:14].strip()}" 칸보다 길어져 줄바꿈 켬' + (f', {bot}행 +{add:.1f}pt' if add > 0 else ''))
         return wrap_cells
+
+    def _overflows(self, v, inner, size, bold, dotum, wrap, top, bot):
+        avail = sum(self.h[k] for k in range(top, bot + 1)); lh = size * 1.45
+        if wrap:
+            return wrap_lines(v, inner, size, bold, dotum) * lh + 3 > avail
+        return max(text_px(t, size, bold, dotum) for t in v.split('\n')) > inner
 
     # ── ④ 쪽 나누기 ──
     def row_empty(self, r):
@@ -373,6 +381,13 @@ def find_docno(b, sheet):
         for c in row:
             if isinstance(c.value, str) and DOCNO.search(c.value) and len(c.value) < 40:
                 return c.value.strip()
+    # 이미 정리한 양식: 문서번호가 칸에서 바닥글로 옮겨져 있다. 다시 돌려도 바닥글을 잃지 않게 바닥글에서 찾는다
+    m = re.search(r'<oddFooter>(.*?)</oddFooter>', b.sx(sheet), re.S)
+    if m:
+        t = re.sub(r'&amp;(?:"[^"]*"|\d+|[A-Z])', '', m.group(1))
+        k = DOCNO.search(t)
+        if k:
+            return t[max(0, t.rfind('■', 0, k.start())):k.end()].strip()
     return None
 
 
@@ -382,11 +397,20 @@ def docno_rows(b, sheet):
 
 
 def standardize(b, sheet, area, docno, hints=(), like=None):
+    from form_style import trim_area, unify, raw_borders
+    area0 = area
+    area, old_r2 = trim_area(load(b)[sheet], area, raw_borders(b.sx(sheet), b.text('xl/styles.xml')))
     lay = Layout(b, sheet, area)
+    if area != area0:
+        lay.notes.append(f'표 아래 내용 없는 줄 {range_boundaries(area)[3] + 1}~{range_boundaries(area0)[3]}행을 인쇄 범위에서 뺌')
     lay.set_widths(like)
     wraps = lay.fit_text()
     hints = sorted(set(hints) | set(docno_rows(b, sheet)))
     pages = lay.paginate(hints)
     lay.write(wraps, docno)
     b.print_area(sheet, area)
+    lay.notes += unify(b, sheet, area, [e for _, e in pages[:-1]], old_r2=range_boundaries(area0)[3])
+    from layout_rules import align, place
+    lay.notes += align(b, sheet, area)
+    lay.notes += place(b, sheet, area)
     return lay, pages
