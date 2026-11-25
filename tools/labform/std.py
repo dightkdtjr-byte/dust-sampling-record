@@ -410,4 +410,7 @@ def standardize(b, sheet, area, docno, hints=(), like=None):
     lay.write(wraps, docno)
     b.print_area(sheet, area)
     lay.notes += unify(b, sheet, area, [e for _, e in pages[:-1]], old_r2=range_boundaries(area0)[3])
+    from layout_rules import align, place
+    lay.notes += align(b, sheet, area)
+    lay.notes += place(b, sheet, area)
     return lay, pages

@@ -150,6 +150,19 @@ class Styles:
             nx = nx.replace('<xf ', '<xf applyFont="1" ', 1)
         return str(self._add('cellXf', 'xf', nx))
 
+    def with_align(self, s, h, v):
+        x = self.xf(s)
+        al = f'<alignment horizontal="{h}" vertical="{v}"'
+        if '<alignment' in x:
+            nx = re.sub(r'<alignment\b([^>]*?)/>', lambda m: al + re.sub(r'\s*(horizontal|vertical)="[^"]*"', '', m.group(1)) + '/>', x, count=1)
+        elif x.endswith('/>'):
+            nx = re.sub(r'<xf\b([^>]*?)/>', lambda m: f'<xf{m.group(1)}>{al}/></xf>', x, count=1)
+        else:
+            nx = x.replace('</xf>', f'{al}/></xf>')
+        if 'applyAlignment' not in nx:
+            nx = nx.replace('<xf ', '<xf applyAlignment="1" ', 1)
+        return str(self._add('cellXf', 'xf', nx))
+
     def with_halign(self, s, h):
         x = self.xf(s)
         if '<alignment' in x:

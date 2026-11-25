@@ -6,6 +6,8 @@
 #   ④ 글자가 칸을 넘거나 잘리지 않는가 (글자 폭은 추정값)
 #   ⑤ 정렬·글꼴이 원본과 같은가 (--ref)
 #   ⑥ 문서번호가 인쇄되는 모든 시트의 바닥글에 있고, PDF 모든 쪽에 찍히는가 (--pdf)
+#   ⑦ 정렬이 정렬 기준(layout_rules.py)과 같은가: 기준을 한 번 더 적용해도 바뀌는 칸이 없어야 한다
+#   ⑧ 수식·그림: 기준대로 놓였는가(다시 적용해도 1px 넘게 움직이지 않음), 수식이 계산식 칸·기호 설명을 침범하지 않는가
 # 원본과 정리본은 파일 이름 앞부분(확장자·'labtest-' 뺀 것)으로 짝짓는다.
 import sys, os, re, glob, subprocess, warnings, zipfile
 import openpyxl
@@ -247,6 +249,48 @@ for f in files:
         if nf: bad(form, '⑤', f'원본과 글꼴이 다른 칸 {nf}개: ' + ', '.join(ex['f'][:6]))
         if na: bad(form, '⑤', f'원본과 정렬이 다른 칸 {na}개: ' + ', '.join(ex['a'][:6]))
 
+    # ⑦·⑧ 정렬·수식·그림: 기준을 다시 적용해 보고 달라지는 것이 있으면 문제
+    from tplkit import Book
+    import layout_rules as LR
+    bk = Book(f); sh = wb.sheetnames[0]
+    area_s = f'{CL(c1)}{r1}:{CL(c2)}{r2}'
+    ns = LR.align(bk, sh, area_s)
+    if ns:
+        bad(form, '⑦', ns[0])
+    part = LR._drawing_part(bk, sh)
+    if part:
+        G = LR.Grid(ws)
+        before = {i: LR._box(G, a.group(0)) for i, a in enumerate(LR._anchors(bk.text(part)))}
+        kinds = {i: ('수식' if ('m:oMath' in a.group(0) or 'a14:m' in a.group(0)) else '차트' if 'c:chart' in a.group(0) else '도형')
+                 for i, a in enumerate(LR._anchors(bk.text(part)))}
+        LR.place(bk, sh, area_s, ws=ws)
+        after = {i: LR._box(G, a.group(0)) for i, a in enumerate(LR._anchors(bk.text(part)))}
+        if len(after) != len(before):
+            bad(form, '⑧', f'보이지 않는 그림이 남아 있음 ({len(before) - len(after)}개)')
+        else:
+            for i in before:
+                d = max(abs(p - q) for p, q in zip(before[i], after[i]))
+                if d > 1.5 and kinds[i] != '도형':
+                    bad(form, '⑧', f'{kinds[i]} 위치가 기준과 {d:.0f}px 다름')
+        # 수식이 계산식 칸 안에 있고 기호 설명과 겹치지 않는가
+        secs = LR._sections(ws, c1, r1, r2)
+        calc = [(a_, e_) for a_, e_, n_ in secs if n_ == '계산식']
+        for i, bx in before.items():
+            if kinds[i] != '수식' or not calc:
+                continue
+            a_, e_ = calc[0]
+            lab = M.get((a_, c1 + 1), (c1 + 1, a_, c1 + 1, a_)); cl = lab[2] + 1
+            x0, y0, x1, y1 = bx
+            if x0 < G.x(cl) or y0 < G.y(a_) - 1 or y1 > G.y(e_ + 1) + 1:
+                bad(form, '⑧', f'수식이 계산식 칸({a_}~{e_}행) 밖으로 나감')
+            for r in range(a_, e_ + 1):
+                for c in range(cl, c2 + 1):
+                    v = ws.cell(r, c).value
+                    if isinstance(v, str) and LR.LEGEND.match(v):
+                        cx0, cy0, cy1 = G.x(c), G.y(r), G.y(r + 1)
+                        if x1 > cx0 + 2 and y1 > cy0 + 2 and y0 < cy1 - 2 and x0 < G.x(c2 + 1):
+                            bad(form, '⑧', f'수식이 기호 설명 {CL(c)}{r}과 겹침')
+
     # ⑥ 문서번호
     for s in wb.worksheets:
         if s.sheet_state != 'visible':
@@ -275,7 +319,7 @@ for k, label in (('title', '제목 글꼴'), ('signtext', '서명란 글자')):
             bad(s_['form'], '⑤', f'{label}가 양식마다 다름: {s_[k]}')
 print('→ 서명란·배율', '모두 같음' if same else '양식마다 다름')
 print()
-for crit in '①②③④⑤⑥':
+for crit in '①②③④⑤⑥⑦⑧':
     hits = {f: p[crit] for f, p in problems.items() if crit in p}
     print(f'{crit} ' + ('통과' if not hits else f'문제 {sum(len(v) for v in hits.values())}건'))
     for f, msgs in hits.items():
