@@ -915,7 +915,7 @@ const getSkyPhaseByHour = (date = new Date()) => {
   return 'night';
 };
 
-// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리와 너구리는 사철 나온다
+// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리와 너구리는 사철, 오소리는 겨울잠을 자는 겨울만 빼고 나온다
 const SKY_SEASON_OPTIONS = [
   { id: 'auto', label: '자동' },
   { id: 'spring', label: '봄' },
@@ -1391,7 +1391,7 @@ const SKYLINE_FLYER_CSS = `
 }
 .skyline-dart { animation: skylineDart var(--dart-duration, 14s) ease-in-out infinite; animation-delay: var(--dart-delay, 0s); }
 .skyline-shimmer { animation: skylineShimmer 0.09s linear infinite alternate; }
-/* 너구리 걸음: 다리 두 쌍이 엇갈려 앞뒤로 움직이고 몸이 살짝 들썩인다 */
+/* 너구리·오소리 걸음: 다리 두 쌍이 엇갈려 앞뒤로 움직이고 몸이 살짝 들썩인다 */
 @keyframes skylineTrot {
   from { transform: rotate(13deg); }
   to { transform: rotate(-13deg); }
@@ -1400,9 +1400,9 @@ const SKYLINE_FLYER_CSS = `
   from { transform: translateY(0); }
   to { transform: translateY(-0.9px); }
 }
-.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot 0.34s ease-in-out infinite alternate; }
+.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot var(--trot, 0.34s) ease-in-out infinite alternate; }
 .skyline-trot-b { animation-direction: alternate-reverse; }
-.skyline-trot-bob { animation: skylineTrotBob 0.17s ease-in-out infinite alternate; }
+.skyline-trot-bob { animation: skylineTrotBob calc(var(--trot, 0.34s) / 2) ease-in-out infinite alternate; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
@@ -1702,23 +1702,56 @@ const SCENE_FROG_TRACKS = [
 // 앉은 모습(오른쪽을 본다)과 뛰는 모습(몸을 쭉 펴고 뒷다리를 뻗는다)
 const SCENE_FROG_SIT = 'M-16,0 L-17,-2 Q-17,-8 -11,-11 L-4,-14.5 L3,-19 a4,4 0 0 1 7.6,0.6 L17,-13.5 Q18.6,-12 16.5,-10.8 L12,-9.5 Q10.5,-6.5 11,-4 L12.5,-1.2 L16,0 L8.5,0 L8,-4 Q4,-2.5 1,-4 L2.5,-1 L5,0 Z';
 const SCENE_FROG_LEAP = 'M-30,-3 L-27,-6.5 L-15,-9 Q-6,-14.5 5,-14 a4,4 0 0 1 7.4,0.8 L20,-9.5 Q21.6,-7.6 19,-6.4 L14,-5 L17.5,-0.5 L14.5,0.5 L10.5,-4 Q2,-2.4 -6,-3.4 L-14,-4.2 L-27,-1.2 L-31,0.6 Z';
-// 너구리(사철): 오른쪽 풀숲에서 나와 둑 위를 종종걸음으로 건너 왼쪽 풀숲으로 들어갔다가, 한참 뒤 되돌아온다
-const SCENE_RACCOON = (() => {
+// 둑 위를 걸어 다니는 동물(너구리·오소리): 오른쪽 풀숲에서 나와 둑을 건너 왼쪽 풀숲으로 들어갔다가, 한참 뒤 되돌아온다
+const SCENE_WALK_TRACK = (() => {
   const xs = [];
   for (let x = 1452; x >= 214; x -= 38) xs.push(x);
   const f = (v) => v.toFixed(1);
   return {
     path: `M${xs.map((x) => `${f(x)},${f(sceneBankY(x) + 2)}`).join(' L')}`,
-    dur: 168,
     // 구간: 풀숲 속(0~4%) → 왼쪽으로 건넘(~40%) → 왼쪽 풀숲 속(~54%) → 오른쪽으로 건넘(~92%) → 풀숲 속
     keyTimes: '0;0.04;0.4;0.54;0.92;1',
     keyPoints: '0;0;1;1;0;0',
     turn: '0.47',
   };
 })();
-// 너구리 모습: 몸도 얼굴도 옆모습(걷는 쪽을 본다). 회색 몸에 검은 다리·귀·꼬리 끝, 밝은 얼굴에 눈 둘레 검은 무늬, 주둥이 끝에 코
-const SCENE_RACCOON_LEG = (x) => `M${x},-13 L${x - 0.6},-1.4 Q${x - 0.6},0 ${x + 1},0 L${x + 4.8},0 Q${x + 6.2},0 ${x + 6.2},-1.4 L${x + 5.8},-13 Z`;
-const SCENE_RACCOON_HEAD = 'M5,-25 C5,-33 11,-39 19,-39 C25,-39 29.6,-35.5 31,-30 L36.4,-25.6 C38,-24.2 37.8,-21.6 35.8,-20.8 L30.6,-18.6 C28.4,-14.4 23.6,-12 18.4,-12 C14.4,-12 11,-13.4 8.6,-15.8 L2.6,-14.4 L5.8,-20 C5.2,-21.6 5,-23.2 5,-25 Z';
+// 짧고 통통한 다리 한 짝 (맨 위는 몸통 속에 있어 그곳을 축으로 앞뒤로 움직인다)
+const sceneWalkerLeg = (x, h) => `M${x},-${h} L${x - 0.3},-1.6 Q${x - 0.3},0 ${x + 1.4},0 L${x + 4.2},0 Q${x + 5.8},0 ${x + 5.6},-1.6 L${x + 5.2},-${h} Z`;
+// 너구리: 만화 캐릭터처럼. 큰 머리, 둥근 귀, 눈가의 검은 띠와 큰 눈, 밝은 주둥이, 줄무늬 꼬리, 밝은 배. 걷는 쪽을 보는 옆모습
+const renderSceneRaccoon = (pal) => (
+  <>
+    <path d="M-12,-19 C-21,-25 -29,-36 -40,-32 C-48,-29 -47,-18 -40,-15 C-32,-12 -22,-10.6 -12,-11.6 Z" fill={pal.mid} />
+    <path d="M-40,-32 C-48,-29 -47,-18 -40,-15 C-38,-20 -38,-27 -40,-32 Z M-31.6,-32.4 C-29.6,-26 -29.6,-18.6 -32,-13 L-27,-11.8 C-24.6,-17.6 -24.6,-24.6 -26.4,-29.8 Z" fill={pal.bank} />
+    <ellipse cx="-3" cy="-14.6" rx="15.5" ry="11" fill={pal.mid} />
+    <path d="M-13,-9.6 C-8,-3.4 6,-3.4 11,-9.6 C5,-6.8 -7,-6.8 -13,-9.6 Z" fill={pal.plume} />
+    <circle cx="20" cy="-37.6" r="4.2" fill={pal.bank} />
+    <path d="M1,-25 C1,-33 7,-38.6 14.6,-38.6 C21,-38.6 26,-34.6 27.6,-29 C28,-27.6 28.2,-26.4 28.2,-25.2 L28.2,-18 C26.6,-13.6 22,-10.8 15.6,-10.8 C11.6,-10.8 8.4,-12 6,-14 L0.6,-12.4 L3,-18.4 C1.6,-20.4 1,-22.6 1,-25 Z" fill={pal.mid} />
+    <circle cx="6.6" cy="-35" r="4.8" fill={pal.bank} />
+    <circle cx="7" cy="-34.6" r="2.3" fill={pal.plume} opacity="0.85" />
+    <path d="M27,-29.4 C22.6,-32.8 15.6,-31.6 11.4,-27.2 C8.6,-24.2 7.6,-20.8 8.4,-18.2 C12.8,-17.8 17.4,-19.6 21,-22.6 C23.6,-24.6 25.8,-27 27,-29.4 Z" fill={pal.bank} />
+    <path d="M19.6,-22.6 C24.4,-24 30,-22.6 32.8,-19.6 C34,-18.2 33.6,-16.4 32,-15.8 C28,-14.4 23.4,-13.8 19.6,-14.8 C18,-17 18,-20.6 19.6,-22.6 Z" fill={pal.plume} />
+    <ellipse cx="32" cy="-19" rx="2.1" ry="1.7" fill={pal.bank} />
+    <ellipse cx="19.2" cy="-26.2" rx="2.9" ry="3.2" fill={pal.plume} />
+    <circle cx="19.9" cy="-26" r="1.9" fill={pal.bank} />
+    <circle cx="20.6" cy="-26.9" r="0.65" fill={pal.plume} />
+  </>
+);
+// 오소리: 낮고 긴 몸, 흰 머리에 코에서 눈을 지나 귀로 가는 검은 줄, 검은 다리와 배, 짧은 꼬리
+const renderSceneBadger = (pal) => (
+  <>
+    <path d="M-22,-17 C-30,-21 -36,-15 -33,-9.6 C-29,-8 -25,-8.6 -21,-10 Z" fill={pal.mid} />
+    <ellipse cx="-4" cy="-13" rx="20.5" ry="10" fill={pal.mid} />
+    <path d="M-21,-8.6 C-12,-3 8,-3 17,-8.6 C8,-5.8 -12,-5.8 -21,-8.6 Z" fill={pal.bank} />
+    <circle cx="15" cy="-28" r="3.6" fill={pal.bank} />
+    <path d="M12.4,-30.4 C13.8,-32 16.2,-32 17.6,-30.4" stroke={pal.plume} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    <path d="M8.6,-21 C10.6,-27.4 18,-30.4 25,-28 C31,-26 36.4,-20.4 39.2,-15.2 C40.2,-13.4 39.2,-11.6 37.2,-11.6 L29,-10 C22,-8 14,-8.6 9.6,-11.6 C7.6,-14.6 7.6,-18 8.6,-21 Z" fill={pal.plume} />
+    <path d="M38.8,-15.8 C33,-20 26,-24.4 17.4,-27.8 C15,-26 13.4,-23.6 12.8,-21 C21,-20 28.4,-17 35.8,-12.6 C37.2,-13.2 38.2,-14.4 38.8,-15.8 Z" fill={pal.bank} />
+    <circle cx="25.6" cy="-21.4" r="1.6" fill={pal.plume} />
+    <circle cx="26" cy="-21.2" r="0.9" fill={pal.bank} />
+    <ellipse cx="38.6" cy="-13.6" rx="2" ry="1.7" fill={pal.bank} />
+    <path d="M29,-10 C22,-8 14,-8.6 9.6,-11.6 C15,-12.6 23,-12.8 31,-12.4 Z" fill={pal.bank} opacity="0.85" />
+  </>
+);
 // 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
 const SCENE_BUTTERFLIES = [
   { x: 166, up: 58, dur: 11, delay: 2, beat: 0.26 }, { x: 322, up: 38, dur: 14, delay: 6, beat: 0.31 },
@@ -2050,51 +2083,36 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
       <g filter={cut}>
         <path d={`M${SCENE_BANK.map(([x, dy]) => `${x},${G + dy}`).join(' L')} L1600,580 L0,580 Z`} fill={pal.bank} />
       </g>
-      {/* 너구리(사철): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
-      {(() => {
-        const timing = { dur: `${SCENE_RACCOON.dur}s`, begin: compact ? '-70s' : '-9s', repeatCount: 'indefinite' };
-        const legs = (
-          <>
-            {/* 다리는 한 짝씩 따로 그린다: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 앞뒤로 움직인다. 대각선 짝끼리 같이 나간다 */}
-            {[[-13.1, 'a'], [-5.1, 'b'], [4.9, 'b'], [12, 'a']].map(([x, pair]) => (
-              <path key={x} className={`skyline-trot-${pair}`} d={SCENE_RACCOON_LEG(x)} fill={pal.bank} />
+      {/* 너구리(사철)·오소리(봄~가을, 겨울에는 겨울잠): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
+      {[
+        { key: 'raccoon', show: true, dur: 168, begin: compact ? -70 : -9, scale: 0.62, trot: 0.34, legH: 15, legs: [[-13, 'a'], [-6.6, 'b'], [2.4, 'b'], [8.4, 'a']], art: renderSceneRaccoon, stillX: 1010 },
+        { key: 'badger', show: season !== 'winter' && !compact, dur: 214, begin: -150, scale: 0.6, trot: 0.46, legH: 13, legs: [[-17, 'a'], [-10.6, 'b'], [4.4, 'b'], [10.6, 'a']], art: renderSceneBadger, stillX: 560 },
+      ].filter((walker) => walker.show).map((walker) => {
+        const timing = { dur: `${walker.dur}s`, begin: `${walker.begin}s`, repeatCount: 'indefinite' };
+        const figure = (
+          <g style={{ '--trot': `${walker.trot}s` }}>
+            {/* 다리는 한 짝씩 따로: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 앞뒤로 움직이고, 대각선 짝끼리 같이 나간다 */}
+            {walker.legs.map(([x, pair]) => (
+              <path key={x} className={stillScene ? undefined : `skyline-trot-${pair}`} d={sceneWalkerLeg(x, walker.legH)} fill={pal.bank} />
             ))}
-          </>
-        );
-        const body = (
-          <g className={stillScene ? undefined : 'skyline-trot-bob'}>
-            {/* 꼬리(끝은 검게) */}
-            <path d="M-15,-24 C-24,-36 -42,-33 -43,-19 C-43.5,-11 -37,-6 -30,-9 C-25,-11 -22,-15 -14,-14 Z" fill={pal.mid} />
-            <path d="M-43,-19 C-43.5,-11 -37,-6 -30,-9 C-32,-13 -37,-17.5 -43,-19 Z" fill={pal.bank} />
-            <g transform="translate(0 -2.6)">
-              {/* 몸 → 먼 쪽 귀 → 머리 → 가까운 쪽 귀 → 밝은 얼굴 → 눈 둘레 검은 무늬·눈·코·입 */}
-              <ellipse cx="-2" cy="-17" rx="19" ry="13" fill={pal.mid} />
-              <path d="M19.5,-37 C20.5,-41.5 24,-43 25.6,-40 C26.4,-38.4 26.2,-36 25.2,-34.4 Z" fill={pal.bank} />
-              <path d={SCENE_RACCOON_HEAD} fill={pal.mid} />
-              <path d="M8.6,-34.5 C8,-41 11,-45 14.6,-42.6 C17,-41 18.2,-38.4 18.6,-36 Z" fill={pal.bank} />
-              <path d="M21.4,-34.4 C26,-34.4 29.4,-32 31,-28.6 L36,-24.6 C37,-23.6 36.8,-22.2 35.4,-21.6 L30.2,-19.4 C27.8,-16 24,-14.6 20.4,-15 C17.4,-20 17.6,-29 21.4,-34.4 Z" fill={pal.plume} />
-              <path d="M22.4,-30.6 C26.6,-31.8 30.6,-29.4 31.4,-26.2 C29,-23.6 24.6,-22 20.6,-22.8 C19.4,-25.6 20.2,-28.8 22.4,-30.6 Z" fill={pal.bank} />
-              <circle cx="26.4" cy="-27" r="1.5" fill={pal.plume} />
-              <ellipse cx="35.8" cy="-23.2" rx="1.9" ry="1.6" fill={pal.bank} />
-              <path d="M30.6,-18.6 C29.4,-17.4 27.6,-17 26,-17.6" stroke={pal.bank} strokeWidth="0.7" fill="none" strokeLinecap="round" />
-            </g>
+            <g className={stillScene ? undefined : 'skyline-trot-bob'}><g transform="translate(0 -3.4)">{walker.art(pal)}</g></g>
           </g>
         );
-        if (stillScene) return <g key="raccoon" transform={`translate(1010 ${sceneBankY(1010) + 2}) scale(-0.66 0.66)`}>{legs}{body}</g>;
+        if (stillScene) return <g key={walker.key} transform={`translate(${walker.stillX} ${sceneBankY(walker.stillX) + 2}) scale(-${walker.scale} ${walker.scale})`}>{figure}</g>;
         return (
-          <g key="raccoon">
-            <animateMotion {...timing} calcMode="linear" path={SCENE_RACCOON.path} keyPoints={SCENE_RACCOON.keyPoints} keyTimes={SCENE_RACCOON.keyTimes} />
+          <g key={walker.key}>
+            <animateMotion {...timing} calcMode="linear" path={SCENE_WALK_TRACK.path} keyPoints={SCENE_WALK_TRACK.keyPoints} keyTimes={SCENE_WALK_TRACK.keyTimes} />
             <animate attributeName="opacity" calcMode="discrete" values="0;1;0;1;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
-            <g transform="scale(0.66)">
+            <g transform={`scale(${walker.scale})`}>
               <g>
                 {/* 갈 때는 왼쪽을, 올 때는 오른쪽을 본다 */}
-                <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="-1 1;1 1" keyTimes={`0;${SCENE_RACCOON.turn}`} {...timing} />
-                {legs}{body}
+                <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="-1 1;1 1" keyTimes={`0;${SCENE_WALK_TRACK.turn}`} {...timing} />
+                {figure}
               </g>
             </g>
           </g>
         );
-      })()}
+      })}
       {/* 개구리(봄·여름): 둑 위를 뛰어 왼쪽·오른쪽 풀숲 사이를 오간다. 앞줄 풀보다 먼저 그려 풀숲에 들어가면 가려진다 */}
       {warm && SCENE_FROG_TRACKS.slice(0, compact ? 1 : SCENE_FROG_TRACKS.length).map((frog, i) => {
         const timing = { dur: `${frog.dur.toFixed(2)}s`, begin: `-${(frog.dur * frog.phase).toFixed(2)}s`, repeatCount: 'indefinite' };
