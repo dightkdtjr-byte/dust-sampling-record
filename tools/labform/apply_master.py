@@ -84,6 +84,20 @@ def add_sheet(b, rows):
 # ── 수식 바꾸기 ──
 def set_formula(b, sheet, ref_, formula):
     b.setf(sheet, ref_, formula)
+    # 새 수식 칸도 날짜·숫자 칸처럼 "셀에 맞춤" (줄바꿈 칸은 그대로) — 기록부 시트만
+    if sheet in b.wb.sheetnames and '시험기록부' in str(b.wb[sheet]['A1'].value or '').replace(' ', ''):
+        return _shrink(b, sheet, ref_)
+
+
+def _shrink(b, sheet, ref_):
+    from form_style import Styles, _set_styles, _cell_style
+    s = b.sx(sheet)
+    st = _cell_style(s, ref_, None, {}, CI(re.sub(r'\d', '', ref_)))
+    S = Styles(b)
+    x = S.xf(st)
+    if 'wrapText="1"' in x or 'shrinkToFit="1"' in x:
+        return
+    _set_styles(b, sheet, {(int(re.sub(r'\D', '', ref_)), CI(re.sub(r'\d', '', ref_))): S.with_shrink(st)})
 
 
 def tok(R):

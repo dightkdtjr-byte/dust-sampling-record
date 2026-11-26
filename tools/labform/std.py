@@ -431,4 +431,17 @@ def standardize(b, sheet, area, docno, hints=(), like=None):
     from layout_rules import align, place
     lay.notes += align(b, sheet, area)     # 테두리 단계에서 바뀐 한 줄 머리 등 마무리 (대부분 바뀌는 것 없음)
     lay.notes += place(b, sheet, area)
+    # 수식이 들어가게 줄을 늘린 뒤(place) 쪽이 넘치면: 줄 높이를 다시 읽어 쪽 나누기·테두리를 다시 한다
+    for _ in range(2):
+        ws2 = load(b)[sheet]
+        hh = {r: (ws2.row_dimensions[r].height if ws2.row_dimensions[r].height is not None else lay.h0.get(r, 15)) for r in lay.h}
+        if all(sum(hh[r] for r in range(a, e + 1)) <= PAGE_PT + 0.5 for a, e in pages):
+            break
+        lay.notes.append('수식 줄을 늘린 뒤 쪽이 넘쳐 쪽 나누기를 다시 함')
+        lay.h = dict(hh); lay.h0 = dict(hh)
+        pages = lay.paginate(hints)
+        lay.write([], docno)
+        b.print_area(sheet, area)
+        lay.notes += unify(b, sheet, area, [e for _, e in pages[:-1]], old_r2=range_boundaries(area0)[3])
+        lay.notes += place(b, sheet, area)
     return lay, pages

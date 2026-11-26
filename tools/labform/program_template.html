@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시험기록부 기준 관리</title>
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --line:#d8dde3; --bg:#f6f7f9; --card:#fff; --accent:#1f5f8b; --ok:#1b7a3e; --warn:#a15c00; --bad:#b42318; --okbg:#e8f5ec; --warnbg:#fff4e0; --badbg:#fde8e7; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"맑은 고딕","Malgun Gothic","Apple SD Gothic Neo",sans-serif; color:var(--ink); background:var(--bg); font-size:14px; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px; position:sticky; top:0; z-index:5; }
+  h1 { font-size:19px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:12.5px; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:7px 12px; cursor:pointer; }
+  button:hover { border-color:#9aa4ae; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:bold; }
+  button.primary:disabled { opacity:.6; cursor:wait; }
+  input[type=search] { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; min-width:200px; }
+  select { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+  main { padding:16px 20px 60px; max-width:1500px; margin:0 auto; }
+  .summary { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .pill { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .pill b { font-size:16px; }
+  details.rules { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin-bottom:14px; }
+  details.rules summary { cursor:pointer; font-weight:bold; }
+  details.rules li { margin:4px 0; }
+  .file { background:var(--card); border:1px solid var(--line); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+  .file > .fh { display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fafbfc; border-bottom:1px solid var(--line); cursor:pointer; }
+  .file > .fh .name { font-weight:bold; }
+  .file.closed > .body { display:none; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { border-bottom:1px solid #edf0f3; padding:7px 8px; vertical-align:top; text-align:left; }
+  th { font-size:12px; color:var(--muted); font-weight:normal; background:#fff; white-space:nowrap; }
+  td.item { font-weight:bold; white-space:nowrap; }
+  td.item .where { display:block; font-weight:normal; color:var(--muted); font-size:11.5px; }
+  textarea { font:inherit; font-size:12.5px; width:100%; min-width:260px; min-height:44px; border:1px solid var(--line); border-radius:5px; padding:5px 6px; resize:vertical; }
+  input.num { font:inherit; width:74px; padding:5px 6px; border:1px solid var(--line); border-radius:5px; }
+  input.unit { font:inherit; width:78px; padding:5px 6px; border:1px solid var(--line); border-radius:5px; }
+  input:disabled, textarea:disabled { background:#f2f4f6; color:var(--muted); }
+  .changed { background:#fffbe6 !important; border-color:#e0c25c !important; }
+  .invalid { border-color:var(--bad) !important; background:var(--badbg) !important; }
+  .judge { color:var(--muted); font-size:12.5px; white-space:nowrap; }
+  .badges { display:flex; flex-wrap:wrap; gap:4px; min-width:150px; }
+  .b { font-size:11.5px; border-radius:10px; padding:2px 7px; white-space:nowrap; cursor:help; }
+  .b.ok { background:var(--okbg); color:var(--ok); } .b.warn { background:var(--warnbg); color:var(--warn); } .b.bad { background:var(--badbg); color:var(--bad); }
+  .note { font-size:11.5px; color:var(--muted); max-width:230px; }
+  tr.detail td { background:#fbfcfd; }
+  .detail-box { display:grid; grid-template-columns: 1.2fr 1fr; gap:14px; }
+  .checks li { margin:3px 0; font-size:12.5px; } .checks .basis { color:var(--muted); font-size:11.5px; }
+  .try { border:1px dashed var(--line); border-radius:8px; padding:10px; }
+  .try input { font:inherit; width:110px; padding:5px 6px; border:1px solid var(--line); border-radius:5px; margin-right:6px; }
+  .try .res { margin-top:8px; font-size:15px; font-weight:bold; }
+  .try .res.over { color:var(--bad); } .try .res.nd { color:var(--muted); }
+  .try .why { color:var(--muted); font-size:12px; margin-top:4px; line-height:1.6; }
+  .toggle { font-size:12px; color:var(--accent); cursor:pointer; background:none; border:none; padding:0; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2937; color:#fff; padding:10px 16px; border-radius:8px; display:none; z-index:20; }
+  @media (max-width:900px){ .detail-box{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>시험기록부 기준 관리 <span class="sub">v__VERSION__ · __BUILT__</span></h1>
+  <div class="sub">물질별 공정시험기준·자릿수·방법검출한계·정량한계를 한 곳에서 보고 고칩니다. 고친 내용은 이 컴퓨터 브라우저에 자동 저장되고, 「골든 카피 내려받기」로 모든 시험기록부에 반영된 관리본을 받습니다.</div>
+  <div class="bar">
+    <button class="primary" id="btnGolden">골든 카피 내려받기 (zip)</button>
+    <button id="btnCsv">기준표 내려받기 (CSV)</button>
+    <button id="btnExport">기준표 백업 (JSON)</button>
+    <button id="btnImport">백업 불러오기</button>
+    <input type="file" id="fileImport" accept=".json" hidden>
+    <button id="btnReset">처음 값으로</button>
+    <span style="flex:1"></span>
+    <input type="search" id="q" placeholder="물질·파일 찾기">
+    <select id="filter"><option value="all">전체</option><option value="issue">확인·틀림만</option><option value="changed">고친 것만</option></select>
+    <button id="btnExpand">모두 펼치기</button>
+  </div>
+</header>
+<main>
+  <div class="summary" id="summary"></div>
+  <details class="rules">
+    <summary>판정 규칙과 근거 (시험기록부 수식과 같은 규칙)</summary>
+    <ol>
+      <li><b>계산</b>: 계산값을 <b>계산 자릿수</b>로 반올림(4사5입)한 뒤 <b>최종 자릿수</b>로 반올림해 표시합니다. 기본은 계산 자릿수 = 최종 자릿수 + 1. <span class="sub" data-rule="calc"></span></li>
+      <li><b>불검출</b>: 반올림한 값이 방법검출한계 <b>미만</b>일 때만 「불검출」. <b>같으면 값으로 표시</b>합니다. 판정은 <b>판정 자릿수</b>(최종 자릿수와 방법검출한계 소수 자릿수 중 큰 쪽)로 합니다. <span class="sub" data-rule="nd"></span></li>
+      <li><b>허가배출기준 초과</b>: 기록부의 허가배출기준 칸(예: <code>8</code>, <code>8(12)</code>)에서 괄호 앞 숫자보다 <b>크면</b> 값 옆에 「(초과)」, 결과 칸은 빨간 글씨·연한 빨강 바탕. 같으면 초과 아님.</li>
+      <li><b>산소 보정</b>: 허가배출기준의 괄호 안 숫자(예: <code>8(12)</code>의 12)는 표준산소농도(%)로 기록부의 표준산소 칸에 자동으로 들어갑니다. 괄호가 없으면 보정하지 않습니다. 초과 판정은 보정한 값으로 합니다.</li>
+      <li><b>원문 대조</b>: 물질별 공정시험기준 원문의 결과 자릿수·제시 방법검출한계·정량범위·단위와 견줍니다. <span class="sub" data-rule="ref_mdl"></span></li>
+    </ol>
+  </details>
+  <div id="list"></div>
+</main>
+<div id="toast"></div>
+<script>/*__JSZIP__*/</script>
+<script>
+const DATA = "__DATA__";
+const FILES = "__FILES__";
+const RULES = "__RULES__";
+const STORE = 'labform-master-v1';
+const UNITS = ['ppm','ppb','mg/sm3','μg/sm3','ug/sm3','ng/sm3'];
+const FIELDS = ['method','calc','final','mdl','loq','unit'];
+const key = r => r.file + '|' + r.row;
+let edits = {};
+try { edits = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { edits = {}; }
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(edits)); } catch (e) {} };
+const orig = Object.fromEntries(DATA.map(r => [key(r), r]));
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.querySelectorAll('[data-rule]').forEach(el => el.textContent = '— ' + RULES[el.dataset.rule]);
+
+function cur(r) { return Object.assign({}, r, edits[key(r)] || {}); }
+function owner(r) { return DATA.find(x => x.file === r.file && x.row === r.method_row) || r; }
+function isFormula(v) { return typeof v === 'string' && v.startsWith('='); }
+function num(v) { if (v === null || v === undefined || v === '' || isFormula(v)) return null; const n = Number(String(v).trim()); return Number.isFinite(n) && String(v).trim() !== '' ? n : null; }
+function decimals(v) { const n = num(v); if (n === null) return 0; const s = String(v).trim(); if (/e/i.test(s)) { const m = n.toExponential().match(/e-(\d+)/); return m ? Number(m[1]) : 0; } const d = s.split('.')[1]; return d ? d.replace(/0+$/, '').length : 0; }
+function sig(v) { const s = String(num(v)); const t = s.replace('-', '').replace('.', '').replace(/^0+/, '').replace(/e.*$/, ''); return s.includes('.') ? t.length : t.replace(/0+$/, '').length || 1; }
+function rhu(x, d) { // 4사5입 (KS Q 5002 4.2.2.2)
+  const s = String(x); if (/e/i.test(s)) { const m = Math.pow(10, d); return Math.round(x * m + (x >= 0 ? 1e-12 : -1e-12)) / m; }
+  return Number(Math.round(Number(s + 'e' + d)) + 'e-' + d);
+}
+function judgeDigits(c) { const f = Number(c.final); return num(c.mdl) !== null ? Math.max(f, decimals(c.mdl)) : f; }
+function parsePermit(t) {
+  const s = String(t ?? '').replace(/\n/g, ' ').trim(); if (!s) return { L: null, O2: null };
+  const i = s.indexOf('('); const L = num(i >= 0 ? s.slice(0, i).trim() : s);
+  let O2 = null; if (i >= 0) { const j = s.indexOf(')', i); O2 = num(s.slice(i + 1, j > 0 ? j : undefined)); }
+  return { L, O2 };
+}
+function evaluate(c, raw, permit) { // 기록부 결과 수식과 같은 규칙
+  const x = num(raw); if (x === null) return null;
+  const calc = Number(c.calc), final = Number(c.final), jd = judgeDigits(c);
+  const v1 = rhu(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);
+  const mdl = num(mdlValue(c));
+  const why = [`계산값 ${x} → 계산 ${calc}자리 ${v1} → 판정 ${jd}자리 ${vj} / 표시 ${final}자리 ${vf.toFixed(final)}`];
+  if (mdl !== null && vj < mdl) { why.push(`${vj} < 방법검출한계 ${mdl} → 불검출`); return { text: '불검출', nd: true, why }; }
+  if (mdl !== null) why.push(`${vj} ${vj === mdl ? '=' : '>'} 방법검출한계 ${mdl} → 값으로 표시`);
+  const p = parsePermit(permit); let text = vf.toFixed(final), over = false;
+  if (p.L !== null) { over = vf > p.L; why.push(`${vf.toFixed(final)} ${over ? '>' : (vf === p.L ? '=' : '<')} 허가배출기준 ${p.L} → ${over ? '초과' : '초과 아님'}`); if (over) text += ' (초과)'; }
+  if (p.O2 !== null) why.push(`허가배출기준 괄호 안 ${p.O2} → 표준산소 ${p.O2}%로 보정한 값으로 판정 (기록부에서 자동 연결)`);
+  return { text, over, why };
+}
+function mdlValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).mdl : c.mdl; } return c.mdl; }
+function loqValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).loq : c.loq; } return c.loq; }
+
+function checks(c) {
+  const out = []; const R = c.ref || {};
+  const calc = Number(c.calc), final = Number(c.final);
+  const okInt = v => Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 8;
+  if (!okInt(c.calc) || !okInt(c.final)) out.push(['bad', '자릿수는 0~8 사이 정수여야 합니다', '입력 확인']);
+  else {
+    out.push(calc === final + 1 ? ['ok', `계산 ${calc}자리 = 최종 ${final}자리 + 1`, RULES.calc] : ['bad', `계산 ${calc}자리 ≠ 최종 ${final}자리 + 1`, RULES.calc]);
+    if (R.calc != null && R.final != null) out.push(calc === R.calc && final === R.final ? ['ok', `원문과 같음: 계산 ${R.calc}·표기 ${R.final}자리`, `ES ${R.code} 「${R.text}…」`] : ['bad', `원문은 계산 ${R.calc}·표기 ${R.final}자리`, `ES ${R.code} 「${R.text}…」`]);
+  }
+  const mdl = num(mdlValue(c)), loq = num(loqValue(c));
+  if (mdl === null && !c.linked) out.push(['warn', `방법검출한계가 숫자가 아님(${esc(c.mdl)}) → 불검출 판정 안 함`, RULES.nd]);
+  if (mdl !== null) {
+    out.push(sig(mdl) <= 2 ? ['ok', `방법검출한계 유효숫자 ${sig(mdl)}개`, RULES.sig] : ['bad', `방법검출한계 유효숫자 ${sig(mdl)}개 (2개 이하)`, RULES.sig]);
+    if (decimals(mdl) > final) out.push(['warn', `방법검출한계 소수 ${decimals(mdl)}자리 > 최종 ${final}자리 → 판정은 ${decimals(mdl)}자리로 하고 표시는 ${final}자리`, RULES.nd]);
+    if (R.mdl != null) out.push(mdl <= R.mdl + 1e-12 ? ['ok', `방법검출한계 ${mdl} ≤ 원문 제시값 ${R.mdl}`, `ES ${R.code} · ${RULES.ref_mdl}`] : ['bad', `방법검출한계 ${mdl} > 원문 제시값 ${R.mdl}`, `ES ${R.code} · ${RULES.ref_mdl}`]);
+  }
+  if (loq !== null) {
+    out.push(sig(loq) <= 2 ? ['ok', `정량한계 유효숫자 ${sig(loq)}개`, RULES.sig] : ['bad', `정량한계 유효숫자 ${sig(loq)}개 (2개 이하)`, RULES.sig]);
+    if (mdl) { const k = loq / mdl; out.push(k >= 2.5 && k <= 4 ? ['ok', `정량한계/방법검출한계 = ${k.toFixed(2)}`, RULES.ratio] : ['warn', `정량한계/방법검출한계 = ${k.toFixed(2)} (이론 3.18)`, RULES.ratio]); }
+    if (R.range_low != null) out.push(loq <= R.range_low + 1e-12 ? ['ok', `정량한계 ${loq} ≤ 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`] : ['warn', `정량한계 ${loq} > 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`]);
+  }
+  const u = String(c.unit || '').toLowerCase().replace(/³/g, '3').replace(/\s/g, '');
+  if (!u) out.push(['warn', '단위가 비어 있음', RULES.unit]);
+  else {
+    out.push(UNITS.includes(u) ? ['ok', `단위 ${c.unit}`, RULES.unit] : ['bad', `단위 ${c.unit}는 총칙 단위가 아님`, RULES.unit]);
+    const ru = String(R.unit || '').toLowerCase().replace(/³/g, '3');
+    if (ru) out.push(u === ru ? ['ok', `단위가 원문과 같음 (${R.unit})`, `ES ${R.code}`] : ['bad', `원문 단위는 ${R.unit}`, `ES ${R.code}`]);
+  }
+  const m = String(c.method || owner(c).method || '');
+  if (R.code) { const v = (m.match(new RegExp('ES\\s*' + R.code.split('.')[0] + '\\.\\s?(\\w+)')) || [])[1]; if (v && v !== R.code.split('.')[1]) out.push(['bad', `시험방법 버전 .${v} ↔ 원문 .${R.code.split('.')[1]}`, `ES ${R.code}`]); }
+  return out;
+}
+const level = cs => cs.some(x => x[0] === 'bad') ? 'bad' : cs.some(x => x[0] === 'warn') ? 'warn' : 'ok';
+function changed(r) { const e = edits[key(r)]; if (!e) return false; return FIELDS.some(f => f in e && String(e[f]) !== String(r[f] ?? '')); }
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase(), flt = $('#filter').value;
+  const byFile = {}; DATA.forEach(r => (byFile[r.file] = byFile[r.file] || []).push(r));
+  let nOk = 0, nWarn = 0, nBad = 0, nCh = 0;
+  DATA.forEach(r => { const l = level(checks(cur(r))); if (l === 'ok') nOk++; else if (l === 'warn') nWarn++; else nBad++; if (changed(r)) nCh++; });
+  $('#summary').innerHTML = `<div class="pill">파일 <b>${Object.keys(byFile).length}</b>개</div><div class="pill">기준 <b>${DATA.length}</b>줄</div>
+    <div class="pill" style="color:var(--ok)">원문 대조 맞음 <b>${nOk}</b></div><div class="pill" style="color:var(--warn)">확인 <b>${nWarn}</b></div><div class="pill" style="color:var(--bad)">틀림 <b>${nBad}</b></div>
+    <div class="pill">고친 줄 <b>${nCh}</b></div>`;
+  const openSet = new Set([...document.querySelectorAll('.file:not(.closed)')].map(e => e.dataset.file));
+  const html = [];
+  for (const [file, rs] of Object.entries(byFile)) {
+    const shown = rs.filter(r => { const c = cur(r); const hay = (file + ' ' + c.item + ' ' + c.sheet).toLowerCase(); if (q && !hay.includes(q)) return false; if (flt === 'issue' && level(checks(c)) === 'ok') return false; if (flt === 'changed' && !changed(r)) return false; return true; });
+    if (!shown.length) continue;
+    const worst = level(rs.flatMap(r => checks(cur(r))));
+    const isOpen = openSet.has(file) || q || flt !== 'all' || window.__expandAll;
+    html.push(`<section class="file ${isOpen ? '' : 'closed'}" data-file="${esc(file)}"><div class="fh"><span class="b ${worst}">${worst === 'ok' ? '맞음' : worst === 'warn' ? '확인' : '틀림'}</span><span class="name">${esc(file.replace(/\.xls[xm]$/, ''))}</span><span class="sub">${rs.length}줄 · ${[...new Set(rs.map(r => r.item))].slice(0, 6).join(', ')}${rs.length > 6 ? ' …' : ''}</span></div><div class="body"><table>
+      <thead><tr><th>물질</th><th>공정시험기준</th><th>계산<br>자릿수</th><th>최종<br>자릿수</th><th>판정<br>자릿수</th><th>방법<br>검출한계</th><th>정량한계</th><th>단위</th><th>원문 대조</th><th>비고</th></tr></thead><tbody>`);
+    for (const r of shown) {
+      const c = cur(r), cs = checks(c), k = key(r), ow = owner(r), follower = ow.row !== r.row;
+      const ch = f => (edits[k] && f in edits[k] && String(edits[k][f]) !== String(r[f] ?? '')) ? 'changed' : '';
+      const bad = f => (f === 'calc' || f === 'final') && !(Number.isInteger(Number(c[f])) && Number(c[f]) >= 0 && Number(c[f]) <= 8) ? 'invalid' : '';
+      html.push(`<tr data-k="${esc(k)}"><td class="item">${esc(c.item)}<span class="where">${esc(c.sheet)} · ${esc(c.result)}</span><button class="toggle" data-act="detail">자세히·시험해 보기</button></td>
+        <td>${follower ? `<textarea disabled title="같은 시험방법 칸을 「${esc(ow.item)}」 줄과 함께 씁니다">${esc(cur(ow).method)}</textarea>` : `<textarea data-f="method" class="${ch('method')}">${esc(c.method)}</textarea>`}</td>
+        <td><input class="num ${ch('calc')} ${bad('calc')}" data-f="calc" value="${esc(c.calc)}"></td>
+        <td><input class="num ${ch('final')} ${bad('final')}" data-f="final" value="${esc(c.final)}"></td>
+        <td class="judge">${judgeDigits(c)}자리</td>
+        <td>${c.linked ? `<input class="num" disabled value="${esc(mdlValue(c))}" title="다른 시트와 같은 값을 씁니다">` : `<input class="num ${ch('mdl')}" data-f="mdl" value="${esc(c.mdl)}">`}</td>
+        <td>${c.linked ? `<input class="num" disabled value="${esc(loqValue(c))}">` : `<input class="num ${ch('loq')}" data-f="loq" value="${esc(c.loq)}">`}</td>
+        <td><input class="unit ${ch('unit')}" data-f="unit" value="${esc(c.unit)}"></td>
+        <td><div class="badges">${cs.filter(x => x[0] !== 'ok').map(x => `<span class="b ${x[0]}" title="${esc(x[2])}">${esc(x[1])}</span>`).join('') || `<span class="b ok" title="${cs.length}가지 모두 맞음">모두 맞음 (${cs.length})</span>`}</div></td>
+        <td class="note">${esc(c.note || '')}</td></tr>`);
+      if (window.__open && window.__open.has(k)) html.push(detailRow(r, c, cs));
+    }
+    html.push('</tbody></table></div></section>');
+  }
+  $('#list').innerHTML = html.join('') || '<p class="sub">조건에 맞는 줄이 없습니다.</p>';
+}
+function detailRow(r, c, cs) {
+  const R = c.ref || {}; const k = key(r); const t = (window.__try || {})[k] || {};
+  const ev = evaluate(c, t.raw, t.permit);
+  return `<tr class="detail" data-k="${esc(k)}"><td colspan="10"><div class="detail-box">
+    <div><b>원문 대조</b>${R.code ? ` <span class="sub">ES ${esc(R.code)}${R.via ? ' (→ ES ' + esc(R.via) + ')' : ''}${R.text ? ' · 「' + esc(R.text) + '…」' : ''}</span>` : ''}
+      <ul class="checks">${cs.map(x => `<li><span class="b ${x[0]}">${x[0] === 'ok' ? '맞음' : x[0] === 'warn' ? '확인' : '틀림'}</span> ${esc(x[1])}<div class="basis">${esc(x[2])}</div></li>`).join('')}</ul></div>
+    <div class="try"><b>시험해 보기</b> <span class="sub">— 기록부 결과 수식과 같은 규칙</span><div style="margin-top:6px">
+      <input data-try="raw" placeholder="계산값" value="${esc(t.raw ?? '')}"><input data-try="permit" placeholder="허가배출기준 예: 8(12)" value="${esc(t.permit ?? '')}"></div>
+      ${ev ? `<div class="res ${ev.over ? 'over' : ev.nd ? 'nd' : ''}">${esc(ev.text)}</div><div class="why">${ev.why.map(esc).join('<br>')}</div>` : '<div class="why">계산값을 넣으면 결과가 나옵니다.</div>'}</div>
+  </div></td></tr>`;
+}
+// 입력
+document.addEventListener('input', e => {
+  const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+  const k = tr.dataset.k;
+  if (e.target.dataset.f) {
+    const f = e.target.dataset.f; let v = e.target.value;
+    if (f === 'calc' || f === 'final') v = v.trim() === '' ? '' : (Number.isFinite(Number(v)) ? Number(v) : v);
+    edits[k] = edits[k] || {}; edits[k][f] = v; save();
+    clearTimeout(window.__t); window.__t = setTimeout(() => { const pos = [e.target.dataset.f, e.target.selectionStart]; render(); const el = document.querySelector(`tr[data-k="${CSS.escape(k)}"] [data-f="${pos[0]}"]`); if (el) { el.focus(); try { el.setSelectionRange(pos[1], pos[1]); } catch (x) {} } }, 350);
+  }
+  if (e.target.dataset.try) {
+    window.__try = window.__try || {}; window.__try[k] = window.__try[k] || {}; window.__try[k][e.target.dataset.try] = e.target.value;
+    clearTimeout(window.__t2); window.__t2 = setTimeout(() => { const which = e.target.dataset.try; render(); const el = document.querySelector(`tr.detail[data-k="${CSS.escape(k)}"] [data-try="${which}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 300);
+  }
+});
+document.addEventListener('click', e => {
+  const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('closed'); return; }
+  if (e.target.dataset.act === 'detail') { const k = e.target.closest('tr').dataset.k; window.__open = window.__open || new Set(); window.__open.has(k) ? window.__open.delete(k) : window.__open.add(k); render(); }
+});
+$('#q').addEventListener('input', render); $('#filter').addEventListener('change', render);
+$('#btnExpand').onclick = () => { window.__expandAll = !window.__expandAll; $('#btnExpand').textContent = window.__expandAll ? '모두 접기' : '모두 펼치기'; document.querySelectorAll('.file').forEach(s => s.classList.toggle('closed', !window.__expandAll)); render(); };
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(window.__tt); window.__tt = setTimeout(() => t.style.display = 'none', 3200); }
+function stamp() { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`; }
+function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+// 엑셀 '기준' 시트 칸 고치기
+function xmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function cellXml(ref, v) {
+  if (v === null || v === undefined || String(v).trim() === '') return `<c r="${ref}"/>`;
+  if (isFormula(v)) return `<c r="${ref}"><f>${xmlEsc(v.slice(1))}</f></c>`;
+  if (typeof v === 'number' || /^-?\d+(\.\d+)?(e-?\d+)?$/i.test(String(v).trim())) return `<c r="${ref}"><v>${Number(v)}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+}
+function setCell(xml, ref, v) {
+  const re = new RegExp(`<c r="${ref}"(?:\\s[^>]*)?(?:/>|>[\\s\\S]*?</c>)`);
+  if (re.test(xml)) return xml.replace(re, cellXml(ref, v));
+  const row = ref.match(/\d+/)[0];
+  return xml.replace(new RegExp(`(<row r="${row}"[^>]*>)([\\s\\S]*?)(</row>)`), (m, a, b, c) => a + b + cellXml(ref, v) + c);
+}
+async function sheetPath(zip, name) {
+  const wb = await zip.file('xl/workbook.xml').async('string'), rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+  const m = wb.match(new RegExp(`<sheet[^>]*name="${name}"[^>]*r:id="([^"]+)"`)); if (!m) return null;
+  const t = rels.match(new RegExp(`<Relationship[^>]*Id="${m[1]}"[^>]*Target="([^"]+)"`)) || rels.match(new RegExp(`<Relationship[^>]*Target="([^"]+)"[^>]*Id="${m[1]}"`));
+  return 'xl/' + t[1].replace(/^\/?xl\//, '');
+}
+function csvText() {
+  const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '판정 자릿수', '방법검출한계', '정량한계', '단위', '원문', '원문 대조', '비고'];
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [head.map(q).join(',')];
+  for (const r of DATA) { const c = cur(r), cs = checks(c), l = level(cs); lines.push([r.file, c.item, c.sheet, c.result, cur(owner(r)).method, c.calc, c.final, judgeDigits(c), mdlValue(c), loqValue(c), c.unit, c.ref && c.ref.code ? 'ES ' + c.ref.code : '', (l === 'ok' ? '맞음' : l === 'warn' ? '확인' : '틀림') + (l !== 'ok' ? ': ' + cs.filter(x => x[0] !== 'ok').map(x => x[1]).join(' / ') : ''), c.note].map(q).join(',')); }
+  return '﻿' + lines.join('\r\n');
+}
+function changeLog() {
+  const out = [`시험기록부 기준 관리 v__VERSION__ — 골든 카피 ${new Date().toLocaleString('ko-KR')}`, ''];
+  for (const r of DATA) { const e = edits[key(r)]; if (!e) continue; for (const f of FIELDS) if (f in e && String(e[f]) !== String(r[f] ?? '')) out.push(`${r.file} · ${r.item} · ${{method: '공정시험기준', calc: '계산 자릿수', final: '최종 자릿수', mdl: '방법검출한계', loq: '정량한계', unit: '단위'}[f]}: ${r[f]} → ${e[f]}`); }
+  if (out.length === 2) out.push('처음 값에서 바꾼 것 없음');
+  return out.join('\r\n');
+}
+$('#btnGolden').onclick = async () => {
+  const bad = DATA.filter(r => { const c = cur(r); return !(Number.isInteger(Number(c.calc)) && Number.isInteger(Number(c.final))); });
+  if (bad.length) { toast('자릿수가 숫자가 아닌 줄이 있습니다: ' + bad.map(r => r.item).join(', ')); return; }
+  const b = $('#btnGolden'); b.disabled = true; b.textContent = '만드는 중…';
+  try {
+    const out = new JSZip(); const folder = `시험기록부_골든카피_${stamp()}`;
+    for (const [name, b64] of Object.entries(FILES)) {
+      const zip = await JSZip.loadAsync(b64, { base64: true });
+      const rs = DATA.filter(r => r.file === name);
+      if (rs.length) {
+        const p = await sheetPath(zip, '기준');
+        if (p) {
+          let x = await zip.file(p).async('string');
+          for (const r of rs) {
+            const c = cur(r), i = r.row;
+            if (owner(r).row === r.row) x = setCell(x, 'D' + i, c.method);
+            x = setCell(x, 'E' + i, Number(c.calc)); x = setCell(x, 'F' + i, Number(c.final));
+            if (!r.linked) { x = setCell(x, 'G' + i, c.mdl); x = setCell(x, 'H' + i, c.loq); }
+            x = setCell(x, 'I' + i, c.unit);
+          }
+          zip.file(p, x);
+        }
+      }
+      out.file(`${folder}/${name}`, await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
+    }
+    out.file(`${folder}/기준표_${stamp()}.csv`, csvText());
+    out.file(`${folder}/변경내역_${stamp()}.txt`, '﻿' + changeLog());
+    download(`${folder}.zip`, await out.generateAsync({ type: 'blob', compression: 'DEFLATE' }));
+    toast('골든 카피를 내려받았습니다. 엑셀에서 열면 기준이 반영되어 다시 계산됩니다.');
+  } catch (err) { console.error(err); toast('만들지 못했습니다: ' + err.message); }
+  b.disabled = false; b.textContent = '골든 카피 내려받기 (zip)';
+};
+$('#btnCsv').onclick = () => download(`기준표_${stamp()}.csv`, new Blob([csvText()], { type: 'text/csv' }));
+$('#btnExport').onclick = () => download(`기준표백업_${stamp()}.json`, new Blob([JSON.stringify({ version: '__VERSION__', saved: new Date().toISOString(), edits }, null, 1)], { type: 'application/json' }));
+$('#btnImport').onclick = () => $('#fileImport').click();
+$('#fileImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); edits = j.edits || j; save(); render(); toast('백업을 불러왔습니다.'); } catch (x) { toast('백업 파일을 읽지 못했습니다.'); } e.target.value = ''; };
+$('#btnReset').onclick = () => { if (!confirm('고친 내용을 모두 지우고 처음 값으로 돌릴까요?')) return; edits = {}; save(); render(); toast('처음 값으로 돌렸습니다.'); };
+render();
+</script>
+</body>
+</html>
