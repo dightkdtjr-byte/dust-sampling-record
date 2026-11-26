@@ -1402,7 +1402,7 @@ const SKYLINE_FLYER_CSS = `
   from { transform: translateY(0); }
   to { transform: translateY(-0.8px); }
 }
-.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 38% 0%; animation: skylineTrot var(--trot, 0.6s) linear infinite; }
+.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot var(--trot, 0.6s) linear infinite; }
 .skyline-trot-b { animation-delay: calc(var(--trot, 0.6s) * -0.5); }
 .skyline-trot-bob { animation: skylineTrotBob calc(var(--trot, 0.6s) / 4) ease-in-out infinite alternate; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
@@ -1716,9 +1716,15 @@ const SCENE_WALK_TRACK = (() => {
     keyPoints: '0;0;1;1;0;0',
   };
 })();
-// 다리 한 짝: 위는 굵고 발목으로 갈수록 가늘어지며, 발은 걷는 쪽(앞)으로 둥글게 나온다.
+// 다리 한 짝 (네발짐승의 다리): 발은 사람 발처럼 길게 뻗지 않고, 다리 끝에 달린 작고 둥근 발바닥이다.
+// 앞다리는 곧게 내려오고, 뒷다리는 뒤꿈치(뒷무릎)가 뒤로 꺾였다가 내려온다.
 // 맨 위는 몸통 속에 있어 그곳(엉덩이·어깨)을 축으로 움직인다
-const sceneWalkerLeg = (x, h) => `M${x - 0.6},-${h} L${x + 6.2},-${h} L${x + 5},-4.8 C${x + 8},-4.8 ${x + 10.6},-3.2 ${x + 10.6},-1.4 Q${x + 10.6},0 ${x + 9},0 L${x + 1},0 Q${x - 0.4},0 ${x - 0.2},-1.6 L${x + 0.6},-5 Z`;
+const sceneWalkerLeg = (x, h, hind) => {
+  const n = (v) => +v.toFixed(2);
+  const paw = (cx) => `M${n(cx - 1.9)},-3.5 h3.8 a1.75,1.75 0 0 1 0,3.5 h-3.8 a1.75,1.75 0 0 1 0,-3.5 Z`;
+  if (hind) return `M${n(x - 0.4)},-${h} L${n(x + 6.6)},-${h} L${n(x + 4)},-7 L${n(x + 5)},-1.6 L${n(x + 0.6)},-1.6 L${n(x - 2)},-7.6 Z ${paw(x + 3.2)}`;
+  return `M${n(x - 0.2)},-${h} L${n(x + 5.8)},-${h} L${n(x + 5.2)},-1.6 L${n(x + 0.6)},-1.6 Z ${paw(x + 3.3)}`;
+};
 // 한 걸음 주기(초): 발이 땅을 디디고 미는 동안 미끄러지지 않게, 걷는 빠르기와 다리 길이에서 계산한다
 const SCENE_STEP_SWING = 20;   // 다리가 앞뒤로 벌어지는 각도
 const SCENE_STEP_STANCE = 0.55; // 한 주기 가운데 발이 땅에 닿아 있는 비율
@@ -2155,7 +2161,7 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
           <g style={{ '--trot': `${sceneWalkerStep(walker).toFixed(3)}s` }}>
             {/* 다리는 한 짝씩 따로: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 움직이고, 대각선 짝끼리 같이 나간다. 먼 쪽 다리는 살짝 옅다 */}
             {walker.legs.map(([x, pair], k) => (
-              <path key={x} className={stillScene ? undefined : `skyline-trot-${pair}`} d={sceneWalkerLeg(x, walker.legH)} fill={pal.bank} opacity={k % 2 === 1 ? 0.7 : 1} />
+              <path key={x} className={stillScene ? undefined : `skyline-trot-${pair}`} d={sceneWalkerLeg(x, walker.legH, k < 2)} fill={pal.bank} opacity={k % 2 === 1 ? 0.7 : 1} />
             ))}
             <g className={stillScene ? undefined : 'skyline-trot-bob'}><g transform="translate(0 -3.4)">{walker.art(pal)}</g></g>
           </g>
