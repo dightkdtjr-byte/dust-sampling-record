@@ -32,6 +32,11 @@ EXAMPLE = {
     '허가배출기준': '8(12)',
     '시료명': '0331-DIG-#A16-P-1',
 }
+# OVERWRITE: 원본 기록을 양식으로 바꿀 때 True. 기본 정보 칸(의뢰기관·측정대상·날짜·시각·기간·서명)에 원본마다 다른 실제 값이
+# 들어 있으면 표준 예시로 바꿔 모든 양식을 같게 한다. 시료명·허가배출기준·측정값 같은 물질별 예시는 원본 값을 둔다.
+OVERWRITE = False
+OVERWRITE_KEYS = {'의뢰기관', '측정대상', '시료채취일', '시료인수일', '분석일자', '시료인수 시각', '시험검사기간'}
+PERIOD_FMT = '0"일"'
 SIGN_NAMES = ('이 상 석 (인)', '전 하 은 (인)')   # 담당, 기술책임자 (원본 기록 그대로)
 _norm = lambda s: re.sub(r'\s', '', str(s or ''))
 
@@ -106,9 +111,20 @@ def examples(b, sheet, area, fill=True):
 
     def put(r, c, val, why):
         cell = ws.cell(r, c)
-        if type(cell).__name__ == 'MergedCell' or cell.value not in (None, ''):
+        if type(cell).__name__ == 'MergedCell':
             return
+        cur = cell.value
+        if cur not in (None, ''):
+            if not (OVERWRITE and why in OVERWRITE_KEYS) or (isinstance(cur, str) and (cur.startswith('=') or '현장' in cur)):
+                return
+            if cur == val or (isinstance(val, datetime.date) and isinstance(cur, datetime.datetime) and cur.date() == val):
+                return
         ref = f'{CL(c)}{r}'
+        if why == '시험검사기간' and 'd' in (cell.number_format or '').replace('"일"', ''):
+            # 날짜로 적혀 있던 기간(1900-01-02 = 2일)을 숫자로
+            b.setv(sheet, ref, val, style=b.style_with_format(_cell_style(b.sx(sheet), ref, None, {}, c), PERIOD_FMT))
+            notes.append(f'{ref} {why} = {val} (표시 형식 {PERIOD_FMT})')
+            return
         if isinstance(val, datetime.date):
             b.setv(sheet, ref, _serial(val))
         else:
@@ -160,7 +176,7 @@ def examples(b, sheet, area, fill=True):
         signs = [c for c in range(c1, c2 + 1) if _norm(ws.cell(r1, c).value) in ('담당', '기술책임자')]
         for c, name in zip(signs, SIGN_NAMES):
             cell = ws.cell(r1 + 1, c)
-            if type(cell).__name__ != 'MergedCell' and _norm(cell.value) in ('', '(인)'):
+            if type(cell).__name__ != 'MergedCell' and (_norm(cell.value) in ('', '(인)') or (OVERWRITE and not str(cell.value).startswith('=') and _norm(cell.value) != _norm(name))):
                 b.setv(sheet, f'{CL(c)}{r1 + 1}', name)
                 notes.append(f'{CL(c)}{r1 + 1} 서명란 = {name}')
     for r in (range(r1 + 2, r2 + 1) if fill else ()):
@@ -169,10 +185,10 @@ def examples(b, sheet, area, fill=True):
             k = _norm(v)
             if not k or type(ws.cell(r, c)).__name__ == 'MergedCell':
                 continue
-            if k in ('의뢰기관', '측정대상', '분석일자', '시료채취일', '시험검사기간'):
+            if k in ('의뢰기관', '측정대상', '분석일자', '시료채취일', '시료인수일', '시험검사기간'):
                 t = right_of(r, c)
                 if t <= c2:
-                    put(r, t, EXAMPLE[k], k)
+                    put(r, t, EXAMPLE['시료채취일'] if k == '시료인수일' else EXAMPLE[k], k)
             if k == '시' and c > c1:
                 put(r, c - 1, EXAMPLE['시각'], '시료인수 시각')
             if k == '허가배출기준' and v.strip() == str(v).strip() and '\n' not in str(v):
@@ -245,6 +261,32 @@ def bold_rule(b, sheet, area):
 
 
 # ───────── 글자 맞춤 ─────────
+# 띄어쓰기 없는 한글 복합어를 나눌 수 있는 자리: 뒤쪽이 이 낱말로 시작하는 곳 (방법|검출한계, 현장바탕|시료용액의)
+WORD_PARTS = ('시험기준', '시료용액', '검출한계', '정량한계', '한계', '바탕시료', '시료', '용액', '농도', '부피', '질량', '결과값', '결과', '면적',
+              '배수', '자료', '기간', '조건', '기준', '물질', '시험', '채취', '측정', '분석', '표준', '평균', '최종', '전체',
+              '산소', '흡수액', '희석', '온도', '압력', '유량', '시간', '데이터', '작성', '검정', '곡선')
+
+
+def _pieces(w):
+    """긴 낱말을 나눌 수 있는 조각으로: 영문 이름은 "-" 뒤·"(" 앞, 한글 복합어는 WORD_PARTS 앞"""
+    if not re.search(r'[가-힣]', w):
+        return re.findall(r'[^-(]*-|\(?[^-(]+', w)
+    # 긴 낱말이 맞는 자리를 먼저 잡고, 그 낱말 안쪽에서는 자르지 않는다 (방법|검출한계, 공정|시험기준)
+    cuts, inside_until = [], 0
+    for i in range(2, len(w) - 1):
+        if i < inside_until or not re.match(r'[가-힣]', w[i - 1]):
+            continue
+        hit = [p for p in WORD_PARTS if w.startswith(p, i)]
+        if hit:
+            cuts.append(i); inside_until = i + max(len(p) for p in hit)
+    out, prev = [], 0
+    for i in cuts:
+        if i - prev >= 2:
+            out.append(w[prev:i]); prev = i
+    out.append(w[prev:])
+    return out
+
+
 def split_lines(text, inner, size, bold, measure):
     """띄어쓰기 자리에서만 나눠 inner(px)에 들어가게. 낱말 하나가 넘치면 None"""
     out = []
@@ -252,7 +294,7 @@ def split_lines(text, inner, size, bold, measure):
         words = para.split(' ')
         # 띄어쓰기 없이 긴 영문 이름(d12-Benzo(a)pyrene 등)은 "-" 뒤, "(" 앞에서도 나눌 수 있게
         if any(measure(w, size, bold) > inner for w in words):
-            words = [p for w in words for p in (re.findall(r'[^-(]*-|\(?[^-(]+', w) if measure(w, size, bold) > inner else [w])]
+            words = [p for w in words for p in (_pieces(w) if measure(w, size, bold) > inner else [w])]
             return _join_parts(words, inner, size, bold, measure, out, text)
         cur = ''
         for w in words:
@@ -388,3 +430,42 @@ def fit_cells(lay):
     if shrink:
         lay.notes.append(f'날짜·숫자·수식 칸 {len(shrink)}개 "셀에 맞춤" 켬')
     return wraps
+
+
+# ───────── 계산·자료 시트 ─────────
+def tidy_other(b, sheet):
+    """기록부가 아닌 시트(계산과정·rawdata·기기 자료): 날짜 표시 형식 yyyy-mm-dd, 숫자·수식 칸 셀에 맞춤(### 방지)."""
+    from std import load
+    from form_style import Styles, _set_styles, _cell_style
+    ws = load(b)[sheet]
+    if ws.max_row < 1:
+        return []
+    area = f'A1:{CL(max(ws.max_column, 1))}{max(ws.max_row, 1)}'
+    notes = examples(b, sheet, area, fill=False)
+    ws = load(b)[sheet]
+    S = Styles(b); s_xml = b.sx(sheet); new = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            v = cell.value
+            if v is None or type(cell).__name__ == 'MergedCell' or (isinstance(v, str) and not v.startswith('=')):
+                continue
+            if cell.alignment.shrink_to_fit or cell.alignment.wrap_text:
+                continue
+            new[(cell.row, cell.column)] = S.with_shrink(_cell_style(s_xml, cell.coordinate, None, {}, cell.column))
+    if new:
+        _set_styles(b, sheet, new)
+        notes.append(f'숫자·수식 칸 {len(new)}개 셀에 맞춤')
+    return notes
+
+
+def wrap_errors(b, sheet, refs):
+    """원본을 다시 계산했을 때 오류(#REF!, #DIV/0! 등)가 나는 수식을 IFERROR(…,"")로 감싸 빈칸으로 보이게"""
+    s = b.sx(sheet); n = 0
+    for ref in refs:
+        m = re.search(rf'(<c r="{ref}"[^>]*>)<f>([^<]*)</f>', s)
+        if not m or m.group(2).startswith('IFERROR('):
+            continue
+        s = s[:m.start()] + m.group(1) + f'<f>IFERROR({m.group(2)},"")</f>' + s[m.end():]
+        n += 1
+    b.setsx(sheet, s)
+    return n
