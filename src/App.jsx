@@ -1405,13 +1405,6 @@ const SKYLINE_FLYER_CSS = `
 .skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot var(--trot, 0.6s) linear infinite; }
 .skyline-trot-b { animation-delay: calc(var(--trot, 0.6s) * -0.5); }
 .skyline-trot-bob { animation: skylineTrotBob calc(var(--trot, 0.6s) / 4) ease-in-out infinite alternate; }
-/* 수달 물장구: 발이 물 위로 올라왔다 내려갔다, 두 짝이 엇갈린다 */
-@keyframes skylinePaddle {
-  from { transform: scaleY(1); }
-  to { transform: scaleY(0.3); }
-}
-.skyline-paddle-a, .skyline-paddle-b { transform-box: fill-box; transform-origin: 50% 100%; animation: skylinePaddle 0.4s ease-in-out infinite alternate; }
-.skyline-paddle-b { animation-direction: alternate-reverse; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
@@ -1433,7 +1426,7 @@ const SKYLINE_FLYER_CSS = `
   overflow: visible;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing, .skyline-flutter, .skyline-wingbeat, .skyline-dart, .skyline-shimmer, .skyline-trot-a, .skyline-trot-b, .skyline-trot-bob, .skyline-paddle-a, .skyline-paddle-b { animation: none; }
+  .skyline-star, .skyline-cloud, .skyline-plume, .skyline-beacon, .skyline-flare, .skyline-flare-core, .skyline-frog-sac, .skyline-crane, .skyline-crane-wing, .skyline-flutter, .skyline-wingbeat, .skyline-dart, .skyline-shimmer, .skyline-trot-a, .skyline-trot-b, .skyline-trot-bob { animation: none; }
   .skyline-geese { animation: none; transform: translate(60vw, 1vh); }
   .skyline-cranes { animation: none; transform: translate(72vw, 1vh); }
 }
@@ -1772,17 +1765,12 @@ const renderSceneBadger = (pal) => (
     <path d="M27.6,-12.4 C23.6,-10 19.6,-9.2 15.6,-9.4 C11,-9.6 6.6,-12 4,-16 C11,-13.6 20,-13.4 29,-14.6 Z" fill={pal.bank} opacity="0.9" />
   </>
 );
-// 수달의 발 한 짝: 물 위로 올라온, 끝이 둥근 발 (x 는 왼쪽 끝, lean 은 기울기)
-const sceneOtterPaw = (x, lean) => `M${x},0 L${x + lean},-5.5 A2.5,2.5 0 0 1 ${x + 5 + lean},-5.5 L${x + 5},0 Z`;
-// 수달: 머리를 물 위로 내밀고 앞발·뒷발로 물장구치며 헤엄친다. 둥근 머리, 작은 귀, 큰 눈, 밝은 주둥이와 수염, 등, 뾰족한 꼬리 끝
-const renderSceneOtterSwim = (pal, still) => (
+// 수달: 머리만 물 위로 내밀고 헤엄친다 (손발은 물속에 있어 보이지 않는다). 둥근 머리, 작은 귀, 큰 눈, 밝은 주둥이와 수염, 낮은 등, 물 위에 길게 끌리는 꼬리
+const renderSceneOtterSwim = (pal) => (
   <>
-    <path d="M-78,1.5 L-58,1.5 M-72,-1.5 L-60,-0.5 M50,1.5 L58,1.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-    <path d="M-58,0 C-54,-3 -49,-7 -44,-9.6 C-45,-6 -45,-3 -44,0 Z" fill={pal.mid} />
-    <path className={still ? undefined : 'skyline-paddle-b'} d={sceneOtterPaw(-40, -1.5)} fill={pal.bank} opacity="0.7" />
-    <path className={still ? undefined : 'skyline-paddle-a'} d={sceneOtterPaw(-33, -1.5)} fill={pal.bank} />
-    <path d="M-26,0 Q-10,-9 3,0 Z" fill={pal.mid} />
-    <path className={still ? undefined : 'skyline-paddle-b'} d={sceneOtterPaw(43, 1.2)} fill={pal.bank} opacity="0.7" />
+    <path d="M-78,1.5 L-58,1.5 M-72,-1.5 L-60,-0.5 M38,1.5 L46,1.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+    <path d="M-64,0 C-56,-0.8 -48,-4.6 -42,-4.6 C-38.6,-4.6 -36.4,-2.6 -35.4,0 Z" fill={pal.mid} />
+    <path d="M-30,0 Q-12,-8.6 3,0 Z" fill={pal.mid} />
     <circle cx="9.4" cy="-16.4" r="3" fill={pal.bank} />
     <path d="M3,0 C2,-9 7,-18 16,-19.4 C23,-20.4 29,-17 31.6,-12.4 C34,-11 35.4,-8.4 35,-5.6 C34.6,-3 33,-1 30.6,0 Z" fill={pal.mid} />
     <path d="M21,-11.6 C25,-13.6 31,-12.6 33.8,-9.6 C35.4,-7.6 35.2,-4.4 33.4,-2.2 C32.6,-1.2 31.6,-0.4 30.6,0 L13,0 C13.4,-5 16.4,-9.6 21,-11.6 Z" fill={pal.plume} />
@@ -1791,16 +1779,13 @@ const renderSceneOtterSwim = (pal, still) => (
     <ellipse cx="21.4" cy="-14" rx="2.7" ry="2.9" fill={pal.plume} />
     <circle cx="22.1" cy="-13.8" r="1.8" fill={pal.bank} />
     <circle cx="22.8" cy="-14.7" r="0.6" fill={pal.plume} />
-    <path className={still ? undefined : 'skyline-paddle-a'} d={sceneOtterPaw(36.5, 1.2)} fill={pal.bank} />
   </>
 );
-// 수달이 잠수하는 순간: 등이 둥글게 솟고 꼬리와 뒷발이 올라온다
+// 수달이 잠수하는 순간: 등이 둥글게 솟고, 굵다가 끝으로 갈수록 가늘어지는 꼬리가 뒤따라 올라온다 (손발은 보이지 않는다)
 const renderSceneOtterDive = (pal) => (
   <>
     <path d="M-34,1.5 L-22,1.5 M26,1.5 L38,1.5 M-30,4.5 L34,4.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-    <path d="M-16,-2 C-22,-10 -30,-17 -40,-19.6 C-33,-12 -27,-6 -24,0 L-17,0 Z" fill={pal.mid} />
-    <path d="M-22,-3 L-27.6,-13 A2.6,2.6 0 0 1 -23,-15.4 L-16,-5 Z" fill={pal.bank} opacity="0.7" />
-    <path d="M-16,-4 L-19,-15.4 A2.6,2.6 0 0 1 -13.8,-16.4 L-9.6,-6 Z" fill={pal.bank} />
+    <path d="M-6,-8 C-15,-15 -28,-21 -45,-22.6 C-37,-16 -31,-8 -28,0 L-12,0 Z" fill={pal.mid} />
     <path d="M-18,0 C-12,-17 12,-17 19,0 Z" fill={pal.mid} />
   </>
 );
@@ -2133,7 +2118,7 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
       {/* 수달(사철): 둑 앞 물길을 따라 헤엄치다가 이따금 잠수해서 조금 앞에서 다시 올라온다 */}
       {!compact && (() => {
         const scale = 0.62;
-        if (stillScene) return <g transform={`translate(900 ${G + 33}) scale(-${scale} ${scale})`}>{renderSceneOtterSwim(pal, true)}</g>;
+        if (stillScene) return <g transform={`translate(900 ${G + 33}) scale(-${scale} ${scale})`}>{renderSceneOtterSwim(pal)}</g>;
         const cycle = { dur: '23s', begin: '-4s', repeatCount: 'indefinite', calcMode: 'discrete' };
         return (
           <g>
