@@ -76,6 +76,30 @@ def apply(b, path):
     return log
 
 
+
+NEED_O2 = '실측산소 입력'
+# 표준산소(허가배출기준 괄호 안)가 있을 때만 실측산소로 보정. 표준산소가 없으면 보정하지 않은 값, 있는데 실측산소가 비면 "실측산소 입력"
+# (사용자 결정. 원본은 실측산소가 비면 0 %로 보고 보정하거나, 괄호가 없으면 결과가 빈칸이었다)
+# 파일 이름 조각 → [(시트, 칸, 새 수식)]
+O2_FIX = {
+    '황화수소': [('계산과정', 'P3', '=IF(M3="","",IF(N3="","{N}",O6*((21-M3)/(21-N3))))')],
+    '수은': [('계산과정', 'R3', '=IF(Q15="",O3,IF(Q16="","{N}",IF(N(O3)>0,O3*((21-Q15)/(21-Q16)),0)))')],
+    '암모니아': [('계산과정', 'R7', '=IF(O4="","",IF(P4="","{N}",Q7*(21-O4)/(21-P4)))'),
+                 ('계산과정', 'R13', '=IF(O10="","",IF(P10="","{N}",Q13*(21-O10)/(21-P10)))')],
+    '플루오린': [('계산과정', 'P3', '=IF(L3="","",IF(M3="","{N}",ROUND((((E3-F3)*100)/N3)*(22.4/18.998)*((21-L3)/(21-M3)),2)&"("&L3&")"))')],
+    '불소': [('계산과정', 'P3', '=IF(L3="","",IF(M3="","{N}",ROUND((((E3-F3)*100)/N3)*(22.4/18.998)*((21-L3)/(21-M3)),2)&"("&L3&")"))')],
+    '비소': [('계산과정(As)', 'F25', '=IF(E21="","",IF(E22="","{N}",((H13+N13)/$E$23)*((21-$E$21)/(21-$E$22))))')],
+    '먼지': [('계산과정', 'N3', '=IF(L$3="","",IF(M3="","{N}",K3*((21-L3)/(21-M3))))'),
+             ('시험기록부', 'J18', '=IF(계산과정!L3="",ROUND(계산과정!K3,2),계산과정!N3)')],
+    '염화수소': [('계산과정', 'P3', '=IF(L3="","",IF(M3="","{N}",ROUND((((E3-F3)*100)/N3)*(22.4/35.453)*((21-L3)/(21-M3)),2)&"("&L3&")"))')],
+    'SOx': [('계산과정', 'I5', '=IF(F5="",D5,IF(G5="","{N}",D5*((21-F5)/(21-G5))))')],
+    '중금속': [('계산과정', f'{c}27', f'=IF({c}$22="",{c}25,IF($C$23="","{{N}}",{c}$25*((21-{c}$22)/(21-$C$23))))') for c in 'CDEFGHI'],
+}
+OTHER_FIX = {
+    '아세트알데하이드': [('계산과정', f'D{r}', '=C8', '현장바탕 평균(C8)을 뺌 (원본은 0으로 박혀 있어 빼지 않음. 폼알데하이드와 같게, 사용자 결정)') for r in (3, 4, 5)],
+    '총탄화수소': [('계산과정', 'C122', '=AVERAGE(C2:C121)', '평균을 반올림하지 않고 다음 계산에 (맺음은 결과 칸에서 한 번, 사용자 결정)')],
+}
+
 METALS = [('C', '구리화합물'), ('D', '납화합물'), ('E', '아연화합물'), ('F', '크로뮴화합물'), ('G', '니켈화합물'), ('H', '카드뮴화합물'), ('I', '베릴륨화합물')]
 
 
@@ -92,10 +116,44 @@ def post_apply(b, path):
             if b.wb['계산과정'][f'{col}22'].value != f:
                 b.setf('계산과정', f'{col}22', f[1:]); b.wb['계산과정'][f'{col}22'].value = f
                 log.append(f'계산과정!{col}22: 표준산소 = {sh} 기준의 괄호 안 숫자 (전에는 구리 기준만 C·D열에)')
+    base = os.path.basename(path)
+    for key, lst in O2_FIX.items():
+        if key not in base:
+            continue
+        for sh, ref, f in lst:
+            if sh not in b.sheets:
+                continue
+            f = f.replace('{N}', NEED_O2)
+            if b.wb[sh][ref].value != f:
+                b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
+                log.append(f'{sh}!{ref}: 표준산소가 있을 때만 실측산소로 보정, 없으면 보정 안 한 값, 실측산소가 비면 "{NEED_O2}"')
+    for key, lst in OTHER_FIX.items():
+        if key not in base:
+            continue
+        for sh, ref, f, why in lst:
+            if sh in b.sheets and b.wb[sh][ref].value != f:
+                b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
+                log.append(f'{sh}!{ref}: {why}')
     return log
 
 
-def _trunc_rounds(f):
+def o2_cells(b, path, r_cells):
+    """결과가 읽는 계산값 칸이 다시 가리키는 칸(한 단계 더): 예) 염화수소 결과 J21 → 계산과정!P3(보정값).
+    거기의 ROUND(…, n)도 계산 자릿수 버림으로 바꾼다 (계산 자릿수 이상에서 버리면 결과는 같고, 그 아래에서 반올림하던 것만 고쳐짐)"""
+    cell_re = re.compile(r"(?<![:A-Za-z$])(?:(?:'([^']+)'|([^\s!(),=<>&\"'+*/:-]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?![\d(:])")   # 범위(H32:H34)는 빼고
+    out = []
+    for sh, ref, item, sheet in r_cells:
+        v = b.wb[sh][ref].value
+        if not (isinstance(v, str) and v.startswith('=')):
+            continue
+        for m in cell_re.finditer(re.sub(r'"[^"]*"', '', v)):
+            s2 = m.group(1) or m.group(2) or sh
+            if s2 in b.sheets:
+                out.append((s2, f'{m.group(3)}{m.group(4)}', item, sheet))
+    return out
+
+
+def _trunc_rounds(f, calc=None):
     """수식 글의 ROUND(식, n)(n은 숫자)을 TRUNC(ROUND(식, n+5), n)으로: n자리까지 계산(아래 버림). 괄호 짝을 센다"""
     out, i = [], 0
     pat = re.compile(r'(?<![A-Z_.])ROUND\(')
@@ -117,19 +175,20 @@ def _trunc_rounds(f):
             j += 1
         n = f[comma + 1:j - 1].strip() if comma else ''
         if re.fullmatch(r'-?\d+', n) and not f[max(0, m.start() - 6):m.start()].endswith('TRUNC('):
-            out.append(f[i:m.start()]); out.append(f'TRUNC(ROUND({_trunc_rounds(f[m.end():comma])},{int(n) + 5}),{n})'); i = j
+            k = max(int(n), calc) if calc is not None else int(n)
+            out.append(f[i:m.start()]); out.append(f'TRUNC(ROUND({_trunc_rounds(f[m.end():comma], calc)},{k + 5}),{k})'); i = j
         else:
             out.append(f[i:m.end()]); i = m.end()
     return ''.join(out)
 
 
-def strip_pre_rounding(b, sheet, ref):
+def strip_pre_rounding(b, sheet, ref, calc=None):
     """결과 수식이 읽는 계산값 칸 R의 ROUND(식, n)을 버림(TRUNC)으로: 결과 수식이 계산 자릿수에서 버리고 최종 자릿수에서
     한 번 맺으므로, 앞에서 먼저 반올림하면 맺음이 두 번이 된다(0.0249 → 0.025 → 0.03). 표시 자릿수는 그대로. 바뀌면 True"""
     v = b.wb[sheet][ref].value
     if not (isinstance(v, str) and v.startswith('=')):
         return False
-    nv = '=' + _trunc_rounds(v[1:])
+    nv = '=' + _trunc_rounds(v[1:], calc)
     if nv == v:
         return False
     b.setf(sheet, ref, nv[1:])

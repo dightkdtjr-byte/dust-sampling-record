@@ -173,7 +173,8 @@ def rewrite(f, compares, row, permit=None):
         Vsel = rounded(num_part(Rsel), calc, final)
         # 불검출이면 "(초과)"를 붙이지 않는다 (허가배출기준이 검출한계보다 작게 적힌 경우 등)
         f = f'IF(({f})="불검출","불검출",({f})&IF(AND(ISNUMBER({L}),{Vsel}>{L})," (초과)",""))'
-    return f'IFERROR(IF({blank},"",{f}),"")'
+    need = 'OR(' + ','.join(f'{R}&""="실측산소 입력"' for R in Rs) + ')'   # 표준산소가 있는데 실측산소가 비면 (허가배출기준 비교보다 바깥)
+    return f'IFERROR(IF({blank},"",IF({need},"실측산소 입력",{f})),"")'
 
 
 ORIG = ['']
@@ -379,14 +380,14 @@ def apply(path, items, dst):
     import form_fixes as FF
     FIX_LOG[:] = FF.apply(b, path)
     cell_re = re.compile(r"(?:(?:'([^']+)'|([^\s!(),=<>&\"'+*/-]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?![\d(])")
+    R_CELLS = []        # 결과가 읽는 계산값 칸 (계산 자릿수가 정해진 뒤 앞선 반올림을 버림으로 바꾼다)
     for it in items:
         for c in it['compares']:
             R = c[0] if isinstance(c[0], str) else ''
             for m in cell_re.finditer(R):
                 sh = m.group(1) or m.group(2) or it['sheet']
-                ref_ = f'{m.group(3)}{m.group(4)}'
-                if sh in b.sheets and FF.strip_pre_rounding(b, sh, ref_):
-                    FIX_LOG.append(f'{sh}!{ref_}: 결과가 읽는 계산값의 반올림을 계산 자릿수 버림으로 (맺음은 결과 칸에서 한 번)')
+                if sh in b.sheets:
+                    R_CELLS.append((sh, f'{m.group(3)}{m.group(4)}', it['item'], it['sheet']))
     # 한 줄 = (시트, 방법검출한계 칸) 묶음
     groups = []
     for it in items:
@@ -507,7 +508,13 @@ def apply(path, items, dst):
         pa = pa[0] if isinstance(pa, (list, tuple)) else pa
         if pa:
             log += align(b, sh, pa.split('!')[-1].replace('$', ''))
-    FIX_LOG.extend(FF.post_apply(b, path))     # 표준산소 연결 등 마지막 손질 (link_o2 뒤)
+    FIX_LOG.extend(FF.post_apply(b, path))     # 표준산소 연결·산소 보정 규칙 등 마지막 손질 (link_o2 뒤)
+    done = set()
+    for sh, ref_, item, sheet in R_CELLS + [(sh, ref_, it_, s_) for (sh, ref_, it_, s_) in FF.o2_cells(b, path, R_CELLS)]:
+        calc = next((r['calc'] for r in rows if r['item'] == item and r['sheet'] == sheet), None)
+        if (sh, ref_) not in done and FF.strip_pre_rounding(b, sh, ref_, calc):
+            FIX_LOG.append(f'{sh}!{ref_}: 결과가 읽는 계산값의 반올림을 계산 자릿수({calc}) 버림으로 (맺음은 결과 칸에서 한 번)')
+        done.add((sh, ref_))
     b.finish(dst)
     return rows, log
 
