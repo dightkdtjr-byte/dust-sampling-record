@@ -22,12 +22,13 @@ RULES = {
     'ratio': '정도보증 ES 01001.b 4.3.2·4.3.3 (방법검출한계 = 3.14s, 정량한계 = 10s)',
     'ref_mdl': '각 시험법 6.1 (측정한 방법검출한계는 제시한 값 이하)',
 }
+js = lambda t: t.replace('</', '<\\/')      # <script> 안 JSON에 "</script>"가 있어도 끊기지 않게
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'program_template.html'), encoding='utf8').read()
 html = (html.replace('/*__JSZIP__*/', open(jszip, encoding='utf8').read())
-            .replace('"__DATA__"', json.dumps(data, ensure_ascii=False, default=str))
+            .replace('"__DATA__"', js(json.dumps(data, ensure_ascii=False, default=str)))
             .replace('"__FILES__"', json.dumps(files))
-            .replace('"__RULES__"', json.dumps(RULES, ensure_ascii=False))
-            .replace('"__EV__"', open(evidence, encoding='utf8').read() if evidence else '{"codes":{},"rules":{},"img":{}}')
+            .replace('"__RULES__"', js(json.dumps(RULES, ensure_ascii=False)))
+            .replace('"__EV__"', js(open(evidence, encoding='utf8').read()) if evidence else '{"codes":{},"rules":{},"img":{}}')
             .replace('__VERSION__', VERSION)
             .replace('__BUILT__', datetime.date.today().isoformat()))
 open(out, 'w', encoding='utf8').write(html)

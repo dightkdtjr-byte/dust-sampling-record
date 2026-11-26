@@ -41,7 +41,8 @@ def decs(v):
 def expected(x, calc, final, mdl, L):
     jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
     v1 = trunc(x, calc); vj, vf = rhu(v1, jd), rhu(v1, final)
-    if mdl is not None and vj < Decimal(str(mdl)):
+    lim = Decimal(str(mdl)) if mdl is not None else Decimal(0)      # 엑셀 N("-") = 0: 방법검출한계가 없으면 0 미만만 불검출
+    if vj < lim:
         return '불검출'
     s = f'{vf:.{final}f}'
     if L is not None and vf > Decimal(str(L)):

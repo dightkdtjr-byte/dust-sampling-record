@@ -150,7 +150,7 @@
 </head>
 <body>
 <div class="top"><div class="top-in">
-  <a class="mark" href="#">시험기록부</a>
+  <a class="mark" href="#" data-home>시험기록부</a>
   <span class="ver">v__VERSION__ · __BUILT__</span>
   <span class="grow"></span>
   <div class="tools">
@@ -180,7 +180,17 @@ const FIELD_NAME = { method: '공정시험기준', calc: '계산 자릿수', fin
 const LEVEL = { ok: '적합', warn: '검토', bad: '부적합', info: '참고' };
 const key = r => r.file + '|' + r.row;
 let edits = {};
-try { edits = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { edits = {}; }
+function cleanEdits(o) { // 저장·백업 값: 기준 줄 키와 고칠 수 있는 칸(FIELDS)만, 글자·숫자만 받는다
+  const out = {}; if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+  const keys = new Set(DATA.map(key));
+  for (const [k, e] of Object.entries(o)) {
+    if (!keys.has(k) || !e || typeof e !== 'object') continue;
+    const c = {}; for (const f of FIELDS) if (f in e && (typeof e[f] === 'string' || typeof e[f] === 'number')) c[f] = e[f];
+    if (Object.keys(c).length) out[k] = c;
+  }
+  return out;
+}
+try { edits = cleanEdits(JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) { edits = {}; }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(edits)); } catch (e) {} };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -193,37 +203,52 @@ function chem(s) {
   t = t.replace(CHEM_RE, (m, a, f) => a + f.replace(/(\d+)/g, '<sub>$1</sub>'));
   return t.replace(/RRFavg/g, 'RRF<sub>avg</sub>');
 }
-function cur(r) { return Object.assign({}, r, edits[key(r)] || {}); }
+function cur(r) { const e = edits[key(r)] || {}; const c = Object.assign({}, r); for (const f of FIELDS) if (f in e) c[f] = e[f]; return c; }
 function owner(r) { return DATA.find(x => x.file === r.file && x.row === r.method_row) || r; }
 function isFormula(v) { return typeof v === 'string' && v.startsWith('='); }
-function num(v) { if (v === null || v === undefined || v === '' || isFormula(v)) return null; const n = Number(String(v).trim()); return Number.isFinite(n) && String(v).trim() !== '' ? n : null; }
-function decimals(v) { const n = num(v); if (n === null) return 0; const s = String(v).trim(); if (/e/i.test(s)) { const m = n.toExponential().match(/e-(\d+)/); return m ? Number(m[1]) : 0; } const d = s.split('.')[1]; return d ? d.replace(/0+$/, '').length : 0; }
+const NUM_RE = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
+function num(v) { if (v === null || v === undefined || isFormula(v)) return null; if (typeof v === 'number') return Number.isFinite(v) ? v : null; const t = String(v).trim(); if (!NUM_RE.test(t)) return null; const n = Number(t); return Number.isFinite(n) ? n : null; }
+function plainDec(x) { // 숫자를 지수 없는 십진 글자로 (15자리 정밀도)
+  const a = Math.abs(Number(Number(x).toPrecision(15)));
+  return a.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 });
+}
+function decimals(v) { const n = num(v); if (n === null) return 0; const f = plainDec(n).split('.')[1]; return f ? f.replace(/0+$/, '').length : 0; }
 function sig(v) { const s = String(num(v)); const t = s.replace('-', '').replace('.', '').replace(/^0+/, '').replace(/e.*$/, ''); return s.includes('.') ? t.length : t.replace(/0+$/, '').length || 1; }
-function rhu(x, d) { // 4사5입 (KS Q 5002 4.2.2.2)
-  const s = String(x); if (/e/i.test(s)) { const m = Math.pow(10, d); return Math.round(x * m + (x >= 0 ? 1e-12 : -1e-12)) / m; }
-  return Number(Math.round(Number(s + 'e' + d)) + 'e-' + d);
+function decRound(x, d, mode) { // mode 'half': 4사5입(0에서 먼 쪽, KS Q 5002 4.2.2.2), 'down': 버림(0 쪽)
+  if (!Number.isFinite(x)) return NaN;
+  const neg = x < 0, [ip, fp = ''] = plainDec(x).split('.');
+  const frac = (fp + '0'.repeat(d + 1)).slice(0, d + 1);
+  let n = BigInt(ip + frac.slice(0, d));
+  if (mode === 'half' && Number(frac[d]) >= 5) n += 1n;
+  let t = n.toString().padStart(d + 1, '0');
+  const out = d > 0 ? t.slice(0, t.length - d) + '.' + t.slice(t.length - d) : t;
+  const v = Number(out); return neg && v !== 0 ? -v : v;
 }
-function trunc(x, d) { // d자리까지 계산(아래는 버림). 이진 오차를 지우려고 d+5자리에서 먼저 4사5입
-  const t = rhu(x, d + 5), m = Math.pow(10, d); return Math.trunc(Number((t * m).toFixed(5))) / m;
-}
+function rhu(x, d) { return decRound(Number(x), d, 'half'); }
+function trunc(x, d) { return decRound(rhu(x, d + 5), d, 'down'); }   // d자리까지 계산(아래는 버림). 이진 오차는 d+5자리에서 먼저 정리
 function judgeDigits(c) { return Number(c.final); }   // 판정은 최종 자릿수로 반올림한 값(성적서 값)
 function ndBelow(mdl, final) { const u = Math.pow(10, -final); return rhu(Math.ceil(mdl / u - 1e-9) * u - 0.5 * u, final + 2); }
-function parsePermit(t) {
+const digitOk = v => String(v ?? '').trim() !== '' && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 8;
+function parsePermit(t) { // "8(12)": 괄호 앞 = 허가배출기준, 괄호 안 = 표준산소농도. "1,000"처럼 쉼표가 있어도 숫자
   const s = String(t ?? '').replace(/\n/g, ' ').trim(); if (!s) return { L: null, O2: null };
-  const i = s.indexOf('('); const L = num(i >= 0 ? s.slice(0, i).trim() : s);
+  const i = s.indexOf('('); const L = num((i >= 0 ? s.slice(0, i) : s).replace(/,/g, ''));
   let O2 = null; if (i >= 0) { const j = s.indexOf(')', i); O2 = num(s.slice(i + 1, j > 0 ? j : undefined)); }
   return { L, O2 };
 }
 function evaluate(c, raw, permit) { // 기록부 결과 수식과 같은 규칙
-  const x = num(raw); if (x === null) return null;
+  // 계산값 "0.1(12)"처럼 숫자 뒤 괄호(표준산소)가 붙으면: 괄호 앞 숫자로 판정·표시하고 꼬리는 뒤에 그대로 (엑셀 수식과 같음)
+  const r = String(raw ?? '').trim(), k = r.indexOf('(');
+  const x = num(k >= 0 ? r.slice(0, k) : r), tail = k >= 0 ? r.slice(k) : '';
+  if (x === null) return null;
+  if (!digitOk(c.calc) || !digitOk(c.final)) return { text: '자릿수 확인', nd: false, why: ['계산·최종 자릿수는 0~8 정수'] };
   const calc = Number(c.calc), final = Number(c.final), jd = judgeDigits(c);
   const v1 = trunc(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);   // 계산 자릿수까지 버림 → 최종 자릿수로 한 번 4사5입
-  const mdl = num(mdlValue(c));
+  const mdl = num(mdlValue(c)), lim = mdl === null ? 0 : mdl;       // 엑셀 N(): 방법검출한계가 "-"이면 0
   const why = [`계산값 ${x}`, `계산 자릿수 ${calc}자리까지 계산: ${v1.toFixed(calc)}`, `최종 자릿수 ${final}자리로 4사5입: ${vf.toFixed(final)}`];
-  if (mdl !== null && vj < mdl) { why.push(`${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
+  if (vj < lim) { why.push(mdl === null ? `${vf.toFixed(final)} < 0: 불검출 (방법검출한계 없음)` : `${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
   if (mdl !== null) why.push(`${vf.toFixed(final)} ${vj === mdl ? '=' : '>'} 방법검출한계 ${mdl}: 검출`);
-  else why.push('방법검출한계 없음: 불검출 판정 안 함');
-  const p = parsePermit(permit); let text = vf.toFixed(final), over = false;
+  else why.push('방법검출한계 없음: 불검출 판정 안 함 (0 미만만 불검출)');
+  const p = parsePermit(permit); let text = vf.toFixed(final) + tail, over = false;
   if (p.L !== null) { over = vf > p.L; why.push(`허가배출기준 ${p.L}: ${over ? '초과' : (vf === p.L ? '같음 (초과 아님)' : '이내')}`); if (over) text += ' (초과)'; }
   if (p.O2 !== null) why.push(`표준산소농도 ${p.O2}% (허가배출기준 괄호 안 값, 기록부에서 보정값으로 판정)`);
   return { text, over, why };
@@ -237,14 +262,13 @@ function fmtLab(v) { const n = num(v); return n === null ? (v == null ? '' : Str
 function checks(c) {
   const out = []; const R = c.ref || {}; const code = R.code ? `ES ${R.code}` : '';
   const calc = Number(c.calc), final = Number(c.final);
-  const okInt = v => Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 8 && String(v).trim() !== '';
-  if (!okInt(c.calc) || !okInt(c.final)) out.push(['bad', '자릿수는 0~8 정수', '입력값']);
+  if (!digitOk(c.calc) || !digitOk(c.final)) out.push(['bad', '자릿수는 0~8 정수', '입력값']);
   else {
     out.push(calc === final + 1 ? ['ok', `계산 ${calc}자리, 최종 ${final}자리 (최종 + 1)`, RULES.calc, 'calc'] : ['bad', `계산 자릿수는 최종 + 1 (현재 계산 ${calc}, 최종 ${final})`, RULES.calc, 'calc']);
     if (R.calc != null && R.final != null) out.push(calc === R.calc && final === R.final ? ['ok', `원문 결과 표시: 계산 ${R.calc}자리, 표기 ${R.final}자리`, `${code} 결과 표시`, 'digits'] : ['bad', `원문은 계산 ${R.calc}자리, 표기 ${R.final}자리`, `${code} 결과 표시`, 'digits']);
   }
   const mdl = num(mdlValue(c)), loq = num(loqValue(c));
-  if (mdl === null && !c.linked) out.push(R.mdl == null ? ['info', '방법검출한계 없음: 불검출 판정 안 함 (원문 제시값 없음)', RULES.nd, 'nd'] : ['warn', `방법검출한계가 숫자가 아님 (${esc(c.mdl)})`, RULES.nd, 'nd']);
+  if (mdl === null && !c.linked) out.push(R.mdl == null ? ['info', '방법검출한계 없음: 0 미만만 불검출 (원문 제시값 없음)', RULES.nd, 'nd'] : ['warn', `방법검출한계가 숫자가 아님 (${esc(c.mdl)})`, RULES.nd, 'nd']);
   if (mdl !== null) {
     out.push(sig(mdl) <= 2 ? ['ok', `방법검출한계 유효숫자 ${sig(mdl)}개`, RULES.sig, 'sig'] : ['bad', `방법검출한계 유효숫자 ${sig(mdl)}개 (2개 이하)`, RULES.sig, 'sig']);
     if (decimals(mdl) > final) { const up = Math.pow(10, -final) * Math.ceil(mdl / Math.pow(10, -final) - 1e-9); out.push(['warn', `방법검출한계 ${mdl}가 최종 ${final}자리보다 작음: 계산값 ${ndBelow(mdl, final)} 미만 불검출, 이상은 ${up.toFixed(final)} 이상으로 표시`, RULES.nd, 'nd']); }
@@ -275,7 +299,7 @@ function checks(c) {
     const ru = String(R.unit || '').toLowerCase().replace(/³/g, '3');
     if (ru && u !== ru) out.push(['bad', `원문 단위는 ${chem(R.unit)}`, code, 'digits']);
   }
-  const m = String(c.method || owner(c).method || '');
+  const m = String(cur(owner(c)).method || '');   // 공정시험기준 칸을 같이 쓰는 줄은 주인 줄 값으로
   if (R.code) { const v = (m.match(new RegExp('ES\\s*' + R.code.split('.')[0] + '\\.\\s?(\\w+)')) || [])[1]; if (v && v !== R.code.split('.')[1]) out.push(['bad', `시험방법 판 .${v}, 원문은 .${R.code.split('.')[1]}`, code]); }
   return out;
 }
@@ -300,7 +324,7 @@ function codesOf(f) { return [...new Set((BY_FILE[f] || []).map(r => r.ref && r.
 
 // 화면
 const view = { q: '', flt: 'all' };
-function route() { const m = location.hash.match(/^#f=(.+)$/); return m ? decodeURIComponent(m[1]) : null; }
+function route() { const m = location.hash.match(/^#f=(.+)$/); if (!m) return null; try { return decodeURIComponent(m[1]); } catch (e) { return null; } }
 function render() { const f = route(); if (f && FILES[f]) renderFile(f); else renderHome(); }
 function renderHome() {
   const n = { ok: 0, warn: 0, bad: 0 }; let nCh = 0;
@@ -435,7 +459,9 @@ function showEvidence(heading, list) {
 function closeModal() { $('#modal').classList.remove('open'); }
 
 // 입력
+document.addEventListener('compositionend', e => { if (e.target.matches && e.target.matches('#q, [data-f], [data-try]')) e.target.dispatchEvent(new Event('input', { bubbles: true })); });
 document.addEventListener('input', e => {
+  if (e.isComposing) return;     // 한글 조합 중 (다시 그리면 글자가 겹친다)
   if (e.target.id === 'q') { view.q = e.target.value; clearTimeout(window.__tq); window.__tq = setTimeout(render, 120); return; }
   const box = e.target.closest('[data-k]'); if (!box) return;
   const k = box.dataset.k;
@@ -455,7 +481,8 @@ document.addEventListener('input', e => {
 });
 function openFile(f) { location.hash = '#f=' + encodeURIComponent(f); }
 document.addEventListener('click', e => {
-  const t = e.target.closest('button, article.card'); if (!t) return;
+  const t = e.target.closest('button, article.card, a[data-home]'); if (!t) return;
+  if (t.matches('a[data-home]')) { e.preventDefault(); location.hash = ''; return; }
   if (t.dataset.flt) { view.flt = t.dataset.flt; render(); return; }
   if (t.dataset.open) { openFile(t.dataset.open); return; }
   if (t.dataset.dl) { downloadOne(t.dataset.dl, t); return; }
@@ -478,18 +505,36 @@ function stamp() { const d = new Date(); const p = n => String(n).padStart(2, '0
 function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
 
 // 엑셀 '기준' 시트 칸 고치기
-function xmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-function cellXml(ref, v) {
-  if (v === null || v === undefined || String(v).trim() === '') return `<c r="${ref}"/>`;
-  if (isFormula(v)) return `<c r="${ref}"><f>${xmlEsc(v.slice(1))}</f></c>`;
-  if (typeof v === 'number' || /^-?\d+(\.\d+)?(e-?\d+)?$/i.test(String(v).trim())) return `<c r="${ref}"><v>${Number(v)}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+function xmlEsc(s) { return String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F￾￿]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function cellXml(ref, v, st) {
+  const sa = st ? ` s="${st}"` : '';
+  if (v === null || v === undefined || String(v).trim() === '') return `<c r="${ref}"${sa}/>`;
+  if (isFormula(v)) return `<c r="${ref}"${sa}><f>${xmlEsc(v.slice(1))}</f></c>`;
+  const n = num(v);
+  if (n !== null) return `<c r="${ref}"${sa}><v>${n}</v></c>`;
+  return `<c r="${ref}"${sa} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
 }
+const colNo = ref => ref.match(/^[A-Z]+/)[0].split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
 function setCell(xml, ref, v) {
-  const re = new RegExp(`<c r="${ref}"(?:\\s[^>]*)?(?:/>|>[\\s\\S]*?</c>)`);
-  if (re.test(xml)) return xml.replace(re, cellXml(ref, v));
-  const row = ref.match(/\d+/)[0];
-  return xml.replace(new RegExp(`(<row r="${row}"[^>]*>)([\\s\\S]*?)(</row>)`), (m, a, b, c) => a + b + cellXml(ref, v) + c);
+  // 있는 칸: <c r="D5" s="3"/> 또는 <c r="D5" …>…</c> (다음 칸까지 먹지 않게), 서식(s=)은 그대로
+  const re = new RegExp(`<c r="${ref}"(\\s[^>]*?)?(?:/>|>(?:(?!<c[\\s>])[\\s\\S])*?</c>)`);
+  const m = xml.match(re);
+  if (m) { const st = (m[1] || '').match(/\ss="(\d+)"/); return xml.replace(re, cellXml(ref, v, st && st[1])); }
+  const row = Number(ref.match(/\d+$/)[0]), col = colNo(ref), cx = cellXml(ref, v);
+  const rowRe = new RegExp(`<row r="${row}"(\\s[^>]*?)?(/>|>([\\s\\S]*?)</row>)`);
+  const rm = xml.match(rowRe);
+  if (rm) {
+    if (rm[2] === '/>') return xml.replace(rowRe, `<row r="${row}"${rm[1] || ''}>${cx}</row>`);
+    const body = rm[3]; let pos = body.length;          // 열 순서대로 끼워 넣기
+    for (const c of body.matchAll(/<c r="([A-Z]+)\d+"/g)) { if (colNo(c[1]) > col) { pos = c.index; break; } }
+    return xml.replace(rowRe, `<row r="${row}"${rm[1] || ''}>${body.slice(0, pos)}${cx}${body.slice(pos)}</row>`);
+  }
+  // 없는 줄: 줄 번호 순서대로 새 줄
+  const rows = [...xml.matchAll(/<row r="(\d+)"/g)];
+  const next = rows.find(x => Number(x[1]) > row);
+  const nr = `<row r="${row}">${cx}</row>`;
+  if (next) return xml.slice(0, next.index) + nr + xml.slice(next.index);
+  return xml.replace('</sheetData>', nr + '</sheetData>').replace('<sheetData/>', `<sheetData>${nr}</sheetData>`);
 }
 async function sheetPath(zip, name) {
   const wb = await zip.file('xl/workbook.xml').async('string'), rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
@@ -517,8 +562,8 @@ async function buildFile(name) {
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 function digitsOk(list) {
-  const bad = list.filter(r => { const c = cur(r); return !(Number.isInteger(Number(c.calc)) && Number.isInteger(Number(c.final))); });
-  if (bad.length) { toast('자릿수가 숫자가 아님: ' + bad.map(r => r.item).join(', ')); return false; }
+  const bad = list.filter(r => { const c = cur(r); return !digitOk(c.calc) || !digitOk(c.final); });
+  if (bad.length) { toast('자릿수는 0~8 정수: ' + bad.map(r => r.item).join(', ')); return false; }
   return true;
 }
 async function busy(btn, label, job) {
@@ -545,7 +590,7 @@ function downloadAll(btn) {
     toast(`기록부 ${FILE_LIST.length}종 내려받음`);
   });
 }
-function plain(s) { return String(s ?? '').replace(/<[^>]+>/g, ''); }
+function plain(s) { return String(s ?? '').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'); }
 function csvText() {
   const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '원문', '판정', '검토 내용', '비고'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -565,7 +610,7 @@ function changeLog() {
 $('#btnCsv').onclick = () => download(`기준표_${stamp()}.csv`, new Blob([csvText()], { type: 'text/csv' }));
 $('#btnExport').onclick = () => download(`기준표백업_${stamp()}.json`, new Blob([JSON.stringify({ version: '__VERSION__', saved: new Date().toISOString(), edits }, null, 1)], { type: 'application/json' }));
 $('#btnImport').onclick = () => $('#fileImport').click();
-$('#fileImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); edits = j.edits || j; save(); render(); toast('백업 불러옴'); } catch (x) { toast('백업 파일을 읽지 못함'); } e.target.value = ''; };
+$('#fileImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); const e2 = cleanEdits(j && j.edits ? j.edits : j); if (!Object.keys(e2).length && !(j && j.edits && !Object.keys(j.edits).length)) { toast('백업 파일에 기준 수정 내용이 없음'); } else { edits = e2; save(); render(); toast(`백업 불러옴 (${Object.keys(e2).length}항목)`); } } catch (x) { toast('백업 파일을 읽지 못함'); } e.target.value = ''; };
 $('#btnReset').onclick = () => { if (!confirm('모든 수정 내용을 지우고 처음 값으로 되돌릴까요?')) return; edits = {}; save(); render(); toast('처음 값으로 되돌림'); };
 render();
 </script>

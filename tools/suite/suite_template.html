@@ -70,6 +70,7 @@
 __APPS__
 <script>
 const APPS = "__MANIFEST__";
+const TITLE = "__TITLE_JS__";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('#tabs').innerHTML = APPS.map(a => `<button class="tab" data-go="${a.id}" ${a.ready ? '' : 'disabled title="파일 없음"'}>${esc(a.title)}</button>`).join('');
@@ -97,8 +98,8 @@ function show() {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-current', String((t.dataset.go || '') === (app ? app.id : ''))));
   $('#home').style.display = app ? 'none' : 'block';
   Object.values(frames).forEach(f => f.classList.remove('on'));
-  if (app) { const f = frameOf(app.id); if (f) f.classList.add('on'); document.title = app.title + ' · __TITLE__'; }
-  else { document.title = '__TITLE__'; $('#loading').classList.remove('on'); }
+  if (app) { const f = frameOf(app.id); if (f) f.classList.add('on'); document.title = app.title + ' · ' + TITLE; }
+  else { document.title = TITLE; $('#loading').classList.remove('on'); }
 }
 document.addEventListener('click', e => { const t = e.target.closest('[data-go]'); if (!t || t.disabled) return; location.hash = t.dataset.go ? '#app=' + t.dataset.go : ''; });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('.card[data-go]')) location.hash = '#app=' + e.target.dataset.go; });

@@ -1,5 +1,5 @@
 # 물질 이름·시험방법 제목을 대기오염공정시험기준 표기로 맞춘다.
-#   · 물질 이름: 원문에서 확인한 표기 (1,3-부타디엔은 원문이 19곳 모두 "1.3-뷰타다이엔"으로 쓴다.
+#   · 물질 이름: 원문에서 확인한 표기 (1,3-부타디엔은 총칙 표 1의 "1,3-뷰타다이엔". 시험법 본문은 "1.3-"으로 쓰나 이름 표는 총칙.
 #     아세트알데히드는 원문 표에 영문만 있어 같은 원문의 "폼알데하이드" 표기법을 따른다)
 #   · 글자 칸·수식 안 글자·시트 이름·인쇄 범위 이름·차트 참조·문서 정보까지 한꺼번에 바꾼다
 #     (시트 이름과 요약표 이름이 따로 놀면 INDIRECT·매크로가 시트를 못 찾는다)
@@ -7,7 +7,8 @@
 import re, os, glob
 
 NAME_MAP = [
-    ('1,3-부타디엔', '1.3-뷰타다이엔'),
+    ('1,3-부타디엔', '1,3-뷰타다이엔'),     # 총칙 1.2.1 표 1 (별표8 이름 → 공정시험기준 이름)
+    ('1.3-뷰타다이엔', '1,3-뷰타다이엔'),
     ('1,2-디클로로에탄', '1,2-다이클로로에테인'),
     ('디클로로메탄', '다이클로로메테인'),
     ('트리클로로에틸렌', '트라이클로로에틸렌'),
@@ -68,13 +69,34 @@ def rename_book(b, pairs=None):
 
 
 def official_titles(ref_dir):
-    """ES 번호 → 원문 파일 제목"""
+    """ES 번호 → 원문 제목. 파일 이름에는 "/"를 쓸 수 없어 빠지므로(자외선/가시선분광법 → 자외선가시선분광법)
+    PDF 첫 쪽에서 파일 이름 제목과 글자(빈칸·/·-·– 빼고)가 같은 줄을 찾아 그 표기를 쓴다"""
+    import subprocess
     out = {}
+    norm = lambda t: re.sub(r'[\s/\-–―−·]', '', t)
     for p in glob.glob(os.path.join(ref_dir, 'ES *.pdf')):
         n = os.path.splitext(os.path.basename(p))[0]
         m = re.match(r'ES (\d{5}(?:\.\w+)?)[ _](.+)$', n)
-        if m:
-            out[m.group(1)] = m.group(2).replace('_', '/').replace('플라스마원자발광', '플라스마/원자발광').strip()   # 파일 이름에서 빠진 "/"
+        if not m:
+            continue
+        title = m.group(2).replace('_', '/').strip()
+        try:
+            lines = [l.strip() for l in subprocess.run(['pdftotext', '-layout', '-f', '1', '-l', '1', p, '-'], capture_output=True, text=True, timeout=30).stdout.splitlines() if l.strip()]
+        except Exception:
+            lines = []
+        # 첫 쪽 제목: "대기오염공정시험기준 ES …" 줄과 연도 줄을 빼고, 영문 "(" 줄 앞까지의 한글 줄을 잇는다
+        body = []
+        for l in lines:
+            if l.startswith('('):
+                break
+            if '대기오염공정시험기준' in l or re.fullmatch(r'\d{4}', l):
+                continue
+            body.append(re.sub(r'\s{2,}\d{4}$', '', l))      # 같은 줄 오른쪽 끝의 연도
+        seg = re.sub(r'\s*[–―−]\s*', ' - ', re.sub(r'\s+', ' ', ' '.join(body))).strip()
+        found = seg if seg and norm(seg) == norm(title) else None
+        if not found:
+            found = title.replace('플라스마원자발광', '플라스마/원자발광')
+        out[m.group(1)] = found
     return out
 
 
