@@ -133,7 +133,10 @@ for f in files:
         bad(form, '①', f'여백 {row["margin"]}')
 
     # ② 쪽 나눔
-    starts = {r for r in range(r1, r2 + 1) if re.fullmatch(r'\d{1,2}', str(ws.cell(r, c1).value or '').strip())}
+    # 항목 시작: 번호가 있는 줄, 또는 번호 칸이 회색 머리 칸인 줄(번호 없는 표 머리, 예: "시료명")
+    starts = {r for r in range(r1, r2 + 1) if re.fullmatch(r'\d{1,2}', str(ws.cell(r, c1).value or '').strip())
+              or (isinstance(ws.cell(r, c1).value, str) and ws.cell(r, c1).value.strip() and not ws.cell(r, c1).value.startswith('=')
+                  and __import__('layout_rules')._gray(ws.cell(r, c1)))}
     cuts = [r1 - 1] + [b for b in breaks_of(ws) if r1 <= b < r2] + [r2]
     for b in cuts[1:-1]:
         if (b + 1) not in starts:
@@ -173,7 +176,8 @@ for f in files:
         for c in range(c1, c2 + 1):
             cell = ws.cell(r, c)
             v = cell.value
-            if type(cell).__name__ == 'MergedCell' or not isinstance(v, str) or v.startswith('=') or not v.strip():
+            if type(cell).__name__ == 'MergedCell' or not isinstance(v, str) or v.startswith('=') or not v.strip() \
+                    or cell.alignment.text_rotation in (90, 180, 255):
                 continue
             a, top, z, bot = M.get((r, c), (c, r, c, r))
             z = min(z, c2)

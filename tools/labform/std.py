@@ -17,6 +17,9 @@ MARGINS = dict(left=0.45, right=0.45, top=0.45, bottom=0.45, header=0.2, footer=
 WORST_SCALE = 67              # 쪽 높이를 따질 때 가정하는 가장 큰 배율(%): 이보다 작게 찍히면 여유가 더 생긴다
 PAGE_PT = (11.69 - MARGINS['top'] - MARGINS['bottom']) * 72 / (WORST_SCALE / 100) * 0.99   # 한 쪽에 들어가는 줄 높이 합(pt), 여유 1%
 DOCNO = re.compile(r'[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}')
+# 문서번호 칸: 칸 전체가 "■ MAMO-QP-14-01" 꼴 (시료명 "0629-TCW-#A1-DMDS-FB-1-1" 같은 것을 문서번호로 잘못 읽지 않게)
+DOCNO_CELL = re.compile(r'\s*■?\s*[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}\s*')
+is_docno = lambda v: isinstance(v, str) and DOCNO_CELL.fullmatch(v) is not None
 
 px = lambda w: int(w * MDW + 5)
 width_of = lambda p: round((p - 5) / MDW, 4)
@@ -208,11 +211,15 @@ class Layout:
         return not any(top <= r < bot for (_, top, _, bot) in self.merges)
 
     def section_starts(self):
-        # A열에 항목 번호가 있는 줄이 항목의 시작
+        # A열에 항목 번호가 있는 줄, 또는 A열이 회색 머리 칸인 줄(번호 없는 표 머리, 예: "시료명")이 항목의 시작
+        from layout_rules import _gray
         out = []
         for r in range(self.r1, self.r2 + 1):
             cell = self.ws.cell(r, self.c1)
-            if type(cell).__name__ != 'MergedCell' and cell.value is not None and re.fullmatch(r'\d{1,2}', str(cell.value).strip()):
+            if type(cell).__name__ == 'MergedCell' or cell.value is None:
+                continue
+            v = str(cell.value).strip()
+            if re.fullmatch(r'\d{1,2}', v) or (isinstance(cell.value, str) and v and not v.startswith('=') and _gray(cell)):
                 out.append(r)
         return out
 
@@ -221,7 +228,8 @@ class Layout:
         total = lambda a, b: sum(H[r] for r in range(a, b + 1))
         starts = set(self.section_starts())
         strong = [r for r in range(self.r1, self.r2) if (r + 1) in starts and self.can_break_after(r)]
-        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h)) | {self.r2})
+        # 원본의 쪽 나눔 자리는 다음 줄이 항목 시작일 때만 쓴다 (아니면 항목 경계에서 다시 정한다)
+        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h) and (h + 1) in starts) | {self.r2})
         pages = []
         a = self.r1
         for e in ends:
@@ -316,7 +324,7 @@ class Layout:
         for r in range(self.r1, self.r2 + 1):
             for c in range(self.c1, self.c2 + 1):
                 cell = self.ws.cell(r, c)
-                if type(cell).__name__ != 'MergedCell' and isinstance(cell.value, str) and DOCNO.search(cell.value) and len(cell.value) < 40:
+                if type(cell).__name__ != 'MergedCell' and is_docno(cell.value):
                     b.setv(sheet, f'{CL(c)}{r}', None)
         page_setup(b, sheet, docno, breaks=[e for _, e in self.pages[:-1]], last_col=self.c2)
 
@@ -379,7 +387,7 @@ def find_docno(b, sheet):
     ws = load(b)[sheet]
     for row in ws.iter_rows():
         for c in row:
-            if isinstance(c.value, str) and DOCNO.search(c.value) and len(c.value) < 40:
+            if is_docno(c.value):
                 return c.value.strip()
     # 이미 정리한 양식: 문서번호가 칸에서 바닥글로 옮겨져 있다. 다시 돌려도 바닥글을 잃지 않게 바닥글에서 찾는다
     m = re.search(r'<oddFooter>(.*?)</oddFooter>', b.sx(sheet), re.S)
@@ -393,7 +401,7 @@ def find_docno(b, sheet):
 
 def docno_rows(b, sheet):
     ws = load(b)[sheet]
-    return [c.row for row in ws.iter_rows() for c in row if isinstance(c.value, str) and DOCNO.search(c.value) and len(c.value) < 40]
+    return [c.row for row in ws.iter_rows() for c in row if is_docno(c.value)]
 
 
 def standardize(b, sheet, area, docno, hints=(), like=None):
@@ -404,6 +412,10 @@ def standardize(b, sheet, area, docno, hints=(), like=None):
     pre += examples(b, sheet, area, fill=main)   # 예시 값은 서명란이 있는 첫 장에만, 날짜 형식은 모든 양식 시트에
     area0 = area
     area, old_r2 = trim_area(load(b)[sheet], area, raw_borders(b.sx(sheet), b.text('xl/styles.xml')))
+    # 정렬·굵기는 글자 맞춤보다 먼저 (굵게·가운데로 바뀐 글이 나중에 칸을 넘지 않게)
+    from layout_rules import align as _align
+    pre += _align(b, sheet, area)
+    pre += bold_rule(b, sheet, area)
     lay = Layout(b, sheet, area)
     lay.notes += pre
     if area != area0:
@@ -416,7 +428,6 @@ def standardize(b, sheet, area, docno, hints=(), like=None):
     b.print_area(sheet, area)
     lay.notes += unify(b, sheet, area, [e for _, e in pages[:-1]], old_r2=range_boundaries(area0)[3])
     from layout_rules import align, place
-    lay.notes += align(b, sheet, area)
+    lay.notes += align(b, sheet, area)     # 테두리 단계에서 바뀐 한 줄 머리 등 마무리 (대부분 바뀌는 것 없음)
     lay.notes += place(b, sheet, area)
-    lay.notes += bold_rule(b, sheet, area)
     return lay, pages

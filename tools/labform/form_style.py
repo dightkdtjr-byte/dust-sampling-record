@@ -66,8 +66,10 @@ def _empty(ws, M, r, c):
 
 def trim_area(ws, area, B):
     """표 아래 내용 없이 선만 있는 줄을 인쇄 범위에서 뺀다. 마지막 가로선이 맨 아래가 되게. B: raw_borders"""
+    from std import is_docno
     c1, r1, c2, r2 = range_boundaries(area)
-    last = max((r for r in range(r1, r2 + 1) if any(ws.cell(r, c).value is not None for c in range(c1, c2 + 1))), default=r1)
+    val = lambda r, c: None if is_docno(ws.cell(r, c).value) else ws.cell(r, c).value   # 문서번호 칸은 바닥글로 옮겨 지운다
+    last = max((r for r in range(r1, r2 + 1) if any(val(r, c) is not None for c in range(c1, c2 + 1))), default=r1)
     M = _merges(ws)
     def full(r):
         return all(B(r, c)[3] or (r < r2 and B(r + 1, c)[2])
@@ -79,7 +81,7 @@ def trim_area(ws, area, B):
         # 마지막 항목 머리줄 바로 아래 선은 건너뛰고, 그다음 선(내용 칸의 바닥)을 끝으로 본다
         cand = [r for r in ends if r > last] or ends
         end = cand[0] if len(cand) else r2
-        if end < r2 and all(ws.cell(r, c).value is None for r in range(end + 1, r2 + 1) for c in range(c1, c2 + 1)):
+        if end < r2 and all(val(r, c) is None for r in range(end + 1, r2 + 1) for c in range(c1, c2 + 1)):
             return f'{CL(c1)}{r1}:{CL(c2)}{end}', end
     return area, r2
 
