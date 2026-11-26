@@ -132,8 +132,12 @@ def run(path):
         log.append(f'{sheet} {area} → {len(pages)}쪽' + (f' 경고 {warn}' if warn else ''))
     for sheet in others:
         land = (load(b)[sheet].page_setup.orientation == 'landscape')
-        page_setup(b, sheet, doc, landscape=land)
+        page_setup(b, sheet, None, landscape=land)   # 문서번호 바닥글은 기록부 시트에만 (로우데이터·계산과정 시트는 뺌)
         CR.tidy_other(b, sheet)
+    import scripts_rule as SR
+    k = SR.unify_scripts(b, [sh for sh, _ in forms] + others)
+    if k:
+        log.append(f'위첨자·아래첨자 통일 {k}칸 (Sm3·m3의 3 위첨자, 화학식 숫자·RRFavg 아래첨자)')
     ext = os.path.splitext(path)[1]
     dst = os.path.join(DST, f'시험기록부_{item_name(path)}{ext}')
     b.finish(dst)
@@ -141,16 +145,33 @@ def run(path):
 
 
 files = sorted(p for p in glob.glob(os.path.join(SRC, '**', '*.xls*'), recursive=True) if not os.path.basename(p).startswith('~$'))
-ok = 0
-for p in files:
+
+
+def job(p):
+    """파일 하나 (다른 파일과 상관없어 여러 개를 동시에 돌린다: LibreOffice는 파일마다 따로 임시 프로필)"""
     try:
         dst, log = run(p)
+        return p, dst, log, None
+    except Exception as e:
+        import traceback
+        return p, None, [], repr(e) + '\n' + traceback.format_exc(limit=3)
+
+
+if __name__ == '__main__':
+    from concurrent.futures import ProcessPoolExecutor
+    jobs = int(os.environ.get('LABFORM_JOBS', min(4, os.cpu_count() or 1)))
+    if jobs > 1:
+        with ProcessPoolExecutor(jobs) as ex:
+            results = list(ex.map(job, files))
+    else:
+        results = [job(p) for p in files]
+    ok = 0
+    for p, dst, log, err in results:
+        if err:
+            print('!! 실패', os.path.basename(p), err)
+            continue
         print('ok' if dst else '--', os.path.basename(p))
         for l in log:
             print('    ', l)
         ok += bool(dst)
-    except Exception as e:
-        import traceback
-        print('!! 실패', os.path.basename(p), repr(e))
-        traceback.print_exc(limit=3)
-print(f'{ok}/{len(files)} 파일 처리')
+    print(f'{ok}/{len(files)} 파일 처리')

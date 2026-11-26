@@ -8,6 +8,7 @@
 #   ⑥ 문서번호가 인쇄되는 모든 시트의 바닥글에 있고, PDF 모든 쪽에 찍히는가 (--pdf)
 #   ⑦ 정렬이 정렬 기준(layout_rules.py)과 같은가: 기준을 한 번 더 적용해도 바뀌는 칸이 없어야 한다
 #   ⑧ 수식·그림: 기준대로 놓였는가(다시 적용해도 1px 넘게 움직이지 않음), 수식이 계산식 칸·기호 설명을 침범하지 않는가
+#   ⑨ 위첨자·아래첨자: 글자 칸에 평문 Sm3·m3·화학식 숫자(NH3·H2S…)·RRFavg가 남지 않았는가, 예시 이름이 오설록인가
 # 원본과 정리본은 파일 이름 앞부분(확장자·'labtest-' 뺀 것)으로 짝짓는다.
 import sys, os, re, glob, subprocess, warnings, zipfile
 import openpyxl
@@ -95,10 +96,35 @@ def footer_docno(ws):
 
 
 summary = []
+import scripts_rule as SR
 for f in files:
     form = key(f)
     wb = openpyxl.load_workbook(f)
     ws = wb.worksheets[0]
+    # ⑨ 위첨자·아래첨자, 예시 이름
+    # 보이는 시트의 칸이 실제로 쓰는 글자만 (공유 문자열 표에 남은 안 쓰는 글자는 인쇄되지 않음)
+    zz = zipfile.ZipFile(f)
+    wbx = zz.read('xl/workbook.xml').decode('utf8'); rels = zz.read('xl/_rels/workbook.xml.rels').decode('utf8')
+    vis_parts = []
+    for m_ in re.finditer(r'<sheet\b[^>]*>', wbx):
+        if 'state="hidden"' in m_.group(0) or 'state="veryHidden"' in m_.group(0):
+            continue
+        rid = re.search(r'r:id="([^"]+)"', m_.group(0)).group(1)
+        tgt = re.search(rf'<Relationship[^>]*Id="{rid}"[^>]*Target="([^"]+)"', rels) or re.search(rf'<Relationship[^>]*Target="([^"]+)"[^>]*Id="{rid}"', rels)
+        vis_parts.append('xl/' + re.sub(r'^/?xl/', '', tgt.group(1)))
+    used, inl = set(), []
+    for vp in vis_parts:
+        x_ = zz.read(vp).decode('utf8')
+        used |= {int(m_.group(2)) for m_ in re.finditer(r'<c r="[A-Z]+\d+"([^>]*?)>\s*<v>(\d+)</v>', x_) if 't="s"' in m_.group(1)}
+        inl += re.findall(r'<c(?=[^>]*t="inlineStr")[^>]*>\s*<is>(.*?)</is>', x_, re.S)
+    sst_ = re.findall(r'<si>.*?</si>', zz.read('xl/sharedStrings.xml').decode('utf8'), re.S) if 'xl/sharedStrings.xml' in zz.namelist() else []
+    for si in [sst_[i] for i in sorted(used) if i < len(sst_)] + ['<si>' + t_ + '</si>' for t_ in inl]:
+        for rpr, t in SR._runs_of_si(si):
+            if not (rpr and 'vertAlign' in rpr) and SR.pieces(t):
+                bad(form, '⑨', f'평문으로 남은 첨자: {t[:30]!r}')
+    names = [str(c.value) for row in ws.iter_rows(max_row=3) for c in row if isinstance(c.value, str) and '(인)' in c.value]
+    if any('오 설 록' not in n_ for n_ in names):
+        bad(form, '⑨', f'서명란 예시 이름: {names}')
     c1, r1, c2, r2 = area_of(ws)
     M = merges_of(ws)
     RB = first_sheet_borders(f)
@@ -141,6 +167,11 @@ for f in files:
     for b in cuts[1:-1]:
         if (b + 1) not in starts:
             bad(form, '②', f'{b}행 뒤에서 쪽이 나뉨: 다음 줄({b + 1}행)이 항목 시작이 아님')
+        _row = [ws.cell(b, c) for c in range(c1, c2 + 1)]
+        _fill = [c for c in _row if type(c).__name__ != 'MergedCell' and c.value not in (None, '')]
+        _gr = [c for c in _fill if __import__('layout_rules')._gray(c)]
+        if b in starts and not re.fullmatch(r'\d{1,2}', str(ws.cell(b, c1).value or '').strip()) and len(_gr) >= 3 and len(_gr) >= 0.6 * len(_fill):
+            bad(form, '②', f'표 머리 줄({b}행 "{str(ws.cell(b, c1).value).strip()[:8]}")이 쪽 끝에 혼자 남고 자료는 다음 쪽으로 감')
         for (a, top, z, bot) in set(M.values()):
             if top <= b < bot:
                 bad(form, '②', f'병합 칸 {CL(a)}{top}:{CL(z)}{bot} 가 쪽 사이로 잘림')
@@ -331,27 +362,42 @@ for f in files:
                         if x1 > cx0 + 2 and y1 > cy0 + 2 and y0 < cy1 - 2 and x0 < G.x(c2 + 1):
                             bad(form, '⑧', f'수식이 기호 설명 {CL(c)}{r}과 겹침')
 
-    # ⑥ 문서번호
+    # ⑥ 문서번호: 기록부 시트(A1이 "시험기록부")는 바닥글에 있고, 로우데이터·계산과정 시트에는 없어야 한다
+    is_form_ws = lambda s: re.sub(r'\s', '', str(s['A1'].value or '')).startswith('시험기록부')
+    n_form_pages = 0
+    # 실제 문서번호 글자(바닥글에서): 시료명(…-HCN-FB-1-1)이 문서번호 꼴과 닮아 패턴으로 세면 틀린다
+    doc_txt = ''
+    for s in wb.worksheets:
+        if s.sheet_state == 'visible' and is_form_ws(s) and footer_docno(s):
+            k_ = DOCNO.search(footer_docno(s) if isinstance(footer_docno(s), str) else ((s.oddFooter.right.text or '') + (s.oddFooter.center.text or '') + (s.oddFooter.left.text or '')))
+            doc_txt = k_.group(0) if k_ else ''
+            break
     for s in wb.worksheets:
         if s.sheet_state != 'visible':
             continue
-        if not footer_docno(s):
-            bad(form, '⑥', f'"{s.title}" 시트 바닥글에 문서번호 없음')
+        if is_form_ws(s):
+            n_form_pages += len(breaks_of(s)) + 1
+            if not footer_docno(s):
+                bad(form, '⑥', f'"{s.title}" 시트 바닥글에 문서번호 없음')
+        elif footer_docno(s):
+            bad(form, '⑥', f'"{s.title}"(로우데이터·계산 시트) 바닥글에 문서번호가 있음')
     if pdf_dir:
         cand = [p for p in glob.glob(os.path.join(pdf_dir, '*.pdf')) if key(p) == form]
         if not cand:
             bad(form, '⑥', 'PDF 없음')
         else:
             n = int(re.search(r'Pages:\s+(\d+)', subprocess.run(['pdfinfo', cand[0]], capture_output=True, text=True).stdout).group(1))
+            n_doc = 0
             for i in range(1, n + 1):
                 t = subprocess.run(['pdftotext', '-f', str(i), '-l', str(i), cand[0], '-'], capture_output=True, text=True).stdout
-                if not DOCNO.search(t):
-                    bad(form, '⑥', f'PDF {i}쪽에 문서번호가 안 찍힘')
+                n_doc += bool(doc_txt) and doc_txt in re.sub(r'\s', '', t)
                 if '###' in t:
                     bad(form, '④', f'PDF {i}쪽에 ###이 찍힘 (칸이 좁은 숫자·날짜)')
                 t_ = re.sub(r'\d{1,2}/\d{1,2}/(19|20)\d{2}\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', '', t)   # 기기 원자료 시각 표기(글자)는 원본 그대로
                 if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b', t_):
                     bad(form, '⑤', f'PDF {i}쪽에 yyyy-mm-dd가 아닌 날짜가 찍힘')
+            if n_doc != n_form_pages:
+                bad(form, '⑥', f'PDF에서 문서번호가 찍힌 쪽 {n_doc}개, 기록부 쪽 {n_form_pages}개')
 
 print('양식        서명칸(px)     서명줄(pt)    열합(px) 배율      여백')
 for s in summary:
@@ -364,7 +410,7 @@ for k, label in (('title', '제목 글꼴'), ('signtext', '서명란 글자')):
             bad(s_['form'], '⑤', f'{label}가 양식마다 다름: {s_[k]}')
 print('→ 서명란·배율', '모두 같음' if same else '양식마다 다름')
 print()
-for crit in '①②③④⑤⑥⑦⑧':
+for crit in '①②③④⑤⑥⑦⑧⑨':
     hits = {f: p[crit] for f, p in problems.items() if crit in p}
     print(f'{crit} ' + ('통과' if not hits else f'문제 {sum(len(v) for v in hits.values())}건'))
     for f, msgs in hits.items():

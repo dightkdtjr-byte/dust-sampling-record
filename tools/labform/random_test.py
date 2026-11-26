@@ -1,6 +1,6 @@
 # 검증 방식 3: 무작위 대량 비교 — 판정 규칙을 파이썬으로 따로 구현하고, 무작위 계산값·허가배출기준을 넣어
 # LibreOffice로 다시 계산한 기록부 결과와 한 칸씩 견준다.
-#   python3 -I tools/labform/random_test.py <골든 폴더> <master.json> <작업 폴더> [회수=8] [씨앗=7]
+#   python3 -I tools/labform/random_test.py <완성본 폴더> <master.json> <작업 폴더> [회수=8] [씨앗=7]
 # 파이썬 쪽 규칙 (엑셀 수식을 보지 않고 README 규칙만으로 구현)
 #   v1 = 4사5입(x, 계산 자릿수), 판정값 = 4사5입(v1, 판정 자릿수), 표시값 = 4사5입(v1, 최종 자릿수)
 #   판정 자릿수 = max(최종, 방법검출한계 소수 자릿수)
@@ -26,7 +26,7 @@ def decs(v):
 
 
 def expected(x, calc, final, mdl, permit):
-    jd = max(final, decs(mdl)) if mdl is not None else final
+    jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
     v1 = rhu(x, calc)
     vj, vf = rhu(v1, jd), rhu(v1, final)
     if mdl is not None and vj < Decimal(str(mdl)):
@@ -94,6 +94,7 @@ os.makedirs(work, exist_ok=True)
 groups = {}
 for c in cases:
     groups.setdefault((c['file'], c['result'], c['sheet']), []).append(c)
+LO_DIRS = []
 for i in range(N):
     d = os.path.join(work, f't{i}'); os.makedirs(d, exist_ok=True)
     byfile = {}
@@ -113,8 +114,11 @@ for i in range(N):
                 wb[c['sheet']][c['pc']].value = c['permit'] if '(' not in c['permit'] else c['permit'].split('(')[0]
             c['t'] = i
         wb.save(os.path.join(d, os.path.splitext(f)[0] + ('.xlsm' if f.endswith('m') else '.xlsx')))
-    subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lo.sh'), d], capture_output=True, timeout=1500)
+    LO_DIRS.append(d)
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lo_pool
+lo_pool.run(LO_DIRS)   # 여러 폴더를 동시에 다시 계산
 ok = bad = 0; fails = []
 cache = {}
 for c in cases:

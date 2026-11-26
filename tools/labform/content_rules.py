@@ -37,7 +37,7 @@ EXAMPLE = {
 OVERWRITE = False
 OVERWRITE_KEYS = {'의뢰기관', '측정대상', '시료채취일', '시료인수일', '분석일자', '시료인수 시각', '시험검사기간'}
 PERIOD_FMT = '0"일"'
-SIGN_NAMES = ('이 상 석 (인)', '전 하 은 (인)')   # 담당, 기술책임자 (원본 기록 그대로)
+SIGN_NAMES = ('오 설 록 (인)', '오 설 록 (인)')   # 담당, 기술책임자 (예시 이름은 오설록으로 통일)
 _norm = lambda s: re.sub(r'\s', '', str(s or ''))
 
 

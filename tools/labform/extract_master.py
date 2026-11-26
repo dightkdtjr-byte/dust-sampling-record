@@ -73,18 +73,36 @@ def nd_compares(f):
 
 
 def lab_basic(ws):
-    """시험 기초자료(실험실이 측정한 방법검출한계·정량한계): '시험 기초자료' 줄 근처 머리 칸 바로 아래 값"""
-    out = {}
+    """시험 기초자료(실험실이 측정한 방법검출한계·정량한계). 비소처럼 줄이 여럿(입자상·가스상)이면 줄마다.
+    돌려주는 값: lab_rows=[{label, mdl, loq}], lab_mdl·lab_loq = 첫 줄"""
     for row in ws.iter_rows(max_row=min(ws.max_row, 60), max_col=4):
         for c in row:
-            if norm(c.value).startswith('시험기초자료'):
-                for rr in range(c.row, c.row + 3):
-                    for cc in range(3, 15):
-                        h = norm(ws.cell(rr, cc).value)
-                        if ('검출한계' in h or '정량한계' in h) and '방법바탕' not in h:
-                            out['lab_mdl' if '검출' in h else 'lab_loq'] = ws.cell(rr + 1, cc).value
-                return out
-    return out
+            if not norm(c.value).startswith('시험기초자료'):
+                continue
+            head = c.row; cols = {}
+            for rr in range(c.row, c.row + 2):
+                for cc in range(3, 15):
+                    h = norm(ws.cell(rr, cc).value)
+                    if ('검출한계' in h or '정량한계' in h or '정량범위' in h) and '방법바탕' not in h:
+                        cols['mdl' if '검출' in h else 'loq'] = cc; head = rr
+            out = []
+            for rr in range(head + 1, head + 6):
+                if rr > head + 1 and re.fullmatch(r'\d{1,2}', str(ws.cell(rr, 1).value or '').strip()):
+                    break
+                vals = {k: ws.cell(rr, cc).value for k, cc in cols.items()}
+                if all(v is None for v in vals.values()):
+                    break
+                if any(isinstance(v, str) and not v.startswith('=') and not re.fullmatch(r'[-\d.]+', v.strip()) for v in vals.values()):
+                    break      # 다른 표(측정결과 등)
+                lim = min(cols.values()) if cols else 15
+                lab = next((str(ws.cell(rr, cc).value).strip() for cc in range(2, lim) if isinstance(ws.cell(rr, cc).value, str)
+                            and not norm(ws.cell(rr, cc).value).startswith('시험기초자료') and not str(ws.cell(rr, cc).value).startswith('=')), '')
+                out.append(dict(label=lab, **vals))
+            res = dict(lab_rows=out)
+            if out:
+                res.update(lab_mdl=out[0].get('mdl'), lab_loq=out[0].get('loq'))
+            return res
+    return {}
 
 
 def item_of(ws):

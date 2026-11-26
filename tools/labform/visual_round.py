@@ -1,5 +1,5 @@
 # 검증 방식 6: 눈으로 보는 검증 — 인쇄(PDF)에 실제로 찍히는지
-#   python3 -I tools/labform/visual_round.py <골든 폴더> <master.json> <작업 폴더>
+#   python3 -I tools/labform/visual_round.py <완성본 폴더> <master.json> <작업 폴더>
 #   · 보통 상태와 "초과"를 일부러 만든 상태(허가배출기준 아주 작게, 계산값 = 방법검출한계의 5배)를 PDF로 찍어
 #     빨간 픽셀 수를 비교한다 → 늘어나야 조건부 서식이 인쇄에 찍힌 것
 #   · PDF 글자에 "(초과)"가 찍히는지, "불검출 (초과)" 같은 잘못된 조합이 없는지
@@ -16,7 +16,7 @@ LO = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lo.sh')
 for f in sorted({r['file'] for r in rows}):
     src = os.path.join(golden, f)
     import shutil
-    shutil.copy(src, os.path.join(base_d, f))          # 보통 상태 = 골든 카피 그대로
+    shutil.copy(src, os.path.join(base_d, f))          # 보통 상태 = 완성본 그대로
     wb = openpyxl.load_workbook(src, keep_vba=f.endswith('m'))
     for r in [x for x in rows if x['file'] == f]:
         try:

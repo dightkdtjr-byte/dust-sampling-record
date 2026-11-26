@@ -1,5 +1,5 @@
 # 검증 방식 5: 수식 정적 감사 + 다른 계산 엔진(fast-formula-parser)용 시험 자료 만들기
-#   python3 -I tools/labform/audit_round.py <골든 폴더> <master.json> <결과 폴더>
+#   python3 -I tools/labform/audit_round.py <완성본 폴더> <master.json> <결과 폴더>
 # 정적 감사
 #   A 결과 수식이 자기 물질의 기준 줄(같은 행 번호)만 가리키는가 ('기준'!$E/$F/$K$행)
 #   B 계산값에 고정 자릿수 ROUND(칸,숫자)가 남아 있지 않은가
@@ -33,7 +33,7 @@ def decs(v):
 
 
 def expected(x, calc, final, mdl, L):
-    jd = max(final, decs(mdl)) if mdl is not None else final
+    jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
     v1 = rhu(x, calc); vj, vf = rhu(v1, jd), rhu(v1, final)
     if mdl is not None and vj < Decimal(str(mdl)):
         return '불검출'
@@ -75,7 +75,11 @@ for f in sorted({r['file'] for r in rows}):
                 if str(v if v is not None else '') != str(r[k] if r[k] is not None else ''):
                     bad(f'F {f} 기준!{col}{n}={v!r} ≠ 기준표 {k}={r[k]!r}')
         # D: 검출한계·정량한계·시험방법 칸
-        if not r.get('linked'):
+        # 방법검출한계를 뺀 물질(기준 G = '-')은 시험 기초자료 칸을 실험실 값 그대로 두고, 결과 수식이 N('기준'!G)를 직접 본다
+        if not r.get('linked') and str(r.get('mdl')) == '-':
+            if not any(f"N('기준'!$G${n})" in str(ws[c].value) for c in r['result'].split(', ')):
+                bad(f"D {f} {r['sheet']}!{r['result']} 결과 수식이 N('기준'!$G${n})를 보지 않음")
+        elif not r.get('linked'):
             if str(ws[r['mdl_cell']].value) != f"='기준'!$G${n}":
                 bad(f"D {f} {r['sheet']}!{r['mdl_cell']}={ws[r['mdl_cell']].value!r} (기준 G{n}을 가리켜야 함)")
             if r.get('loq_cell') and str(ws[r['loq_cell']].value) != f"='기준'!$H${n}":
@@ -122,7 +126,7 @@ for f in sorted({r['file'] for r in rows}):
                 cases.append(dict(file=f, sheet=r['sheet'], result=res, formula=fm, rsh=rsh, rc=rc, x=x,
                                   pc=mp.group(1).replace('$', '') if mp else None, permit='해당없음' if Lp is None else f'{Lp:g}',
                                   expect=expected(x, calc, final, mdl, Lp if mp else None), item=r['item']))
-    # 셀 지도: 수식(골든) + 값(LibreOffice 계산본)
+    # 셀 지도: 수식(완성본) + 값(LibreOffice 계산본)
     cells = {}
     for ws in wb.worksheets:
         for row in ws.iter_rows():

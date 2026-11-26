@@ -1,5 +1,5 @@
-# 골든 카피 허가배출기준 초과·산소 보정 연동 시험
-#   python3 -I tools/labform/excess_test.py <골든 폴더> <master.json> <작업 폴더>
+# 완성본 허가배출기준 초과·산소 보정 연동 시험
+#   python3 -I tools/labform/excess_test.py <완성본 폴더> <master.json> <작업 폴더>
 # 경우 (허가배출기준 칸에 넣는 값 / 계산값, u = 최종 자릿수 한 단위)
 #   X1 "10" / 10        → 값, 초과 아님 (같으면 초과 아님)
 #   X2 "10" / 10 + u    → "(초과)"
@@ -43,6 +43,7 @@ for f, items in plan.items():
         it['cf'] = bool(has)
         cf_ok += bool(has); cf_bad += (not has)
 
+LO_DIRS = []
 for case, (permit, k) in CASES.items():
     d = os.path.join(work, case); os.makedirs(d, exist_ok=True)
     for f, items in plan.items():
@@ -73,8 +74,10 @@ for case, (permit, k) in CASES.items():
             else:
                 it['set'] = False
         wb.save(os.path.join(d, os.path.splitext(f)[0] + ('.xlsm' if f.endswith('m') else '.xlsx')))
-    subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lo.sh'), d], capture_output=True, timeout=1500)
+    LO_DIRS.append(d)
 
+import lo_pool
+lo_pool.run(LO_DIRS)   # 여러 폴더를 동시에 다시 계산
 ok = bad = 0
 expect = {'X1': False, 'X2': True, 'X3': False}
 for f, items in plan.items():

@@ -1,4 +1,4 @@
-# 검증 방식 7-2: 프로그램 판정 ↔ 내려받은 골든 카피(엑셀) 판정
+# 검증 방식 7-2: 프로그램 판정 ↔ 내려받은 완성본(엑셀) 판정
 #   python3 -I tools/labform/program_vs_excel.py <작업 폴더(golden.zip, program_cases.json)>
 import sys, os, re, json, zipfile, subprocess, warnings
 import openpyxl
@@ -18,6 +18,7 @@ for c in cases:
     by.setdefault((c['file'], c['row']), []).append(c)
 N = max(len(v) for v in by.values())
 LO = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lo.sh')
+LO_DIRS = []
 for i in range(N):
     d = os.path.join(W, f't{i}'); os.makedirs(d, exist_ok=True)
     files = {}
@@ -48,7 +49,10 @@ for i in range(N):
                 c['nopermit'] = True
             c['t'] = i
         wb.save(os.path.join(d, os.path.splitext(f)[0] + ('.xlsm' if f.endswith('m') else '.xlsx')))
-    subprocess.run([LO, d], capture_output=True, timeout=1500)
+    LO_DIRS.append(d)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lo_pool
+lo_pool.run(LO_DIRS)   # 여러 폴더를 동시에 다시 계산
 ok = bad = skip = 0; fails = []; cache = {}
 for c in cases:
     if 't' not in c:

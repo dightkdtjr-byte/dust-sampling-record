@@ -1,5 +1,5 @@
 # 기준표(master.json)를 대기오염공정시험기준(총칙·정도보증·시료채취방법·분석법)과 대조한다.
-#   python3 -I tools/labform/check_master.py <master.json> [골든 카피 폴더]
+#   python3 -I tools/labform/check_master.py <master.json> [완성본 폴더]
 # 근거
 #   총칙 ES 01000.b 1.6·2.14.2  마지막 유효숫자의 다음 단위까지 계산 → KS Q 5002 4.2.2.2 4사5입법으로 기록  ⇒ 계산 자릿수 = 최종 자릿수 + 1
 #   총칙 ES 01000.b 2.14.3      방법검출한계 "미만"의 결과는 불검출  ⇒ 같으면 값
@@ -39,6 +39,12 @@ def num(v):
         return None
 
 
+def nd_upto(mdl, final):
+    """최종 자릿수로 반올림해서 방법검출한계 이상이 되는 가장 작은 계산값 (이보다 작으면 불검출)"""
+    u = 10 ** -final
+    return round(math.ceil(mdl / u - 1e-9) * u - 0.5 * u, final + 2)
+
+
 def check(r):
     res = []   # (판정, 내용, 근거)  판정: 맞음/확인/틀림
     calc, final = r.get('calc'), r.get('final')
@@ -46,16 +52,16 @@ def check(r):
     # 1 계산 = 최종 + 1
     if isinstance(calc, int) and isinstance(final, int):
         if calc == final + 1:
-            res.append(('맞음', f'계산 {calc}자리 = 최종 {final}자리 + 1', '총칙 2.14.2'))
+            res.append(('적합', f'계산 {calc}자리 = 최종 {final}자리 + 1', '총칙 2.14.2'))
         else:
-            res.append(('틀림', f'계산 {calc}자리 ≠ 최종 {final}자리 + 1', '총칙 2.14.2 (마지막 유효숫자의 다음 단위까지 계산)'))
+            res.append(('부적합', f'계산 {calc}자리 ≠ 최종 {final}자리 + 1', '총칙 2.14.2 (마지막 유효숫자의 다음 단위까지 계산)'))
     # 2 항목별 규정
     rule = next((v for k, v in RULES.items() if k in item), None)
     if rule is None and ('비분산' in method or 'NDIR' in method.upper()):
         rule = NDIR
     if rule:
         ok = (calc, final) == rule[:2]
-        res.append(('맞음' if ok else '틀림', f'계산 {calc}·최종 {final}자리' + ('' if ok else f' → 규정은 계산 {rule[0]}·최종 {rule[1]}자리'), rule[2]))
+        res.append(('적합' if ok else '부적합', f'계산 {calc}·최종 {final}자리' + ('' if ok else f' → 규정은 계산 {rule[0]}·최종 {rule[1]}자리'), rule[2]))
     # 3 유효숫자 2개 이하
     mdl, loq = num(r.get('mdl')), num(r.get('loq'))
     for name, v in (('방법검출한계', mdl), ('정량한계', loq)):
@@ -63,26 +69,26 @@ def check(r):
             if str(r.get('mdl' if name == '방법검출한계' else 'loq', '')).startswith('='):
                 continue
             if name == '방법검출한계':
-                res.append(('확인', f'방법검출한계가 숫자가 아님({r.get("mdl")!r}) → 불검출 판정을 하지 않음', '총칙 2.14.3'))
+                res.append(('검토', f'방법검출한계가 숫자가 아님({r.get("mdl")!r}) → 불검출 판정을 하지 않음', '총칙 2.14.3'))
             continue
         s = sig(v)
-        res.append(('맞음' if s <= 2 else '틀림', f'{name} {v:g}: 유효숫자 {s}개', '정도보증 4.3.4.4 (유효숫자 2개 이하)'))
+        res.append(('적합' if s <= 2 else '부적합', f'{name} {v:g}: 유효숫자 {s}개', '정도보증 4.3.4.4 (유효숫자 2개 이하)'))
     # 4 정량한계/방법검출한계 ≈ 10/3.14
     if mdl and loq:
         k = loq / mdl
         ok = 2.5 <= k <= 4.0
-        res.append(('맞음' if ok else '확인', f'정량한계/방법검출한계 = {k:.2f} (이론값 10/3.14 = 3.18)', '정도보증 4.3.2·4.3.3 (MDL = 3.14s, LOQ = 10s)'))
+        res.append(('적합' if ok else '검토', f'정량한계/방법검출한계 = {k:.2f} (이론값 10/3.14 = 3.18)', '정도보증 4.3.2·4.3.3 (MDL = 3.14s, LOQ = 10s)'))
     # 5 최종 자릿수로 방법검출한계를 나타낼 수 있는가
     if mdl is not None and isinstance(final, int):
         d = decimals(mdl)
-        res.append(('맞음' if d <= final else '틀림', f'방법검출한계 {mdl:g}는 소수 {d}자리, 최종 {final}자리' + ('' if d <= final else ' → 최종값으로 검출한계를 나타낼 수 없어 판정이 어긋남'), '총칙 2.14.2·2.14.3'))
+        res.append(('적합' if d <= final else '검토', f'방법검출한계 {mdl:g}는 소수 {d}자리, 최종 {final}자리' + ('' if d <= final else f' → 최종값(소수 {final}자리)으로 판정: 계산값 {nd_upto(mdl, final):g} 미만은 불검출, 이상은 {10 ** -final * math.ceil(mdl / 10 ** -final - 1e-9):.{final}f} 이상으로 표시'), '총칙 2.14.2·2.14.3'))
     # 6 단위
     u = str(r.get('unit', '')).strip()
     un = u.lower().replace(' ', '').replace('³', '3')
     if u:
-        res.append(('맞음' if un in {x.replace('³', '3') for x in UNITS} else '틀림', f'단위 {u}' + ('' if un in {x.replace('³', '3') for x in UNITS} else ' → 총칙 단위가 아님 (오타?)'), '총칙 2.14.1'))
+        res.append(('적합' if un in {x.replace('³', '3') for x in UNITS} else '부적합', f'단위 {u}' + ('' if un in {x.replace('³', '3') for x in UNITS} else ' → 총칙 단위가 아님 (오타?)'), '총칙 2.14.1'))
     else:
-        res.append(('확인', '단위가 비어 있음', '총칙 2.14.1'))
+        res.append(('검토', '단위가 비어 있음', '총칙 2.14.1'))
     return res
 
 
@@ -136,52 +142,55 @@ def check_ref(r, refs):
     res = []
     code, ref, vnote = ref_for(r, refs)
     if not ref:
-        return [('확인', '시험방법에서 ES 번호를 찾지 못해 원문 대조를 못 함', '-')]
+        return [('검토', '시험방법에서 ES 번호를 찾지 못해 원문 대조를 못 함', '-')]
     src = f'ES {code}' + (f' (→ ES {ref["from"]})' if ref.get('from') else '')
     if vnote:
-        res.append(('틀림', vnote + ' → 시험방법 칸의 버전 확인 필요', src))
+        res.append(('부적합', vnote + ' → 시험방법 칸의 버전 확인 필요', src))
     if ref['digits']:
         d = ref['digits'][0]
         ok = (r.get('calc'), r.get('final')) == (d['calc'], d['final'])
-        res.append(('맞음' if ok else '틀림', f'원문: {d["unit"]} 계산 {d["calc"]}·표기 {d["final"]}자리 / 기준표: 계산 {r.get("calc")}·최종 {r.get("final")}자리', f'{src} 「{d["text"][:70]}…」'))
+        res.append(('적합' if ok else '부적합', f'원문: {d["unit"]} 계산 {d["calc"]}·표기 {d["final"]}자리 / 기준표: 계산 {r.get("calc")}·최종 {r.get("final")}자리', f'{src} 「{d["text"][:70]}…」'))
     else:
-        res.append(('확인', '원문에서 결과 자릿수 문장을 찾지 못함', src))
+        res.append(('검토', '원문에서 결과 자릿수 문장을 찾지 못함', src))
     pick, rg_low = ref_values(r, ref)
     mdl, loq = num(r.get('mdl')), num(r.get('loq'))
     linked = str(r.get('mdl', '')).startswith('=')
     # 공정시험기준 칸 = 원문 제시값과 같아야 한다 (불검출 판정에 쓰는 칸)
     if pick and not linked:
         if mdl is not None and abs(mdl - pick['value']) < 1e-12:
-            res.append(('맞음', f'공정시험기준 방법검출한계 {mdl:g} = 원문 {pick["value"]:g} {pick["unit"]}', src))
+            res.append(('적합', f'공정시험기준 방법검출한계 {mdl:g} = 원문 {pick["value"]:g} {pick["unit"]}', src))
         else:
-            res.append(('틀림', f'공정시험기준 방법검출한계 {r.get("mdl")} ≠ 원문 {pick["value"]:g} {pick["unit"]}', src))
+            res.append(('부적합', f'공정시험기준 방법검출한계 {r.get("mdl")} ≠ 원문 {pick["value"]:g} {pick["unit"]}', src))
     elif not pick and not linked:
-        res.append(('확인', f'원문에 방법검출한계 제시값 없음 (공정시험기준 칸 {r.get("mdl")})', src))
+        res.append(('검토', f'원문에 방법검출한계 제시값 없음 (공정시험기준 칸 {r.get("mdl")})', src))
     if rg_low is not None and not linked:
         if loq is not None and abs(loq - rg_low) < 1e-12:
-            res.append(('맞음', f'공정시험기준 정량한계 {loq:g} = 원문 정량범위 하한 {rg_low:g}', src))
+            res.append(('적합', f'공정시험기준 정량한계 {loq:g} = 원문 정량범위 하한 {rg_low:g}', src))
         else:
-            res.append(('틀림', f'공정시험기준 정량한계 {r.get("loq")} ≠ 원문 정량범위 하한 {rg_low:g}', src))
-    # 시험 기초자료(실험실 측정값) ≤ 원문 제시값
-    for k, lab, refv, nm in (('lab_mdl', num(r.get('lab_mdl')), pick['value'] if pick else None, '방법검출한계'),
-                             ('lab_loq', num(r.get('lab_loq')), rg_low, '정량한계')):
-        if refv is None or k not in r:
-            continue
-        if lab is None or lab == 0:
-            res.append(('확인', f'시험 기초자료 {nm}가 비어 있음 ({r.get(k)!r})', src))
-        elif lab <= refv + 1e-12:
-            res.append(('맞음', f'시험 기초자료 {nm} {lab:.4g} ≤ 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
-        else:
-            res.append(('틀림', f'시험 기초자료 {nm} {lab:.4g} > 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
+            res.append(('부적합', f'공정시험기준 정량한계 {r.get("loq")} ≠ 원문 정량범위 하한 {rg_low:g}', src))
+    # 시험 기초자료(실험실 측정값) ≤ 원문 제시값 — 줄이 여럿이면 줄마다 (비소: 입자상·가스상)
+    labs = r.get('lab_rows') or ([dict(label='', mdl=r.get('lab_mdl'), loq=r.get('lab_loq'))] if 'lab_mdl' in r else [])
+    for L in labs:
+        tag = f'({L["label"]}) ' if L.get('label') and len(labs) > 1 else ''
+        for k, refv, nm in (('mdl', pick['value'] if pick else None, '방법검출한계'), ('loq', rg_low, '정량한계')):
+            if refv is None or k not in L:
+                continue
+            lab = num(L.get(k))
+            if lab is None or lab == 0:
+                res.append(('검토', f'시험 기초자료 {tag}{nm}가 {L.get(k)!r} → 실험실 측정값 입력 필요', src))
+            elif lab <= refv + 1e-12:
+                res.append(('적합', f'시험 기초자료 {tag}{nm} {lab:.4g} ≤ 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
+            else:
+                res.append(('부적합', f'시험 기초자료 {tag}{nm} {lab:.4g} > 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
     u = str(r.get('unit', '')).lower().replace('³', '3').replace(' ', '')
     ru = (ref['digits'][0]['unit'] if ref['digits'] and ref['digits'][0]['unit'] else (pick or {}).get('unit', '')).lower().replace('³', '3')
     if u and ru:
-        res.append(('맞음' if u == ru else '틀림', f'단위 기준표 {r.get("unit")} / 원문 {ru}', src))
+        res.append(('적합' if u == ru else '부적합', f'단위 기준표 {r.get("unit")} / 원문 {ru}', src))
     return res
 
 
 def check_formulas(golden):
-    """골든 카피 결과 수식이 '미만이면 불검출'인지 (같으면 값)"""
+    """완성본 결과 수식이 '미만이면 불검출'인지 (같으면 값)"""
     out = {}
     for p in glob.glob(os.path.join(golden, '*.xls*')):
         z = zipfile.ZipFile(p)
@@ -200,26 +209,22 @@ def check_formulas(golden):
 if __name__ == '__main__':
     rows = json.load(open(sys.argv[1], encoding='utf8'))
     refs = json.load(open(os.path.join(os.path.dirname(sys.argv[1]), 'ref_rules.json'), encoding='utf8')) if os.path.exists(os.path.join(os.path.dirname(sys.argv[1]), 'ref_rules.json')) else {}
-    total = {'맞음': 0, '확인': 0, '틀림': 0}
+    total = {'적합': 0, '검토': 0, '부적합': 0}
     for r in rows:
         res = check(r) + (check_ref(r, refs) if refs else [])
         if refs:
             code, rf, vnote = ref_for(r, refs)
             if rf:
                 d = rf['digits'][0] if rf['digits'] else {}
-                sym = next((v for k, v in SYMBOL.items() if k in r.get('item', '')), None)
-                mm = [x for x in rf['mdl'] if x.get('value') is not None]
-                pk = next((x for x in mm if sym and x['name'] == sym), None) or \
-                     (next((x for x in mm if ALIAS.get(r['item'], r['item'])[:3] in x['name'] or r['item'][:3] in x['name']), None) if len({x['value'] for x in mm}) > 1 else None) or (mm[0] if mm else None)
-                rg = [x for x in rf['range'] if (not sym or x.get('name') in (None, sym))]
+                pk, low = ref_values(r, rf)     # 원문 대조(check_ref)와 같은 값을 프로그램에 넘긴다
                 r['ref'] = dict(code=code, via=rf.get('from'), calc=d.get('calc'), final=d.get('final'), unit=d.get('unit', ''),
                                 text=d.get('text', ''), mdl=(pk or {}).get('value'), mdl_unit=(pk or {}).get('unit', ''),
-                                range_low=rg[0]['low'] if rg else None, version_note=vnote)
+                                range_low=low, version_note=vnote)
         r['checks'] = res
-        bad = [x for x in res if x[0] != '맞음']
+        bad = [x for x in res if x[0] != '적합']
         for x in res:
             total[x[0]] += 1
-        flag = '✔' if not bad else ('✖' if any(x[0] == '틀림' for x in res) else '△')
+        flag = '✔' if not bad else ('✖' if any(x[0] == '부적합' for x in res) else '△')
         print(f"{flag} {r['file'][6:22]:16} {r['item'][:12]:12} 계산 {r['calc']} 최종 {r['final']} MDL {str(r['mdl'])[:8]:8} LOQ {str(r['loq'])[:8]:8} {r['unit']}")
         for x in bad:
             print(f"      {x[0]}: {x[1]}  [{x[2]}]")
@@ -227,5 +232,5 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         fs = check_formulas(sys.argv[2])
         wrong = [(k, v) for k, v in fs.items() if any(op in ('<=',) for op in v[0])]
-        print(f'골든 카피 불검출 수식 {len(fs)}개 중 "같으면 불검출"(<=)로 판정하는 수식 {len(wrong)}개')
+        print(f'완성본 불검출 수식 {len(fs)}개 중 "같으면 불검출"(<=)로 판정하는 수식 {len(wrong)}개')
     json.dump(rows, open(sys.argv[1].replace('.json', '_checked.json'), 'w', encoding='utf8'), ensure_ascii=False, indent=1, default=str)

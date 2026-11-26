@@ -27,14 +27,25 @@ NAME_MAP = [
 FILE_MAP = {'불소화합물': '플루오린화합물', '브롬': '브로민화합물', '시안화수소': '사이안화수소', '포름알데하이드': '폼알데하이드'}
 
 
-def rename_text(s):
-    for a, b in NAME_MAP:
+# 파일별로 고칠 시트 이름: 이황화메틸 기록부의 시트 이름이 원본에서 "이황화탄소"로 복사된 채였다
+SHEET_FIX = {'이황화메틸': [('시험기록부-이황화탄소', '시험기록부-이황화메틸')]}
+
+
+def rename_text(s, pairs=None):
+    for a, b in (NAME_MAP if pairs is None else pairs):
         s = s.replace(a, b)
     return s
 
 
-def rename_book(b):
+def pairs_for(path):
+    base = os.path.basename(path)
+    return NAME_MAP + [p for k, v in SHEET_FIX.items() if k in base for p in v]
+
+
+def rename_book(b, pairs=None):
     """통합 문서 전체(글자·수식·시트 이름·이름 정의·차트·문서 정보)에서 물질 이름을 바꾼다. 바꾼 개수"""
+    NAME_MAP_ = NAME_MAP if pairs is None else pairs
+    rename_text_ = lambda s: rename_text(s, NAME_MAP_)
     n = 0
     for p in list(b.parts):
         if not (p.endswith('.xml') or p.endswith('.rels')) or p.startswith('xl/media/'):
@@ -43,14 +54,14 @@ def rename_book(b):
             x = b.text(p)
         except UnicodeDecodeError:
             continue
-        y = rename_text(x)
+        y = rename_text_(x)
         if y != x:
-            n += sum(x.count(a) for a, _ in NAME_MAP)
+            n += sum(x.count(a) for a, _ in NAME_MAP_)
             b.put(p, y)
     # Book이 들고 있는 시트 이름 목록·openpyxl 사본도 새 이름으로
-    b.sheets = {rename_text(k): v for k, v in b.sheets.items()}
+    b.sheets = {rename_text_(k): v for k, v in b.sheets.items()}
     for ws in b.wb.worksheets:
-        nt = rename_text(ws.title)
+        nt = rename_text_(ws.title)
         if nt != ws.title:
             ws.title = nt
     return n
