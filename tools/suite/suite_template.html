@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --ink:#2a3944; --ink-2:#4b5a63; --soft:#66747c; --line:rgba(42,57,68,.16); --line-2:rgba(42,57,68,.28);
+    --paper:#fff; --paper-2:#f4f5f4; --bg:#eceeec;
+    --shadow:0 1px 0 rgba(42,57,68,.08), 0 10px 24px -16px rgba(20,28,34,.5);
+    --font:"IBM Plex Sans KR","Pretendard","맑은 고딕","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { font-family:var(--font); color:var(--ink); background:var(--bg); font-size:14px; line-height:1.55; word-break:keep-all; overflow-wrap:anywhere; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  .bar { position:fixed; top:0; left:0; right:0; height:44px; z-index:10; display:flex; align-items:center; gap:6px; padding:0 14px;
+         background:#22313c; color:#fff; }
+  .bar .mark { font-weight:800; letter-spacing:.24em; font-size:14px; margin-right:10px; white-space:nowrap; cursor:pointer; background:none; border:0; color:#fff; padding:0 .24em; }
+  .tab { border:0; background:transparent; color:rgba(255,255,255,.72); padding:6px 12px; border-radius:999px; font-size:13px; font-weight:700; white-space:nowrap; }
+  .tab:hover { color:#fff; background:rgba(255,255,255,.08); }
+  .tab[aria-current="true"] { background:#fff; color:#22313c; }
+  .tab:disabled { opacity:.4; cursor:default; }
+  .grow { flex:1; }
+  .ver { font-size:11.5px; color:rgba(255,255,255,.55); white-space:nowrap; }
+  .tab:focus-visible, .mark:focus-visible, .card:focus-visible { outline:3px solid #c4523a; outline-offset:2px; }
+  #home { position:absolute; top:44px; left:0; right:0; bottom:0; overflow-y:auto; }
+  #home main { max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+  .hero { background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:28px 30px; }
+  .hero h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:.14em; }
+  .hero p { margin:10px 0 0; color:var(--ink-2); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-top:18px; }
+  .card { display:flex; flex-direction:column; text-align:left; background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);
+          padding:20px 22px 18px; transition:transform .18s, box-shadow .18s; min-width:0; }
+  .card:not(.off):hover { transform:translateY(-3px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 18px 30px -16px rgba(20,28,34,.55); }
+  .card.off { opacity:.6; cursor:default; }
+  .kicker { font-size:12px; font-weight:600; color:var(--soft); }
+  .card h2 { margin:2px 0 0; font-size:20px; font-weight:800; }
+  .stroke { display:block; width:100%; height:.45rem; margin:.5rem 0 .7rem; background:var(--c, var(--ink));
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+  .card p { margin:0; color:var(--ink-2); font-size:13.5px; }
+  .card .meta { margin-top:14px; font-size:12px; color:var(--soft); }
+  .frame { position:absolute; top:44px; left:0; right:0; bottom:0; border:0; width:100%; height:calc(100% - 44px); background:var(--bg); display:none; }
+  .frame.on { display:block; }
+  .loading { position:absolute; top:44px; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; color:var(--soft); }
+  .loading.on { display:flex; }
+  @media (max-width:560px) { .bar { padding:0 8px; gap:2px; overflow-x:auto; } .bar .mark { letter-spacing:.1em; margin-right:4px; } .ver { display:none; } .hero { padding:20px; } .hero h1 { font-size:26px; } }
+  @media (prefers-reduced-motion:reduce) { .card { transition:none; } }
+</style>
+</head>
+<body>
+<nav class="bar" aria-label="프로그램">
+  <button class="mark" data-go="">__TITLE_SPACED__</button>
+  <button class="tab" data-go="" aria-current="true">처음 화면</button>
+  <span id="tabs"></span>
+  <span class="grow"></span>
+  <span class="ver">__BUILT__</span>
+</nav>
+<div id="home"><main>
+  <section class="hero">
+    <div class="kicker">__KICKER__</div>
+    <h1>__TITLE__</h1>
+    <p>__LEAD__</p>
+  </section>
+  <div class="grid" id="cards"></div>
+</main></div>
+<div class="loading" id="loading">불러오는 중</div>
+__APPS__
+<script>
+const APPS = "__MANIFEST__";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('#tabs').innerHTML = APPS.map(a => `<button class="tab" data-go="${a.id}" ${a.ready ? '' : 'disabled title="파일 없음"'}>${esc(a.title)}</button>`).join('');
+$('#cards').innerHTML = APPS.map(a => `<article class="card ${a.ready ? '' : 'off'}" ${a.ready ? `data-go="${a.id}" tabindex="0" role="button"` : ''} style="--c:${a.color}">
+  <div class="kicker">${esc(a.kicker || '')}</div><h2>${esc(a.title)}</h2><span class="stroke"></span>
+  <p>${esc(a.desc || '')}</p>
+  <div class="meta">${a.ready ? esc(a.version ? 'v' + a.version : '') : '아직 합치지 않음 (build_suite.py에 파일을 넣으면 들어감)'}</div></article>`).join('');
+const frames = {};
+// 프로그램마다 따로 만든 HTML 한 파일을 그대로 띄운다 (srcdoc: 이 파일과 같은 출처라 브라우저 저장·내려받기가 그대로 된다)
+function frameOf(id) {
+  if (frames[id]) return frames[id];
+  const src = document.getElementById('app-' + id); if (!src) return null;
+  $('#loading').classList.add('on');
+  const bin = atob(src.textContent.trim()); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const f = document.createElement('iframe'); f.className = 'frame'; f.title = id;
+  f.addEventListener('load', () => $('#loading').classList.remove('on'));
+  f.srcdoc = new TextDecoder('utf-8').decode(bytes);
+  document.body.appendChild(f); frames[id] = f;
+  return f;
+}
+function show() {
+  const id = (location.hash.match(/^#app=(.+)$/) || [])[1] || '';
+  const app = APPS.find(a => a.id === id && a.ready);
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-current', String((t.dataset.go || '') === (app ? app.id : ''))));
+  $('#home').style.display = app ? 'none' : 'block';
+  Object.values(frames).forEach(f => f.classList.remove('on'));
+  if (app) { const f = frameOf(app.id); if (f) f.classList.add('on'); document.title = app.title + ' · __TITLE__'; }
+  else { document.title = '__TITLE__'; $('#loading').classList.remove('on'); }
+}
+document.addEventListener('click', e => { const t = e.target.closest('[data-go]'); if (!t || t.disabled) return; location.hash = t.dataset.go ? '#app=' + t.dataset.go : ''; });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('.card[data-go]')) location.hash = '#app=' + e.target.dataset.go; });
+window.addEventListener('hashchange', show);
+show();
+</script>
+</body>
+</html>
