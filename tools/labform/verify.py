@@ -349,7 +349,8 @@ for f in files:
                     bad(form, '⑥', f'PDF {i}쪽에 문서번호가 안 찍힘')
                 if '###' in t:
                     bad(form, '④', f'PDF {i}쪽에 ###이 찍힘 (칸이 좁은 숫자·날짜)')
-                if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b', t):
+                t_ = re.sub(r'\d{1,2}/\d{1,2}/(19|20)\d{2}\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', '', t)   # 기기 원자료 시각 표기(글자)는 원본 그대로
+                if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b', t_):
                     bad(form, '⑤', f'PDF {i}쪽에 yyyy-mm-dd가 아닌 날짜가 찍힘')
 
 print('양식        서명칸(px)     서명줄(pt)    열합(px) 배율      여백')
