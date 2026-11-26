@@ -82,8 +82,10 @@ def add_sheet(b, rows):
 
 
 # ── 수식 바꾸기 ──
-def set_formula(b, sheet, ref_, formula):
+def set_formula(b, sheet, ref_, formula, shrink=True):
     b.setf(sheet, ref_, formula)
+    if not shrink:
+        return      # 시험방법처럼 글자가 옆 빈칸으로 이어져 보여야 하는 칸은 셀에 맞춤을 켜지 않는다
     # 새 수식 칸도 날짜·숫자 칸처럼 "셀에 맞춤" (줄바꿈 칸은 그대로) — 기록부 시트만
     if sheet in b.wb.sheetnames and '시험기록부' in str(b.wb[sheet]['A1'].value or '').replace(' ', ''):
         return _shrink(b, sheet, ref_)
@@ -354,7 +356,7 @@ def apply(path, items, dst):
             if r['loq_cell']:
                 set_formula(b, sh, r['loq_cell'], ref(r['row'], 'loq'))
         if r['method_cell'] and r['method_row'] == r['row']:
-            set_formula(b, sh, r['method_cell'], ref(r['row'], 'method'))
+            set_formula(b, sh, r['method_cell'], ref(r['row'], 'method'), shrink=False)
         for it in r['results']:
             ORIG[0] = it['formula'][1:]
             P = permit_cell(b.wb[sh], it)
@@ -365,6 +367,13 @@ def apply(path, items, dst):
                 PERMITS.setdefault(sh, {})[it['result']] = P
             log.append(f"{sh}!{it['result']}: {r['item']} (기준 {r['row']}행){' 허가배출기준 ' + P if P else ''}")
     link_o2(b, PERMITS, log)
+    # 새로 수식을 넣은 칸(표준산소 등)의 정렬을 정렬 기준대로 다시 맞춘다
+    from layout_rules import align
+    for sh in {r['sheet'] for r in rows}:
+        pa = b.wb[sh].print_area
+        pa = pa[0] if isinstance(pa, (list, tuple)) else pa
+        if pa:
+            log += align(b, sh, pa.split('!')[-1].replace('$', ''))
     b.finish(dst)
     return rows, log
 
