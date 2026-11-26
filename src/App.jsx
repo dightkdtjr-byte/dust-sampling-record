@@ -915,7 +915,7 @@ const getSkyPhaseByHour = (date = new Date()) => {
   return 'night';
 };
 
-// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리·너구리·오소리는 사철 나온다
+// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리·수달·너구리·오소리는 사철 나온다
 const SKY_SEASON_OPTIONS = [
   { id: 'auto', label: '자동' },
   { id: 'spring', label: '봄' },
@@ -1754,6 +1754,28 @@ const renderSceneBadger = (pal) => (
     <path d="M27.6,-12.4 C23.6,-10 19.6,-9.2 15.6,-9.4 C11,-9.6 6.6,-12 4,-16 C11,-13.6 20,-13.4 29,-14.6 Z" fill={pal.bank} opacity="0.9" />
   </>
 );
+// 수달: 머리만 물 위로 내밀고 헤엄친다. 둥근 머리, 작은 귀, 큰 눈, 밝은 주둥이와 수염, 뒤로 살짝 보이는 등과 꼬리 끝
+const renderSceneOtterSwim = (pal) => (
+  <>
+    <path d="M-70,1.5 L-50,1.5 M-64,-1.5 L-52,-0.5 M36,1.5 L44,1.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+    <path d="M-46,0 Q-38,-5.4 -29,0 Z M-26,0 Q-10,-8.6 3,0 Z" fill={pal.mid} />
+    <circle cx="9.4" cy="-16.4" r="3" fill={pal.bank} />
+    <path d="M3,0 C2,-9 7,-18 16,-19.4 C23,-20.4 29,-17 31.6,-12.4 C34,-11 35.4,-8.4 35,-5.6 C34.6,-3 33,-1 30.6,0 Z" fill={pal.mid} />
+    <path d="M21,-11.6 C25,-13.6 31,-12.6 33.8,-9.6 C35.4,-7.6 35.2,-4.4 33.4,-2.2 C32.6,-1.2 31.6,-0.4 30.6,0 L13,0 C13.4,-5 16.4,-9.6 21,-11.6 Z" fill={pal.plume} />
+    <ellipse cx="33.6" cy="-9.6" rx="2.4" ry="1.9" fill={pal.bank} />
+    <path d="M27,-5.4 L39,-6.6 M27,-3.6 L39,-2.4" stroke={pal.bank} strokeWidth="0.5" strokeLinecap="round" opacity="0.7" fill="none" />
+    <ellipse cx="21.4" cy="-14" rx="2.7" ry="2.9" fill={pal.plume} />
+    <circle cx="22.1" cy="-13.8" r="1.8" fill={pal.bank} />
+    <circle cx="22.8" cy="-14.7" r="0.6" fill={pal.plume} />
+  </>
+);
+// 수달이 잠수하는 순간: 등이 둥글게 솟고 꼬리가 올라온다
+const renderSceneOtterDive = (pal) => (
+  <>
+    <path d="M-34,1.5 L-22,1.5 M26,1.5 L38,1.5 M-30,4.5 L34,4.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+    <path d="M-18,0 C-12,-17 12,-17 19,0 Z M-16,-2 C-22,-10 -30,-17 -40,-19.6 C-33,-12 -27,-6 -24,0 L-17,0 Z" fill={pal.mid} />
+  </>
+);
 // 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
 const SCENE_BUTTERFLIES = [
   { x: 166, up: 58, dur: 11, delay: 2, beat: 0.26 }, { x: 322, up: 38, dur: 14, delay: 6, beat: 0.31 },
@@ -2079,6 +2101,33 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
           <animateMotion dur={`${flock.dur}s`} begin={`${flock.delay}s`} repeatCount="indefinite" path="M-140,0 L1740,0" keyPoints={flock.dir > 0 ? '0;1' : '1;0'} keyTimes="0;1" calcMode="linear" />
         </g>
       ))}
+
+      {/* 수달(사철): 둑 앞 물길을 따라 헤엄치다가 이따금 잠수해서 조금 앞에서 다시 올라온다 */}
+      {!compact && (() => {
+        const scale = 0.62;
+        if (stillScene) return <g transform={`translate(900 ${G + 33}) scale(-${scale} ${scale})`}>{renderSceneOtterSwim(pal)}</g>;
+        const cycle = { dur: '23s', begin: '-4s', repeatCount: 'indefinite', calcMode: 'discrete' };
+        return (
+          <g>
+            <animateMotion dur="118s" begin="-52s" repeatCount="indefinite" calcMode="linear" path={`M1680,${G + 33} L120,${G + 33}`} />
+            <g transform={`scale(-${scale} ${scale})`}>
+              <g>
+                <animate attributeName="opacity" values="1;0;1" keyTimes="0;0.6;0.86" {...cycle} />
+                {renderSceneOtterSwim(pal)}
+              </g>
+              <g opacity="0">
+                <animate attributeName="opacity" values="0;1;0" keyTimes="0;0.6;0.645" {...cycle} />
+                {renderSceneOtterDive(pal)}
+              </g>
+              {/* 물속에 있는 동안: 들어간 자리에 잔물결만 남는다 */}
+              <g opacity="0">
+                <animate attributeName="opacity" values="0;1;0" keyTimes="0;0.645;0.72" {...cycle} />
+                <path d="M-16,1.5 L16,1.5 M-8,4.5 L10,4.5" stroke={pal.stroke} strokeWidth="1.8" strokeLinecap="round" fill="none" />
+              </g>
+            </g>
+          </g>
+        );
+      })()}
 
       {/* 앞 둑: 뒷줄 풀(한 단계 밝게) → 어두운 땅 → 앞줄 풀·부들·들꽃·돌 */}
       <path d={tufts.filter((t) => t.back).map((t, i) => sceneTuft(t.x, t.size * 1.25, i * 17 + 5)).join(' ')} fill={pal.ink} transform="translate(0 -3)" />
