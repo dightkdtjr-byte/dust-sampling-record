@@ -159,6 +159,10 @@ def rewrite(f, compares, row, permit=None):
         # (Excel은 숫자 < 글자를 참으로 보아, 감싸지 않으면 "-"일 때 늘 불검출이 된다)
         G = f'N({ref(row, "mdl")})'
         f = re.sub(rf'({re.escape(V)}\s*(?:<=|>=|<|>))\s*{re.escape(mdl)}(?!\d)', lambda m: m.group(1) + G, f)
+    if len(Rs) == 1:
+        # 불검출 판정을 가장 바깥에서 먼저: 원본 수식이 판정을 허가배출기준 비교 안쪽에 두면(PAHs) 기준이 비거나 0일 때 판정을 건너뛴다
+        V1 = rounded(num_part(Rs[0]), calc, judge)
+        f = f'IF({V1}<N({ref(row, "mdl")}),"불검출",{f})'
     blank = 'AND(' + ','.join(f'{R}&""=""' for R in Rs) + ')'          # 계산값이 모두 비어 있으면 빈칸
     if permit:
         # 허가배출기준 초과: 표시값(보정 전/후 중 고른 값)이 기준값보다 크면 " (초과)" — 원래 초과 표시는 지운다
@@ -349,6 +353,7 @@ METHOD_CHOICE = {'트라이클로로에틸렌': ('01514.1d', '01511.1d')}
 # 원문에 방법검출한계 제시값이 없어 빼는 물질 (불검출 판정 안 함, 사용자 결정)
 NO_MDL = {'황산화물', '질소산화물', '일산화탄소', '총탄화수소'}
 TITLES = {}
+FIX_LOG = []
 
 
 def own_lab_rows(it):
@@ -370,6 +375,18 @@ def apply(path, items, dst):
             if isinstance(it.get(k), str):
                 it[k] = NM.rename_text(it[k], pairs)
         it['compares'] = [[NM.rename_text(x, pairs) if isinstance(x, str) else x for x in c] for c in it['compares']]
+    # 원본 계산 수식 오류 고치기 (form_fixes.py, 근거는 거기에) + 결과가 읽는 계산값 칸의 앞선 반올림을 버림으로
+    import form_fixes as FF
+    FIX_LOG[:] = FF.apply(b, path)
+    cell_re = re.compile(r"(?:(?:'([^']+)'|([^\s!(),=<>&\"'+*/-]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?![\d(])")
+    for it in items:
+        for c in it['compares']:
+            R = c[0] if isinstance(c[0], str) else ''
+            for m in cell_re.finditer(R):
+                sh = m.group(1) or m.group(2) or it['sheet']
+                ref_ = f'{m.group(3)}{m.group(4)}'
+                if sh in b.sheets and FF.strip_pre_rounding(b, sh, ref_):
+                    FIX_LOG.append(f'{sh}!{ref_}: 결과가 읽는 계산값의 반올림을 계산 자릿수 버림으로 (맺음은 결과 칸에서 한 번)')
     # 한 줄 = (시트, 방법검출한계 칸) 묶음
     groups = []
     for it in items:
@@ -490,6 +507,7 @@ def apply(path, items, dst):
         pa = pa[0] if isinstance(pa, (list, tuple)) else pa
         if pa:
             log += align(b, sh, pa.split('!')[-1].replace('$', ''))
+    FIX_LOG.extend(FF.post_apply(b, path))     # 표준산소 연결 등 마지막 손질 (link_o2 뒤)
     b.finish(dst)
     return rows, log
 
@@ -518,6 +536,8 @@ if __name__ == '__main__':
             base = base.replace(f'_{a_}.', f'_{b_}.')
         rows, log = apply(p, items, os.path.join(dst, base))
         print('ok', os.path.basename(p), f'기준 {len(rows)}줄')
+        for l in FIX_LOG:
+            print('     원본 수식 고침:', l)
         for l in log:
             if '표준산소' in l or '허가배출기준' in l:
                 print('    ', l)
