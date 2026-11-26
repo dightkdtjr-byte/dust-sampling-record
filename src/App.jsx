@@ -1391,18 +1391,20 @@ const SKYLINE_FLYER_CSS = `
 }
 .skyline-dart { animation: skylineDart var(--dart-duration, 14s) ease-in-out infinite; animation-delay: var(--dart-delay, 0s); }
 .skyline-shimmer { animation: skylineShimmer 0.09s linear infinite alternate; }
-/* 너구리·오소리 걸음: 다리 두 쌍이 엇갈려 앞뒤로 움직이고 몸이 살짝 들썩인다 */
+/* 너구리·오소리 걸음: 발을 앞에 디디고 땅을 밀며 뒤로 보낸 뒤, 들어 올려 다시 앞으로. 대각선 짝끼리 같이 나가고 몸이 살짝 들썩인다 */
 @keyframes skylineTrot {
-  from { transform: rotate(13deg); }
-  to { transform: rotate(-13deg); }
+  0% { transform: translateY(0) rotate(-20deg); }
+  55% { transform: translateY(0) rotate(20deg); }
+  78% { transform: translateY(-2.6px) rotate(3deg); }
+  100% { transform: translateY(0) rotate(-20deg); }
 }
 @keyframes skylineTrotBob {
   from { transform: translateY(0); }
-  to { transform: translateY(-0.9px); }
+  to { transform: translateY(-0.8px); }
 }
-.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 50% 0%; animation: skylineTrot var(--trot, 0.34s) ease-in-out infinite alternate; }
-.skyline-trot-b { animation-direction: alternate-reverse; }
-.skyline-trot-bob { animation: skylineTrotBob calc(var(--trot, 0.34s) / 2) ease-in-out infinite alternate; }
+.skyline-trot-a, .skyline-trot-b { transform-box: fill-box; transform-origin: 38% 0%; animation: skylineTrot var(--trot, 0.6s) linear infinite; }
+.skyline-trot-b { animation-delay: calc(var(--trot, 0.6s) * -0.5); }
+.skyline-trot-bob { animation: skylineTrotBob calc(var(--trot, 0.6s) / 4) ease-in-out infinite alternate; }
 /* 개구리 울음: 턱 밑 울음주머니가 세 번 부풀었다 꺼진다 */
 @keyframes skylineFrogCroak {
   0%, 16%, 25%, 34%, 43%, 100% { transform: scale(0); }
@@ -1708,14 +1710,23 @@ const SCENE_WALK_TRACK = (() => {
   for (let x = 1452; x >= 214; x -= 38) xs.push(x);
   const f = (v) => v.toFixed(1);
   return {
-    path: `M${xs.map((x) => `${f(x)},${f(sceneBankY(x) + 2)}`).join(' L')}`,
+    path: `M${xs.map((x) => `${f(x)},${f(sceneBankY(x) + 0.5)}`).join(' L')}`,
     // 구간: 풀숲 속(0~4%) → 왼쪽으로 건넘(~40%) → 왼쪽 풀숲 속(~54%) → 오른쪽으로 건넘(~92%) → 풀숲 속
     keyTimes: '0;0.04;0.4;0.54;0.92;1',
     keyPoints: '0;0;1;1;0;0',
   };
 })();
-// 짧고 통통한 다리 한 짝 (맨 위는 몸통 속에 있어 그곳을 축으로 앞뒤로 움직인다)
-const sceneWalkerLeg = (x, h) => `M${x},-${h} L${x - 0.3},-1.6 Q${x - 0.3},0 ${x + 1.4},0 L${x + 4.2},0 Q${x + 5.8},0 ${x + 5.6},-1.6 L${x + 5.2},-${h} Z`;
+// 다리 한 짝: 위는 굵고 발목으로 갈수록 가늘어지며, 발은 걷는 쪽(앞)으로 둥글게 나온다.
+// 맨 위는 몸통 속에 있어 그곳(엉덩이·어깨)을 축으로 움직인다
+const sceneWalkerLeg = (x, h) => `M${x - 0.6},-${h} L${x + 6.2},-${h} L${x + 5},-4.8 C${x + 8},-4.8 ${x + 10.6},-3.2 ${x + 10.6},-1.4 Q${x + 10.6},0 ${x + 9},0 L${x + 1},0 Q${x - 0.4},0 ${x - 0.2},-1.6 L${x + 0.6},-5 Z`;
+// 한 걸음 주기(초): 발이 땅을 디디고 미는 동안 미끄러지지 않게, 걷는 빠르기와 다리 길이에서 계산한다
+const SCENE_STEP_SWING = 20;   // 다리가 앞뒤로 벌어지는 각도
+const SCENE_STEP_STANCE = 0.55; // 한 주기 가운데 발이 땅에 닿아 있는 비율
+const sceneWalkerStep = (walker) => {
+  const stride = 2 * walker.legH * Math.sin((SCENE_STEP_SWING * Math.PI) / 180) * walker.scale;
+  const speed = (1452 - 214) / (walker.dur * 0.37);
+  return stride / speed / SCENE_STEP_STANCE;
+};
 // 너구리: 만화 캐릭터처럼. 큰 머리, 둥근 귀, 눈가의 검은 띠와 큰 눈, 밝은 주둥이, 줄무늬 꼬리, 밝은 배. 걷는 쪽을 보는 옆모습
 const renderSceneRaccoon = (pal) => (
   <>
@@ -2136,20 +2147,20 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
       </g>
       {/* 너구리·오소리(사철): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
       {[
-        { key: 'raccoon', show: true, dur: 168, begin: compact ? -70 : -9, scale: 0.62, trot: 0.34, legH: 15, legs: [[-13, 'a'], [-6.6, 'b'], [2.4, 'b'], [8.4, 'a']], art: renderSceneRaccoon, stillX: 1010 },
-        { key: 'badger', show: !compact, dur: 214, begin: -150, scale: 0.6, trot: 0.46, legH: 13, legs: [[-19, 'a'], [-12.6, 'b'], [2.4, 'b'], [8.6, 'a']], art: renderSceneBadger, stillX: 560 },
+        { key: 'raccoon', show: true, dur: 168, begin: compact ? -70 : -9, scale: 0.62, legH: 15, legs: [[-13, 'a'], [-6.6, 'b'], [2.4, 'b'], [8.4, 'a']], art: renderSceneRaccoon, stillX: 1010 },
+        { key: 'badger', show: !compact, dur: 214, begin: -150, scale: 0.6, legH: 13, legs: [[-19, 'a'], [-12.6, 'b'], [2.4, 'b'], [8.6, 'a']], art: renderSceneBadger, stillX: 560 },
       ].filter((walker) => walker.show).map((walker) => {
         const timing = { dur: `${walker.dur}s`, begin: `${walker.begin}s`, repeatCount: 'indefinite' };
         const figure = (
-          <g style={{ '--trot': `${walker.trot}s` }}>
-            {/* 다리는 한 짝씩 따로: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 앞뒤로 움직이고, 대각선 짝끼리 같이 나간다 */}
-            {walker.legs.map(([x, pair]) => (
-              <path key={x} className={stillScene ? undefined : `skyline-trot-${pair}`} d={sceneWalkerLeg(x, walker.legH)} fill={pal.bank} />
+          <g style={{ '--trot': `${sceneWalkerStep(walker).toFixed(3)}s` }}>
+            {/* 다리는 한 짝씩 따로: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 움직이고, 대각선 짝끼리 같이 나간다. 먼 쪽 다리는 살짝 옅다 */}
+            {walker.legs.map(([x, pair], k) => (
+              <path key={x} className={stillScene ? undefined : `skyline-trot-${pair}`} d={sceneWalkerLeg(x, walker.legH)} fill={pal.bank} opacity={k % 2 === 1 ? 0.7 : 1} />
             ))}
             <g className={stillScene ? undefined : 'skyline-trot-bob'}><g transform="translate(0 -3.4)">{walker.art(pal)}</g></g>
           </g>
         );
-        if (stillScene) return <g key={walker.key} transform={`translate(${walker.stillX} ${sceneBankY(walker.stillX) + 2}) scale(-${walker.scale} ${walker.scale})`}>{figure}</g>;
+        if (stillScene) return <g key={walker.key} transform={`translate(${walker.stillX} ${sceneBankY(walker.stillX) + 0.5}) scale(-${walker.scale} ${walker.scale})`}>{figure}</g>;
         return (
           <g key={walker.key}>
             <animateMotion {...timing} calcMode="linear" path={SCENE_WALK_TRACK.path} keyPoints={SCENE_WALK_TRACK.keyPoints} keyTimes={SCENE_WALK_TRACK.keyTimes} />
