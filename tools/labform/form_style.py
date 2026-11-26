@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter as CL, column_index_from_string as 
 from tplkit import escape
 
 FRAME, INNER = 'medium', 'thin'
-TITLE_FONT = '돋움'
+TITLE_FONT = '맑은 고딕'
 SIGN_TEXT = {'담당': '담 당', '담 당': '담 당', '기술책임자': '기술책임자'}
 
 
@@ -148,6 +148,47 @@ class Styles:
         nx = re.sub(r'fontId="\d+"', f'fontId="{nid}"', x, count=1)
         if 'applyFont' not in nx:
             nx = nx.replace('<xf ', '<xf applyFont="1" ', 1)
+        return str(self._add('cellXf', 'xf', nx))
+
+    def with_font(self, s, bold=None, size=None):
+        x = self.xf(s)
+        fid = re.search(r'fontId="(\d+)"', x).group(1)
+        font = self._list('font', 'font')[2][int(fid)]
+        nf = font
+        if bold is not None:
+            nf = re.sub(r'<b\s*/>|<b val="[^"]*"/>', '', nf)
+            if bold:
+                nf = re.sub(r'(<font\b[^>]*>)', r'\1<b/>', nf, count=1)
+        if size is not None:
+            nf = re.sub(r'<sz val="[^"]*"/>', f'<sz val="{size:g}"/>', nf) if '<sz ' in nf else re.sub(r'(<font\b[^>]*>(?:<b/>)?)', rf'\1<sz val="{size:g}"/>', nf, count=1)
+        nid = self._add('font', 'font', nf)
+        nx = re.sub(r'fontId="\d+"', f'fontId="{nid}"', x, count=1)
+        if 'applyFont' not in nx:
+            nx = nx.replace('<xf ', '<xf applyFont="1" ', 1)
+        return str(self._add('cellXf', 'xf', nx))
+
+    def with_rotation(self, s, deg):
+        x = self.xf(s)
+        if '<alignment' in x:
+            nx = re.sub(r'<alignment\b([^>]*?)/>', lambda m: '<alignment' + re.sub(r'\s*(textRotation|wrapText|shrinkToFit)="[^"]*"', '', m.group(1)) + f' textRotation="{deg}"/>', x, count=1)
+        elif x.endswith('/>'):
+            nx = re.sub(r'<xf\b([^>]*?)/>', lambda m: f'<xf{m.group(1)}><alignment horizontal="center" vertical="center" textRotation="{deg}"/></xf>', x, count=1)
+        else:
+            nx = x.replace('</xf>', f'<alignment horizontal="center" vertical="center" textRotation="{deg}"/></xf>')
+        if 'applyAlignment' not in nx:
+            nx = nx.replace('<xf ', '<xf applyAlignment="1" ', 1)
+        return str(self._add('cellXf', 'xf', nx))
+
+    def with_shrink(self, s):
+        x = self.xf(s)
+        if '<alignment' in x:
+            nx = re.sub(r'<alignment\b([^>]*?)/>', lambda m: '<alignment' + re.sub(r'\s*(wrapText|shrinkToFit)="[^"]*"', '', m.group(1)) + ' shrinkToFit="1"/>', x, count=1)
+        elif x.endswith('/>'):
+            nx = re.sub(r'<xf\b([^>]*?)/>', lambda m: f'<xf{m.group(1)}><alignment shrinkToFit="1"/></xf>', x, count=1)
+        else:
+            nx = x.replace('</xf>', '<alignment shrinkToFit="1"/></xf>')
+        if 'applyAlignment' not in nx:
+            nx = nx.replace('<xf ', '<xf applyAlignment="1" ', 1)
         return str(self._add('cellXf', 'xf', nx))
 
     def with_align(self, s, h, v):

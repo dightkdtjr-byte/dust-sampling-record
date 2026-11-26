@@ -3,7 +3,7 @@
 #   ① 서명란 크기·인쇄 배율이 모든 양식에서 같은가
 #   ② 쪽이 항목 경계에서만 나뉘고, 병합 칸·항목이 쪽 사이로 잘리지 않으며, 한 쪽 높이를 넘지 않는가
 #   ③ 테두리가 원본과 같은가 (--ref), 표 밖으로 남은 선이 없는가
-#   ④ 글자가 칸을 넘거나 잘리지 않는가 (글자 폭은 추정값)
+#   ④ 글자가 칸을 넘거나 단어 중간에서 잘리지 않는가 (글자 폭은 추정값), 날짜·숫자 칸이 ###으로 찍히지 않는가 (--pdf)
 #   ⑤ 정렬·글꼴이 원본과 같은가 (--ref)
 #   ⑥ 문서번호가 인쇄되는 모든 시트의 바닥글에 있고, PDF 모든 쪽에 찍히는가 (--pdf)
 #   ⑦ 정렬이 정렬 기준(layout_rules.py)과 같은가: 기준을 한 번 더 적용해도 바뀌는 칸이 없어야 한다
@@ -249,6 +249,42 @@ for f in files:
         if nf: bad(form, '⑤', f'원본과 글꼴이 다른 칸 {nf}개: ' + ', '.join(ex['f'][:6]))
         if na: bad(form, '⑤', f'원본과 정렬이 다른 칸 {na}개: ' + ', '.join(ex['a'][:6]))
 
+    # ④·⑤ 글자 맞춤·굵기·글꼴: 기준을 다시 적용해 보고 달라지는 것이 있으면 문제
+    from tplkit import Book as _Book
+    import content_rules as CR
+    from std import Layout as _Layout
+    bk2 = _Book(f); sh2 = wb.sheetnames[0]; a2 = f'{CL(c1)}{r1}:{CL(c2)}{r2}'
+    # 기록부 양식 시트 모두 (VOCs 물질별 시트 등)
+    for wsx in wb.worksheets:
+        if not wsx.print_area or wsx.sheet_state != 'visible':
+            continue
+        pa_ = wsx.print_area[0] if isinstance(wsx.print_area, (list, tuple)) else wsx.print_area
+        ax = pa_.split('!')[-1].replace('$', '')
+        cx1, _, cx2, _ = range_boundaries(ax)
+        if sum(px(col_w(wsx, k)) for k in range(cx1, cx2 + 1)) != TOTAL_PX:
+            continue   # 기록부 양식이 아닌 계산·자료 시트는 글꼴·바닥글만 맞춘다
+        lay2 = _Layout(bk2, wsx.title, ax)
+        wr2 = CR.fit_cells(lay2)
+        ch = [n for n in lay2.notes if not n.startswith('날짜')] + [f'{w} 줄바꿈 필요' for w in wr2]
+        tag = '' if wsx.title == sh2 else f'[{wsx.title}] '
+        if ch:
+            bad(form, '④', f'{tag}글자 맞춤이 기준과 다른 곳 {len(ch)}군데: ' + ', '.join(ch[:5]))
+        if any(n.startswith('날짜') for n in lay2.notes):
+            bad(form, '④', f'{tag}날짜·숫자·수식 칸에 "셀에 맞춤"이 꺼진 곳: ' + [n for n in lay2.notes if n.startswith('날짜')][0])
+    nb = CR.bold_rule(bk2, sh2, a2)
+    if nb:
+        bad(form, '⑤', nb[0].replace('맞춤', '가 기준과 다름'))
+    zf = zipfile.ZipFile(f)
+    fonts = set(re.findall(r'<name val="([^"]+)"/>', zf.read('xl/styles.xml').decode('utf8'))) - {CR.FONT}
+    for n_ in zf.namelist():
+        if re.match(r'xl/(drawings/drawing|charts/chart)\d+\.xml$', n_):
+            fonts |= set(re.findall(r'<a:(?:latin|ea|cs) typeface="([^"]+)"', zf.read(n_).decode('utf8'))) - {CR.FONT, 'Cambria Math'}
+    for n_ in zf.namelist():
+        if re.match(r'xl/(sharedStrings|comments\d*|worksheets/sheet\d+)\.xml$', n_):
+            fonts |= set(re.findall(r'<rFont val="([^"]+)"/>', zf.read(n_).decode('utf8'))) - {CR.FONT}
+    if fonts:
+        bad(form, '⑤', f'맑은 고딕이 아닌 글꼴 (모든 시트·일부 글자 서식·메모·글상자·차트): {", ".join(sorted(fonts))}')
+
     # ⑦·⑧ 정렬·수식·그림: 기준을 다시 적용해 보고 달라지는 것이 있으면 문제
     from tplkit import Book
     import layout_rules as LR
@@ -307,6 +343,10 @@ for f in files:
                 t = subprocess.run(['pdftotext', '-f', str(i), '-l', str(i), cand[0], '-'], capture_output=True, text=True).stdout
                 if not DOCNO.search(t):
                     bad(form, '⑥', f'PDF {i}쪽에 문서번호가 안 찍힘')
+                if '###' in t:
+                    bad(form, '④', f'PDF {i}쪽에 ###이 찍힘 (칸이 좁은 숫자·날짜)')
+                if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b', t):
+                    bad(form, '⑤', f'PDF {i}쪽에 yyyy-mm-dd가 아닌 날짜가 찍힘')
 
 print('양식        서명칸(px)     서명줄(pt)    열합(px) 배율      여백')
 for s in summary:
