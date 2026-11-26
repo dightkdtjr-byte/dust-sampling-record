@@ -148,15 +148,31 @@ function attachWindowBehaviors(win) {
   });
 }
 
-let lastDownloadName = '';
-ipcMain.on('desktop:download-name', (event, name) => {
-  lastDownloadName = String(name || '').replace(/[\\/:*?"<>|]/g, '_');
-});
+// 내려받을 파일의 이름과 묶음 폴더를 차례대로 기억해 둔다.
+// 한 칸에만 기억하면, 체크한 리포트 여러 건을 연달아 추출할 때 앞 파일의 저장 창이 떠 있는 동안
+// 뒤 파일들의 이름이 서로 덮어써져 저장 창에 이름이 비거나 엉뚱한 이름이 들어갔다
+const pendingDownloads = [];
+const DOWNLOAD_NOTE_MAX_AGE = 10 * 60 * 1000;
 // 엑셀 저장 시 파일을 넣을 묶음 폴더 이름(날짜_사업장명_#배출구). 화면에서 내려받기 직전에 알려 준다
-let lastDownloadFolder = '';
+let nextDownloadFolder = '';
 ipcMain.on('desktop:download-folder', (event, name) => {
-  lastDownloadFolder = String(name || '').replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '').trim();
+  nextDownloadFolder = String(name || '').replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '').trim();
 });
+// 내려받기 링크를 누르는 순간 파일 이름을 알려 준다 (폴더 이름은 그 바로 앞에 온다)
+ipcMain.on('desktop:download-name', (event, name) => {
+  const now = Date.now();
+  while (pendingDownloads.length > 0 && now - pendingDownloads[0].at > DOWNLOAD_NOTE_MAX_AGE) pendingDownloads.shift();
+  pendingDownloads.push({ name: String(name || '').replace(/[\\/:*?"<>|]/g, '_'), folder: nextDownloadFolder, at: now });
+  nextDownloadFolder = '';
+});
+// 이번 내려받기에 맞는 기억을 꺼낸다: 이름이 그대로 전해졌으면 같은 이름의 것, 아니면 가장 먼저 기억한 것
+const takeDownloadNote = (reported) => {
+  const valid = Boolean(reported) && reported !== 'download' && reported.includes('.');
+  let index = valid ? pendingDownloads.findIndex((entry) => entry.name === reported) : 0;
+  if (index < 0) index = 0;
+  const [entry] = pendingDownloads.splice(index, 1);
+  return { fileName: valid ? reported : ((entry && entry.name) || reported), folderName: (entry && entry.folder) || '' };
+};
 // 묶음 폴더를 만들 상위 위치: 설정 창에서 고른 폴더, 고르지 않았으면 다운로드 폴더
 const exportBaseFile = () => path.join(app.getPath('userData'), 'export-base.json');
 const readExportBase = () => {
@@ -228,10 +244,7 @@ app.whenReady().then(() => {
   session.defaultSession.on('will-download', (event, item) => {
     try {
       const reported = item.getFilename();
-      const fileName = (!reported || reported === 'download' || !reported.includes('.')) && lastDownloadName ? lastDownloadName : reported;
-      lastDownloadName = '';
-      const folderName = lastDownloadFolder;
-      lastDownloadFolder = '';
+      const { fileName, folderName } = takeDownloadNote(reported);
       // 묶음 폴더(날짜_사업장명_#배출구)를 미리 만들어 저장 창이 그 안에서 열리게 한다
       let targetDir = readExportBase();
       let createdDir = '';
