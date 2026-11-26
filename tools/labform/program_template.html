@@ -140,6 +140,7 @@ function evaluate(c, raw, permit) { // 기록부 결과 수식과 같은 규칙
 function mdlValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).mdl : c.mdl; } return c.mdl; }
 function loqValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).loq : c.loq; } return c.loq; }
 
+function fmtLab(v) { const n = num(v); return n === null ? String(v) : String(Number(n.toPrecision(3))); }
 function checks(c) {
   const out = []; const R = c.ref || {};
   const calc = Number(c.calc), final = Number(c.final);
@@ -154,12 +155,23 @@ function checks(c) {
   if (mdl !== null) {
     out.push(sig(mdl) <= 2 ? ['ok', `방법검출한계 유효숫자 ${sig(mdl)}개`, RULES.sig] : ['bad', `방법검출한계 유효숫자 ${sig(mdl)}개 (2개 이하)`, RULES.sig]);
     if (decimals(mdl) > final) out.push(['warn', `방법검출한계 소수 ${decimals(mdl)}자리 > 최종 ${final}자리 → 판정은 ${decimals(mdl)}자리로 하고 표시는 ${final}자리`, RULES.nd]);
-    if (R.mdl != null) out.push(mdl <= R.mdl + 1e-12 ? ['ok', `방법검출한계 ${mdl} ≤ 원문 제시값 ${R.mdl}`, `ES ${R.code} · ${RULES.ref_mdl}`] : ['bad', `방법검출한계 ${mdl} > 원문 제시값 ${R.mdl}`, `ES ${R.code} · ${RULES.ref_mdl}`]);
+  }
+  // 공정시험기준 칸 = 원문 제시값 (불검출 판정에 쓰는 칸)
+  if (!c.linked) {
+    if (R.mdl != null) out.push(mdl !== null && Math.abs(mdl - R.mdl) < 1e-12 ? ['ok', `공정시험기준 방법검출한계 ${mdl} = 원문 ${R.mdl}`, `ES ${R.code}`] : ['bad', `공정시험기준 방법검출한계 ${esc(c.mdl)} ≠ 원문 ${R.mdl}`, `ES ${R.code}`]);
+    else if (R.code) out.push(['warn', `원문에 방법검출한계 제시값 없음`, `ES ${R.code}`]);
+    if (R.range_low != null) out.push(loq !== null && Math.abs(loq - R.range_low) < 1e-12 ? ['ok', `공정시험기준 정량한계 ${loq} = 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`] : ['bad', `공정시험기준 정량한계 ${esc(c.loq)} ≠ 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`]);
   }
   if (loq !== null) {
     out.push(sig(loq) <= 2 ? ['ok', `정량한계 유효숫자 ${sig(loq)}개`, RULES.sig] : ['bad', `정량한계 유효숫자 ${sig(loq)}개 (2개 이하)`, RULES.sig]);
     if (mdl) { const k = loq / mdl; out.push(k >= 2.5 && k <= 4 ? ['ok', `정량한계/방법검출한계 = ${k.toFixed(2)}`, RULES.ratio] : ['warn', `정량한계/방법검출한계 = ${k.toFixed(2)} (이론 3.18)`, RULES.ratio]); }
-    if (R.range_low != null) out.push(Math.abs(loq - R.range_low) < 1e-12 ? ['ok', `정량한계 ${loq} = 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`] : ['warn', `정량한계 ${loq} ${loq < R.range_low ? '<' : '>'} 원문 정량범위 하한 ${R.range_low}${loq < R.range_low ? ' (시험법 검증 범위보다 낮음 — 실험실 검증 자료 확인)' : ''}`, `ES ${R.code}`]);
+  }
+  // 시험 기초자료(실험실 측정값) ≤ 원문 제시값
+  for (const [v, refv, nm] of [[c.lab_mdl, R.mdl, '방법검출한계'], [c.lab_loq, R.range_low, '정량한계']]) {
+    if (refv == null || v === undefined) continue;
+    const n = num(v);
+    if (n === null || n === 0) out.push(['warn', `시험 기초자료 ${nm}가 비어 있음`, `ES ${R.code}`]);
+    else out.push(n <= refv + 1e-12 ? ['ok', `시험 기초자료 ${nm} ${Number(n.toPrecision(4))} ≤ 원문 ${refv}`, `ES ${R.code} · ${RULES.ref_mdl}`] : ['bad', `시험 기초자료 ${nm} ${Number(n.toPrecision(4))} > 원문 ${refv}`, `ES ${R.code} · ${RULES.ref_mdl}`]);
   }
   const u = String(c.unit || '').toLowerCase().replace(/³/g, '3').replace(/\s/g, '');
   if (!u) out.push(['warn', '단위가 비어 있음', RULES.unit]);
@@ -191,7 +203,7 @@ function render() {
     const worst = level(rs.flatMap(r => checks(cur(r))));
     const isOpen = openSet.has(file) || q || flt !== 'all' || window.__expandAll;
     html.push(`<section class="file ${isOpen ? '' : 'closed'}" data-file="${esc(file)}"><div class="fh"><span class="b ${worst}">${worst === 'ok' ? '맞음' : worst === 'warn' ? '확인' : '틀림'}</span><span class="name">${esc(file.replace(/\.xls[xm]$/, ''))}</span><span class="sub">${rs.length}줄 · ${[...new Set(rs.map(r => r.item))].slice(0, 6).join(', ')}${rs.length > 6 ? ' …' : ''}</span></div><div class="body"><table>
-      <thead><tr><th>물질</th><th>공정시험기준</th><th>계산<br>자릿수</th><th>최종<br>자릿수</th><th>판정<br>자릿수</th><th>방법<br>검출한계</th><th>정량한계</th><th>단위</th><th>원문 대조</th><th>비고</th></tr></thead><tbody>`);
+      <thead><tr><th>물질</th><th>공정시험기준</th><th>계산<br>자릿수</th><th>최종<br>자릿수</th><th>판정<br>자릿수</th><th>방법<br>검출한계</th><th>정량한계</th><th>시험 기초자료<br>(실험실 측정)</th><th>단위</th><th>원문 대조</th><th>비고</th></tr></thead><tbody>`);
     for (const r of shown) {
       const c = cur(r), cs = checks(c), k = key(r), ow = owner(r), follower = ow.row !== r.row;
       const ch = f => (edits[k] && f in edits[k] && String(edits[k][f]) !== String(r[f] ?? '')) ? 'changed' : '';
@@ -203,6 +215,7 @@ function render() {
         <td class="judge">${judgeDigits(c)}자리</td>
         <td>${c.linked ? `<input class="num" disabled value="${esc(mdlValue(c))}" title="다른 시트와 같은 값을 씁니다">` : `<input class="num ${ch('mdl')}" data-f="mdl" value="${esc(c.mdl)}">`}</td>
         <td>${c.linked ? `<input class="num" disabled value="${esc(loqValue(c))}">` : `<input class="num ${ch('loq')}" data-f="loq" value="${esc(c.loq)}">`}</td>
+        <td class="judge" title="기록부의 시험 기초자료 칸 값 (기록부마다 실험실이 적는 값, 여기서는 고치지 않음)">${c.lab_mdl != null ? '검출 ' + esc(fmtLab(c.lab_mdl)) : '-'}<br>${c.lab_loq != null ? '정량 ' + esc(fmtLab(c.lab_loq)) : ''}</td>
         <td><input class="unit ${ch('unit')}" data-f="unit" value="${esc(c.unit)}"></td>
         <td><div class="badges">${cs.filter(x => x[0] !== 'ok').map(x => `<span class="b ${x[0]}" title="${esc(x[2])}">${esc(x[1])}</span>`).join('') || `<span class="b ok" title="${cs.length}가지 모두 맞음">모두 맞음 (${cs.length})</span>`}</div></td>
         <td class="note">${esc(c.note || '')}</td></tr>`);
@@ -215,7 +228,7 @@ function render() {
 function detailRow(r, c, cs) {
   const R = c.ref || {}; const k = key(r); const t = (window.__try || {})[k] || {};
   const ev = evaluate(c, t.raw, t.permit);
-  return `<tr class="detail" data-k="${esc(k)}"><td colspan="10"><div class="detail-box">
+  return `<tr class="detail" data-k="${esc(k)}"><td colspan="11"><div class="detail-box">
     <div><b>원문 대조</b>${R.code ? ` <span class="sub">ES ${esc(R.code)}${R.via ? ' (→ ES ' + esc(R.via) + ')' : ''}${R.text ? ' · 「' + esc(R.text) + '…」' : ''}</span>` : ''}
       <ul class="checks">${cs.map(x => `<li><span class="b ${x[0]}">${x[0] === 'ok' ? '맞음' : x[0] === 'warn' ? '확인' : '틀림'}</span> ${esc(x[1])}<div class="basis">${esc(x[2])}</div></li>`).join('')}</ul></div>
     <div class="try"><b>시험해 보기</b> <span class="sub">— 기록부 결과 수식과 같은 규칙</span><div style="margin-top:6px">

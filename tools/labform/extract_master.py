@@ -72,6 +72,21 @@ def nd_compares(f):
     return out
 
 
+def lab_basic(ws):
+    """시험 기초자료(실험실이 측정한 방법검출한계·정량한계): '시험 기초자료' 줄 근처 머리 칸 바로 아래 값"""
+    out = {}
+    for row in ws.iter_rows(max_row=min(ws.max_row, 60), max_col=4):
+        for c in row:
+            if norm(c.value).startswith('시험기초자료'):
+                for rr in range(c.row, c.row + 3):
+                    for cc in range(3, 15):
+                        h = norm(ws.cell(rr, cc).value)
+                        if ('검출한계' in h or '정량한계' in h) and '방법바탕' not in h:
+                            out['lab_mdl' if '검출' in h else 'lab_loq'] = ws.cell(rr + 1, cc).value
+                return out
+    return out
+
+
 def item_of(ws):
     for r in range(1, 12):
         if norm(ws.cell(r, 2).value) == '시험항목':
@@ -88,6 +103,9 @@ def digits_of(formula, cell):
     return len(m.group(1)) if m else None
 
 
+LAB = [{}]
+
+
 def scan(path):
     wb = openpyxl.load_workbook(path)
     out = []
@@ -95,6 +113,7 @@ def scan(path):
         if ws.sheet_state != 'visible' or '시험기록부' not in norm(ws['A1'].value):
             continue
         item, item_cell = item_of(ws)
+        LAB[0] = lab_basic(ws)
         method = label_right(ws, {'시험방법'})
         for row in ws.iter_rows(max_row=min(ws.max_row, 80)):
             for c in row:
@@ -128,7 +147,7 @@ def scan(path):
                     limit_cell=f'{CL(lim[1])}{lim[0]}' if lim else None,
                     unit=(unit or '').strip(), method_cell=f'{CL(method[1])}{method[0]}' if method else None,
                     method=str(ws.cell(*method).value or '').strip() if method else '',
-                    final_digits=digits_of(v, c), excess=excess))
+                    final_digits=digits_of(v, c), excess=excess, **LAB[0]))
         # 불검출 수식이 없는 양식(먼지 등): "측정결과" 칸에 같은 기준을 건다
         if not any(o['sheet'] == ws.title for o in out):
             res = label_right(ws, {'측정결과'})
@@ -150,7 +169,7 @@ def scan(path):
                         limit_cell=None, unit=str(ws.cell(mdl[0], mdl[1] + 1).value or '').strip(),
                         method_cell=f'{CL(method[1])}{method[0]}' if method else None,
                         method=str(ws.cell(*method).value or '').strip() if method else '',
-                        final_digits=len(fmt.group(1)) if fmt else 0, excess=False, synthetic=True))
+                        final_digits=len(fmt.group(1)) if fmt else 0, excess=False, synthetic=True, **LAB[0]))
     return out
 
 

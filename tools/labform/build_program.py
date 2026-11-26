@@ -7,7 +7,7 @@ import sys, os, json, base64, glob, datetime
 VERSION = '1.0.0'
 golden, master, jszip, out = sys.argv[1:5]
 rows = json.load(open(master, encoding='utf8'))
-keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref']
+keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'lab_mdl', 'lab_loq']
 data = [{k: r.get(k) for k in keep} for r in rows]
 files = {}
 for p in sorted(glob.glob(os.path.join(golden, '*.xls*'))):
@@ -19,7 +19,7 @@ RULES = {
     'unit': '총칙 ES 01000.b 2.14.1 — 가스상 ppm(μmol/mol)·ppb(nmol/mol), 입자상 mg/Sm³·μg/Sm³·ng/Sm³',
     'sig': '정도보증 ES 01001.b 4.3.4.4 — 방법검출한계·정량한계는 유효숫자 2개 이하로 표기',
     'ratio': '정도보증 ES 01001.b 4.3.2·4.3.3 — 방법검출한계 = 표준편차 × 3.14, 정량한계 = 표준편차 × 10 (비 ≈ 3.18)',
-    'ref_mdl': '각 시험법 6.1 — 측정한 방법검출한계는 시험방법에서 제시한 값 이하이어야 한다',
+    'ref_mdl': '각 시험법 6.1 — 측정한 방법검출한계는 시험방법에서 제시한 값 이하이어야 한다 (시험 기초자료). 공정시험기준 칸은 원문 제시값과 같아야 함',
 }
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'program_template.html'), encoding='utf8').read()
 html = (html.replace('/*__JSZIP__*/', open(jszip, encoding='utf8').read())

@@ -86,7 +86,7 @@ def check(r):
     return res
 
 
-SYMBOL = {'구리': 'Cu', '납': 'Pb', '아연': 'Zn', '크롬': 'Cr', '크로뮴': 'Cr', '니켈': 'Ni', '카드뮴': 'Cd', '베릴륨': 'Be', '비소': 'As', '수은': 'Hg'}
+SYMBOL = {'크로뮴': 'Cr', '구리': 'Cu', '납': 'Pb', '아연': 'Zn', '크롬': 'Cr', '크로뮴': 'Cr', '니켈': 'Ni', '카드뮴': 'Cd', '베릴륨': 'Be', '비소': 'As', '수은': 'Hg'}
 ALIAS = {'클로로포름': '클로로폼', '염화비닐': '염화바이닐', '1,3-부타디엔': '1.3-뷰타다이엔', '디클로로메탄': '다이클로로메테인',
          '트리클로로에틸렌': '트라이클로로에틸렌', '불소화합물': '플루오린화합물', '브롬화합물': '브로민화합물', '시안화수소': '사이안화수소',
          '포름알데히드': '폼알데하이드', '아세트알데히드': '아세트알데하이드'}
@@ -110,6 +110,27 @@ def ref_for(r, refs):
     return None, None, ''
 
 
+def ref_values(r, ref):
+    """원문에서 이 물질의 제시 방법검출한계(pick)와 정량범위 하한"""
+    item = r.get('item', '')
+    key = ALIAS.get(item, item)
+    sym = next((v for k, v in SYMBOL.items() if k in item), None)
+    m = [x for x in ref['mdl'] if x.get('value') is not None]
+    pick = None
+    if sym:
+        pick = next((x for x in m if x['name'] == sym), None)
+    if pick is None and len({x['value'] for x in m}) > 1:
+        pick = next((x for x in m if key[:3] in x['name'] or item[:3] in x['name']), None)
+    if pick is None and m:
+        pick = m[0]
+    # 정량범위는 본문(1.2 적용범위 등)에 있을 때만 쓴다 — 부록 요약표에만 있는 값(총탄화수소)은 쓰지 않는다
+    rg = [x for x in ref['range'] if (not sym or x.get('name') in (None, sym)) and x.get('where', '본문') == '본문']
+    low = rg[0]['low'] if rg and rg[0].get('low') else None
+    if ref.get('range') and all((x.get('high') or 0) >= 1000 and (x.get('low') or 0) == 0 for x in ref['range']):
+        low = None      # 자동측정법 "(0 ∼ 1 000) ppm"은 측정범위라 정량범위 하한으로 보지 않는다
+    return pick, low
+
+
 def check_ref(r, refs):
     """원문과 대조: 자릿수, 제시 방법검출한계, 정량범위, 단위, 버전"""
     res = []
@@ -125,32 +146,33 @@ def check_ref(r, refs):
         res.append(('맞음' if ok else '틀림', f'원문: {d["unit"]} 계산 {d["calc"]}·표기 {d["final"]}자리 / 기준표: 계산 {r.get("calc")}·최종 {r.get("final")}자리', f'{src} 「{d["text"][:70]}…」'))
     else:
         res.append(('확인', '원문에서 결과 자릿수 문장을 찾지 못함', src))
-    item = r.get('item', '')
-    key = ALIAS.get(item, item)
-    sym = next((v for k, v in SYMBOL.items() if k in item), None)
-    m = [x for x in ref['mdl'] if x.get('value') is not None]
-    pick = None
-    if sym:
-        pick = next((x for x in m if x['name'] == sym), None)
-    if pick is None and len({x['value'] for x in m}) > 1:
-        pick = next((x for x in m if key[:3] in x['name'] or item[:3] in x['name']), None)
-    if pick is None and m:
-        pick = m[0]
-    mdl = num(r.get('mdl'))
-    if pick and mdl is not None:
-        ok = mdl <= pick['value'] + 1e-12
-        res.append(('맞음' if ok else '틀림', f'실험실 방법검출한계 {mdl:g} {"≤" if ok else ">"} 원문 제시값 {pick["value"]:g} {pick["unit"]}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
-    elif not m:
-        res.append(('확인', '원문에 제시 방법검출한계 없음 (자동측정법 등)', src))
-    rg = [x for x in ref['range'] if (not sym or x.get('name') in (None, sym))]
-    loq = num(r.get('loq'))
-    if rg and loq is not None and rg[0].get('low'):
-        lo = rg[0]['low']
-        if abs(loq - lo) < 1e-12:
-            res.append(('맞음', f'정량한계 {loq:g} = 원문 정량범위 하한 {lo:g} {rg[0]["unit"]}', src))
+    pick, rg_low = ref_values(r, ref)
+    mdl, loq = num(r.get('mdl')), num(r.get('loq'))
+    linked = str(r.get('mdl', '')).startswith('=')
+    # 공정시험기준 칸 = 원문 제시값과 같아야 한다 (불검출 판정에 쓰는 칸)
+    if pick and not linked:
+        if mdl is not None and abs(mdl - pick['value']) < 1e-12:
+            res.append(('맞음', f'공정시험기준 방법검출한계 {mdl:g} = 원문 {pick["value"]:g} {pick["unit"]}', src))
         else:
-            res.append(('확인', f'정량한계 {loq:g} {"<" if loq < lo else ">"} 원문 정량범위 하한 {lo:g} {rg[0]["unit"]}'
-                        + (' → 시험법이 검증한 범위보다 낮음, 실험실 검증 자료 확인' if loq < lo else ''), src))
+            res.append(('틀림', f'공정시험기준 방법검출한계 {r.get("mdl")} ≠ 원문 {pick["value"]:g} {pick["unit"]}', src))
+    elif not pick and not linked:
+        res.append(('확인', f'원문에 방법검출한계 제시값 없음 (공정시험기준 칸 {r.get("mdl")})', src))
+    if rg_low is not None and not linked:
+        if loq is not None and abs(loq - rg_low) < 1e-12:
+            res.append(('맞음', f'공정시험기준 정량한계 {loq:g} = 원문 정량범위 하한 {rg_low:g}', src))
+        else:
+            res.append(('틀림', f'공정시험기준 정량한계 {r.get("loq")} ≠ 원문 정량범위 하한 {rg_low:g}', src))
+    # 시험 기초자료(실험실 측정값) ≤ 원문 제시값
+    for k, lab, refv, nm in (('lab_mdl', num(r.get('lab_mdl')), pick['value'] if pick else None, '방법검출한계'),
+                             ('lab_loq', num(r.get('lab_loq')), rg_low, '정량한계')):
+        if refv is None or k not in r:
+            continue
+        if lab is None or lab == 0:
+            res.append(('확인', f'시험 기초자료 {nm}가 비어 있음 ({r.get(k)!r})', src))
+        elif lab <= refv + 1e-12:
+            res.append(('맞음', f'시험 기초자료 {nm} {lab:.4g} ≤ 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
+        else:
+            res.append(('틀림', f'시험 기초자료 {nm} {lab:.4g} > 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
     u = str(r.get('unit', '')).lower().replace('³', '3').replace(' ', '')
     ru = (ref['digits'][0]['unit'] if ref['digits'] and ref['digits'][0]['unit'] else (pick or {}).get('unit', '')).lower().replace('³', '3')
     if u and ru:

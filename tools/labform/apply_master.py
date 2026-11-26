@@ -317,9 +317,24 @@ def link_o2(b, permits, log):
                     log.append(f'{tgt[0]}!{tgt[1]}: 표준산소 = {sh_p}!{P}의 괄호 안 숫자 (원래 {tv!r})')
 
 
+# 물질별로 사용자가 정한 시험방법 (ES 번호 바꾸기): 트라이클로로에틸렌은 ES 01511.1d로 통일 (0.03/0.1과 같은 원문)
+METHOD_CHOICE = {'트라이클로로에틸렌': ('01514.1d', '01511.1d')}
+TITLES = {}
+
+
 def apply(path, items, dst):
     PERMITS.clear(); DXF[0] = None
     b = Book(path)
+    import names as NM
+    nrep = NM.rename_book(b)        # 물질 이름을 공정시험기준 표기로 (글자·수식·시트 이름·이름 정의까지)
+    for it in items:
+        for k in ('item', 'sheet', 'method', 'formula'):
+            if isinstance(it.get(k), str):
+                it[k] = NM.rename_text(it[k])
+        for k in ('mdl', 'loq'):
+            if isinstance(it.get(k), str):
+                it[k] = NM.rename_text(it[k])
+        it['compares'] = [[NM.rename_text(x) if isinstance(x, str) else x for x in c] for c in it['compares']]
     # 한 줄 = (시트, 방법검출한계 칸) 묶음
     groups = []
     for it in items:
@@ -355,7 +370,14 @@ def apply(path, items, dst):
                          method=it['method'], calc=final + 1, final=final, mdl=mdl, loq=loq if g['loq_cell'] else '',
                          unit=it['unit'] or ('ppm' if 'SOx' in it['sheet'] else ''), note=' · '.join(note),
                          mdl_cell=g['mdl_cell'], loq_cell=g['loq_cell'], method_cell=g['method_cell'], results=g['results'],
-                         method_row=method_owner[g['sheet']][g['method_cell']], linked=bool(linked)))
+                         method_row=method_owner[g['sheet']][g['method_cell']], linked=bool(linked),
+                         lab_mdl=it.get('lab_mdl'), lab_loq=it.get('lab_loq')))
+    # 사용자가 정한 시험방법 (트라이클로로에틸렌 → ES 01511.1d)
+    for r in rows:
+        ch = METHOD_CHOICE.get(r['item'])
+        if ch and ch[0] in r['method']:
+            r['method'] = re.sub(r'ES\s*' + re.escape(ch[0]) + r'[^)\n]*', f'ES {ch[1]}', r['method'])
+            r['note'] = ' · '.join(filter(None, [r['note'], f'시험방법을 ES {ch[1]}로 (공정시험기준 칸 값과 같은 원문, 사용자 결정)']))
     # ES 번호 띄어쓰기 오타: "ES 01409. 2" → "ES 01409.2"
     for r in rows:
         fixed_m = re.sub(r'(ES\s*\d{5}\.)\s+(\w)', r'\1\2', r['method'])
@@ -392,6 +414,12 @@ def apply(path, items, dst):
                     r['method'] = r['method'].replace(old.group(0), f'ES {code}')
             if fixed:
                 r['note'] = ' · '.join(filter(None, [r['note'], '원문 대조로 고침: ' + '; '.join(fixed)]))
+    if TITLES:
+        import names as NM2
+        for r in rows:
+            nm = NM2.fix_method(r['method'], TITLES)
+            if nm != r['method']:
+                r['method'] = nm
     add_sheet(b, rows)
     log = []
     for r in rows:
@@ -428,6 +456,8 @@ REFS = {}
 
 if __name__ == '__main__':
     src, dst, master = sys.argv[1], sys.argv[2], sys.argv[3]
+    import names as NM
+    TITLES.update(NM.official_titles(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work', 'ref_zip')))
     rp = os.path.join(os.path.dirname(os.path.abspath(master)), 'ref_rules.json')
     if os.path.exists(rp):
         REFS.update(json.load(open(rp, encoding='utf8')))
@@ -440,12 +470,16 @@ if __name__ == '__main__':
             print('--', os.path.basename(p), '불검출 수식 없음 (기준 시트만 없이 그대로 복사)')
             import shutil; shutil.copy(p, dst)
             continue
-        rows, log = apply(p, items, os.path.join(dst, os.path.basename(p)))
+        import names as NM
+        base = os.path.basename(p)
+        for a_, b_ in NM.FILE_MAP.items():
+            base = base.replace(f'_{a_}.', f'_{b_}.')
+        rows, log = apply(p, items, os.path.join(dst, base))
         print('ok', os.path.basename(p), f'기준 {len(rows)}줄')
         for l in log:
             if '표준산소' in l or '허가배출기준' in l:
                 print('    ', l)
         for r in rows:
-            allrows.append({k: v for k, v in r.items() if k != 'results'} | {'file': os.path.basename(p)})
+            allrows.append({k: v for k, v in r.items() if k != 'results'} | {'file': base})
     json.dump(allrows, open(master, 'w', encoding='utf8'), ensure_ascii=False, indent=1, default=str)
     print(len(allrows), '기준 줄')
