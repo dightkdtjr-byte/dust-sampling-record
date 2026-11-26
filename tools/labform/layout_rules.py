@@ -2,7 +2,7 @@
 #
 #  정렬 (세로는 모두 가운데)
 #   · 번호 칸, 항목명 칸, 회색 머리 칸, 표 안의 값          → 가로 가운데
-#   · 기본 정보의 내용 칸(시험항목 ~ 검정곡선 작성), 기호 설명("C : …"), 긴 설명 글 → 왼쪽 (세 글자 이하 단위 칸은 가운데)
+#   · 기본 정보의 내용 칸(시험항목 ~ 검정곡선 작성), 기호 설명("C : …"), "*"로 시작하는 주석, 긴 설명 글 → 왼쪽 (세 글자 이하 단위 칸은 가운데)
 #   · 계산식 칸에 직접 쓴 수식(분수 모양 등)은 배치를 그대로 둔다
 #   · 한 줄 전체를 차지하는 항목 머리                       → 왼쪽
 #   · 도형(그래프 등) 위에 얹은 글자 칸은 도형에 맞춰 놓은 것이라 그대로 둔다
@@ -191,7 +191,7 @@ def align(b, sheet, area, ws=None):
                     h = 'left'
                 else:
                     continue
-            elif not v.startswith('=') and (LEGEND.match(v) or '\n' in v.strip() or len(v) > 25):
+            elif not v.startswith('=') and (LEGEND.match(v) or v.strip().startswith('*') or '\n' in v.strip() or len(v) > 25):
                 h = 'left'
             else:
                 h = 'center'

@@ -265,7 +265,8 @@ class Layout:
             return True
         fill = [r for r in range(a, e + 1) if self.row_empty(r) and H[r] >= 45]
         room = sum(H[r] for r in fill) * 0.35
-        loose = [r for r in range(a, e + 1) if r not in fill and H[r] >= 26 and r not in (self.r1, self.r1 + 1)]
+        loose = [r for r in range(a, e + 1) if r not in fill and H[r] >= 26 and r not in (self.r1, self.r1 + 1)
+                 and r not in getattr(self, 'tight', set())]   # 글자가 꽉 찬 줄은 줄이지 않는다
         room2 = sum(H[r] for r in loose) * 0.03
         if over > room + room2:
             return False

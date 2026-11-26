@@ -347,6 +347,7 @@ def fit_cells(lay):
     S = Styles(b)
     measure = lambda t, sz, bold: text_px(t, sz, bold, False)
     wraps, size_fix, shrink, rotate = [], {}, {}, {}
+    lay.tight = getattr(lay, 'tight', set())
     s_xml = b.sx(sheet)
     for r in range(lay.r1, lay.r2 + 1):
         for c in range(lay.c1, lay.c2 + 1):
@@ -414,6 +415,8 @@ def fit_cells(lay):
             if need > 1 and not cell.alignment.wrap_text:
                 wraps.append(ref)
             want = need * size * LINE + 4
+            if want >= avail - 3:
+                lay.tight |= set(range(top, bot + 1))      # 글자가 꽉 찬 줄: 쪽 맞춤에서 줄이지 않는다
             if want > avail + 0.5:
                 lay.h[bot] = round(lay.h[bot] + want - avail, 2)
                 lay.notes.append(f'{ref} {need}줄이 들어가게 {bot}행 +{want - avail:.1f}pt')
@@ -462,10 +465,12 @@ def wrap_errors(b, sheet, refs):
     """원본을 다시 계산했을 때 오류(#REF!, #DIV/0! 등)가 나는 수식을 IFERROR(…,"")로 감싸 빈칸으로 보이게"""
     s = b.sx(sheet); n = 0
     for ref in refs:
-        m = re.search(rf'(<c r="{ref}"[^>]*>)<f>([^<]*)</f>', s)
-        if not m or m.group(2).startswith('IFERROR('):
+        # <f ca="1"> 처럼 속성이 붙은 수식(INDIRECT 등)도. 남아 있던 오류 표시값(t="e", <v>#REF!</v>)은 지운다
+        m = re.search(rf'(<c r="{ref}"[^>]*?)(/?)>(?:<f([^>]*)>([^<]*)</f>)(<v>[^<]*</v>)?', s)
+        if not m or m.group(2) or m.group(4).startswith('IFERROR('):
             continue
-        s = s[:m.start()] + m.group(1) + f'<f>IFERROR({m.group(2)},"")</f>' + s[m.end():]
+        head = re.sub(r'\s+t="e"', '', m.group(1))
+        s = s[:m.start()] + head + '>' + f'<f{m.group(3)}>IFERROR({m.group(4)},"")</f>' + s[m.end():]
         n += 1
     b.setsx(sheet, s)
     return n
