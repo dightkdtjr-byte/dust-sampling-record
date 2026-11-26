@@ -84,8 +84,17 @@ def add_sheet(b, rows):
 # ── 수식 바꾸기 ──
 def set_formula(b, sheet, ref_, formula, shrink=True):
     b.setf(sheet, ref_, formula)
-    if not shrink:
-        return      # 시험방법처럼 글자가 옆 빈칸으로 이어져 보여야 하는 칸은 셀에 맞춤을 켜지 않는다
+    if shrink == 'auto' and sheet in b.wb.sheetnames:
+        # 글자 결과 칸(시험방법): 옆 빈칸으로 이어져 보일 수 있으면 셀에 맞춤을 켜지 않는다 (content_rules.fit_cells와 같은 조건)
+        ws = b.wb[sheet]; c = ws[ref_]
+        merged = any(ref_ in g for g in ws.merged_cells.ranges)
+        nxt = ws.cell(c.row, c.column + 1)
+        spill = (not merged and c.alignment.horizontal in (None, 'general', 'left') and nxt.value is None
+                 and not any(nxt.coordinate in g for g in ws.merged_cells.ranges))
+        if spill:
+            return
+    elif not shrink:
+        return
     # 새 수식 칸도 날짜·숫자 칸처럼 "셀에 맞춤" (줄바꿈 칸은 그대로) — 기록부 시트만
     if sheet in b.wb.sheetnames and '시험기록부' in str(b.wb[sheet]['A1'].value or '').replace(' ', ''):
         return _shrink(b, sheet, ref_)
@@ -147,7 +156,8 @@ def rewrite(f, compares, row, permit=None):
         L, _ = OX.permit_exprs(permit)
         Rsel = OX.selected_value(ORIG[0], Rs)
         Vsel = f'ROUND(ROUND({num_part(Rsel)},{calc}),{final})'
-        f = f'{f}&IF(AND(ISNUMBER({L}),{Vsel}>{L})," (초과)","")'
+        # 불검출이면 "(초과)"를 붙이지 않는다 (허가배출기준이 검출한계보다 작게 적힌 경우 등)
+        f = f'IF(({f})="불검출","불검출",({f})&IF(AND(ISNUMBER({L}),{Vsel}>{L})," (초과)",""))'
     return f'IFERROR(IF({blank},"",{f}),"")'
 
 
@@ -185,6 +195,35 @@ def permit_cell(ws, it):
     if not best:
         return None
     return f'{CL(best[1][1])}{best[1][0]}'
+
+
+def mirror_red(b, rows, log):
+    """결과 칸을 가져와 보여 주는 칸(요약 시트의 INDIRECT(…'!D17') 등)에도 빨간 "초과" 서식, 원래 있던 "초과" 서식은 같은 빨간 서식으로"""
+    if DXF[0] is None:
+        DXF[0] = OX.red_dxf(b)
+    res = {(r['sheet'], x) for r in rows for x in r['result'].split(', ')}
+    cols = {x for _, x in res}
+    for ws in b.wb.worksheets:
+        if ws.sheet_state != 'visible':
+            continue
+        for row in ws.iter_rows():
+            for c in row:
+                v = c.value
+                if not (isinstance(v, str) and v.startswith('=')) or (ws.title, c.coordinate) in res:
+                    continue
+                hit = any(re.search(rf"!\$?{re.escape(re.sub(r'(\d+)', r'$?\1', x))}(?![\d])", v, re.I) or f"!{x.lower()}\")" in v.lower() for x in cols)
+                if hit and ('INDIRECT' in v.upper() or any(f"{OX.q(sh)}!{x}" in v or f"{sh}!{x}" in v for sh, x in res)):
+                    OX.add_red_rule(b, ws.title, c.coordinate, DXF[0])
+                    log.append(f'{ws.title}!{c.coordinate}: 결과를 가져와 보여 주는 칸에도 빨간 초과 서식')
+    for ws in b.wb.worksheets:
+        part = b.sheets.get(ws.title)
+        if not part or part not in b.parts:
+            continue
+        x = b.text(part)
+        y = re.sub(r'(<cfRule\b[^>]*?)dxfId="\d+"([^>]*text="초과")', lambda m: f'{m.group(1)}dxfId="{DXF[0]}"{m.group(2)}', x)
+        if y != x:
+            b.put(part, y)
+            log.append(f'{ws.title}: 원래 있던 "초과" 서식을 같은 빨간 서식으로')
 
 
 def link_o2(b, permits, log):
@@ -317,6 +356,12 @@ def apply(path, items, dst):
                          unit=it['unit'] or ('ppm' if 'SOx' in it['sheet'] else ''), note=' · '.join(note),
                          mdl_cell=g['mdl_cell'], loq_cell=g['loq_cell'], method_cell=g['method_cell'], results=g['results'],
                          method_row=method_owner[g['sheet']][g['method_cell']], linked=bool(linked)))
+    # ES 번호 띄어쓰기 오타: "ES 01409. 2" → "ES 01409.2"
+    for r in rows:
+        fixed_m = re.sub(r'(ES\s*\d{5}\.)\s+(\w)', r'\1\2', r['method'])
+        if fixed_m != r['method']:
+            r['note'] = ' · '.join(filter(None, [r['note'], f'시험방법 ES 번호 띄어쓰기 오타 고침']))
+            r['method'] = fixed_m
     # 원문 대조: 원문에 결과 자릿수·단위가 있으면 원문 값으로, 시험방법 버전이 원문과 다르면 원문 버전으로
     if REFS:
         import check_master as CM
@@ -356,7 +401,7 @@ def apply(path, items, dst):
             if r['loq_cell']:
                 set_formula(b, sh, r['loq_cell'], ref(r['row'], 'loq'))
         if r['method_cell'] and r['method_row'] == r['row']:
-            set_formula(b, sh, r['method_cell'], ref(r['row'], 'method'), shrink=False)
+            set_formula(b, sh, r['method_cell'], ref(r['row'], 'method'), shrink='auto')
         for it in r['results']:
             ORIG[0] = it['formula'][1:]
             P = permit_cell(b.wb[sh], it)
@@ -367,6 +412,7 @@ def apply(path, items, dst):
                 PERMITS.setdefault(sh, {})[it['result']] = P
             log.append(f"{sh}!{it['result']}: {r['item']} (기준 {r['row']}행){' 허가배출기준 ' + P if P else ''}")
     link_o2(b, PERMITS, log)
+    mirror_red(b, rows, log)
     # 새로 수식을 넣은 칸(표준산소 등)의 정렬을 정렬 기준대로 다시 맞춘다
     from layout_rules import align
     for sh in {r['sheet'] for r in rows}:

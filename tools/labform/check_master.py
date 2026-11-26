@@ -146,7 +146,11 @@ def check_ref(r, refs):
     loq = num(r.get('loq'))
     if rg and loq is not None and rg[0].get('low'):
         lo = rg[0]['low']
-        res.append(('맞음' if loq <= lo + 1e-12 else '확인', f'정량한계 {loq:g} {"≤" if loq <= lo + 1e-12 else ">"} 원문 정량범위 하한 {lo:g} {rg[0]["unit"]}', src))
+        if abs(loq - lo) < 1e-12:
+            res.append(('맞음', f'정량한계 {loq:g} = 원문 정량범위 하한 {lo:g} {rg[0]["unit"]}', src))
+        else:
+            res.append(('확인', f'정량한계 {loq:g} {"<" if loq < lo else ">"} 원문 정량범위 하한 {lo:g} {rg[0]["unit"]}'
+                        + (' → 시험법이 검증한 범위보다 낮음, 실험실 검증 자료 확인' if loq < lo else ''), src))
     u = str(r.get('unit', '')).lower().replace('³', '3').replace(' ', '')
     ru = (ref['digits'][0]['unit'] if ref['digits'] and ref['digits'][0]['unit'] else (pick or {}).get('unit', '')).lower().replace('³', '3')
     if u and ru:

@@ -159,7 +159,7 @@ function checks(c) {
   if (loq !== null) {
     out.push(sig(loq) <= 2 ? ['ok', `정량한계 유효숫자 ${sig(loq)}개`, RULES.sig] : ['bad', `정량한계 유효숫자 ${sig(loq)}개 (2개 이하)`, RULES.sig]);
     if (mdl) { const k = loq / mdl; out.push(k >= 2.5 && k <= 4 ? ['ok', `정량한계/방법검출한계 = ${k.toFixed(2)}`, RULES.ratio] : ['warn', `정량한계/방법검출한계 = ${k.toFixed(2)} (이론 3.18)`, RULES.ratio]); }
-    if (R.range_low != null) out.push(loq <= R.range_low + 1e-12 ? ['ok', `정량한계 ${loq} ≤ 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`] : ['warn', `정량한계 ${loq} > 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`]);
+    if (R.range_low != null) out.push(Math.abs(loq - R.range_low) < 1e-12 ? ['ok', `정량한계 ${loq} = 원문 정량범위 하한 ${R.range_low}`, `ES ${R.code}`] : ['warn', `정량한계 ${loq} ${loq < R.range_low ? '<' : '>'} 원문 정량범위 하한 ${R.range_low}${loq < R.range_low ? ' (시험법 검증 범위보다 낮음 — 실험실 검증 자료 확인)' : ''}`, `ES ${R.code}`]);
   }
   const u = String(c.unit || '').toLowerCase().replace(/³/g, '3').replace(/\s/g, '');
   if (!u) out.push(['warn', '단위가 비어 있음', RULES.unit]);
