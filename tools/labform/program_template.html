@@ -300,6 +300,11 @@ function checks(c) {
     if (ru && u !== ru) out.push(['bad', `원문 단위는 ${chem(R.unit)}`, code, 'digits']);
   }
   const m = String(cur(owner(c)).method || '');   // 공정시험기준 칸을 같이 쓰는 줄은 주인 줄 값으로
+  if (R.code && R.title) { // 시험방법 제목 = 원문 제목 (띄어쓰기·줄바꿈 무시), 한 번만
+    const sq = t => String(t).replace(/\s+/g, ''), mm = m.match(new RegExp('ES\\s*' + R.code.replace('.', '\\.')));
+    if (mm) { const seg = sq(m.slice(mm.index + mm[0].length).split(/ES\s*\d{5}\./)[0]); const t = sq(R.title);
+      out.push(!seg.startsWith(t) ? ['warn', `시험방법 제목이 원문과 다름 (원문: ${esc(R.title)})`, code + ' 첫 쪽'] : seg.split(t).length > 2 || /(\([^()]+\))\1/.test(seg) ? ['bad', '시험방법 제목 뒤에 같은 글이 겹침', code + ' 첫 쪽'] : ['ok', '시험방법 제목 = 원문 제목', code + ' 첫 쪽']); }
+  }
   if (R.code) { const v = (m.match(new RegExp('ES\\s*' + R.code.split('.')[0] + '\\.\\s?(\\w+)')) || [])[1]; if (v && v !== R.code.split('.')[1]) out.push(['bad', `시험방법 판 .${v}, 원문은 .${R.code.split('.')[1]}`, code]); }
   return out;
 }

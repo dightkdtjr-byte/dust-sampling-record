@@ -206,12 +206,39 @@ def check_formulas(golden):
     return out
 
 
+_TT = {}
+
+
+def check_title(r):
+    """시험방법 칸: ES 번호마다 뒤 제목이 원문 제목과 같고(띄어쓰기·줄바꿈 무시) 한 번만 나오는가"""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import names as NM
+    if not _TT:
+        _TT.update(NM.official_titles(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work', 'ref_zip')) or {'_': ''})
+    out = []
+    text = str(r.get('method') or '')
+    sq = lambda t: re.sub(r'\s+', '', t)
+    ms = list(re.finditer(r'ES\s*(\d{5}\.\w+)', text))
+    for n, m in enumerate(ms):
+        t = _TT.get(m.group(1))
+        if not t:
+            continue
+        seg = sq(text[m.end():ms[n + 1].start() if n + 1 < len(ms) else len(text)])     # 이 번호부터 다음 번호 앞까지
+        if not seg.startswith(sq(t)):
+            out.append(('검토', f'ES {m.group(1)} 제목이 원문 제목과 다름 (원문: {t})', '원문 PDF 첫 쪽'))
+        elif seg.count(sq(t)) > 1 or re.search(r'(\([^()]+\))\1', seg):
+            out.append(('부적합', f'ES {m.group(1)} 제목 뒤에 같은 글이 겹침', '원문 PDF 첫 쪽'))
+        else:
+            out.append(('적합', f'ES {m.group(1)} 제목 = 원문 제목', '원문 PDF 첫 쪽'))
+    return out
+
+
 if __name__ == '__main__':
     rows = json.load(open(sys.argv[1], encoding='utf8'))
     refs = json.load(open(os.path.join(os.path.dirname(sys.argv[1]), 'ref_rules.json'), encoding='utf8')) if os.path.exists(os.path.join(os.path.dirname(sys.argv[1]), 'ref_rules.json')) else {}
     total = {'적합': 0, '검토': 0, '부적합': 0}
     for r in rows:
-        res = check(r) + (check_ref(r, refs) if refs else [])
+        res = check(r) + (check_ref(r, refs) if refs else []) + check_title(r)
         if refs:
             code, rf, vnote = ref_for(r, refs)
             if rf:
@@ -219,7 +246,7 @@ if __name__ == '__main__':
                 pk, low = ref_values(r, rf)     # 원문 대조(check_ref)와 같은 값을 프로그램에 넘긴다
                 r['ref'] = dict(code=code, via=rf.get('from'), calc=d.get('calc'), final=d.get('final'), unit=d.get('unit', ''),
                                 text=d.get('text', ''), mdl=(pk or {}).get('value'), mdl_unit=(pk or {}).get('unit', ''),
-                                range_low=low, version_note=vnote)
+                                range_low=low, version_note=vnote, title=(check_title(r) and _TT.get(code)) or None)
         r['checks'] = res
         bad = [x for x in res if x[0] != '적합']
         for x in res:

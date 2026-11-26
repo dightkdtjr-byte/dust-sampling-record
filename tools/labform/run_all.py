@@ -23,6 +23,26 @@ os.makedirs(DST, exist_ok=True)
 CR.OVERWRITE = True
 
 
+_TITLES = {}
+
+
+def fix_titles(b, sheets):
+    import names as NM
+    if not _TITLES:
+        _TITLES.update(NM.official_titles(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work', 'ref_zip')) or {'_': ''})
+    n = 0
+    for sh in sheets:
+        ws = b.wb[sh]
+        for row in ws.iter_rows():
+            for c in row:
+                v = c.value
+                if isinstance(v, str) and not v.startswith('=') and re.search(r'ES\s*\d{5}\.\w', v):
+                    nv = NM.fix_method(NM.rename_text(v), _TITLES)
+                    if nv != v:
+                        b.setv(sh, c.coordinate, nv); c.value = nv; n += 1
+    return n
+
+
 def item_name(path):
     n = os.path.splitext(os.path.basename(path))[0]
     m = re.search(r'시험기록부_([^_]+)', n)
@@ -122,6 +142,10 @@ def run(path):
         k = fix_due(b, sheet)
         if k:
             log.append(f'{sheet}: 시험기한 수식 DAY() 버그 고침 {k}곳')
+    # 시험방법 제목을 원문 제목으로 먼저 고친다 (글자 맞춤·줄바꿈이 고친 글자로 되게)
+    k = fix_titles(b, [sh for sh, _ in forms])
+    if k:
+        log.append(f'시험방법 제목을 원문 제목으로 {k}칸')
     doc = find_docno(b, forms[0][0]) or DEFAULT_DOCNO
     first = None
     for sheet, area in forms:

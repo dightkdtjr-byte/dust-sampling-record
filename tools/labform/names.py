@@ -101,10 +101,14 @@ def official_titles(ref_dir):
 
 
 def fix_method(text, titles):
-    """시험방법 글: ES 번호 띄어쓰기를 맞추고, 번호 뒤 제목을 원문 제목으로 (제목이 없으면 붙인다)"""
+    """시험방법 글: ES 번호 띄어쓰기를 맞추고, 번호 뒤 제목을 원문 제목으로 (제목이 없으면 붙인다).
+    이미 원문 제목과 같으면(줄바꿈·띄어쓰기만 다르면) 그대로 둔다: 칸 너비에 맞춰 넣은 줄바꿈이 제목 안에 있어도 겹쳐 쓰지 않게"""
+    squash = lambda t: re.sub(r'\s+', '', t)
     def one(m):
         code = m.group(1)
         t = titles.get(code)
+        if t and squash(text[m.start(2):]).startswith(squash(t)):
+            return f'ES {code}' + (m.group(2) or '')
         return f'ES {code} {t}' if t else f'ES {code}' + (m.group(2) or '')
     # "ES 01510.1d 배출가스 중 …" 에서 제목은 다음 "(" 짝이 닫히는 ")"나 줄바꿈 앞까지
     return re.sub(r'ES\s*(\d{5}\.\w+)((?:\s+[^\n()]*?(?:\([^\n()]*\)[^\n()]*?)*)?)(?=\)|\n|$)', one, text)

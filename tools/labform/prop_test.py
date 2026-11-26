@@ -25,7 +25,7 @@ for i in range(N):
 cf, of = os.path.join(work, 'cases.json'), os.path.join(work, 'js.json')
 json.dump(cases, open(cf, 'w'))
 here = os.path.dirname(os.path.abspath(__file__))
-subprocess.run(['node', os.path.join(here, 'verify_js', 'prop.js'), os.path.abspath(html), cf, of], check=True, timeout=600)
+subprocess.run(['node', os.path.join(here, 'verify_js', 'prop.cjs'), os.path.abspath(html), cf, of], check=True, timeout=600)
 js = json.load(open(of))
 bad = []
 for c, g in zip(cases, js):
