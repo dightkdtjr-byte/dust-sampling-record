@@ -1393,8 +1393,8 @@ const SKYLINE_FLYER_CSS = `
 .skyline-shimmer { animation: skylineShimmer 0.09s linear infinite alternate; }
 /* 너구리 걸음: 다리 두 쌍이 엇갈려 앞뒤로 움직이고 몸이 살짝 들썩인다 */
 @keyframes skylineTrot {
-  from { transform: rotate(17deg); }
-  to { transform: rotate(-17deg); }
+  from { transform: rotate(13deg); }
+  to { transform: rotate(-13deg); }
 }
 @keyframes skylineTrotBob {
   from { transform: translateY(0); }
@@ -1716,8 +1716,9 @@ const SCENE_RACCOON = (() => {
     turn: '0.47',
   };
 })();
-// 오른쪽을 보고 선 모습: 통통한 몸, 짧은 다리, 늘어진 굵은 꼬리, 뾰족한 주둥이
-const SCENE_RACCOON_BODY = 'M-33,-2 Q-40,-12 -27,-17.5 Q-20,-21.5 -12,-21.5 Q0,-24.5 10,-21.5 L12.6,-26.5 L16,-22 L18.8,-26 L21.4,-20.4 Q27.5,-17.5 30.5,-11.4 L31.6,-9.4 Q29.4,-7 24.4,-7 Q19.4,-6 17,-8.2 Q8,-5 -8,-6 Q-14,-5 -18,-9 Q-22,0 -33,-2 Z';
+// 너구리 모습: 몸도 얼굴도 옆모습(걷는 쪽을 본다). 회색 몸에 검은 다리·귀·꼬리 끝, 밝은 얼굴에 눈 둘레 검은 무늬, 주둥이 끝에 코
+const SCENE_RACCOON_LEG = (x) => `M${x},-13 L${x - 0.6},-1.4 Q${x - 0.6},0 ${x + 1},0 L${x + 4.8},0 Q${x + 6.2},0 ${x + 6.2},-1.4 L${x + 5.8},-13 Z`;
+const SCENE_RACCOON_HEAD = 'M5,-25 C5,-33 11,-39 19,-39 C25,-39 29.6,-35.5 31,-30 L36.4,-25.6 C38,-24.2 37.8,-21.6 35.8,-20.8 L30.6,-18.6 C28.4,-14.4 23.6,-12 18.4,-12 C14.4,-12 11,-13.4 8.6,-15.8 L2.6,-14.4 L5.8,-20 C5.2,-21.6 5,-23.2 5,-25 Z';
 // 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
 const SCENE_BUTTERFLIES = [
   { x: 166, up: 58, dur: 11, delay: 2, beat: 0.26 }, { x: 322, up: 38, dur: 14, delay: 6, beat: 0.31 },
@@ -2054,25 +2055,37 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
         const timing = { dur: `${SCENE_RACCOON.dur}s`, begin: compact ? '-70s' : '-9s', repeatCount: 'indefinite' };
         const legs = (
           <>
-            <g className="skyline-trot-a"><path d="M10,-15 L9.4,-1 L8.6,0.4 L13.6,0.4 L13.2,-1 L14.4,-15 Z M-15.6,-15 L-16.6,-1 L-17.4,0.4 L-12.4,0.4 L-12.8,-1 L-11.4,-15 Z" fill={pal.bank} /></g>
-            <g className="skyline-trot-b"><path d="M4.8,-15 L4.4,-1 L3.6,0.4 L8.6,0.4 L8.2,-1 L9.2,-15 Z M-10.4,-15 L-11.2,-1 L-12,0.4 L-7,0.4 L-7.4,-1 L-6.4,-15 Z" fill={pal.bank} /></g>
+            {/* 다리는 한 짝씩 따로 그린다: 저마다 제 엉덩이·어깨(다리 맨 위)를 축으로 앞뒤로 움직인다. 대각선 짝끼리 같이 나간다 */}
+            {[[-13.1, 'a'], [-5.1, 'b'], [4.9, 'b'], [12, 'a']].map(([x, pair]) => (
+              <path key={x} className={`skyline-trot-${pair}`} d={SCENE_RACCOON_LEG(x)} fill={pal.bank} />
+            ))}
           </>
         );
         const body = (
-          <g transform="translate(0 -6)"><g className={stillScene ? undefined : 'skyline-trot-bob'}>
-            <path d={SCENE_RACCOON_BODY} fill={pal.bank} />
-            {/* 눈가의 밝은 털과 꼬리의 밝은 띠 */}
-            <path d="M15.4,-17.6 Q21.4,-19 26,-14 Q21.6,-12.6 17,-13.6 Z" fill={pal.water} opacity="0.5" />
-            <circle cx="22.2" cy="-15" r="1" fill={pal.bank} />
-            <path d="M-31.6,-10.6 Q-28,-13.6 -25,-15 M-33.6,-6.4 Q-29.4,-9.8 -26,-11" stroke={pal.water} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.45" />
-          </g></g>
+          <g className={stillScene ? undefined : 'skyline-trot-bob'}>
+            {/* 꼬리(끝은 검게) */}
+            <path d="M-15,-24 C-24,-36 -42,-33 -43,-19 C-43.5,-11 -37,-6 -30,-9 C-25,-11 -22,-15 -14,-14 Z" fill={pal.mid} />
+            <path d="M-43,-19 C-43.5,-11 -37,-6 -30,-9 C-32,-13 -37,-17.5 -43,-19 Z" fill={pal.bank} />
+            <g transform="translate(0 -2.6)">
+              {/* 몸 → 먼 쪽 귀 → 머리 → 가까운 쪽 귀 → 밝은 얼굴 → 눈 둘레 검은 무늬·눈·코·입 */}
+              <ellipse cx="-2" cy="-17" rx="19" ry="13" fill={pal.mid} />
+              <path d="M19.5,-37 C20.5,-41.5 24,-43 25.6,-40 C26.4,-38.4 26.2,-36 25.2,-34.4 Z" fill={pal.bank} />
+              <path d={SCENE_RACCOON_HEAD} fill={pal.mid} />
+              <path d="M8.6,-34.5 C8,-41 11,-45 14.6,-42.6 C17,-41 18.2,-38.4 18.6,-36 Z" fill={pal.bank} />
+              <path d="M21.4,-34.4 C26,-34.4 29.4,-32 31,-28.6 L36,-24.6 C37,-23.6 36.8,-22.2 35.4,-21.6 L30.2,-19.4 C27.8,-16 24,-14.6 20.4,-15 C17.4,-20 17.6,-29 21.4,-34.4 Z" fill={pal.plume} />
+              <path d="M22.4,-30.6 C26.6,-31.8 30.6,-29.4 31.4,-26.2 C29,-23.6 24.6,-22 20.6,-22.8 C19.4,-25.6 20.2,-28.8 22.4,-30.6 Z" fill={pal.bank} />
+              <circle cx="26.4" cy="-27" r="1.5" fill={pal.plume} />
+              <ellipse cx="35.8" cy="-23.2" rx="1.9" ry="1.6" fill={pal.bank} />
+              <path d="M30.6,-18.6 C29.4,-17.4 27.6,-17 26,-17.6" stroke={pal.bank} strokeWidth="0.7" fill="none" strokeLinecap="round" />
+            </g>
+          </g>
         );
-        if (stillScene) return <g key="raccoon" transform={`translate(1010 ${sceneBankY(1010) + 2}) scale(-0.8 0.8)`}>{legs}{body}</g>;
+        if (stillScene) return <g key="raccoon" transform={`translate(1010 ${sceneBankY(1010) + 2}) scale(-0.66 0.66)`}>{legs}{body}</g>;
         return (
           <g key="raccoon">
             <animateMotion {...timing} calcMode="linear" path={SCENE_RACCOON.path} keyPoints={SCENE_RACCOON.keyPoints} keyTimes={SCENE_RACCOON.keyTimes} />
             <animate attributeName="opacity" calcMode="discrete" values="0;1;0;1;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
-            <g transform="scale(0.8)">
+            <g transform="scale(0.66)">
               <g>
                 {/* 갈 때는 왼쪽을, 올 때는 오른쪽을 본다 */}
                 <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="-1 1;1 1" keyTimes={`0;${SCENE_RACCOON.turn}`} {...timing} />
