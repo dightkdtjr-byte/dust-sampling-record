@@ -398,13 +398,18 @@ def docno_rows(b, sheet):
 
 def standardize(b, sheet, area, docno, hints=(), like=None):
     from form_style import trim_area, unify, raw_borders
+    from content_rules import unify_fonts, examples, fit_cells, bold_rule
+    pre = unify_fonts(b)
+    main = any(isinstance(c.value, str) and re.sub(r'\s', '', c.value) in ('담당', '기술책임자') for c in load(b)[sheet][range_boundaries(area)[1]])
+    pre += examples(b, sheet, area, fill=main)   # 예시 값은 서명란이 있는 첫 장에만, 날짜 형식은 모든 양식 시트에
     area0 = area
     area, old_r2 = trim_area(load(b)[sheet], area, raw_borders(b.sx(sheet), b.text('xl/styles.xml')))
     lay = Layout(b, sheet, area)
+    lay.notes += pre
     if area != area0:
         lay.notes.append(f'표 아래 내용 없는 줄 {range_boundaries(area)[3] + 1}~{range_boundaries(area0)[3]}행을 인쇄 범위에서 뺌')
     lay.set_widths(like)
-    wraps = lay.fit_text()
+    wraps = fit_cells(lay)
     hints = sorted(set(hints) | set(docno_rows(b, sheet)))
     pages = lay.paginate(hints)
     lay.write(wraps, docno)
@@ -413,4 +418,5 @@ def standardize(b, sheet, area, docno, hints=(), like=None):
     from layout_rules import align, place
     lay.notes += align(b, sheet, area)
     lay.notes += place(b, sheet, area)
+    lay.notes += bold_rule(b, sheet, area)
     return lay, pages
