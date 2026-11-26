@@ -7,7 +7,9 @@
 # 기록부
 #   · 방법검출한계·정량한계·시험방법 칸 = '기준'!G·H·D (다른 시트에서 가져오던 칸은 그대로 둔다: 암모니아 BA·전체)
 #   · 결과 수식: 계산값 R을
-#       비교 자리 → V = ROUND(ROUND(R, 계산 자릿수), 판정 자릿수)  (판정 자릿수 = 최종 자릿수)
+#       비교 자리 → V = ROUND(TRUNC(ROUND(R, 계산+5), 계산 자릿수), 판정 자릿수)  (판정 자릿수 = 최종 자릿수)
+#       계산 자릿수까지 계산(그 아래는 버림) → 최종 자릿수로 한 번 4사5입 (총칙 1.6·2.14.2 → KS Q 5002 4.2.2.2, 맺음은 한 번에)
+#       ROUND(R, 계산+5): 이진 소수 오차(0.025 → 0.02499999…) 때문에 버림이 한 자리 내려가지 않게
 #       표시 자리 → TEXT(V, 최종 자릿수)  (끝자리 0까지 보이게)
 #     "R > 한계면 값, 아니면 불검출" 꼴은 ">="로: 최종값이 방법검출한계와 같으면 불검출이 아니라 값
 #     계산값이 비어 있으면 빈칸, 계산 중 오류도 빈칸
@@ -126,6 +128,11 @@ def o2_suffix(R):
     return f'IF(ISNUMBER(FIND("(",{R}&"")),MID({R}&"",FIND("(",{R}&""),20),"")'
 
 
+def rounded(x, calc, digits):
+    """계산 자릿수까지 계산(아래는 버림)한 뒤 digits 자리로 한 번 4사5입"""
+    return f'ROUND(TRUNC(ROUND({x},{calc}+5),{calc}),{digits})'
+
+
 def rewrite(f, compares, row, permit=None):
     """f: '=' 뺀 결과 수식. compares: [(R, op, 한계 칸)]"""
     calc, final, judge = ref(row, 'calc'), ref(row, 'final'), ref(row, 'judge')
@@ -136,8 +143,8 @@ def rewrite(f, compares, row, permit=None):
         Rs.append(R)
         # 계산값이 "0.1(12)"처럼 숫자 뒤에 표준산소를 붙인 글자이면: 괄호 앞 숫자로 판정·표시하고 "(12)"는 뒤에 그대로
         Rn = num_part(R)
-        V = f'ROUND(ROUND({Rn},{calc}),{judge})'                                # 판정용 (검출한계와 비교)
-        Vf = f'ROUND(ROUND({Rn},{calc}),{final})'                               # 표시용
+        V = rounded(Rn, calc, judge)                                          # 판정용 (검출한계와 비교)
+        Vf = rounded(Rn, calc, final)                                         # 표시용
         T = f'TEXT({Vf},IF({final}=0,"0","0."&REPT("0",{final})))&{o2_suffix(R)}'
         t = tok(R)
         f = re.sub(rf'ROUND\(\s*{t}\s*,\s*\d+\s*\)', '\x00OUT\x00', f)               # 원래 반올림해서 내보내던 자리 → 표시
@@ -159,7 +166,7 @@ def rewrite(f, compares, row, permit=None):
         f = OX.strip_excess(f)
         L, _ = OX.permit_exprs(permit)
         Rsel = OX.selected_value(ORIG[0], Rs)
-        Vsel = f'ROUND(ROUND({num_part(Rsel)},{calc}),{final})'
+        Vsel = rounded(num_part(Rsel), calc, final)
         # 불검출이면 "(초과)"를 붙이지 않는다 (허가배출기준이 검출한계보다 작게 적힌 경우 등)
         f = f'IF(({f})="불검출","불검출",({f})&IF(AND(ISNUMBER({L}),{Vsel}>{L})," (초과)",""))'
     return f'IFERROR(IF({blank},"",{f}),"")'

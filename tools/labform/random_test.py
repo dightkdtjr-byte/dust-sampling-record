@@ -2,7 +2,7 @@
 # LibreOffice로 다시 계산한 기록부 결과와 한 칸씩 견준다.
 #   python3 -I tools/labform/random_test.py <완성본 폴더> <master.json> <작업 폴더> [회수=8] [씨앗=7]
 # 파이썬 쪽 규칙 (엑셀 수식을 보지 않고 README 규칙만으로 구현)
-#   v1 = 4사5입(x, 계산 자릿수), 판정값 = 4사5입(v1, 판정 자릿수), 표시값 = 4사5입(v1, 최종 자릿수)
+#   v1 = 버림(x, 계산 자릿수), 판정값 = 4사5입(v1, 판정 자릿수), 표시값 = 4사5입(v1, 최종 자릿수)  (맺음은 한 번)
 #   판정 자릿수 = max(최종, 방법검출한계 소수 자릿수)
 #   판정값 < 방법검출한계 → "불검출"; 아니면 표시값을 최종 자릿수로 쓴 글자 + (표시값 > 허가배출기준 괄호 앞 숫자면 " (초과)")
 import sys, os, re, json, random, subprocess, warnings
@@ -20,6 +20,12 @@ def rhu(x, d):
     return Decimal(str(x)).quantize(Decimal(1).scaleb(-d), rounding=ROUND_HALF_UP)
 
 
+def trunc(x, d):
+    """d자리까지 계산(아래 버림). 이진 오차를 지우려고 d+5자리에서 먼저 4사5입"""
+    from decimal import ROUND_DOWN
+    return rhu(x, d + 5).quantize(Decimal(1).scaleb(-d), rounding=ROUND_DOWN)
+
+
 def decs(v):
     t = Decimal(str(v)).normalize().as_tuple()
     return max(0, -t.exponent)
@@ -27,7 +33,7 @@ def decs(v):
 
 def expected(x, calc, final, mdl, permit):
     jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
-    v1 = rhu(x, calc)
+    v1 = trunc(x, calc)
     vj, vf = rhu(v1, jd), rhu(v1, final)
     if mdl is not None and vj < Decimal(str(mdl)):
         return '불검출'
@@ -61,8 +67,8 @@ for r in rows:
     wb = openpyxl.load_workbook(os.path.join(golden, r['file']), keep_vba=r['file'].endswith('m'))
     for res in r['result'].split(', '):
         fm = str(wb[r['sheet']][res].value)
-        m = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
-        m2 = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
+        m = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
+        m2 = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
         mp = re.search(r'TRIM\(SUBSTITUTE\((\$?[A-Z]{1,3}\$?\d+)&""', fm)
         if m:
             rsh, rc = r['sheet'], m.group(1).replace('$', '')

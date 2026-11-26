@@ -1,8 +1,8 @@
 # 완성본 불검출 판정 경계값 시험: 계산값을 방법검출한계 근처로 넣고 다시 계산해 결과를 본다.
 #   python3 -I tools/labform/boundary_test.py <완성본 폴더> <master.json> <작업 폴더>
 # 경우 (u = 최종 자릿수 한 단위, 판정은 최종 자릿수로 반올림한 값)
-#   A 계산값 = 방법검출한계            B = 검출한계 - 0.4u     C = 검출한계 - 0.6u     D = 검출한계 + 0.5u
-#   기대값은 규칙으로 계산: 계산 자릿수 4사5입 → 최종 자릿수 4사5입 → 검출한계 미만이면 불검출, 아니면 값
+#   A 계산값 = 방법검출한계            B = 검출한계 - 0.4u     C = 검출한계 - 0.6u     D = 검출한계 + 0.5u     E = 검출한계 - 0.505u
+#   기대값은 규칙으로 계산: 계산 자릿수까지 버림 → 최종 자릿수 한 번 4사5입 → 검출한계 미만이면 불검출, 아니면 값
 #   (대부분 A·B·D 값, C 불검출. 브로민처럼 검출한계가 최종 자릿수보다 잘면 A도 불검출)
 import sys, os, re, json, shutil, subprocess, warnings
 import openpyxl
@@ -13,7 +13,7 @@ import extract_master as EM
 golden, master, work = sys.argv[1], sys.argv[2], sys.argv[3]
 rows = json.load(open(master, encoding='utf8'))
 from decimal import Decimal, ROUND_HALF_UP
-CASES = {'A': 0.0, 'B': 0.4, 'C': 0.6, 'D': -0.5}
+CASES = {'A': 0.0, 'B': 0.4, 'C': 0.6, 'D': -0.5, 'E': 0.505}   # E: 2단계 반올림이면 검출, 한 번 맺음이면 불검출이 되는 값
 
 
 def rhu(x, d):
@@ -24,8 +24,13 @@ def case_value(it, k):
     return round(it['mdl'] - k * 10 ** (-it['final']), it['final'] + 3)
 
 
+def trunc(x, d):
+    from decimal import ROUND_DOWN
+    return rhu(x, d + 5).quantize(Decimal(1).scaleb(-d), rounding=ROUND_DOWN)
+
+
 def expect_of(it, k):
-    v = rhu(rhu(case_value(it, k), it['calc']), it['final'])
+    v = rhu(trunc(case_value(it, k), it['calc']), it['final'])      # 계산 자릿수까지 버림 → 최종 자릿수 한 번 4사5입
     return 'nd' if v < Decimal(str(it['mdl'])) else 'value'
 plan = {}   # file -> list of (sheet, result, R cell, mdl, final)
 for r in rows:
@@ -51,8 +56,8 @@ for f, items in plan.items():
     for it in items:
         fm = str(wb0[it['sheet']][it['result']].value)
         # 바뀐 수식에서 첫 번째 계산값: ROUND(ROUND(<R>,
-        m = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
-        m2 = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
+        m = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
+        m2 = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
         if not m and m2:
             sh = (m2.group(1) or '').rstrip('!').strip("'") or it['sheet']
             cells.append((dict(it, sheet_src=sh), m2.group(2).replace('$', '')))

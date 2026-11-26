@@ -4,7 +4,7 @@
 # 기준을 고친 뒤 내려받으면 각 기록부의 숨김 '기준' 시트 칸(D·E·F·G·H·I)을 고쳐 준다 (기록부 하나 또는 전체 zip).
 import sys, os, json, base64, glob, datetime
 
-VERSION = '2.0.0'
+VERSION = '2.1.0'
 golden, master, jszip, out = sys.argv[1:5]
 evidence = sys.argv[5] if len(sys.argv) > 5 else None
 rows = json.load(open(master, encoding='utf8'))
@@ -15,7 +15,7 @@ for p in sorted(glob.glob(os.path.join(golden, '*.xls*'))):
     files[os.path.basename(p)] = base64.b64encode(open(p, 'rb').read()).decode()
 # 원문 문장 등 RULES (총칙·정도보증)
 RULES = {
-    'calc': '총칙 ES 01000.b 2.14.2 (마지막 유효숫자의 다음 단위까지 계산, KS Q 5002 4사5입)',
+    'calc': '총칙 ES 01000.b 1.6·2.14.2 (마지막 유효숫자의 다음 단위까지 계산, KS Q 5002 4.2.2.2 4사5입, 맺음은 한 번에)',
     'nd': '총칙 ES 01000.b 2.14.3 (방법검출한계 미만은 불검출)',
     'unit': '총칙 ES 01000.b 2.14.1 (가스상 ppm·ppb, 입자상 mg/Sm³·μg/Sm³·ng/Sm³)',
     'sig': '정도보증 ES 01001.b 4.3.4.4 (유효숫자 2개 이하)',

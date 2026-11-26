@@ -28,13 +28,19 @@ def rhu(x, d):
     return Decimal(str(x)).quantize(Decimal(1).scaleb(-d), rounding=ROUND_HALF_UP)
 
 
+def trunc(x, d):
+    """d자리까지 계산(아래 버림). 이진 오차를 지우려고 d+5자리에서 먼저 4사5입"""
+    from decimal import ROUND_DOWN
+    return rhu(x, d + 5).quantize(Decimal(1).scaleb(-d), rounding=ROUND_DOWN)
+
+
 def decs(v):
     return max(0, -Decimal(str(v)).normalize().as_tuple().exponent)
 
 
 def expected(x, calc, final, mdl, L):
     jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
-    v1 = rhu(x, calc); vj, vf = rhu(v1, jd), rhu(v1, final)
+    v1 = trunc(x, calc); vj, vf = rhu(v1, jd), rhu(v1, final)
     if mdl is not None and vj < Decimal(str(mdl)):
         return '불검출'
     s = f'{vf:.{final}f}'
@@ -107,8 +113,8 @@ for f in sorted({r['file'] for r in rows}):
             if not re.search(rf'<conditionalFormatting sqref="{res}"><cfRule type="containsText"[^>]*text="초과"', sx):
                 bad(f'G {f} {r["sheet"]}!{res} 초과 조건부 서식 없음')
             # 다른 엔진 시험 자료
-            m = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
-            m2 = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
+            m = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
+            m2 = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
             if not (m or m2):
                 continue
             rsh, rc = (r['sheet'], m.group(1).replace('$', '')) if m else ((m2.group(1) or '').rstrip('!').strip("'") or r['sheet'], m2.group(2).replace('$', ''))

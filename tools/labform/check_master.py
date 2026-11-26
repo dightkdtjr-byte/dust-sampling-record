@@ -200,7 +200,7 @@ def check_formulas(golden):
             x = z.read(n).decode('utf8')
             for m in re.finditer(r'<c r="([A-Z]+\d+)"[^>]*><f[^>]*>([^<]*불검출[^<]*)</f>', x):
                 f = m.group(2).replace('&amp;', '&').replace('&quot;', '"').replace('&lt;', '<').replace('&gt;', '>')
-                bad = re.search(r'ROUND\(ROUND\([^<>]*\)\)\s*>\s*(?!=)\$?[A-Z]+\d+\s*,\s*(?:IF\(|TEXT\()', f) and '"불검출"' in f.split(',')[-1]
+                bad = re.search(r'ROUND\((?:ROUND|TRUNC\(ROUND)\([^<>]*\)\)\s*>\s*(?!=)\$?[A-Z]+\d+\s*,\s*(?:IF\(|TEXT\()', f) and '"불검출"' in f.split(',')[-1]
                 lt = re.findall(r'\)\)\s*(<=|<|>=|>)', f)
                 out[(os.path.basename(p), n, m.group(1))] = (lt, f)
     return out

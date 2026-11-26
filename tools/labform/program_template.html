@@ -203,6 +203,9 @@ function rhu(x, d) { // 4사5입 (KS Q 5002 4.2.2.2)
   const s = String(x); if (/e/i.test(s)) { const m = Math.pow(10, d); return Math.round(x * m + (x >= 0 ? 1e-12 : -1e-12)) / m; }
   return Number(Math.round(Number(s + 'e' + d)) + 'e-' + d);
 }
+function trunc(x, d) { // d자리까지 계산(아래는 버림). 이진 오차를 지우려고 d+5자리에서 먼저 4사5입
+  const t = rhu(x, d + 5), m = Math.pow(10, d); return Math.trunc(Number((t * m).toFixed(5))) / m;
+}
 function judgeDigits(c) { return Number(c.final); }   // 판정은 최종 자릿수로 반올림한 값(성적서 값)
 function ndBelow(mdl, final) { const u = Math.pow(10, -final); return rhu(Math.ceil(mdl / u - 1e-9) * u - 0.5 * u, final + 2); }
 function parsePermit(t) {
@@ -214,9 +217,9 @@ function parsePermit(t) {
 function evaluate(c, raw, permit) { // 기록부 결과 수식과 같은 규칙
   const x = num(raw); if (x === null) return null;
   const calc = Number(c.calc), final = Number(c.final), jd = judgeDigits(c);
-  const v1 = rhu(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);
+  const v1 = trunc(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);   // 계산 자릿수까지 버림 → 최종 자릿수로 한 번 4사5입
   const mdl = num(mdlValue(c));
-  const why = [`계산값 ${x}`, `계산 자릿수 ${calc}자리: ${v1}`, `최종 자릿수 ${final}자리: ${vf.toFixed(final)}`];
+  const why = [`계산값 ${x}`, `계산 자릿수 ${calc}자리까지 계산: ${v1.toFixed(calc)}`, `최종 자릿수 ${final}자리로 4사5입: ${vf.toFixed(final)}`];
   if (mdl !== null && vj < mdl) { why.push(`${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
   if (mdl !== null) why.push(`${vf.toFixed(final)} ${vj === mdl ? '=' : '>'} 방법검출한계 ${mdl}: 검출`);
   else why.push('방법검출한계 없음: 불검출 판정 안 함');
@@ -343,7 +346,7 @@ function renderHome() {
     <h2>판정 기준</h2>
     <div class="kicker">모든 기록부 결과 수식에 같은 기준 적용</div>
     <ol>
-      <li><b>계산</b>: 계산 자릿수로 4사5입한 뒤 최종 자릿수로 4사5입. 계산 자릿수 = 최종 자릿수 + 1. ${evBtn('calc', '총칙 2.14.2')}</li>
+      <li><b>계산</b>: 계산 자릿수까지 계산(그 아래는 버림)한 뒤 최종 자릿수로 한 번 4사5입. 계산 자릿수 = 최종 자릿수 + 1. 맺음은 한 번에 (총칙 1.6·2.14.2 → KS Q 5002 4.2.2.2). ${evBtn('calc', '총칙 2.14.2')}</li>
       <li><b>불검출</b>: 최종 자릿수로 반올림한 값이 방법검출한계 <b>미만</b>이면 불검출, 같으면 검출. ${evBtn('nd', '총칙 2.14.3')} ${evBtn('lt', '총칙 2.13.6')}</li>
       <li><b>초과</b>: 허가배출기준(괄호 앞 숫자)보다 크면 결과 옆에 "(초과)", 빨간 글씨와 연한 빨강 바탕. 같으면 초과 아님.</li>
       <li><b>산소 보정</b>: 허가배출기준 괄호 안 숫자(예: 8(12)의 12)는 표준산소농도(%)로 기록부 표준산소 칸에 연결. 초과 판정은 보정값으로.</li>
