@@ -915,7 +915,7 @@ const getSkyPhaseByHour = (date = new Date()) => {
   return 'night';
 };
 
-// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리와 너구리는 사철, 오소리는 겨울잠을 자는 겨울만 빼고 나온다
+// 계절: 풍경에 나오는 동물이 계절마다 다르다 (봄 나비·개구리, 여름 개구리·잠자리, 가을 잠자리·기러기, 겨울 학). 오리·너구리·오소리는 사철 나온다
 const SKY_SEASON_OPTIONS = [
   { id: 'auto', label: '자동' },
   { id: 'spring', label: '봄' },
@@ -1712,7 +1712,6 @@ const SCENE_WALK_TRACK = (() => {
     // 구간: 풀숲 속(0~4%) → 왼쪽으로 건넘(~40%) → 왼쪽 풀숲 속(~54%) → 오른쪽으로 건넘(~92%) → 풀숲 속
     keyTimes: '0;0.04;0.4;0.54;0.92;1',
     keyPoints: '0;0;1;1;0;0',
-    turn: '0.47',
   };
 })();
 // 짧고 통통한 다리 한 짝 (맨 위는 몸통 속에 있어 그곳을 축으로 앞뒤로 움직인다)
@@ -1736,20 +1735,23 @@ const renderSceneRaccoon = (pal) => (
     <circle cx="20.6" cy="-26.9" r="0.65" fill={pal.plume} />
   </>
 );
-// 오소리: 낮고 긴 몸, 흰 머리에 코에서 눈을 지나 귀로 가는 검은 줄, 검은 다리와 배, 짧은 꼬리
+// 오소리: 낮고 긴 몸에 크고 둥근 흰 머리, 코에서 눈을 지나 귀로 가는 검은 줄, 큰 눈, 검은 다리와 배, 작게 처진 꼬리.
+// (머리가 작고 뾰족하면 줄무늬 꼬리처럼 보여 뒤로 걷는 것 같다 → 머리를 크게, 꼬리는 작게)
 const renderSceneBadger = (pal) => (
   <>
-    <path d="M-22,-17 C-30,-21 -36,-15 -33,-9.6 C-29,-8 -25,-8.6 -21,-10 Z" fill={pal.mid} />
-    <ellipse cx="-4" cy="-13" rx="20.5" ry="10" fill={pal.mid} />
-    <path d="M-21,-8.6 C-12,-3 8,-3 17,-8.6 C8,-5.8 -12,-5.8 -21,-8.6 Z" fill={pal.bank} />
-    <circle cx="15" cy="-28" r="3.6" fill={pal.bank} />
-    <path d="M12.4,-30.4 C13.8,-32 16.2,-32 17.6,-30.4" stroke={pal.plume} strokeWidth="1.2" fill="none" strokeLinecap="round" />
-    <path d="M8.6,-21 C10.6,-27.4 18,-30.4 25,-28 C31,-26 36.4,-20.4 39.2,-15.2 C40.2,-13.4 39.2,-11.6 37.2,-11.6 L29,-10 C22,-8 14,-8.6 9.6,-11.6 C7.6,-14.6 7.6,-18 8.6,-21 Z" fill={pal.plume} />
-    <path d="M38.8,-15.8 C33,-20 26,-24.4 17.4,-27.8 C15,-26 13.4,-23.6 12.8,-21 C21,-20 28.4,-17 35.8,-12.6 C37.2,-13.2 38.2,-14.4 38.8,-15.8 Z" fill={pal.bank} />
-    <circle cx="25.6" cy="-21.4" r="1.6" fill={pal.plume} />
-    <circle cx="26" cy="-21.2" r="0.9" fill={pal.bank} />
-    <ellipse cx="38.6" cy="-13.6" rx="2" ry="1.7" fill={pal.bank} />
-    <path d="M29,-10 C22,-8 14,-8.6 9.6,-11.6 C15,-12.6 23,-12.8 31,-12.4 Z" fill={pal.bank} opacity="0.85" />
+    <path d="M-20,-17 C-25,-17.6 -30,-14.6 -33.6,-9.4 C-29,-9 -24,-9.6 -20,-10.6 Z" fill={pal.mid} />
+    <ellipse cx="-5" cy="-13.4" rx="19" ry="10.4" fill={pal.mid} />
+    <path d="M-21,-9 C-13,-3.2 5,-3.2 12,-9 C4,-6.2 -13,-6.2 -21,-9 Z" fill={pal.bank} />
+    <circle cx="21" cy="-34.4" r="3.8" fill={pal.bank} />
+    <path d="M2,-23 C2,-31 8,-36.4 15.6,-36.4 C21.6,-36.4 26.4,-33 28.8,-28 C31.6,-26 35,-23 37,-19.8 C38.2,-17.8 37.2,-15.6 35,-15 L27.6,-12.4 C23.6,-10 19.6,-9.2 15.6,-9.4 C8.6,-9.8 2,-15 2,-23 Z" fill={pal.plume} />
+    <path d="M36.6,-20.4 C31,-25 24.6,-29.4 17,-33.4 C13,-35.4 8.6,-34.4 6,-31.2 C5,-28.4 5.8,-25.6 8,-23.8 C16,-23.6 24.4,-21.6 32,-17 C34,-17.6 35.8,-18.8 36.6,-20.4 Z" fill={pal.bank} />
+    <circle cx="8" cy="-33.6" r="4.6" fill={pal.bank} />
+    <path d="M4.8,-36.4 C6.6,-38.6 9.6,-38.6 11.4,-36.6" stroke={pal.plume} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+    <ellipse cx="20.6" cy="-27" rx="2.9" ry="3.1" fill={pal.plume} />
+    <circle cx="21.3" cy="-26.8" r="1.9" fill={pal.bank} />
+    <circle cx="22" cy="-27.7" r="0.65" fill={pal.plume} />
+    <ellipse cx="36" cy="-18.4" rx="2.2" ry="1.8" fill={pal.bank} />
+    <path d="M27.6,-12.4 C23.6,-10 19.6,-9.2 15.6,-9.4 C11,-9.6 6.6,-12 4,-16 C11,-13.6 20,-13.4 29,-14.6 Z" fill={pal.bank} opacity="0.9" />
   </>
 );
 // 나비(봄): 풀숲과 들꽃 둘레를 팔랑팔랑 맴돈다.  잠자리(여름·가을): 물 위에 떠 있다가 휙 자리를 옮긴다
@@ -2083,10 +2085,10 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
       <g filter={cut}>
         <path d={`M${SCENE_BANK.map(([x, dy]) => `${x},${G + dy}`).join(' L')} L1600,580 L0,580 Z`} fill={pal.bank} />
       </g>
-      {/* 너구리(사철)·오소리(봄~가을, 겨울에는 겨울잠): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
+      {/* 너구리·오소리(사철): 둑 위를 건너 풀숲에서 풀숲으로. 풀숲 속에 있는 동안은 보이지 않는다 */}
       {[
         { key: 'raccoon', show: true, dur: 168, begin: compact ? -70 : -9, scale: 0.62, trot: 0.34, legH: 15, legs: [[-13, 'a'], [-6.6, 'b'], [2.4, 'b'], [8.4, 'a']], art: renderSceneRaccoon, stillX: 1010 },
-        { key: 'badger', show: season !== 'winter' && !compact, dur: 214, begin: -150, scale: 0.6, trot: 0.46, legH: 13, legs: [[-17, 'a'], [-10.6, 'b'], [4.4, 'b'], [10.6, 'a']], art: renderSceneBadger, stillX: 560 },
+        { key: 'badger', show: !compact, dur: 214, begin: -150, scale: 0.6, trot: 0.46, legH: 13, legs: [[-19, 'a'], [-12.6, 'b'], [2.4, 'b'], [8.6, 'a']], art: renderSceneBadger, stillX: 560 },
       ].filter((walker) => walker.show).map((walker) => {
         const timing = { dur: `${walker.dur}s`, begin: `${walker.begin}s`, repeatCount: 'indefinite' };
         const figure = (
@@ -2102,13 +2104,14 @@ const renderSkylineSvg = ({ pal, scope, compact = false, season = 'summer' }) =>
         return (
           <g key={walker.key}>
             <animateMotion {...timing} calcMode="linear" path={SCENE_WALK_TRACK.path} keyPoints={SCENE_WALK_TRACK.keyPoints} keyTimes={SCENE_WALK_TRACK.keyTimes} />
-            <animate attributeName="opacity" calcMode="discrete" values="0;1;0;1;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
-            <g transform={`scale(${walker.scale})`}>
-              <g>
-                {/* 갈 때는 왼쪽을, 올 때는 오른쪽을 본다 */}
-                <animateTransform attributeName="transform" type="scale" calcMode="discrete" values="-1 1;1 1" keyTimes={`0;${SCENE_WALK_TRACK.turn}`} {...timing} />
-                {figure}
-              </g>
+            {/* 갈 때는 왼쪽 보는 그림, 올 때는 오른쪽 보는 그림만 보인다 (늘 걷는 쪽을 본다) */}
+            <g opacity="0" transform={`scale(-${walker.scale} ${walker.scale})`}>
+              <animate attributeName="opacity" calcMode="discrete" values="0;1;0;0;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
+              {figure}
+            </g>
+            <g opacity="0" transform={`scale(${walker.scale})`}>
+              <animate attributeName="opacity" calcMode="discrete" values="0;0;0;1;0" keyTimes="0;0.04;0.4;0.54;0.92" {...timing} />
+              {figure}
             </g>
           </g>
         );
