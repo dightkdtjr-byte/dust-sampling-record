@@ -15,7 +15,9 @@ ROW1, ROW2 = 30.75, 59.25     # 서명란 이름 줄·서명 줄 높이(pt)
 # 모든 양식의 열 너비 합(TOTAL_PX)과 여백이 같으므로 엑셀이 정하는 배율도 모두 같다 (이 너비·여백에서는 65~66%).
 MARGINS = dict(left=0.45, right=0.45, top=0.45, bottom=0.45, header=0.2, footer=0.2)
 WORST_SCALE = 67              # 쪽 높이를 따질 때 가정하는 가장 큰 배율(%): 이보다 작게 찍히면 여유가 더 생긴다
-PAGE_PT = (11.69 - MARGINS['top'] - MARGINS['bottom']) * 72 / (WORST_SCALE / 100) * 0.99   # 한 쪽에 들어가는 줄 높이 합(pt), 여유 1%
+# 여유 6%: 엑셀의 '너비에 맞춤' 배율은 화면 DPI·글꼴 렌더링에 따라 1~3%p 달라진다. 98%까지 채우면 엑셀에서 쪽 끝 표가
+# 다음 쪽으로 밀려 나뉜다(PAHs 시료 표). 배율이 70%까지 커져도 한 쪽에 들어가게 한다
+PAGE_PT = (11.69 - MARGINS['top'] - MARGINS['bottom']) * 72 / (WORST_SCALE / 100) * 0.94   # 한 쪽에 들어가는 줄 높이 합(pt)
 DOCNO = re.compile(r'[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}')
 # 문서번호 칸: 칸 전체가 "■ MAMO-QP-14-01" 꼴 (시료명 "0629-TCW-#A1-DMDS-FB-1-1" 같은 것을 문서번호로 잘못 읽지 않게)
 DOCNO_CELL = re.compile(r'\s*■?\s*[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}\s*')
@@ -227,9 +229,21 @@ class Layout:
         H = self.h
         total = lambda a, b: sum(H[r] for r in range(a, b + 1))
         starts = set(self.section_starts())
-        strong = [r for r in range(self.r1, self.r2) if (r + 1) in starts and self.can_break_after(r)]
+        # 번호 없는 회색 머리 줄(표 머리, 예: "시료명") 바로 뒤에서는 나누지 않는다: 머리 줄만 앞 쪽에 남고 자료가 다음 쪽으로 가면 안 됨
+        # (자료 첫 줄의 세로 병합 머리 "흡수액"도 회색이라 항목 시작처럼 보인다)
+        from layout_rules import _gray
+        def is_head(r):
+            # 표 머리 줄: 번호 없는 시작 줄이면서 줄의 글자 칸 대부분(3칸 이상, 60% 이상)이 회색 머리 칸
+            # (VOCs 요약처럼 A열만 회색인 목록 줄은 표 머리가 아님 → 그 사이에서는 나눌 수 있다)
+            if r not in starts or re.fullmatch(r'\d{1,2}', str(self.ws.cell(r, self.c1).value).strip()):
+                return False
+            cells = [self.ws.cell(r, c) for c in range(self.c1, self.c2 + 1)]
+            filled = [c for c in cells if type(c).__name__ != 'MergedCell' and c.value not in (None, '')]
+            gray = [c for c in filled if _gray(c)]
+            return len(gray) >= 3 and len(gray) >= 0.6 * len(filled)
+        strong = [r for r in range(self.r1, self.r2) if (r + 1) in starts and self.can_break_after(r) and not is_head(r)]
         # 원본의 쪽 나눔 자리는 다음 줄이 항목 시작일 때만 쓴다 (아니면 항목 경계에서 다시 정한다)
-        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h) and (h + 1) in starts) | {self.r2})
+        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h) and (h + 1) in starts and not is_head(h)) | {self.r2})
         pages = []
         a = self.r1
         for e in ends:
@@ -237,6 +251,23 @@ class Layout:
             while total(a, e) > PAGE_PT:
                 cand = [r for r in strong if a <= r < e and total(a, r) <= PAGE_PT]
                 if not cand:
+                    # 항목 경계에서 나눌 수 없으면: 먼저 빈 줄·넉넉한 줄을 줄여 한 쪽에 넣어 보고, 그래도 안 되면 항목 안에서 나눈다
+                    if self.squeeze(a, e, dry=True):
+                        self.squeeze(a, e)
+                        break
+                    # 넘치는 것이 맨 끝 빈 줄뿐이면 그 줄을 낮춘다 (빈 줄 하나만 다음 쪽으로 넘어가지 않게)
+                    tail = []
+                    for r in range(e, a, -1):
+                        if not self.row_empty(r):
+                            break
+                        tail.append(r)
+                    over = total(a, e) - PAGE_PT
+                    room = sum(H[r] - 4 for r in tail)
+                    if tail and over <= room:
+                        for r in tail:
+                            cut = min(over, H[r] - 4); H[r] = round(H[r] - cut, 2); over -= cut
+                        self.notes.append(f'{a}~{e}행: 맨 끝 빈 줄 {tail} 높이를 줄여 한 쪽에 넣음')
+                        break
                     cand = [r for r in range(a, e) if self.can_break_after(r) and total(a, r) <= PAGE_PT]
                 if not cand:
                     break
@@ -257,32 +288,62 @@ class Layout:
         self.pages = pages
         return pages
 
+    def covered_rows(self):
+        """차트·그림·글상자가 걸쳐 있는 줄 번호(1부터)"""
+        if getattr(self, '_covered', None) is not None:
+            return self._covered
+        from layout_rules import _drawing_part, _anchors, _pos
+        out = set()
+        part = _drawing_part(self.b, self.sheet)
+        if part and part in self.b.parts:
+            for m in _anchors(self.b.text(part)):
+                f, t = _pos(m.group(0), 'from'), _pos(m.group(0), 'to')
+                if f and t:
+                    out |= set(range(f[2] + 1, t[2] + 2))
+                elif f:
+                    e = re.search(r'<xdr:ext cx="\d+" cy="(\d+)"', m.group(0))
+                    hpt = int(e.group(1)) / 12700 if e else 0
+                    r, acc = f[2] + 1, 0
+                    while acc < hpt and r <= self.r2:
+                        out.add(r); acc += self.h.get(r, 15); r += 1
+        self._covered = out
+        return out
+
     def squeeze(self, a, e, dry=False):
         # 넘치는 만큼: 먼저 내용 없는 큰 줄(여백·그림 자리)을 35%까지, 그래도 모자라면 넉넉한 줄 전체를 3%까지 줄인다
         H = self.h
         over = sum(H[r] for r in range(a, e + 1)) - PAGE_PT
         if over <= 0:
             return True
-        fill = [r for r in range(a, e + 1) if self.row_empty(r) and H[r] >= 45]
-        room = sum(H[r] for r in fill) * 0.35
-        loose = [r for r in range(a, e + 1) if r not in fill and H[r] >= 26 and r not in (self.r1, self.r1 + 1)
+        # 줄일 수 있는 빈 줄: 큰 빈 줄(45pt 이상) + 빈 줄이 3줄 이상 이어진 곳(차트·그림 자리)
+        emp = [r for r in range(a, e + 1) if self.row_empty(r)]
+        runs, cur_ = [], []
+        for r in emp:
+            if cur_ and r != cur_[-1] + 1:
+                runs.append(cur_); cur_ = []
+            cur_.append(r)
+        if cur_:
+            runs.append(cur_)
+        under = self.covered_rows()      # 차트·그림이 놓인 빈 줄은 15%까지만 (더 줄이면 그림 글자가 겹친다)
+        cand_ = {r for run in runs for r in run if len(run) >= 3} | {r for r in emp if H[r] >= 45}
+        fill = sorted(cand_ - under)
+        chart = sorted(cand_ & under)
+        loose = [r for r in range(a, e + 1) if r not in cand_ and H[r] >= 26 and r not in (self.r1, self.r1 + 1)
                  and r not in getattr(self, 'tight', set())]   # 글자가 꽉 찬 줄은 줄이지 않는다
-        room2 = sum(H[r] for r in loose) * 0.03
-        if over > room + room2:
+        steps = [(fill, 0.35, '빈 줄'), (chart, 0.15, '그림 자리 빈 줄'), (loose, 0.03, '줄 높이를 고르게')]
+        if over > sum(sum(H[r] for r in rows) * k for rows, k, _ in steps):
             return False
         if dry:
             return True
-        if fill:
-            cut = min(over, room); f = cut / sum(H[r] for r in fill)
-            for r in fill:
-                H[r] = round(H[r] * (1 - f), 2)
+        for rows, k, label in steps:
+            if over <= 0.01 or not rows:
+                continue
+            tot = sum(H[r] for r in rows)
+            cut = min(over, tot * k); f = cut / tot
+            for r in rows:
+                H[r] = round(H[r] * (1 - f) - (0.005 if label.startswith('줄') else 0), 2)
             over -= cut
-            self.notes.append(f'{a}~{e}행: 빈 줄 {fill} 높이를 {f * 100:.0f}% 줄임')
-        if over > 0.01:
-            f = over / sum(H[r] for r in loose)
-            for r in loose:
-                H[r] = round(H[r] * (1 - f) - 0.005, 2)
-            self.notes.append(f'{a}~{e}행: 줄 높이를 고르게 {f * 100:.1f}% 줄임')
+            self.notes.append(f'{a}~{e}행: {label} {f * 100:.1f}% 줄임' + (f' {rows}' if label != '줄 높이를 고르게' else ''))
         return True
 
     # ── 고친 값을 XML에 적는다 ──
@@ -302,10 +363,11 @@ class Layout:
         items = [f'<col min="{c}" max="{c}" width="{self.w[c]}"{attrs.get(c, "")} customWidth="1"/>' for c in range(self.c1, self.c2 + 1)]
         s = s.replace(cols.group(0), '<cols>' + ''.join(items) + ''.join(tail) + '</cols>')
         # 줄 높이
+        # 모든 줄을 높이 고정(customHeight): 엑셀이 열 때 줄 높이를 자동으로 다시 맞추면 쪽 나눔이 어긋난다
         for r in range(self.r1, self.r2 + 1):
-            if abs(self.h[r] - self.h0[r]) < 0.005:
-                continue
             m = re.search(rf'<row r="{r}"([^>]*?)(/?)>', s)
+            if abs(self.h[r] - self.h0[r]) < 0.005 and m and 'customHeight="1"' in m.group(1):
+                continue
             if not m:
                 continue
             a = re.sub(r'\s*(ht|customHeight)="[^"]*"', '', m.group(1))
@@ -322,7 +384,7 @@ class Layout:
             new = re.sub(r' s="\d+"', f' s="{cache[st]}"', m.group(0), count=1)
             b.setsx(sheet, s[:m.start()] + new + s[m.end():])
         # 문서번호 칸은 비우고 바닥글로
-        for r in range(self.r1, self.r2 + 1):
+        for r in range(self.r1, self.ws.max_row + 1):      # 인쇄 범위 밖(표 바로 아래)에 남은 문서번호 칸도
             for c in range(self.c1, self.c2 + 1):
                 cell = self.ws.cell(r, c)
                 if type(cell).__name__ != 'MergedCell' and is_docno(cell.value):

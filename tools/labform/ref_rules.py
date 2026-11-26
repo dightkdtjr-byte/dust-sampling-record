@@ -49,19 +49,19 @@ def parse(path):
         v = float(m.group(2))
         if not any(abs((x['value'] or -1) - v) < 1e-12 for x in out['mdl']):
             out['mdl'].append(dict(name=m.group(1).strip()[-30:], value=v, unit=m.group(3), where='본문'))
-    for m in re.finditer(rf'정량범위\s*[:은는]\s*(.{{0,120}}?)(?=간섭물질|방법검출|시료채취|이며|이고|$)', t):
-        seg = m.group(1)
+    for m in re.finditer(rf'정량범위\s*([:은는])\s*(.{{0,120}}?)(?=간섭물질|방법검출|시료채취|이며|이고|$)', t):
+        seg = m.group(2); where = '요약표' if m.group(1) == ':' else '본문'
         k = re.search(rf'\(?\s*([\d.]+)\s*(?:{UNITN})?\s*[∼～~-]\s*([\d.]+)\s*\)?\s*{UNIT}', seg)
         if k:
-            out['range'].append(dict(low=float(k.group(1)), high=float(k.group(2)), unit=k.group(3), text=seg[:100]))
+            out['range'].append(dict(low=float(k.group(1)), high=float(k.group(2)), unit=k.group(3), text=seg[:100], where=where))
             continue
         k = re.search(rf'([\d.]+)\s*{UNIT}\s*이상', seg)
         if k:
-            out['range'].append(dict(low=float(k.group(1)), high=None, unit=k.group(2), text=seg[:100]))
+            out['range'].append(dict(low=float(k.group(1)), high=None, unit=k.group(2), text=seg[:100], where=where))
     # 금속 공통 원문의 표: "Cd 226.50/214.44/228.80 0.005 이상 0.002"
     for k in re.finditer(r'\b(Cd|Pb|Cr|Cu|Ni|Zn|Be|As|Hg|Fe|Mn)\s+[\d./]+\s+(\d+\.\d+)\s*이상\s+(\d+\.\d+?)(?=\d\.\d|[^\d.]|$)', t):
         out['mdl'].append(dict(name=k.group(1), value=float(k.group(3)), unit='mg/Sm3', where='표 1'))
-        out['range'].append(dict(name=k.group(1), low=float(k.group(2)), high=None, unit='mg/Sm3', text=k.group(0)))
+        out['range'].append(dict(name=k.group(1), low=float(k.group(2)), high=None, unit='mg/Sm3', text=k.group(0), where='본문'))
     # "ES 01400.2 … 을 따른다" : 따르는 원문
     m = re.search(r'(ES\s*\d{5}(?:\.\d)?)\s*[^.]{0,60}?을\s*따른다', t)
     out['follows'] = m.group(1).replace(' ', '') if m else None

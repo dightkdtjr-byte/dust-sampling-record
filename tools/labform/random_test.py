@@ -1,8 +1,8 @@
 # 검증 방식 3: 무작위 대량 비교 — 판정 규칙을 파이썬으로 따로 구현하고, 무작위 계산값·허가배출기준을 넣어
 # LibreOffice로 다시 계산한 기록부 결과와 한 칸씩 견준다.
-#   python3 -I tools/labform/random_test.py <골든 폴더> <master.json> <작업 폴더> [회수=8] [씨앗=7]
+#   python3 -I tools/labform/random_test.py <완성본 폴더> <master.json> <작업 폴더> [회수=8] [씨앗=7]
 # 파이썬 쪽 규칙 (엑셀 수식을 보지 않고 README 규칙만으로 구현)
-#   v1 = 4사5입(x, 계산 자릿수), 판정값 = 4사5입(v1, 판정 자릿수), 표시값 = 4사5입(v1, 최종 자릿수)
+#   v1 = 버림(x, 계산 자릿수), 판정값 = 4사5입(v1, 판정 자릿수), 표시값 = 4사5입(v1, 최종 자릿수)  (맺음은 한 번)
 #   판정 자릿수 = max(최종, 방법검출한계 소수 자릿수)
 #   판정값 < 방법검출한계 → "불검출"; 아니면 표시값을 최종 자릿수로 쓴 글자 + (표시값 > 허가배출기준 괄호 앞 숫자면 " (초과)")
 import sys, os, re, json, random, subprocess, warnings
@@ -20,16 +20,23 @@ def rhu(x, d):
     return Decimal(str(x)).quantize(Decimal(1).scaleb(-d), rounding=ROUND_HALF_UP)
 
 
+def trunc(x, d):
+    """d자리까지 계산(아래 버림). 이진 오차를 지우려고 d+5자리에서 먼저 4사5입"""
+    from decimal import ROUND_DOWN
+    return rhu(x, d + 5).quantize(Decimal(1).scaleb(-d), rounding=ROUND_DOWN)
+
+
 def decs(v):
     t = Decimal(str(v)).normalize().as_tuple()
     return max(0, -t.exponent)
 
 
 def expected(x, calc, final, mdl, permit):
-    jd = max(final, decs(mdl)) if mdl is not None else final
-    v1 = rhu(x, calc)
+    jd = final      # 판정은 최종 자릿수로 반올림한 값 (표시값과 판정이 같도록)
+    v1 = trunc(x, calc)
     vj, vf = rhu(v1, jd), rhu(v1, final)
-    if mdl is not None and vj < Decimal(str(mdl)):
+    lim = Decimal(str(mdl)) if mdl is not None else Decimal(0)      # 엑셀 N("-") = 0: 방법검출한계가 없으면 0 미만만 불검출
+    if vj < lim:
         return '불검출'
     s = f'{vf:.{final}f}'
     L = None
@@ -42,17 +49,27 @@ def expected(x, calc, final, mdl, permit):
 
 
 cases = []      # (file, sheet, result, raw cell sheet, raw cell, permit cell, x, permit, calc, final, mdl)
-for r in rows:
+def mdl_of(r):
+    # 다른 시트 값을 쓰는 줄(암모니아 BA·전체: ='기준'!G2)은 그 줄의 값을 따라간다
+    v = r['mdl']
+    m = re.fullmatch(r"='기준'!\$?G\$?(\d+)", str(v))
+    if m:
+        src = next((x for x in rows if x['file'] == r['file'] and x['row'] == int(m.group(1))), None)
+        v = src['mdl'] if src else None
     try:
-        mdl = float(r['mdl'])
+        return float(v)
     except (TypeError, ValueError):
-        mdl = None
+        return None
+
+
+for r in rows:
+    mdl = mdl_of(r)
     calc, final = int(r['calc']), int(r['final'])
     wb = openpyxl.load_workbook(os.path.join(golden, r['file']), keep_vba=r['file'].endswith('m'))
     for res in r['result'].split(', '):
         fm = str(wb[r['sheet']][res].value)
-        m = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
-        m2 = re.search(r"ROUND\(ROUND\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
+        m = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\((\$?[A-Z]{1,3}\$?\d+)&\"\"", fm)
+        m2 = re.search(r"ROUND\((?:ROUND|TRUNC\(ROUND)\(IFERROR\(VALUE\(LEFT\(IF\(((?:'[^']+'|[^!(),\s]+)!)?(\$?[A-Z]{1,3}\$?\d+)=\"\"", fm)
         mp = re.search(r'TRIM\(SUBSTITUTE\((\$?[A-Z]{1,3}\$?\d+)&""', fm)
         if m:
             rsh, rc = r['sheet'], m.group(1).replace('$', '')
@@ -84,6 +101,7 @@ os.makedirs(work, exist_ok=True)
 groups = {}
 for c in cases:
     groups.setdefault((c['file'], c['result'], c['sheet']), []).append(c)
+LO_DIRS = []
 for i in range(N):
     d = os.path.join(work, f't{i}'); os.makedirs(d, exist_ok=True)
     byfile = {}
@@ -103,8 +121,11 @@ for i in range(N):
                 wb[c['sheet']][c['pc']].value = c['permit'] if '(' not in c['permit'] else c['permit'].split('(')[0]
             c['t'] = i
         wb.save(os.path.join(d, os.path.splitext(f)[0] + ('.xlsm' if f.endswith('m') else '.xlsx')))
-    subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lo.sh'), d], capture_output=True, timeout=1500)
+    LO_DIRS.append(d)
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lo_pool
+lo_pool.run(LO_DIRS)   # 여러 폴더를 동시에 다시 계산
 ok = bad = 0; fails = []
 cache = {}
 for c in cases:

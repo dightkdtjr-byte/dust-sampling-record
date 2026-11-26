@@ -72,6 +72,39 @@ def nd_compares(f):
     return out
 
 
+def lab_basic(ws):
+    """시험 기초자료(실험실이 측정한 방법검출한계·정량한계). 비소처럼 줄이 여럿(입자상·가스상)이면 줄마다.
+    돌려주는 값: lab_rows=[{label, mdl, loq}], lab_mdl·lab_loq = 첫 줄"""
+    for row in ws.iter_rows(max_row=min(ws.max_row, 60), max_col=4):
+        for c in row:
+            if not norm(c.value).startswith('시험기초자료'):
+                continue
+            head = c.row; cols = {}
+            for rr in range(c.row, c.row + 2):
+                for cc in range(3, 15):
+                    h = norm(ws.cell(rr, cc).value)
+                    if ('검출한계' in h or '정량한계' in h or '정량범위' in h) and '방법바탕' not in h:
+                        cols['mdl' if '검출' in h else 'loq'] = cc; head = rr
+            out = []
+            for rr in range(head + 1, head + 6):
+                if rr > head + 1 and re.fullmatch(r'\d{1,2}', str(ws.cell(rr, 1).value or '').strip()):
+                    break
+                vals = {k: ws.cell(rr, cc).value for k, cc in cols.items()}
+                if all(v is None for v in vals.values()):
+                    break
+                if any(isinstance(v, str) and not v.startswith('=') and not re.fullmatch(r'[-\d.]+', v.strip()) for v in vals.values()):
+                    break      # 다른 표(측정결과 등)
+                lim = min(cols.values()) if cols else 15
+                lab = next((str(ws.cell(rr, cc).value).strip() for cc in range(2, lim) if isinstance(ws.cell(rr, cc).value, str)
+                            and not norm(ws.cell(rr, cc).value).startswith('시험기초자료') and not str(ws.cell(rr, cc).value).startswith('=')), '')
+                out.append(dict(label=lab, **vals))
+            res = dict(lab_rows=out)
+            if out:
+                res.update(lab_mdl=out[0].get('mdl'), lab_loq=out[0].get('loq'))
+            return res
+    return {}
+
+
 def item_of(ws):
     for r in range(1, 12):
         if norm(ws.cell(r, 2).value) == '시험항목':
@@ -88,6 +121,9 @@ def digits_of(formula, cell):
     return len(m.group(1)) if m else None
 
 
+LAB = [{}]
+
+
 def scan(path):
     wb = openpyxl.load_workbook(path)
     out = []
@@ -95,6 +131,7 @@ def scan(path):
         if ws.sheet_state != 'visible' or '시험기록부' not in norm(ws['A1'].value):
             continue
         item, item_cell = item_of(ws)
+        LAB[0] = lab_basic(ws)
         method = label_right(ws, {'시험방법'})
         for row in ws.iter_rows(max_row=min(ws.max_row, 80)):
             for c in row:
@@ -128,7 +165,7 @@ def scan(path):
                     limit_cell=f'{CL(lim[1])}{lim[0]}' if lim else None,
                     unit=(unit or '').strip(), method_cell=f'{CL(method[1])}{method[0]}' if method else None,
                     method=str(ws.cell(*method).value or '').strip() if method else '',
-                    final_digits=digits_of(v, c), excess=excess))
+                    final_digits=digits_of(v, c), excess=excess, **LAB[0]))
         # 불검출 수식이 없는 양식(먼지 등): "측정결과" 칸에 같은 기준을 건다
         if not any(o['sheet'] == ws.title for o in out):
             res = label_right(ws, {'측정결과'})
@@ -150,7 +187,7 @@ def scan(path):
                         limit_cell=None, unit=str(ws.cell(mdl[0], mdl[1] + 1).value or '').strip(),
                         method_cell=f'{CL(method[1])}{method[0]}' if method else None,
                         method=str(ws.cell(*method).value or '').strip() if method else '',
-                        final_digits=len(fmt.group(1)) if fmt else 0, excess=False, synthetic=True))
+                        final_digits=len(fmt.group(1)) if fmt else 0, excess=False, synthetic=True, **LAB[0]))
     return out
 
 

@@ -23,6 +23,26 @@ os.makedirs(DST, exist_ok=True)
 CR.OVERWRITE = True
 
 
+_TITLES = {}
+
+
+def fix_titles(b, sheets):
+    import names as NM
+    if not _TITLES:
+        _TITLES.update(NM.official_titles(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work', 'ref_zip')) or {'_': ''})
+    n = 0
+    for sh in sheets:
+        ws = b.wb[sh]
+        for row in ws.iter_rows():
+            for c in row:
+                v = c.value
+                if isinstance(v, str) and not v.startswith('=') and re.search(r'ES\s*\d{5}\.\w', v):
+                    nv = NM.fix_method(NM.rename_text(v), _TITLES)
+                    if nv != v:
+                        b.setv(sh, c.coordinate, nv); c.value = nv; n += 1
+    return n
+
+
 def item_name(path):
     n = os.path.splitext(os.path.basename(path))[0]
     m = re.search(r'시험기록부_([^_]+)', n)
@@ -122,6 +142,10 @@ def run(path):
         k = fix_due(b, sheet)
         if k:
             log.append(f'{sheet}: 시험기한 수식 DAY() 버그 고침 {k}곳')
+    # 시험방법 제목을 원문 제목으로 먼저 고친다 (글자 맞춤·줄바꿈이 고친 글자로 되게)
+    k = fix_titles(b, [sh for sh, _ in forms])
+    if k:
+        log.append(f'시험방법 제목을 원문 제목으로 {k}칸')
     doc = find_docno(b, forms[0][0]) or DEFAULT_DOCNO
     first = None
     for sheet, area in forms:
@@ -132,8 +156,12 @@ def run(path):
         log.append(f'{sheet} {area} → {len(pages)}쪽' + (f' 경고 {warn}' if warn else ''))
     for sheet in others:
         land = (load(b)[sheet].page_setup.orientation == 'landscape')
-        page_setup(b, sheet, doc, landscape=land)
+        page_setup(b, sheet, None, landscape=land)   # 문서번호 바닥글은 기록부 시트에만 (로우데이터·계산과정 시트는 뺌)
         CR.tidy_other(b, sheet)
+    import scripts_rule as SR
+    k = SR.unify_scripts(b, [sh for sh, _ in forms] + others)
+    if k:
+        log.append(f'위첨자·아래첨자 통일 {k}칸 (Sm3·m3의 3 위첨자, 화학식 숫자·RRFavg 아래첨자)')
     ext = os.path.splitext(path)[1]
     dst = os.path.join(DST, f'시험기록부_{item_name(path)}{ext}')
     b.finish(dst)
@@ -141,16 +169,33 @@ def run(path):
 
 
 files = sorted(p for p in glob.glob(os.path.join(SRC, '**', '*.xls*'), recursive=True) if not os.path.basename(p).startswith('~$'))
-ok = 0
-for p in files:
+
+
+def job(p):
+    """파일 하나 (다른 파일과 상관없어 여러 개를 동시에 돌린다: LibreOffice는 파일마다 따로 임시 프로필)"""
     try:
         dst, log = run(p)
+        return p, dst, log, None
+    except Exception as e:
+        import traceback
+        return p, None, [], repr(e) + '\n' + traceback.format_exc(limit=3)
+
+
+if __name__ == '__main__':
+    from concurrent.futures import ProcessPoolExecutor
+    jobs = int(os.environ.get('LABFORM_JOBS', min(4, os.cpu_count() or 1)))
+    if jobs > 1:
+        with ProcessPoolExecutor(jobs) as ex:
+            results = list(ex.map(job, files))
+    else:
+        results = [job(p) for p in files]
+    ok = 0
+    for p, dst, log, err in results:
+        if err:
+            print('!! 실패', os.path.basename(p), err)
+            continue
         print('ok' if dst else '--', os.path.basename(p))
         for l in log:
             print('    ', l)
         ok += bool(dst)
-    except Exception as e:
-        import traceback
-        print('!! 실패', os.path.basename(p), repr(e))
-        traceback.print_exc(limit=3)
-print(f'{ok}/{len(files)} 파일 처리')
+    print(f'{ok}/{len(files)} 파일 처리')

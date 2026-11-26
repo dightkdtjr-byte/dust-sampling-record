@@ -37,7 +37,7 @@ EXAMPLE = {
 OVERWRITE = False
 OVERWRITE_KEYS = {'의뢰기관', '측정대상', '시료채취일', '시료인수일', '분석일자', '시료인수 시각', '시험검사기간'}
 PERIOD_FMT = '0"일"'
-SIGN_NAMES = ('이 상 석 (인)', '전 하 은 (인)')   # 담당, 기술책임자 (원본 기록 그대로)
+SIGN_NAMES = ('오 설 록 (인)', '오 설 록 (인)')   # 담당, 기술책임자 (예시 이름은 오설록으로 통일)
 _norm = lambda s: re.sub(r'\s', '', str(s or ''))
 
 
@@ -287,11 +287,29 @@ def _pieces(w):
     return out
 
 
+def _keep_parens(words, inner, size, bold, measure):
+    """괄호 안 낱말들은 한 덩어리로 (예: "(정전위 전해법)"이 "(정전위" / "전해법)"으로 갈라지지 않게). 한 줄에 안 들어가면 그대로"""
+    out, buf, depth = [], [], 0
+    for w in words:
+        if depth > 0:
+            buf.append(w)
+        elif '(' in w and w.count('(') > w.count(')'):
+            buf = [w]
+        else:
+            out.append(w); continue
+        depth = sum(x.count('(') - x.count(')') for x in buf)
+        if depth <= 0:
+            g = ' '.join(buf)
+            out += [g] if measure(g, size, bold) <= inner else [buf[0]] + _keep_parens(buf[1:], inner, size, bold, measure)   # 바깥 괄호가 길면 안쪽 괄호만
+            buf, depth = [], 0
+    return out + buf
+
+
 def split_lines(text, inner, size, bold, measure):
     """띄어쓰기 자리에서만 나눠 inner(px)에 들어가게. 낱말 하나가 넘치면 None"""
     out = []
     for para in text.split('\n'):
-        words = para.split(' ')
+        words = _keep_parens(para.split(' '), inner, size, bold, measure)
         # 띄어쓰기 없이 긴 영문 이름(d12-Benzo(a)pyrene 등)은 "-" 뒤, "(" 앞에서도 나눌 수 있게
         if any(measure(w, size, bold) > inner for w in words):
             words = [p for w in words for p in (_pieces(w) if measure(w, size, bold) > inner else [w])]

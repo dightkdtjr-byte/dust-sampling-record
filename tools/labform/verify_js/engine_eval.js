@@ -11,6 +11,10 @@ const col = s => s.split('').reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0
 const colL = n => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
 // 이 엔진에 없는 엑셀 함수 둘: 엑셀 정의대로
 const functions = {
+  // 이 엔진의 ROUND는 1.005 → 1.00 (이진 오차). 엑셀처럼 15자리로 고친 뒤 0에서 먼 쪽으로 4사5입
+  ROUND: (x, digits) => { const n = H.accept(x, T.NUMBER), d = Math.trunc(H.accept(digits, T.NUMBER)); const a = Math.abs(Number(n.toPrecision(15))); const r = Number(Math.round(Number(a + 'e' + d)) + 'e' + (-d)); return n < 0 ? -r : r; },
+  // 이 엔진의 TRUNC는 자릿수를 주면 0을 돌려준다(버그) → 엑셀 정의대로: 0 쪽으로 버림, 15자리 정밀도
+  TRUNC: (x, digits) => { const n = H.accept(x, T.NUMBER), d = digits === undefined || digits === null ? 0 : Math.trunc(H.accept(digits, T.NUMBER)); const m = Math.pow(10, d); return Math.trunc(Number((n * m).toPrecision(15))) / m; },
   SUBSTITUTE: (text, oldT, newT) => { text = H.accept(text, T.STRING); oldT = H.accept(oldT, T.STRING); newT = H.accept(newT, T.STRING); return oldT === '' ? text : text.split(oldT).join(newT); },
   VALUE: (text) => { const v = H.accept(text); if (typeof v === 'number') return v; const s = String(v).trim(); if (s === '' || !/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s)) throw FormulaError.VALUE; return Number(s); },
 };
