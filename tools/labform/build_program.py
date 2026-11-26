@@ -4,7 +4,7 @@
 # 기준을 고친 뒤 "골든 카피 내려받기"를 누르면 각 기록부의 숨김 '기준' 시트 칸(D·E·F·G·H·I)을 고쳐 zip으로 내려받는다.
 import sys, os, json, base64, glob, datetime
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 golden, master, jszip, out = sys.argv[1:5]
 rows = json.load(open(master, encoding='utf8'))
 keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'lab_mdl', 'lab_loq']
