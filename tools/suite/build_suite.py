@@ -20,6 +20,7 @@ title = man.get('title', '실험실 프로그램')
 from html import escape as H
 J = lambda o: json.dumps(o, ensure_ascii=False).replace('</', '<\\/')
 html = (tpl.replace('"__MANIFEST__"', J(apps)).replace('"__TITLE_JS__"', J(title))
+           .replace('/*__SCENE__*/', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'stackpilot_scene.js'), encoding='utf8').read().replace('</script', '<\\/script'))
            .replace('__APPS__', '\n'.join(blobs))
            .replace('__TITLE_SPACED__', H(' '.join(title.replace(' ', ''))))
            .replace('__TITLE__', H(title))

@@ -24,7 +24,9 @@ RULES = {
 }
 js = lambda t: t.replace('</', '<\\/')      # <script> 안 JSON에 "</script>"가 있어도 끊기지 않게
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'program_template.html'), encoding='utf8').read()
+SCENE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'suite', 'vendor', 'stackpilot_scene.js')
 html = (html.replace('/*__JSZIP__*/', open(jszip, encoding='utf8').read())
+            .replace('/*__SCENE__*/', open(SCENE, encoding='utf8').read().replace('</script', '<\\/script') if os.path.exists(SCENE) else '')
             .replace('"__DATA__"', js(json.dumps(data, ensure_ascii=False, default=str)))
             .replace('"__FILES__"', json.dumps(files))
             .replace('"__RULES__"', js(json.dumps(RULES, ensure_ascii=False)))

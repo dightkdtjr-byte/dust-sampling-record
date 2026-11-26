@@ -37,7 +37,13 @@
   .btn.sm { padding:5px 11px; font-size:12px; }
   .btn:disabled { opacity:.55; cursor:wait; }
   .btn:focus-visible, .card:focus-visible, .linkbtn:focus-visible, .stat:focus-visible, .seg button:focus-visible { outline:3px solid #c4523a; outline-offset:2px; }
-  main { max-width:1240px; margin:0 auto; padding:22px 20px 80px; }
+  main { max-width:1240px; margin:0 auto; padding:22px 20px 80px; position:relative; z-index:1; }
+  #spSky { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  @media (prefers-reduced-motion:reduce) { #spSky * { animation:none !important; } }
+  @media print { #spSky { display:none !important; } }
+  .panel, .card { background:rgba(255,255,255,.95); }
+  .bar { background:rgba(255,255,255,.82); border:1px solid var(--line); border-radius:999px; padding:8px 12px; box-shadow:var(--shadow); }
+  .crumb { display:inline-flex !important; background:rgba(255,255,255,.85); border-radius:999px; padding:5px 12px; }
   .panel { background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); }
   .kicker { font-size:12px; font-weight:600; color:var(--soft); }
   h1, h2, h3 { margin:0; letter-spacing:-.015em; }
@@ -161,6 +167,7 @@
     <button class="btn sm" id="btnReset">처음 값으로</button>
   </div>
 </div></div>
+<div id="spSky" aria-hidden="true"></div>
 <main id="app"></main>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="sheet">
   <div class="sheet-h"><h2 id="modalTitle">원문</h2><span class="grow"></span><button class="btn sm" id="modalClose">닫기</button></div>
@@ -168,6 +175,7 @@
 </div></div>
 <div id="toast" role="status"></div>
 <script>/*__JSZIP__*/</script>
+<script>/*__SCENE__*/</script>
 <script>
 const DATA = "__DATA__";
 const FILES = "__FILES__";
@@ -618,6 +626,7 @@ $('#btnImport').onclick = () => $('#fileImport').click();
 $('#fileImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); const e2 = cleanEdits(j && j.edits ? j.edits : j); if (!Object.keys(e2).length && !(j && j.edits && !Object.keys(j.edits).length)) { toast('백업 파일에 기준 수정 내용이 없음'); } else { edits = e2; save(); render(); toast(`백업 불러옴 (${Object.keys(e2).length}항목)`); } } catch (x) { toast('백업 파일을 읽지 못함'); } e.target.value = ''; };
 $('#btnReset').onclick = () => { if (!confirm('모든 수정 내용을 지우고 처음 값으로 되돌릴까요?')) return; edits = {}; save(); render(); toast('처음 값으로 되돌림'); };
 render();
+try { if (window.StackpilotScene) StackpilotScene.mount(document.getElementById('spSky'), { theme: 'basic', mode: 'auto', season: 'auto', scope: 'menu' }); } catch (e) {}   // 시료채취 프로그램과 같은 풍경 (시간대·계절)
 </script>
 </body>
 </html>
