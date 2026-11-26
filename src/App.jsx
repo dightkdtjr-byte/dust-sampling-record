@@ -3700,7 +3700,9 @@ export default function App() {
         if (!cancelled) setSecureUsers(normalizedUsers);
 
         let restored = false;
-        const savedSession = readSessionAuth();
+        // 프로그램을 켜면 언제나 로그인 화면부터: 본 창은 지난번 로그인을 되살리지 않는다.
+        // 로그인한 본 창에서 띄운 기록부 창만 그 로그인을 이어받는다.
+        const savedSession = IS_POPUP_WINDOW ? readSessionAuth() : null;
         if (savedSession) {
           const { userId, password } = savedSession;
           const targetUser = normalizedUsers[userId];
@@ -3738,7 +3740,8 @@ export default function App() {
         }
 
         if (!restored && !cancelled) {
-          clearSessionAuth();
+          // 본 창을 새로 켤 때는 저장된 로그인을 지우지 않는다 (지우면 열려 있는 다른 창이 저장 확인 없이 잠긴다). 다음 로그인 때 덮어쓴다
+          if (IS_POPUP_WINDOW) clearSessionAuth();
           setActiveUser('');
           setLoginUserId(BETA_USER_ID);
           setIsUserUnlocked(false);
