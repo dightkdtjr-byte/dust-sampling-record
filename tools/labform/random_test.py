@@ -42,11 +42,21 @@ def expected(x, calc, final, mdl, permit):
 
 
 cases = []      # (file, sheet, result, raw cell sheet, raw cell, permit cell, x, permit, calc, final, mdl)
-for r in rows:
+def mdl_of(r):
+    # 다른 시트 값을 쓰는 줄(암모니아 BA·전체: ='기준'!G2)은 그 줄의 값을 따라간다
+    v = r['mdl']
+    m = re.fullmatch(r"='기준'!\$?G\$?(\d+)", str(v))
+    if m:
+        src = next((x for x in rows if x['file'] == r['file'] and x['row'] == int(m.group(1))), None)
+        v = src['mdl'] if src else None
     try:
-        mdl = float(r['mdl'])
+        return float(v)
     except (TypeError, ValueError):
-        mdl = None
+        return None
+
+
+for r in rows:
+    mdl = mdl_of(r)
     calc, final = int(r['calc']), int(r['final'])
     wb = openpyxl.load_workbook(os.path.join(golden, r['file']), keep_vba=r['file'].endswith('m'))
     for res in r['result'].split(', '):
