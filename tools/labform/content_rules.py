@@ -29,7 +29,10 @@ EXAMPLE = {
     '분석일자': datetime.date(2027, 4, 1),
     '시각': 17,
     '시험검사기간': 2,
+    '허가배출기준': '8(12)',
+    '시료명': '0331-DIG-#A16-P-1',
 }
+SIGN_NAMES = ('이 상 석 (인)', '전 하 은 (인)')   # 담당, 기술책임자 (원본 기록 그대로)
 _norm = lambda s: re.sub(r'\s', '', str(s or ''))
 
 
@@ -116,6 +119,50 @@ def examples(b, sheet, area, fill=True):
         z = M.get((r, c), (c, r, c, r))[2]
         return z + 1
 
+    def sample_name(r, c):
+        # 시료명 표 첫 줄의 시료명 칸. 다른 시트에서 끌어오는 수식이면 그 원래 칸에 넣는다
+        a, top, z, bot = M.get((r, c), (c, r, c, r))
+        rr = bot + 1
+        for cc in range(a, z + 1):
+            cell = ws.cell(rr, cc)
+            if type(cell).__name__ == 'MergedCell':
+                continue
+            v = cell.value
+            if isinstance(v, str) and v.startswith('='):
+                m = re.search(r"=IF\((?:'([^']+)'|([^!'\s(]+))!\$?([A-Z]+)\$?(\d+)=\"\"", v)
+                if m:
+                    src = m.group(1) or m.group(2); ref = f'{m.group(3)}{m.group(4)}'
+                    if src not in b.sheets:
+                        return
+                    # 같은 시트 안에서 수식을 따라가 실제 입력 칸을 찾는다 (예: A9 = A3&"-1" → A3)
+                    sw = load(b)[src]; name = EXAMPLE['시료명']
+                    for _ in range(5):
+                        fv = sw[ref].value
+                        if not (isinstance(fv, str) and fv.startswith('=')):
+                            break
+                        k = re.search(r'=(?:IF\(\$?([A-Z]+)\$?(\d+)=""\s*,\s*""\s*,\s*)?\$?([A-Z]+)\$?(\d+)((?:&"[^"]*")*)', fv)
+                        if not k:
+                            return
+                        for tail in re.findall(r'&"([^"]*)"', k.group(5) or ''):
+                            if name.endswith(tail):
+                                name = name[:len(name) - len(tail)]
+                        ref = f'{k.group(3)}{k.group(4)}'
+                    if sw[ref].value in (None, ''):
+                        b.setv(src, ref, name)
+                        notes.append(f'{src}!{ref} 시료명 = {name} ({CL(cc)}{rr}에 {EXAMPLE["시료명"]}로 나옴)')
+                return
+            if v is None:
+                put(rr, cc, EXAMPLE['시료명'], '시료명'); return
+            # 세로 머리글(흡수액 등)은 건너뛴다
+
+    if fill:
+        # 서명란 이름
+        signs = [c for c in range(c1, c2 + 1) if _norm(ws.cell(r1, c).value) in ('담당', '기술책임자')]
+        for c, name in zip(signs, SIGN_NAMES):
+            cell = ws.cell(r1 + 1, c)
+            if type(cell).__name__ != 'MergedCell' and _norm(cell.value) in ('', '(인)'):
+                b.setv(sheet, f'{CL(c)}{r1 + 1}', name)
+                notes.append(f'{CL(c)}{r1 + 1} 서명란 = {name}')
     for r in (range(r1 + 2, r2 + 1) if fill else ()):
         for c in range(c1, c2 + 1):
             v = ws.cell(r, c).value
@@ -128,6 +175,12 @@ def examples(b, sheet, area, fill=True):
                     put(r, t, EXAMPLE[k], k)
             if k == '시' and c > c1:
                 put(r, c - 1, EXAMPLE['시각'], '시료인수 시각')
+            if k == '허가배출기준' and v.strip() == str(v).strip() and '\n' not in str(v):
+                t = right_of(r, c)
+                if t <= c2:
+                    put(r, t, EXAMPLE['허가배출기준'], '허가배출기준')
+            if k == '시료명':
+                sample_name(r, c)
     # 날짜 칸 표시 형식
     s_xml = b.sx(sheet)
     new = {}
