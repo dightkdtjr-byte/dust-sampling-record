@@ -33,18 +33,19 @@
   .hero { background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:28px 30px; }
   .hero h1 { margin:0; font-size:30px; font-weight:800; letter-spacing:.04em; }
   .hero p { margin:10px 0 0; color:var(--ink-2); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-top:18px; }
-  .card { display:flex; flex-direction:column; text-align:left; background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);
-          padding:20px 22px 18px; transition:transform .18s, box-shadow .18s; min-width:0; }
-  .card:not(.off):hover { transform:translateY(-3px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 18px 30px -16px rgba(20,28,34,.55); }
+  .grid { display:flex; flex-direction:column; gap:10px; margin-top:18px; }
+  .card { display:flex; align-items:center; gap:20px; text-align:left; background:var(--paper); border:1px solid var(--line); border-left:6px solid var(--c, var(--ink));
+          border-radius:12px; box-shadow:var(--shadow); padding:16px 22px; transition:transform .15s, box-shadow .15s; min-width:0; cursor:pointer; }
+  .card:not(.off):hover { transform:translateY(-1px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 12px 24px -16px rgba(20,28,34,.55); }
   .card.off { opacity:.6; cursor:default; }
   .kicker { font-size:12px; font-weight:600; color:var(--soft); }
-  .card h2 { margin:2px 0 0; font-size:20px; font-weight:800; }
-  .stroke { display:block; width:100%; height:.45rem; margin:.5rem 0 .7rem; background:var(--c, var(--ink));
-    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
-  .card p { margin:0; color:var(--ink-2); font-size:13.5px; }
-  .card .meta { margin-top:14px; font-size:12px; color:var(--soft); }
+  .card .name { flex:0 0 220px; min-width:0; }
+  .card h2 { margin:2px 0 0; font-size:19px; font-weight:800; }
+  .card p { flex:1 1 auto; margin:0; color:var(--ink-2); font-size:13.5px; min-width:0; }
+  .card .meta { flex:0 0 auto; font-size:12px; color:var(--soft); white-space:nowrap; }
+  .card .go { flex:0 0 auto; font-size:13px; font-weight:700; padding:7px 16px; border-radius:999px; background:var(--ink); color:#fff; white-space:nowrap; }
+  .card.off .go { background:var(--paper-2); color:var(--soft); }
+  @media (max-width:700px) { .card { flex-wrap:wrap; gap:8px 12px; } .card .name { flex:1 1 60%; } .card p { flex:1 1 100%; order:3; } }
   .frame { position:absolute; top:44px; left:0; right:0; bottom:0; border:0; width:100%; height:calc(100% - 44px); background:var(--bg); display:none; z-index:2; }
   .frame.on { display:block; }
   .loading { position:absolute; top:44px; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; color:var(--soft); }
@@ -80,9 +81,10 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('#tabs').innerHTML = APPS.map(a => `<button class="tab" data-go="${a.id}" ${a.ready ? '' : 'disabled title="파일 없음"'}>${esc(a.title)}</button>`).join('');
 $('#cards').innerHTML = APPS.map(a => `<article class="card ${a.ready ? '' : 'off'}" ${a.ready ? `data-go="${a.id}" tabindex="0" role="button"` : ''} style="--c:${a.color}">
-  <div class="kicker">${esc(a.kicker || '')}</div><h2>${esc(a.title)}</h2><span class="stroke"></span>
+  <div class="name"><div class="kicker">${esc(a.kicker || '')}</div><h2>${esc(a.title)}</h2></div>
   <p>${esc(a.desc || '')}</p>
-  <div class="meta">${a.ready ? esc(a.version ? 'v' + a.version : '') : '아직 합치지 않음 (build_suite.py에 파일을 넣으면 들어감)'}</div></article>`).join('');
+  <div class="meta">${a.ready ? esc(a.version ? 'v' + a.version : '') : '아직 합치지 않음'}</div>
+  <span class="go">${a.ready ? '열기' : '없음'}</span></article>`).join('');
 const frames = {};
 // 프로그램마다 따로 만든 HTML 한 파일을 그대로 띄운다 (srcdoc: 이 파일과 같은 출처라 브라우저 저장·내려받기가 그대로 된다)
 function frameOf(id) {
