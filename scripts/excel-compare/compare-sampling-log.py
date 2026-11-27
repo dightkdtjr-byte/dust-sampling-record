@@ -53,9 +53,11 @@ for row, kind in kinds.items():
 # 비소(입자상 32행·가스상 33행)는 한 물질: 의뢰 칸은 병합해 O 하나, 의뢰 개수에 1로 잡히고, 채취유량이 같다
 if '32' in kinds and '33' in kinds:
     same('비소 가스상 의뢰 칸(병합이라 빈칸)', ws['C33'].value, '')
-    same('의뢰 개수(C63)', ws['C63'].value, len(kinds) - 1)
     cmp('비소 입자상·가스상 채취유량이 같은지', ws['K33'].value, ws['K32'].value, 1e-9)
     same('비소 가스상 sampler No.', blank(ws['E33'].value), blank(ws['E32'].value))
+# 의뢰 개수: 줄 수가 아니라 화면이 세는 종 수와 같아야 한다 (알데히드는 고른 종 수만큼, 3회차·암모니아 2줄은 한 번만, 비소 입자·가스상은 1)
+same('의뢰 개수(C63) = 화면의 의뢰 종 수', ws['C63'].value, src['stats']['requestedCount'])
+same('의뢰 개수가 수식인지', str(wsf['C63'].value).startswith('='), True)
 # 일차별 시트
 for sheet in wv.worksheets[1:]:
     day = sheet['J7'].value; dues = []

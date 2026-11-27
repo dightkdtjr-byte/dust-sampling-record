@@ -756,6 +756,30 @@ const countSpecies = (subs, log = null) => {
   return total;
 };
 const SAMPLING_LOG_SPECIES_TOTAL = countSpecies(SAMPLING_LOG_SUBSTANCES);
+// 엑셀의 의뢰 개수 칸에 넣을 수식. 양식은 O 표시한 줄 수(COUNTA)를 세는데, 화면은 종(種) 수를 센다
+// → 같은 종을 여러 줄로 적는 것(암모니아 흡수액 2종, 알데히드 3회차)은 한 번만 세고,
+//   한 줄에 두 종이 묶인 것(알데히드: 포름·아세트)은 고른 종 수만큼 센다. 비소 가스상은 의뢰 칸이 병합이라 원래 세지 않는다
+const buildSamplingLogCountFormula = (log) => {
+  const groups = new Map();
+  SAMPLING_LOG_SUBSTANCES.filter((sub) => !sub.sameAs).forEach((sub) => {
+    const key = getSubstanceSpeciesKey(sub);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(sub);
+  });
+  const rows = SAMPLING_LOG_SUBSTANCES.map((sub) => sub.row);
+  let formula = `COUNTA(C${Math.min(...rows)}:C${Math.max(...rows)})`;
+  groups.forEach((subs) => {
+    const range = `C${subs[0].row}:C${subs[subs.length - 1].row}`;
+    if (subs.length > 1) formula += `-MAX(0,COUNTA(${range})-1)`;
+    if (Array.isArray(subs[0].options)) {
+      // 화면과 같은 규칙: 의뢰한 첫 줄에서 고른 종 수
+      const first = subs.find((sub) => log.rows[String(sub.row)]?.requested) || subs[0];
+      const picked = getSubstanceSpeciesCount(first, log.rows[String(first.row)]);
+      if (picked > 1) formula += `+MIN(1,COUNTA(${range}))*${picked - 1}`;
+    }
+  });
+  return formula;
+};
 const getSamplingLogRowsOfSpecies = (sub) => SAMPLING_LOG_SUBSTANCES.filter((item) => getSubstanceSpeciesKey(item) === getSubstanceSpeciesKey(sub));
 
 // 다른 줄과 한 번에 채취하는 줄(비소 가스상 → 비소 입자상): 일차·시각·가스미터 값·온도·압력이 늘 같다
@@ -9675,6 +9699,8 @@ export default function App() {
         });
       });
       add('C59', { formula: 'IF(C6="","",C6)' }); // 양식은 MIN(C6:C8)이라 1일차 날짜가 비면 2일차 날짜가 나왔다
+      // 의뢰 개수: 줄 수가 아니라 화면과 같은 종 수 (포름알데하이드·아세트알데하이드는 각각 1종, 알데히드 3회차·암모니아 2줄은 한 번만)
+      add('C63', { formula: buildSamplingLogCountFormula(log) });
       const inputPath = sheetPathMap.get(inputSheet);
       const inputXml = await zip.file(inputPath).async('string');
       zip.file(inputPath, repairOrphanSharedFormulas(inputXml, patchWorksheetXml(inputXml, updates, { removeMerges: SAMPLING_LOG_UNMERGE_ON_EXPORT }))
@@ -9975,6 +10001,7 @@ export default function App() {
     });
     window.__stackpilotExportSamplingLogForTest = exportSamplingLogExcel;
     window.__stackpilotSetSamplingLogForTest = (value) => setSamplingLogData(sanitizeSamplingLog(value));
+    window.__stackpilotSamplingLogStatsForTest = () => getSamplingLogStats(sanitizeSamplingLog(samplingLogData));
   }
 
   const handleExportSelectedTemplateExcel = async () => {

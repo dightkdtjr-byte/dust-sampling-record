@@ -6,7 +6,7 @@ let seed = Number(process.env.SEED || 1); const rnd = () => { seed = (seed * 110
 const r = (lo, hi, dec) => (lo + rnd() * (hi - lo)).toFixed(dec);
 // 줄 번호 → 종류: 입자 샘플러(먼지·금속·수은), 가스 샘플러(흡수액), 음압상자·테들러백, 그 밖
 // (thc: 현장측정이라 채취유량 없음. 23·31·53행은 양식의 일차별 시트에 시험검사기간이 빠져 있던 줄, 33·36행은 기간이 따로 없던 줄)
-const ROWS = { 13: 'particle', 19: 'gas', 20: 'gas', 21: 'gas', 23: 'gas', 24: 'gas-liquid', 25: 'particle', 31: 'particle', 32: 'particle', 33: 'particle', 34: 'particle', 35: 'gas', 36: 'gas', 38: 'gas', 40: 'thc', 41: 'plain', 42: 'box', 43: 'box', 53: 'box', 57: 'box', 58: 'box' };
+const ROWS = { 13: 'particle', 17: 'gas', 18: 'gas', 19: 'gas', 20: 'gas', 21: 'gas', 23: 'gas', 24: 'gas-liquid', 25: 'particle', 31: 'particle', 32: 'particle', 33: 'particle', 34: 'particle', 35: 'gas', 36: 'gas', 37: 'gas', 38: 'gas', 40: 'thc', 41: 'plain', 42: 'box', 43: 'box', 53: 'box', 57: 'box', 58: 'box' };
 const log = {
   company: '견본산업(주)', industry: '폐기물 소각', facility: '소각로 1호기', stackName: 'S1', siteAbbr: 'GB',
   particleSamplerId: '', particleSamplerYd: '0.991', particleSamplerYdManual: true, gasSamplerId: '', gasSamplerYd: '1.0127', gasSamplerYdManual: true,
@@ -33,6 +33,7 @@ log.rows[33] = { ...log.rows[32] };
   await p.evaluate(() => window.__stackpilotExportSamplingLogForTest());
   const d = await dl;
   if (d) { await d.saveAs(`${out}/samplinglog.xlsx`); console.log('samplinglog ok'); } else console.log('samplinglog NO DOWNLOAD');
-  fs.writeFileSync(`${out}/samplinglog.input.json`, JSON.stringify({ log, kinds: ROWS }, null, 1));
+  const stats = await p.evaluate(() => window.__stackpilotSamplingLogStatsForTest());
+  fs.writeFileSync(`${out}/samplinglog.input.json`, JSON.stringify({ log, kinds: ROWS, stats }, null, 1));
   await b.close();
 })().catch((e) => { console.log('ERR', e.message); process.exit(1); });
