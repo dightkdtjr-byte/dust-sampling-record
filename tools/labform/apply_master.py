@@ -312,8 +312,10 @@ def link_o2(b, permits, log):
                 L, O2 = OX.permit_exprs(P)
                 set_formula(b, sh, nxt, O2)
                 log.append(f'{sh}!{nxt}: 표준산소 = {P}의 괄호 안 숫자')
-    def o2_for(sh, P):
+    def o2_for(sh, P, at=None):
         sc = side.get(sh)
+        if sc and at and at != sh:
+            sc = f'{OX.q(sh)}!{sc}'      # 다른 시트(계산과정)에 넣는 식이면 기록부 시트 이름을 붙임 (안 붙이면 자기 시트의 같은 칸을 읽음)
         return OX.permit_exprs(P, O2cell=sc)[1] if sc else OX.permit_exprs(P)[1]
     done = set(side.items())
     # 거꾸로 찾기: 계산과정 칸 ← 기록부 표의 어느 줄에서 쓰이는가 (SOx: 계산과정 F6 ← 기록부 E24 → SO2 묶음)
@@ -372,7 +374,7 @@ def link_o2(b, permits, log):
                         sh_p, P = back[tgt][0], permit_by_row(*back[tgt])
                     else:
                         P, sh_p = first_P, first_sheet
-                    expr = o2_for(sh_p, f'{OX.q(sh_p)}!{P}' if tgt[0] != sh_p else P)
+                    expr = o2_for(sh_p, f'{OX.q(sh_p)}!{P}' if tgt[0] != sh_p else P, at=tgt[0])
                     set_formula(b, tgt[0], tgt[1], expr)
                     done.add(tgt)
                     log.append(f'{tgt[0]}!{tgt[1]}: 표준산소 = {sh_p}!{P}의 괄호 안 숫자 (원래 {tv!r})')

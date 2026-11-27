@@ -142,6 +142,17 @@ def post_apply(b, path):
             if sh in b.sheets and b.wb[sh][ref].value != f:
                 b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
                 log.append(f'{sh}!{ref}: {why}')
+    # 암모니아 (전체): 원본은 보정값이 없는지를 MAX(K21:L32)="" 로 봤는데 MAX는 빈칸만 있어도 0이라 늘 거짓 → 표준산소가 없으면
+    # 결과가 0(불검출)이 됨. 보정값(숫자)이 하나도 없으면 보정 전 값의 큰 값, 실측산소가 비었으면 그 글자를 그대로.
+    # 결과 수식은 이미 바뀐 뒤라 시트 XML에서 바꾼다 (수식 안의 > 는 &gt;)
+    if '암모니아' in base:
+        old = 'IF(MAX(K21:L32)="",MAX(J21:J32),MAX(K21:L32))'
+        new = 'IF(COUNTIF(K21:L32,"실측산소 입력")&gt;0,"실측산소 입력",IF(COUNT(K21:L32)=0,MAX(J21:J32),MAX(K21:L32)))'
+        for sh in list(b.sheets):
+            x = b.sx(sh)
+            if old in x:
+                b.setsx(sh, x.replace(old, new))
+                log.append(f'{sh}: 표준산소가 없으면 보정 전 값의 큰 값 (원본은 MAX(…)="" 비교가 늘 거짓이라 0 → 불검출)')
     log += blank_rows(b, path)
     # 글자가 될 수 있는 칸(빈칸 "" 또는 "실측산소 입력")을 ROUND로 감싼 표시 칸: 숫자일 때만 맺고 아니면 그대로 (엑셀은 ROUND("")가 #VALUE!)
     ref_re = re.compile(r"^=ROUND\(((?:'[^']+'|[^!(),'=]+)!)?\$?([A-Z]{1,3})\$?(\d+),(\d)\)$")

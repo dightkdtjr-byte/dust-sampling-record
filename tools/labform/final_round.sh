@@ -18,4 +18,5 @@ python3 -I blank_scan.py $W/golden $W/bscan > $W/bscan.log 2>&1; log "방식13 �
 for d in $(find $W/fixt -type d -name lo); do python3 -I errs.py $d; done | grep -v "오류 칸 0" > $W/fixt_errs.log; log "방식13 일부만 입력: 오류 칸 있는 파일 $(wc -l < $W/fixt_errs.log)개"
 python3 -I link_audit.py work/all_zip $W/golden $W/link > $W/link.log 2>&1; log "방식14 $(tail -1 $W/link.log)"
 python3 -I chain_audit.py $W/golden $W/master.json > $W/chain.log 2>&1; log "방식15 $(tail -1 $W/chain.log)"
+python3 -I e2e_model_test.py $W/golden $W/master.json $W/e2e16 12 > $W/e2e16.log 2>&1; log "방식16 $(tail -1 $W/e2e16.log)"
 log "최종 회차 끝"
