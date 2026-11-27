@@ -66,20 +66,25 @@
   .seg { display:inline-flex; border:1px solid var(--line-2); border-radius:999px; overflow:hidden; background:var(--paper); }
   .seg button { border:0; background:none; padding:7px 13px; font-size:12.5px; font-weight:700; color:var(--soft); white-space:nowrap; }
   .seg button[aria-pressed="true"] { background:var(--ink); color:#fff; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; }
-  .card { display:flex; flex-direction:column; text-align:left; padding:16px 18px 14px; background:var(--paper); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);
-          transition:transform .18s, box-shadow .18s; min-width:0; cursor:pointer; }
-  .card:hover { transform:translateY(-3px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 18px 30px -16px rgba(20,28,34,.55); }
-  .card .head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
-  .card .head > div:last-child { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
-  .card h3 { font-size:17px; font-weight:800; }
+  .grid { display:flex; flex-direction:column; gap:8px; }
+  .glabel { margin:12px 4px 2px; font-size:12.5px; font-weight:800; color:var(--ink); display:inline-flex; align-self:flex-start; background:rgba(255,255,255,.85); border-radius:999px; padding:3px 12px; }
+  .glabel:first-child { margin-top:0; }
+  /* 기록부 목록: 한 줄씩 가로로 */
+  .card { display:flex; align-items:center; gap:16px; text-align:left; padding:12px 18px; background:var(--paper); border:1px solid var(--line); border-left:6px solid var(--c, var(--ink));
+          border-radius:12px; box-shadow:var(--shadow); transition:transform .15s, box-shadow .15s; min-width:0; cursor:pointer; }
+  .card:hover { transform:translateY(-1px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 12px 24px -16px rgba(20,28,34,.55); }
+  .card .name { flex:0 0 230px; min-width:0; }
+  .card h3 { font-size:16px; font-weight:800; }
+  .card .what { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .card .state { flex:0 0 auto; display:flex; gap:4px; }
+  .card .foot { flex:0 0 auto; display:flex; gap:6px; }
   .stroke { display:block; width:100%; height:.42rem; margin:.4rem 0 .6rem; background:var(--c, var(--ink));
     -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
     mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M2,7 C12,3 26,4 40,5 C58,6 74,3 92,4 C104,4.5 114,5 118,6 C116,8.5 104,9 90,8.6 C70,8 52,10 34,9 C20,8.4 8,9.5 2,7 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
-  .chips { display:flex; flex-wrap:wrap; gap:4px; margin:2px 0 10px; }
-  .chip { font-size:12px; padding:2px 8px; border-radius:999px; background:var(--paper-2); color:var(--ink-2); }
-  .card .meta { font-size:12px; color:var(--soft); margin-top:auto; }
-  .card .foot { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; }
+  .chip { font-size:12px; padding:1px 8px; border-radius:999px; background:var(--paper-2); color:var(--ink-2); }
+  .card .meta { font-size:12px; color:var(--soft); }
+  @media (max-width:760px) { .card { flex-wrap:wrap; gap:8px 12px; } .card .name { flex:1 1 60%; } .card .what { flex:1 1 100%; order:3; } .card .foot { order:4; } }
   .pill { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700; padding:2px 9px; border-radius:999px; white-space:nowrap; }
   .pill.ok { background:var(--ok-bg); color:var(--ok); } .pill.warn { background:var(--warn-bg); color:var(--warn); } .pill.bad { background:var(--bad-bg); color:var(--bad); } .pill.info { background:var(--info-bg); color:var(--info); }
   .pill.edit { background:#e8eef7; color:#2c4f7c; }
@@ -129,7 +134,7 @@
   .try .tf { flex:1; min-width:130px; display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:700; color:var(--ink-2); }
   .try .tf i { font-style:normal; font-weight:500; color:var(--faint); }
   .try input { width:100%; padding:7px 10px; border:1px solid var(--line-2); border-radius:10px; font-weight:400; color:var(--ink); }
-  .how { font-size:12.5px; color:var(--ink-2); margin:0 0 10px; }
+  .how { font-size:12.5px; color:var(--ink-2); }
   .tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   .try .res { margin-top:10px; font-size:18px; font-weight:800; }
   .try .res.over { color:var(--bad); } .try .res.nd { color:var(--soft); }
@@ -378,7 +383,7 @@ function renderHome() {
       <button data-flt="changed" aria-pressed="${view.flt === 'changed'}">수정</button>
     </div>
   </div>
-  <div class="grid" id="cards">${shown.map(card).join('') || '<div class="empty">해당 기록부 없음</div>'}</div>
+  <div class="grid" id="cards">${shown.map((f, i) => (i === 0 || group(shown[i - 1]).name !== group(f).name ? `<div class="glabel">${esc(group(f).name)}</div>` : '') + card(f)).join('') || '<div class="empty">해당 기록부 없음</div>'}</div>
   <section class="panel rules">
     <h2>판정 기준</h2>
     <div class="kicker">모든 기록부 결과 수식에 같은 기준 적용</div>
@@ -396,13 +401,12 @@ function renderHome() {
 function evBtn(k, label) { return EV.rules && EV.rules[k] ? `<button class="linkbtn" data-rule="${k}">${esc(label)} 원문</button>` : `<span class="kicker">${esc(label)}</span>`; }
 function card(f) {
   const g = group(f), rs = BY_FILE[f] || [], lv = fileLevel(f), names = [...new Set(rs.map(r => cur(r).item))], codes = codesOf(f);
+  const many = names.length > 1 || (names[0] && names[0] !== title(f));
   return `<article class="card" data-file="${esc(f)}" style="--c:${g.color}" tabindex="0">
-    <div class="head"><div><div class="kicker">${esc(g.name)}${DISPLAY[SHORT(f)] ? ' · ' + chem(SHORT(f)) : ''}</div><h3>${chem(title(f))}</h3></div>
-      <div>${fileChanged(f) ? '<span class="pill edit">수정</span>' : ''}${rs.length ? `<span class="pill ${lv}">${LEVEL[lv]}</span>` : ''}</div></div>
-    <span class="stroke"></span>
-    ${names.length > 1 || (names[0] && names[0] !== title(f)) ? `<div class="chips">${names.slice(0, 8).map(x => `<span class="chip">${chem(x)}</span>`).join('')}${names.length > 8 ? `<span class="chip">외 ${names.length - 8}종</span>` : ''}</div>` : ''}
-    ${names.length <= 1 && methodName(f) ? `<div class="how">${esc(methodName(f))}</div>` : ''}
-    <div class="meta">${esc(codes.slice(0, 3).join(' · '))}${codes.length > 3 ? ' 외' : ''}</div>
+    <div class="name">${DISPLAY[SHORT(f)] ? `<div class="kicker">${chem(SHORT(f))}</div>` : ''}<h3>${chem(title(f))}</h3></div>
+    <div class="what">${many ? `<div class="chips">${names.slice(0, 12).map(x => `<span class="chip">${chem(x)}</span>`).join('')}${names.length > 12 ? `<span class="chip">외 ${names.length - 12}종</span>` : ''}</div>` : (methodName(f) ? `<div class="how">${esc(methodName(f))}</div>` : '')}
+      <div class="meta">${esc(codes.slice(0, 4).join(' · '))}${codes.length > 4 ? ' 외' : ''}</div></div>
+    <div class="state">${fileChanged(f) ? '<span class="pill edit">수정</span>' : ''}${rs.length ? `<span class="pill ${lv}">${LEVEL[lv]}</span>` : ''}</div>
     <div class="foot"><button class="btn sm fill" data-open="${esc(f)}">기준 보기</button><button class="btn sm" data-dl="${esc(f)}">내려받기</button></div>
   </article>`;
 }

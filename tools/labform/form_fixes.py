@@ -183,13 +183,43 @@ def _trunc_rounds(f, calc=None):
     return ''.join(out)
 
 
+def _guard_truncs(f):
+    """TRUNC(식, n)(n은 숫자, 식이 ROUND로 시작하지 않음) → TRUNC(ROUND(식, n+5), n): 이진 소수 오차(0.025 → 0.02499…)로
+    버림이 한 단위 내려가지 않게"""
+    out, i = [], 0
+    pat = re.compile(r'(?<![A-Z_.])TRUNC\(')
+    while True:
+        m = pat.search(f, i)
+        if not m:
+            out.append(f[i:]); break
+        j, depth, comma = m.end(), 1, None
+        while j < len(f) and depth:
+            ch = f[j]
+            if ch == '"':
+                j = f.index('"', j + 1)
+            elif ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            elif ch == ',' and depth == 1:
+                comma = j
+            j += 1
+        n = f[comma + 1:j - 1].strip() if comma else ''
+        arg = f[m.end():comma] if comma else ''
+        if re.fullmatch(r'-?\d+', n) and not arg.lstrip().startswith('ROUND('):
+            out.append(f[i:m.start()]); out.append(f'TRUNC(ROUND({_guard_truncs(arg)},{int(n) + 5}),{n})'); i = j
+        else:
+            out.append(f[i:m.end()]); i = m.end()
+    return ''.join(out)
+
+
 def strip_pre_rounding(b, sheet, ref, calc=None):
     """결과 수식이 읽는 계산값 칸 R의 ROUND(식, n)을 버림(TRUNC)으로: 결과 수식이 계산 자릿수에서 버리고 최종 자릿수에서
     한 번 맺으므로, 앞에서 먼저 반올림하면 맺음이 두 번이 된다(0.0249 → 0.025 → 0.03). 표시 자릿수는 그대로. 바뀌면 True"""
     v = b.wb[sheet][ref].value
     if not (isinstance(v, str) and v.startswith('=')):
         return False
-    nv = '=' + _trunc_rounds(v[1:], calc)
+    nv = '=' + _guard_truncs(_trunc_rounds(v[1:], calc))
     if nv == v:
         return False
     b.setf(sheet, ref, nv[1:])
