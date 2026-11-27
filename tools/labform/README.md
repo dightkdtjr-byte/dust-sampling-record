@@ -165,6 +165,7 @@ python3 -I tools/labform/run_all.py <원본 폴더> work/out
 python3 -I tools/labform/ref_rules.py <공정시험기준 텍스트 폴더> work/ref_rules.json
 python3 -I tools/labform/apply_master.py work/out work/golden work/master.json
 python3 -I tools/labform/wrap_blank_errors.py work/golden
+python3 -I tools/labform/anonymize.py work/golden
 python3 -I tools/labform/check_master.py work/master.json
 python3 -I tools/labform/evidence.py work/ref_zip work/master_checked.json work/evidence.json
 python3 -I tools/labform/build_program.py work/golden work/master_checked.json jszip.min.js 시험기록부.html work/evidence.json
