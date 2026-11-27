@@ -40,7 +40,8 @@ def _vocs_fixes():
             out += [(sh, f'N{lr}', f'=200/M{lr}', '희석배수 = 200 / 주입량 (Benzene은 원본이 거꾸로 주입량/200)'),
                     (sh, f'O{lr}', f'=IFERROR(AVERAGE(L{lr}:L{lr + 2}),"")', '반복 주입 평균, 희석배수는 여기서 곱하지 않음 (원본 4종은 여기와 H열에서 두 번 곱함). 주입값이 모두 비면 빈칸(분석 안 한 시료), 0을 적으면 0'),
                     (sh, f'D{r}', f'=O{lr}', '시료 농도 = 반복 주입 평균 (원본 6종은 첫 주입값만)'),
-                    (sh, f'H{r}', f'=IF(D{r}="","",ROUND(((D{r}*F{r})-G$32),3))', '분석 안 한 시료는 빈칸으로 평균에서 뺌(0을 적은 시료는 0으로 들어감), 음수도 숫자로 (Dichloromethane은 원본이 글자 "0.000"으로 바꿔 평균에서 빠짐)')]
+                    (sh, f'H{r}', f'=IF(D{r}="","",(D{r}*F{r})-G$32)', '분석 안 한 시료는 빈칸으로 평균에서 뺌(0을 적은 시료는 0으로 들어감), 음수도 숫자로 (Dichloromethane은 원본이 글자 "0.000"으로 바꿔 평균에서 빠짐)')]
+        out.append((sh, 'O51', '=IFERROR(AVERAGE(L51:L52),0)', '바탕시료 평균을 미리 반올림하지 않음 (맺음은 결과 칸에서 한 번)'))
         out += [(sh, f'P{lr}', f'=IF(O{lr}="","",O{lr}-O$51)', '분석 안 한 시료는 빈칸 (빈칸 − 바탕은 엑셀에서 #VALUE!)') for lr in (53, 56, 59)]
         out += [(sh, f'B{r}', f'=IFERROR(LEFT(K{lr},FIND(".",K{lr})-1),K{lr}&"")', '시료명: 파일 이름에 점이 없거나 비면 그대로 (원본은 #VALUE!)') for r, lr in [(32, 53), (33, 56), (34, 59)]]
         out.append((sh, 'I32', '=IFERROR(IF((AVERAGE(H32:H34)/1000)<0,0,TRUNC(ROUND(AVERAGE(H32:H34)/1000,8),3)),"")', '시료 평균은 분석한 시료만 (원본은 빈 시료가 0으로 평균에 들어가 결과가 작아짐), 시료가 모두 비면 결과 빈칸'))
@@ -64,6 +65,9 @@ def apply(b, path):
         new = val
         if ref == 'N3' and isinstance(cur, str):
             new = re.sub(r'\(\(K3\+J3\)/K3\)', '((K3+J3)/760)', cur)
+            m_ = re.fullmatch(r'=ROUND\((.*),\s*\d\)', new)      # 염화수소: 시료량을 미리 반올림하지 않음
+            if m_:
+                new = '=' + m_.group(1)
         elif ref == 'I32' and '/1000' in str(cur) and '이황화메틸' in base:
             new = str(cur).replace('/1000', '')
         elif ref == 'D20' and isinstance(cur, str):
@@ -155,7 +159,8 @@ def post_apply(b, path):
                 tv = str(b.wb[sh2][f'{m.group(2)}{m.group(3)}'].value or '')
                 if tv.startswith('=') and ('""' in tv or '실측산소' in tv):
                     x = (m.group(1) or '') + f'{m.group(2)}{m.group(3)}'
-                    if _set(b, ws.title, c.coordinate, f'=IF(ISNUMBER({x}),ROUND({x},{m.group(4)}),{x}&"")'):
+                    n_ = int(m.group(4))     # 표시는 그 자릿수까지 버림: 결과 칸이 이 칸을 다시 읽어도(암모니아 전체) 반올림이 두 번 되지 않게
+                    if _set(b, ws.title, c.coordinate, f'=IF(ISNUMBER({x}),TRUNC(ROUND({x},{n_ + 5}),{n_}),{x}&"")'):
                         log.append(f'{ws.title}!{c.coordinate}: 보정값이 빈칸·「실측산소 입력」이면 그대로 표시')
     return log
 
@@ -260,7 +265,8 @@ def blank_rows(b, path):
             v = b.wb['계산과정'][f'C{r}'].value
             m = re.search(r"('Raw data'!\$?[A-Z]+\$?\d+)", str(v))
             if m:
-                note(_wrap_blank(b, '계산과정', f'C{r}', m.group(1)), '계산과정!C2:C121', '측정이 없는 시각은 평균에서 뺌')
+                raw_ = m.group(1)
+                note(_set(b, '계산과정', f'C{r}', f'=IF({raw_}="","",IF({raw_}<0,0,{raw_}))'), '계산과정!C2:C121', '측정이 없는 시각은 평균에서 뺌, 기기값을 미리 반올림하지 않음')
             # 시각: 기기 파일의 " 2026/11/05 13:08:05"에서 시·분·초를 숫자로 꺼냄 (TIMEVALUE는 엑셀 지역 설정·앞 공백에 따라 #VALUE!),
             # 엑셀이 날짜·시각으로 바꿔 넣은 값이면 시각 부분, 비면 빈칸
             rb = f"'Raw data'!B{r + 12}"
@@ -270,6 +276,21 @@ def blank_rows(b, path):
             ev = b.wb['계산과정'][f'E{r}'].value
             if isinstance(ev, str) and ev.startswith('=') and not ev.startswith(f'=IF(C{r}="",""'):
                 note(_wrap_blank(b, '계산과정', f'E{r}', f'C{r}'), '계산과정!E2:E121', '측정이 없는 시각은 빈칸 (빈칸 × K는 엑셀에서 #VALUE!)')
+    if 'CS2' in base or '이황화메틸' in base:
+        # 최종 결과값(H32:H37)이 원본부터 숫자 0으로 박혀 있어 시료 농도가 결과에 들어가지 않음 → 시료 농도 × 희석배수 (VOCs와 같게).
+        # 이황화탄소: 시료 농도 ppm(표준가스 5.01 ppm, 검정곡선 0.25~2.5) → 결과값 ppb는 ×1000, 이황화메틸: ppb 그대로
+        sh = next((ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', '')), None)
+        cs2 = 'CS2' in base; col = 'D' if cs2 else 'E'; k = '*1000' if cs2 else ''; d = '/1000' if cs2 else ''
+        if sh:
+            for r in range(32, 38):
+                v = b.wb[sh][f'{col}{r}'].value
+                if isinstance(v, str):     # 시트 이름을 바꾸기 전 이름(자기 시트)을 가리키는 글자가 남아 있으면 뗌
+                    v = re.sub(r"'([^']+)'!", lambda m: m.group(0) if m.group(1) in b.sheets else '', v)
+                if isinstance(v, str) and v.startswith('=') and not v.startswith(f'=IF(O{r - 16}=""'):
+                    note(_set(b, sh, f'{col}{r}', f'=IF(O{r - 16}="","",{v[1:]})'), f'{sh}!{col}32:{col}37', '기기 농도가 빈 줄(분석 안 함)은 빈칸으로 평균에서 뺌')
+                note(_set(b, sh, f'H{r}', f'=IF({col}{r}="","",{col}{r}*G{r}{k})'), f'{sh}!H32:H37', '최종 결과값 = 시료 농도 × 희석배수 (원본은 숫자 0으로 박혀 있어 시료 농도가 결과에 들어가지 않음)')
+            S_, B_ = f'AVERAGE(H35:H37){d}', f'IF(COUNT(H32:H34)=0,0,AVERAGE(H32:H34){d})'
+            note(_set(b, sh, 'I32', f'=IF(COUNT(H35:H37)=0,"",IF({S_}-{B_}<0,0,TRUNC(ROUND({S_}-{B_},8),3)))'), f'{sh}!I32', '시료 평균 − 바탕 평균 (바탕을 분석하지 않았으면 0), 시료가 모두 비면 빈칸')
     if 'PAHs' in base and W('시험기록부'):
         for r in range(21, 27):
             v = b.wb['시험기록부'][f'I{r}'].value
