@@ -302,6 +302,14 @@ def blank_rows(b, path):
                 note(_set(b, sh, f'H{r}', f'=IF({col}{r}="","",{col}{r}*G{r}{k})'), f'{sh}!H32:H37', '최종 결과값 = 시료 농도 × 희석배수 (원본은 숫자 0으로 박혀 있어 시료 농도가 결과에 들어가지 않음)')
             S_, B_ = f'AVERAGE(H35:H37){d}', f'IF(COUNT(H32:H34)=0,0,AVERAGE(H32:H34){d})'
             note(_set(b, sh, 'I32', f'=IF(COUNT(H35:H37)=0,"",IF({S_}-{B_}<0,0,TRUNC(ROUND({S_}-{B_},8),3)))'), f'{sh}!I32', '시료 평균 − 바탕 평균 (바탕을 분석하지 않았으면 0), 시료가 모두 비면 빈칸')
+    if 'PAHs' in base and W('계산과정'):
+        # 검증시료(Re_STD) 상대감응계수: 원본은 검증시료의 벤조(a)피렌 면적을 다른 주입(표준용액)의 내부표준 면적·농도로 나눔
+        # → 같은 주입의 값으로 (ES 01525.1a 식 9: RRF = An/Ais × Cis/Cn, 모두 그 표준용액의 값)
+        for r in range(55, 62):
+            v = b.wb['계산과정'][f'B{r}'].value
+            if isinstance(v, str) and v.startswith('=') and f'MATCH(A{r},' in v:
+                new = re.sub(r'MATCH\(A\d+,', f'MATCH(A{r},', v)
+                note(_set(b, '계산과정', f'B{r}', new), f'계산과정!B{r}', '검증시료 RRF를 같은 주입의 내부표준 면적·농도로 (식 9)')
     if 'PAHs' in base and W('시험기록부'):
         for r in range(21, 27):
             v = b.wb['시험기록부'][f'I{r}'].value
@@ -500,51 +508,3 @@ def sig_figs(b, path, rows, SHEET='기준', COL=None):
         log.append(f'{ws.title}: 시험 기초자료 ' + ', '.join(done))
     return log
 
-
-# ── 수식에 숫자로 박힌 용액 부피·분취량을 옆 입력 칸으로, 습식 가스미터의 포화 수증기압 칸 ──
-# 원문 식의 고정 값(100 mL, 250/25, 250/10, 0.02 L × 200/20)이 수식에 숫자로 적혀 옆의 입력 칸을 바꿔도 결과가 안 바뀌던 것.
-# 표준 조건에서는 값이 같다. 다른 수식 손질이 모두 끝난 뒤 시트 XML에서 바꾼다 (바꾸는 글자에 < > & 없음)
-VOL_LINKS = [   # (파일 이름 열쇠, 시트 고르기, [(옛 글자, 새 글자)], 까닭)
-    (('브롬', '브로민', '불소', '플루오린', '염화수소'), '계산과정', [('(E3-F3)*100)/N3', '(E3-F3)*G3)/N3')], '시료 용액 부피 100 → 입력 칸 G3'),
-    (('브롬', '브로민', '불소', '플루오린', '염화수소'), 'form', [('(F21-G21)*100)/I21', '(F21-G21)*H21)/I21')], '시료 용액 부피 100 → 입력 칸 H21'),
-    (('시안화수소', '사이안화수소'), '계산과정', [('((F6-F3)*10/N3)', '((F6*G3/D6-F3*H3/D3)/N3)')], '250/25 = 10 → 용액 부피(G3·H3) / 분취량(D6·D3)'),
-    (('암모니아',), '계산과정', [('(F7-F4)*25/N4', '(F7-F4)*(250/D7)/N4'), ('(F13-F10)*25/N10', '(F13-F10)*(250/D13)/N10')], '250/10 = 25 → 250 / 분취량(D7·D13)'),
-    (('황화수소',), '계산과정', [(f'B{r}*0.2*C{r}', f'B{r}*0.02*$F${3 if r < 6 else 6}*C{r}') for r in range(3, 9)], '0.2 = 0.02 L × (200/20) → 0.02 × 입력 칸 F3·F6'),
-    (('중금속',), 'metal', [('(E22-G22)*100/I22', "(E22-G22)*계산과정!$C$16/I22")], '시료 용액 부피 100 → 계산과정 C16'),
-]
-PV_FORMS = ('시안화수소', '사이안화수소', '황화수소', '암모니아', '페놀', '알데하이드', '브롬', '브로민', '불소', '플루오린', '염화수소')   # 흡수액으로 채취하는 가스상 항목
-PV_HEAD = '포화 수증기압 Pv (mmHg)\n습식 가스미터만'
-
-
-def link_volumes(b, path):
-    import os
-    from openpyxl.utils import get_column_letter as CL_
-    base = os.path.basename(path); log = []
-    forms = [ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', '')]
-    for keys, which, pairs, why in VOL_LINKS:
-        if not any(k in base for k in keys):
-            continue
-        sheets = forms if which in ('form', 'metal') else [which]
-        n = 0
-        for sh in sheets:
-            if sh not in b.sheets:
-                continue
-            x = b.sx(sh); y = x
-            for old, new in pairs:
-                y = y.replace(old, new)
-            if y != x:
-                b.setsx(sh, y); n += 1
-        if n:
-            log.append(f'{base}: {why}')
-    # 습식 가스미터: Vs = V × 273/(273+t) × (Pa + Pm − Pv)/760. Pv 칸을 계산과정 오른쪽 끝에 두고 비면 0 (건식과 같음)
-    if any(k in base for k in PV_FORMS) and '계산과정' in b.sheets:
-        ws = b.wb['계산과정']; x = b.sx('계산과정')
-        rx = re.compile(r'\(\(([A-Z]{1,2}\d+)\+([A-Z]{1,2}\d+)\)/760\)')
-        rows_ = sorted({int(m.group(1)) for m in re.finditer(r'<c r="[A-Z]+(\d+)"[^>]*><f>[^<]*\)/760\)', x)})
-        if rows_ and '-N($' not in x:
-            col = CL_(ws.max_column + 1); r0 = rows_[0]; pv = f'${col}${r0}'
-            x = rx.sub(lambda m: f'(({m.group(1)}+{m.group(2)}-N({pv}))/760)', x)
-            b.setsx('계산과정', x)
-            b.setv('계산과정', f'{col}{r0 - 1}', PV_HEAD.replace('\\n', '\n'))
-            log.append(f'{base}: 계산과정!{col}{r0} 포화 수증기압 칸 (습식 가스미터일 때만 입력, 비면 건식 식과 같음)')
-    return log

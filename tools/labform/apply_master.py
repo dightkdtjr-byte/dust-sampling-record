@@ -549,7 +549,6 @@ def apply(path, items, dst):
         if (sh, ref_) not in done and FF.strip_pre_rounding(b, sh, ref_, calc):
             FIX_LOG.append(f'{sh}!{ref_}: 결과가 읽는 계산값의 반올림을 계산 자릿수({calc}) 버림으로 (맺음은 결과 칸에서 한 번)')
         done.add((sh, ref_))
-    FIX_LOG.extend(FF.link_volumes(b, path))     # 수식에 박힌 용액 부피·분취량을 입력 칸으로, 습식 가스미터 수증기압 칸 (모든 수식 손질 뒤, XML에서)
     b.finish(dst)
     return rows, log
 

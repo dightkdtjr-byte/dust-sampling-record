@@ -33,13 +33,6 @@ corr = lambda c, s, m: c if s is None else c * (21 - s) / (21 - m)
 gas = lambda: (round(U(10, 40), 2), round(U(5, 35), 1), random.randint(740, 775), round(U(5, 40), 1))   # V, t, Pa, 게이지압(mmH2O)
 FILES = {os.path.basename(p): p for p in glob.glob(G + '/*.xls[xm]')}
 WB = {f: openpyxl.load_workbook(p) for f, p in FILES.items()}
-def pv_cell(f):   # 계산과정의 포화 수증기압 칸 (머리글 아래 칸)
-    ws = WB[f]['계산과정']
-    for row in ws.iter_rows():
-        for c in row:
-            if isinstance(c.value, str) and c.value.startswith('포화 수증기압'): return f'{c.column_letter}{c.row + 1}'
-def pv():        # 습식 가스미터인 경우의 포화 수증기압 (mmHg), 절반은 건식(빈칸)
-    return round(U(9, 32), 1) if random.random() < 0.5 else None
 def raw_ref(f, sh, cell):   # =IF('Raw data'!I16="","",…) 꼴에서 원자료 칸
     m = re.search(r"(?:'([^']+)'|([A-Za-z가-힣()]+))!\$?([A-Z]+)\$?(\d+)", WB[f][sh][cell].value)
     return (m.group(1) or m.group(2)), m.group(3) + m.group(4)
@@ -55,44 +48,39 @@ def case():
     E.append((f, '시험기록부', corr(((round(a0 + gain, 4) - a0) - (round(d0 + fb, 4) - d0)) * 1000 / Vs(V, t, Pa, dH / 13.6), s, m)))
     # 사이안화수소 (ES 01312.1 식 7): (a−b)×10/Vs × 22.4/26.017, a = 농도 × 분취량 25
     f = '시험기록부_사이안화수소.xlsx'; V, t, Pa, g = gas(); fbv = [round(U(0, 0.02), 4) for _ in range(3)]; sv = [round(U(0.03, 0.9), 4) for _ in range(3)]
-    tot, ali, P = random.choice([250, 500]), random.choice([25, 50, 10]), pv()   # 용액 전체 부피·분취량을 바꿔도 a × (전체/분취) = 농도 × 전체 부피
-    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, **{f'D{3 + i}': ali for i in range(6)}, 'G3': tot, 'H3': tot, 'M3': V, 'L3': t, 'I3': Pa, 'J3': g, pv_cell(f): P})
-    E.append((f, '시험기록부', (mean(sv) - mean(fbv)) * tot / Vs(V, t, Pa, g / 13.6 - (P or 0)) * 22.4 / 26.017))
+    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, 'M3': V, 'L3': t, 'I3': Pa, 'J3': g})
+    E.append((f, '시험기록부', (mean(sv) - mean(fbv)) * 25 * 10 / Vs(V, t, Pa, g / 13.6) * 22.4 / 26.017))
     # 황화수소 (ES 01310.1): 0.698 × (a−b) × 1000/Vs, a = 농도(mg/L) × 0.02 L × (200/20)
     f = '시험기록부_황화수소.xlsx'; V, t, Pa, g = gas(); fbv = [round(U(0, 0.01), 4) for _ in range(3)]; sv = [round(U(0.02, 0.8), 4) for _ in range(3)]; s, m = o2()
-    k_, P = random.choice([10, 20, 5]), pv()
-    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, 'F3': k_, 'F6': k_, 'K3': V, 'J3': t, 'G3': Pa, 'H3': g, 'M3': s, 'N3': m, pv_cell(f): P})
-    E.append((f, '시험기록부', corr(0.698 * (mean(sv) - mean(fbv)) * 0.02 * k_ * 1000 / Vs(V, t, Pa, g / 13.6 - (P or 0)), s, m)))
+    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, 'K3': V, 'J3': t, 'G3': Pa, 'H3': g, 'M3': s, 'N3': m})
+    E.append((f, '시험기록부', corr(0.698 * (mean(sv) - mean(fbv)) * 0.02 * 10 * 1000 / Vs(V, t, Pa, g / 13.6), s, m)))
     # 암모니아 (ES 01303.1): (a−b) × (250/10)/Vs, a = 농도(μL/mL) × 분취량 10. 붕산(4~9행)·과산화수소(10~15행), 전체 = 큰 값
-    f = '시험기록부_암모니아.xlsx'; Pa = random.randint(745, 775); s, m = o2(); res = {}; P = pv(); S.append((f, '계산과정', pv_cell(f), P))
+    f = '시험기록부_암모니아.xlsx'; Pa = random.randint(745, 775); s, m = o2(); res = {}
     for name, r0 in (('시험기록부(BA)', 4), ('시험기록부 (H2O2)', 10)):
         V, t, _, g = gas(); fbv = [round(U(0, 0.005), 4) for _ in range(3)]; sv = [round(U(0.01, 0.4), 4) for _ in range(3)]
-        ali = random.choice([10, 20, 5])
-        put(f, '계산과정', {**{f'B{r0 + i}': fbv[i] for i in range(3)}, **{f'B{r0 + 3 + i}': sv[i] for i in range(3)}, **{f'D{r0 + i}': ali for i in range(6)}, f'M{r0}': V, f'L{r0}': t, f'J{r0}': g, f'O{r0}': s, f'P{r0}': m})
-        res[name] = corr((mean(sv) - mean(fbv)) * 250 / Vs(V, t, Pa, g / 13.6 - (P or 0)), s, m); E.append((f, name, res[name]))
+        put(f, '계산과정', {**{f'B{r0 + i}': fbv[i] for i in range(3)}, **{f'B{r0 + 3 + i}': sv[i] for i in range(3)}, f'M{r0}': V, f'L{r0}': t, f'J{r0}': g, f'O{r0}': s, f'P{r0}': m})
+        res[name] = corr((mean(sv) - mean(fbv)) * 10 * 25 / Vs(V, t, Pa, g / 13.6), s, m); E.append((f, name, res[name]))
     put(f, '계산과정', {'I4': Pa}); E.append((f, '시험기록부 (전체)', max(res.values())))
     # 페놀 (ES 01503.2): 농도 × 10 × (200/10)/Vs, 현장바탕을 뺌
     f = '시험기록부_페놀화합물.xlsx'; V, t, Pa, g = gas(); fbv = [round(U(0, 0.01), 4) for _ in range(3)]; sv = [round(U(0.05, 0.9), 4) for _ in range(3)]
-    P = pv()
-    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, 'J3': V, 'I3': t, 'F3': Pa, 'G3': g, pv_cell(f): P})
-    E.append((f, '시험기록부', (mean(sv) - mean(fbv)) * 10 * 20 / Vs(V, t, Pa, g / 13.6 - (P or 0))))
+    put(f, '계산과정', {**{f'B{3 + i}': fbv[i] for i in range(3)}, **{f'B{6 + i}': sv[i] for i in range(3)}, 'J3': V, 'I3': t, 'F3': Pa, 'G3': g})
+    E.append((f, '시험기록부', (mean(sv) - mean(fbv)) * 10 * 20 / Vs(V, t, Pa, g / 13.6)))
     # 알데하이드 (ES 01501.1): ((Aa−Ab) × V/Vs) × (22.4/Mw) × 분자량비, 시료 3개 평균
     for f, Mw, B in (('시험기록부_아세트알데하이드.xlsx', 44.05, 0.1965), ('시험기록부_폼알데하이드.xlsx', 30.03, 0.1429)):
-        fbv = [round(U(0, 0.02), 4) for _ in range(3)]; Pa = random.randint(745, 775); cs = []; P = pv(); kv = {f'B{8 + i}': fbv[i] for i in range(3)}; kv[pv_cell(f)] = P
+        fbv = [round(U(0, 0.02), 4) for _ in range(3)]; Pa = random.randint(745, 775); cs = []; kv = {f'B{8 + i}': fbv[i] for i in range(3)}
         for i in range(3):
             sv = [round(U(0.1, 3), 4) for _ in range(3)]; V, t, pm = round(U(8, 14), 2), round(U(15, 32), 1), round(U(0.5, 2), 2)
             kv.update({f'B{11 + 3 * i + j}': sv[j] for j in range(3)}); kv.update({f'G{3 + i}': V, f'H{3 + i}': t, f'J{3 + i}': pm})
             if not str(WB[f]['계산과정'][f'I{3 + i}'].value).startswith('='): kv[f'I{3 + i}'] = Pa
-            cs.append((mean(sv) - mean(fbv)) * 5 / Vs(V, t, Pa, pm - (P or 0)) * 22.4 / Mw * B)
+            cs.append((mean(sv) - mean(fbv)) * 5 / Vs(V, t, Pa, pm) * 22.4 / Mw * B)
         put(f, '계산과정', kv); E.append((f, '시험기록부', mean(cs)))
     # 브로민·플루오린·염화수소 (ES 01502.3 식 5 등): (a−b) × 100/Vs × 22.4/M
     for f, M, has_o2 in (('시험기록부_브로민화합물.xlsx', 79.904, False), ('시험기록부_플루오린화합물.xlsx', 18.998, True), ('시험기록부_염화수소.xlsx', 35.453, True)):
         V, t, Pa, pm = round(U(15, 45), 2), round(U(5, 30), 1), random.randint(745, 775), round(U(0.5, 2), 2)
         fbv = [round(U(0, 0.01), 4) for _ in range(3)]; sv = [round(U(0.05, 2), 4) for _ in range(3)]; s, m = o2() if has_o2 else (None, None)
         put(f, 'rawdata', {**{f'H{14 + i}': fbv[i] for i in range(3)}, **{f'H{17 + i}': sv[i] for i in range(3)}})
-        vol, P = random.choice([100, 250, 50]), pv()
-        put(f, '계산과정', {'G3': vol, 'H3': V, 'I3': t, 'K3': Pa, 'J3': pm, pv_cell(f): P, **({'L3': s, 'M3': m} if has_o2 else {})})
-        E.append((f, '시험기록부', corr((mean(sv) - mean(fbv)) * vol / Vs(V, t, Pa, pm - (P or 0)) * 22.4 / M, s, m)))
+        put(f, '계산과정', {'H3': V, 'I3': t, 'K3': Pa, 'J3': pm, **({'L3': s, 'M3': m} if has_o2 else {})})
+        E.append((f, '시험기록부', corr((mean(sv) - mean(fbv)) * 100 / Vs(V, t, Pa, pm) * 22.4 / M, s, m)))
     # 수은 (ES 01408.1): (흡수액 2단 합 − 현장바탕 2단 합), 각 단 = Hg(ng)/분석량 × 희석배수 × 용액 부피/10^6 / Vs(Sm3)
     f = '시험기록부_수은화합물.xlsx'; ws = WB[f]['계산과정']; V, t, Pa, dH = round(U(0.8, 1.4), 4), round(U(10, 30), 1), random.randint(745, 772), round(U(5, 30), 2); s, m = o2()
     kv = {'I3': V, 'J3': t, 'K3': Pa, 'L3': dH, 'Q15': s, 'Q16': m}; tot = 0
@@ -111,12 +99,12 @@ def case():
     E.append((f, '시험기록부(As)', corr(mm / (Vs(V, t, Pa, dH / 13.6) * 1000), s, m) * 22.41 / 74.92))
     # 중금속 7종 (ES 01405.2 등): (시료 − 바탕) 농도(μg/mL) × 100 mL / Vs(L)
     f = '시험기록부_중금속.xlsm'; ws = WB[f]['계산과정']; V, t, Pa, dH = round(U(0.8, 1.4), 4), round(U(10, 30), 1), random.randint(745, 772), round(U(5, 60), 2); m_ = round(U(5, 18), 2)
-    vol = random.choice([100, 250, 50]); put(f, '계산과정', {'C16': vol, 'C18': V, 'C19': t, 'C20': dH, 'C21': Pa, 'C23': m_})
+    put(f, '계산과정', {'C18': V, 'C19': t, 'C20': dH, 'C21': Pa, 'C23': m_})
     for col, name in zip('CDEFGHI', ('구리화합물', '납화합물', '아연화합물', '크로뮴화합물', '니켈화합물', '카드뮴화합물', '베릴륨화합물')):
         sv = [round(U(0.005, 0.4), 4) for _ in range(3)]; bv = [round(U(0, 0.002), 4) for _ in range(3)]; s = random.choice([None, 6, 12])
         for i in range(3):
             rs, rc = raw_ref(f, '계산과정', f'{col}{11 + i}'); S.append((f, rs, rc, sv[i])); rs, rc = raw_ref(f, '계산과정', f'{col}{6 + i}'); S.append((f, rs, rc, bv[i]))
-        put(f, name, {'K17': s}); E.append((f, name, corr((mean(sv) - mean(bv)) * vol / (Vs(V, t, Pa, dH / 13.6) * 1000), s, m_)))
+        put(f, name, {'K17': s}); E.append((f, name, corr((mean(sv) - mean(bv)) * 100 / (Vs(V, t, Pa, dH / 13.6) * 1000), s, m_)))
     # VOCs 12종 (ES 01511.1 등): 기기 농도(ppb) × 200/주입량 − 바탕, 시료 3개 평균, ppm
     f = '시험기록부_VOCs.xlsm'
     for (ff, sh), _ in [(k, v) for k, v in CR.items() if k[0] == f]:
@@ -129,7 +117,7 @@ def case():
     for f, sh, lo, hi in (('시험기록부_CS2.xlsx', '시험기록부-이황화탄소', 0.1, 3), ('시험기록부_이황화메틸.xlsx', '시험기록부-이황화메틸', 0.02, 9)):
         bv = [round(U(0, lo / 5), 4) for _ in range(3)]; sv = [round(U(lo, hi), 4) for _ in range(3)]
         put(f, sh, {**{f'O{16 + i}': bv[i] for i in range(3)}, **{f'O{19 + i}': sv[i] for i in range(3)}}); E.append((f, sh, mean(sv) - mean(bv)))
-    # 벤조(a)피렌 (ES 01525.1): 농도 = (As/Ais) × (Qis/RRF) / Vs, RRF = 표준용액들의 (At/Ais) × (Qis/Qt) 평균, 시료 평균 − 현장바탕 평균
+    # 벤조(a)피렌 (ES 01525.1a 식 9·10·13·14, 원문 PDF의 식을 보고 확인): 농도 = (As/Ais) × (Qis/RRF) / Vs, RRF = 표준용액들의 (At/Ais) × (Qis/Qt) 평균, 시료 평균 − 현장바탕 평균
     f = '시험기록부_PAHs.xlsx'; c = WB[f]['계산과정']; t_sh, i_sh = WB[f]['Benzo(a)pyrene'], WB[f]['d12-Benzo(a)pyrene']
     def name_of(cell):
         v = c[cell].value
