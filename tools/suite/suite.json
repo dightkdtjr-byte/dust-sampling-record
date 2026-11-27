@@ -7,7 +7,7 @@
       "id": "report",
       "title": "성적서",
       "kicker": "",
-      "desc": "",
+      "desc": "성적서 발급 · 관리대장",
       "color": "#9A4B36",
       "file": "apps/성적서발급시스템.html",
       "version": "2.2.1"
@@ -16,7 +16,7 @@
       "id": "labform",
       "title": "시험기록부",
       "kicker": "",
-      "desc": "",
+      "desc": "공정시험기준 · 기록부 19종",
       "color": "#3F6B57",
       "file": "apps/시험기록부.html",
       "version": "2.2.4"
