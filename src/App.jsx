@@ -1224,6 +1224,14 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
 const SKYLINE_FLYER_CSS = `
 /* 긴 표의 가로 스크롤 막대: 표 아래쪽이 화면 밖일 때 화면 아래에 붙어 따라다닌다 */
 .sp-sticky-scroll-x { position: sticky; bottom: 0; z-index: 20; min-height: 18px; overflow-x: scroll; overflow-y: hidden; background: rgba(255, 255, 255, 0.96); border-top: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; }
+/* 가로로 긴 표: 왼쪽 두 칸(의뢰·물질명)은 옆으로 밀어도 제자리에 남는다. 칸 테두리는 같이 밀려 나가므로 안쪽 그림자로 다시 긋는다 */
+.sp-log-table .sp-pin-0, .sp-log-table .sp-pin-1 { position: sticky; z-index: 5; }
+/* 고정한 칸은 속이 비치면 안 된다: 화면 양식이 연한 바탕색들을 투명하게 바꾸므로 종이색으로 못 박는다 */
+.sp-log-table tbody .sp-pin-0, .sp-log-table tbody .sp-pin-1 { background-color: var(--ds-paper, #ffffff) !important; }
+.sp-log-table .sp-pin-0 { left: 0; width: 40px; min-width: 40px; max-width: 40px; box-shadow: inset -1px 0 0 #e2e8f0, inset 0 -1px 0 #e2e8f0; }
+.sp-log-table .sp-pin-1 { left: 40px; box-shadow: inset -1px 0 0 #94a3b8, inset 0 -1px 0 #e2e8f0, 4px 0 6px -4px rgba(15, 23, 42, 0.45); }
+.sp-log-table thead .sp-pin-0, .sp-log-table thead .sp-pin-1 { z-index: 6; }
+.sp-log-table .sp-pin-group { position: sticky; left: 8px; width: max-content; max-width: 100%; }
 /* 막대가 어느 컴퓨터에서나 또렷이 보이게 직접 그린다 (스크롤 막대를 숨기는 환경에서도 보인다) */
 .sp-sticky-scroll-x::-webkit-scrollbar { height: 16px; }
 .sp-sticky-scroll-x::-webkit-scrollbar-track { background: #e2e8f0; }
@@ -3160,7 +3168,8 @@ const SheetSectionNav = ({ scope }) => {
 };
 
 // 가로로 긴 표 상자. 표가 길어서 상자의 아래쪽(가로 스크롤 막대)이 화면 밖에 있을 때는,
-// 같은 일을 하는 가로 스크롤 막대를 화면 아래에 붙여 따라다니게 한다. 상자의 아래쪽이 보이면 사라진다
+// 같은 일을 하는 가로 스크롤 막대를 화면 아래에 붙여 따라다니게 한다. 상자의 아래쪽이 보이면 사라진다.
+// 상자의 위쪽이 화면 밖으로 올라갔을 때는 머리줄을 내려 보낼 거리(--sp-pin-top)도 알려 준다
 function StickyScrollX({ className, children }) {
   const boxRef = useRef(null);
   const barRef = useRef(null);
@@ -3176,6 +3185,12 @@ function StickyScrollX({ className, children }) {
       const stuck = footerRect && footerRect.height > 0 && footerRect.bottom >= window.innerHeight - 2 && footerRect.top < window.innerHeight;
       const viewH = stuck ? footerRect.top : window.innerHeight;
       const bottom = Math.max(0, Math.round(window.innerHeight - viewH));
+      // 머리줄: 화면 위에 붙어 있는 섹션 메뉴 줄이 있으면 그 바로 아래를 보이는 곳의 맨 위로 친다
+      const nav = document.querySelector('.ds-secnav');
+      const navRect = nav ? nav.getBoundingClientRect() : null;
+      const viewTop = navRect && navRect.height > 0 && navRect.top <= 1 && navRect.bottom > 0 ? navRect.bottom : 0;
+      const pinTop = Math.max(0, Math.min(Math.round(viewTop - rect.top), Math.round(rect.height) - 140));
+      box.style.setProperty('--sp-pin-top', `${pinTop}px`);
       const overflows = box.scrollWidth > box.clientWidth + 1;
       // 상자 아래쪽이 보이는 곳 밖이고, 상자 위쪽은 충분히 들어와 있을 때만
       const show = overflows && rect.bottom > viewH - 2 && rect.top < viewH - 90;
@@ -11136,11 +11151,11 @@ export default function App() {
               ))}
             </div>
             <StickyScrollX className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
-              <table className="w-full text-[11px] text-center border-collapse min-w-[1400px]">
-                <thead className="sticky top-0 z-10">
+              <table className="sp-log-table w-full text-[11px] text-center border-collapse min-w-[1400px]">
+                <thead className="sticky z-10" style={{ top: 'var(--sp-pin-top, 0px)' }}>
                   <tr className="bg-slate-800 text-white">
-                    <th className="p-2 border border-slate-700 w-10">의뢰</th>
-                    <th className="p-2 border border-slate-700 text-left min-w-[190px]">물질명</th>
+                    <th className="sp-pin-0 bg-slate-800 p-2 border border-slate-700 w-10">의뢰</th>
+                    <th className="sp-pin-1 bg-slate-800 p-2 border border-slate-700 text-left min-w-[190px]">물질명</th>
                     <th className="p-2 border border-slate-700 min-w-[96px]">일차</th>
                     <th className="p-2 border border-slate-700">시작</th>
                     <th className="p-2 border border-slate-700">종료</th>
@@ -11168,7 +11183,7 @@ export default function App() {
                       <React.Fragment key={`log-group-${group.id}`}>
                         <tr className={`${SAMPLING_LOG_GROUP_HEADER[group.color]} border-y`}>
                           <td colSpan={15} className="p-1.5 text-left">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="sp-pin-group flex flex-wrap items-center gap-2">
                               <span className="font-black text-xs">{group.title}</span>
                               <span className="text-[10px] opacity-70">{group.note}</span>
                               <span className="px-1.5 py-0.5 rounded-full bg-white/80 border border-current/20 text-[10px] font-bold">{requestedInGroup}/{speciesInGroup} 의뢰</span>
@@ -11187,10 +11202,10 @@ export default function App() {
                           const timeDone = on && row.start && row.end;
                           return (
                             <tr key={`log-row-${sub.row}`} className={on ? 'bg-orange-50/60' : 'text-slate-500'}>
-                              <td className="p-1 border border-slate-200">
+                              <td className={`sp-pin-0 p-1 border border-slate-200 ${on ? 'bg-orange-50' : 'bg-white'}`}>
                                 <input type="checkbox" name={`log-row-${sub.row}-requested`} checked={on} onChange={(e) => updateSamplingLogRow(String(sub.row), 'requested', e.target.checked)} className="w-4 h-4" />
                               </td>
-                              <td className="p-1 border border-slate-200 text-left whitespace-nowrap">
+                              <td className={`sp-pin-1 p-1 border border-slate-200 text-left whitespace-nowrap ${on ? 'bg-orange-50' : 'bg-white'}`}>
                                 <div className="flex items-center gap-1.5">
                                   <span className={`font-bold ${on ? 'text-slate-900' : 'text-slate-500'}`}>{Array.isArray(sub.options) ? samplingLogSpeciesName(sub, row) : (sub.species || sub.name)}</span>
                                   {sub.part && <span className="text-[10px] text-slate-500">{sub.part}</span>}
