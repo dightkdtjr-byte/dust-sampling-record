@@ -551,7 +551,7 @@ const SAMPLING_LOG_SUBSTANCES = [
   { row: 30, code: 'M', name: '아연', kind: 'particle', testPeriod: '6' },
   { row: 31, code: 'M', name: '베릴륨', kind: 'particle', testPeriod: '6' },
   { row: 32, code: 'M', name: '비소(입자상)', species: '비소', part: '입자상', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
-  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', suctionRate: '1', duration: '입자상 동일', testPeriod: '9', sameAs: 32 },
+  { row: 33, code: 'As-G', name: '비소(가스상)', species: '비소', part: '가스상', kind: 'particle', duration: '입자상 동일', testPeriod: '9', sameAs: 32 },
   { row: 34, code: 'Hg', name: '수은', kind: 'particle', targetVolume: '1000', testPeriod: '9' },
   { row: 35, code: 'ALD-1', name: '알데히드-1', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '1회차', kind: 'gas', suctionRate: '1', targetVolume: '10', testPeriod: '7' },
   { row: 36, code: 'ALD-2', name: '알데히드-2', species: '포름알데하이드 · 아세트알데하이드', options: ['포름알데하이드', '아세트알데하이드'], part: '2회차', kind: 'gas', suctionRate: '1', targetVolume: '10' },
@@ -865,6 +865,8 @@ const sanitizeSamplingLog = (value) => {
         if (field === 'requested' || field === 'dayIndex' || field === 'speciesSel' || field === 'collector') return;
         if (src[field] !== undefined) row[field] = text(src[field]);
       });
+      // 비소(가스상)의 흡입속도에는 예전에 기본값 1이 들어 있었다 → 뺐으므로 예전 저장본의 1도 비운다
+      if (item.row === 33 && row.suctionRate === '1') row.suctionRate = '';
       if (Array.isArray(item.collectors) && item.collectors.includes(src.collector)) row.collector = src.collector;
       if (Array.isArray(item.options) && Array.isArray(src.speciesSel)) {
         const picked = item.options.filter((opt) => src.speciesSel.includes(opt));
@@ -1220,6 +1222,14 @@ const normalizeGasMeterRows = (rows, fallbackPointCount = 5) => {
 };
 
 const SKYLINE_FLYER_CSS = `
+/* 긴 표의 가로 스크롤 막대: 표 아래쪽이 화면 밖일 때 화면 아래에 붙어 따라다닌다 */
+.sp-sticky-scroll-x { position: sticky; bottom: 0; z-index: 20; min-height: 18px; overflow-x: scroll; overflow-y: hidden; background: rgba(255, 255, 255, 0.96); border-top: 1px solid #cbd5e1; border-radius: 0 0 8px 8px; }
+/* 막대가 어느 컴퓨터에서나 또렷이 보이게 직접 그린다 (스크롤 막대를 숨기는 환경에서도 보인다) */
+.sp-sticky-scroll-x::-webkit-scrollbar { height: 16px; }
+.sp-sticky-scroll-x::-webkit-scrollbar-track { background: #e2e8f0; }
+.sp-sticky-scroll-x::-webkit-scrollbar-thumb { background: #64748b; border-radius: 8px; border: 3px solid #e2e8f0; }
+.sp-sticky-scroll-x::-webkit-scrollbar-thumb:hover { background: #475569; }
+@media (pointer: coarse) { .sp-sticky-scroll-x { display: none !important; } }
 @keyframes skylineTwinkle {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.9; }
@@ -3148,6 +3158,64 @@ const SheetSectionNav = ({ scope }) => {
     </nav>
   );
 };
+
+// 가로로 긴 표 상자. 표가 길어서 상자의 아래쪽(가로 스크롤 막대)이 화면 밖에 있을 때는,
+// 같은 일을 하는 가로 스크롤 막대를 화면 아래에 붙여 따라다니게 한다. 상자의 아래쪽이 보이면 사라진다
+function StickyScrollX({ className, children }) {
+  const boxRef = useRef(null);
+  const barRef = useRef(null);
+  const [bar, setBar] = useState({ show: false, width: 0, bottom: 0 });
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return undefined;
+    const update = () => {
+      const rect = box.getBoundingClientRect();
+      // 화면 아래에 붙어 있는 버튼 줄(저장·엑셀 추출)이 있으면 그 위까지만 보이는 곳으로 친다
+      const footer = document.querySelector('.ds-actionbar');
+      const footerRect = footer ? footer.getBoundingClientRect() : null;
+      const stuck = footerRect && footerRect.height > 0 && footerRect.bottom >= window.innerHeight - 2 && footerRect.top < window.innerHeight;
+      const viewH = stuck ? footerRect.top : window.innerHeight;
+      const bottom = Math.max(0, Math.round(window.innerHeight - viewH));
+      const overflows = box.scrollWidth > box.clientWidth + 1;
+      // 상자 아래쪽이 보이는 곳 밖이고, 상자 위쪽은 충분히 들어와 있을 때만
+      const show = overflows && rect.bottom > viewH - 2 && rect.top < viewH - 90;
+      // 두 막대가 움직일 수 있는 거리를 똑같이 맞춘다 (상자는 세로 스크롤 막대만큼 좁다)
+      const width = box.scrollWidth + (box.offsetWidth - box.clientWidth);
+      setBar((prev) => (prev.show === show && prev.width === width && prev.bottom === bottom ? prev : { show, width, bottom }));
+    };
+    const fromBox = () => { const el = barRef.current; if (el && el.scrollLeft !== box.scrollLeft) el.scrollLeft = box.scrollLeft; };
+    update();
+    window.addEventListener('scroll', update, { passive: true, capture: true });
+    window.addEventListener('resize', update);
+    box.addEventListener('scroll', fromBox, { passive: true });
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    if (observer) { observer.observe(box); if (box.firstElementChild) observer.observe(box.firstElementChild); }
+    return () => {
+      window.removeEventListener('scroll', update, { capture: true });
+      window.removeEventListener('resize', update);
+      box.removeEventListener('scroll', fromBox);
+      if (observer) observer.disconnect();
+    };
+  }, []);
+  // 막대가 나타날 때 상자의 현재 위치에 맞춘다
+  useEffect(() => {
+    if (bar.show && barRef.current && boxRef.current) barRef.current.scrollLeft = boxRef.current.scrollLeft;
+  }, [bar.show, bar.width]);
+  return (
+    <div className="relative">
+      <div ref={boxRef} className={className}>{children}</div>
+      <div
+        ref={barRef}
+        className="sp-sticky-scroll-x"
+        style={{ display: bar.show ? 'block' : 'none', bottom: `${bar.bottom}px` }}
+        onScroll={(e) => { const box = boxRef.current; if (box && box.scrollLeft !== e.currentTarget.scrollLeft) box.scrollLeft = e.currentTarget.scrollLeft; }}
+        aria-hidden="true"
+      >
+        <div style={{ width: `${bar.width}px`, height: '1px' }} />
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // 색 테마: 'default'(기본) | 'earth'(세이지·베이지·테라코타). 이 기기에 저장하고 모든 창에 같이 적용
@@ -11067,7 +11135,7 @@ export default function App() {
                 </span>
               ))}
             </div>
-            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
+            <StickyScrollX className="overflow-x-auto max-h-[70vh] overflow-y-auto rounded-lg border border-slate-200">
               <table className="w-full text-[11px] text-center border-collapse min-w-[1400px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-800 text-white">
@@ -11202,7 +11270,7 @@ export default function App() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </StickyScrollX>
           </div>
 
           {/* 저장·새 기록지 버튼 줄: 화면 아래에 붙어 스크롤해도 따라온다 */}
