@@ -4,12 +4,16 @@
 # 기준을 고친 뒤 내려받으면 각 기록부의 숨김 '기준' 시트 칸(D·E·F·G·H·I)을 고쳐 준다 (기록부 하나 또는 전체 zip).
 import sys, os, json, base64, glob, datetime
 
-VERSION = '2.2.3'
+VERSION = '2.2.4'
 golden, master, jszip, out = sys.argv[1:5]
 evidence = sys.argv[5] if len(sys.argv) > 5 else None
 rows = json.load(open(master, encoding='utf8'))
-keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'lab_mdl', 'lab_loq', 'lab_rows']
-data = [{k: r.get(k) for k in keep} for r in rows]
+keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'sig_mdl', 'sig_loq']
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from form_fixes import O2_FIX
+# 산소 보정을 하는 기록부 (결과 계산에 표준산소·실측산소 칸)
+o2 = lambda f: any(k in f for k in O2_FIX)
+data = [{k: r.get(k) for k in keep} | {'o2': o2(r['file'])} for r in rows]
 files = {}
 for p in sorted(glob.glob(os.path.join(golden, '*.xls*'))):
     files[os.path.basename(p)] = base64.b64encode(open(p, 'rb').read()).decode()
@@ -20,7 +24,6 @@ RULES = {
     'unit': '총칙 ES 01000.b 2.14.1 (가스상 ppm·ppb, 입자상 mg/Sm³·μg/Sm³·ng/Sm³)',
     'sig': '정도보증 ES 01001.b 4.3.4.4 (유효숫자 2개 이하)',
     'ratio': '정도보증 ES 01001.b 4.3.2·4.3.3 (방법검출한계 = 3.14s, 정량한계 = 10s)',
-    'ref_mdl': '각 시험법 6.1 (측정한 방법검출한계는 제시한 값 이하)',
 }
 js = lambda t: t.replace('</', '<\\/')      # <script> 안 JSON에 "</script>"가 있어도 끊기지 않게
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'program_template.html'), encoding='utf8').read()

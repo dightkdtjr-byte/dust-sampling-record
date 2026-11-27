@@ -150,7 +150,8 @@ python3 -I tools/labform/compare.py $W/orig $W/fill/lo     # 고친 오류 칸 �
 - `boundary_test.py` — 불검출 경계값 시험 (검출한계와 같음 → 값, 반올림해 같아짐 → 값, 반올림해 작아짐 → 불검출)
 - `excess_test.py` — 초과(같음 → 아님, 1단위 큼 → 초과)·조건부 서식·표준산소 연동 시험
 - `build_program.py` + `program_template.html` — 시험기록부 프로그램(HTML 한 파일: 기록부·원문 그림·JSZip 내장)
-- `evidence.py` — 원문 근거 그림: 공정시험기준 PDF에서 결과 자릿수·방법검출한계·정량범위·시험 기초자료 기준·총칙 조항 문장을 찾아 형광펜 표시해 자른다 (쪽을 넘는 문장은 위아래로 이음)
+- `sig_test.py` — 검증 방식 12: 시험 기초자료 유효숫자 표시 (수식 ↔ 규칙, LibreOffice 인쇄 글자)
+- `evidence.py` — 원문 근거 그림: 공정시험기준 PDF에서 결과 자릿수·방법검출한계·정량범위·총칙 조항 문장을 찾아 형광펜 표시해 자른다 (쪽을 넘는 문장은 위아래로 이음)
 - `verify_round.sh` — 위 전부를 처음부터 한 번에 돌리는 검증 회차
 
 ### 쓰는 법
@@ -164,4 +165,4 @@ python3 -I tools/labform/evidence.py work/ref_zip work/master_checked.json work/
 python3 -I tools/labform/build_program.py work/golden work/master_checked.json jszip.min.js 시험기록부.html work/evidence.json
 ```
 
-프로그램: 브라우저로 열면 처음 화면(기록부 카드·원문 대조 요약·판정 기준) → 카드를 누르면 기록부 화면(기준 수정·시험 기초자료·결과 계산·원문 대조와 원문 그림). 기록부 하나 또는 전체(zip: 기록부 + 기준표 CSV + 수정 내역)를 내려받는다. 고친 값은 브라우저에 저장되고 JSON으로 백업·불러오기.
+프로그램: 브라우저로 열면 처음 화면(기록부 카드·원문 대조 요약·판정 기준) → 카드를 누르면 기록부 화면(기준·시험 기초자료 유효숫자 수정, 결과 계산(산소 보정 기록부는 표준산소·실측산소), 원문 대조와 원문 그림). 기록부 하나 또는 전체(zip: 기록부 + 기준표 CSV + 수정 내역)를 내려받는다. 고친 값은 브라우저에 저장되고 JSON으로 백업·불러오기.

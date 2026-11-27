@@ -168,20 +168,6 @@ def check_ref(r, refs):
             res.append(('적합', f'공정시험기준 정량한계 {loq:g} = 원문 정량범위 하한 {rg_low:g}', src))
         else:
             res.append(('부적합', f'공정시험기준 정량한계 {r.get("loq")} ≠ 원문 정량범위 하한 {rg_low:g}', src))
-    # 시험 기초자료(실험실 측정값) ≤ 원문 제시값 — 줄이 여럿이면 줄마다 (비소: 입자상·가스상)
-    labs = r.get('lab_rows') or ([dict(label='', mdl=r.get('lab_mdl'), loq=r.get('lab_loq'))] if 'lab_mdl' in r else [])
-    for L in labs:
-        tag = f'({L["label"]}) ' if L.get('label') and len(labs) > 1 else ''
-        for k, refv, nm in (('mdl', pick['value'] if pick else None, '방법검출한계'), ('loq', rg_low, '정량한계')):
-            if refv is None or k not in L:
-                continue
-            lab = num(L.get(k))
-            if lab is None or lab == 0:
-                res.append(('검토', f'시험 기초자료 {tag}{nm}가 {L.get(k)!r} → 실험실 측정값 입력 필요', src))
-            elif lab <= refv + 1e-12:
-                res.append(('적합', f'시험 기초자료 {tag}{nm} {lab:.4g} ≤ 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
-            else:
-                res.append(('부적합', f'시험 기초자료 {tag}{nm} {lab:.4g} > 원문 {refv:g}', f'{src} 「측정한 방법검출한계는 시험방법에서 제시한 값 이하」'))
     u = str(r.get('unit', '')).lower().replace('³', '3').replace(' ', '')
     ru = (ref['digits'][0]['unit'] if ref['digits'] and ref['digits'][0]['unit'] else (pick or {}).get('unit', '')).lower().replace('³', '3')
     if u and ru:

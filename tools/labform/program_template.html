@@ -114,16 +114,13 @@
   .field { display:flex; flex-direction:column; gap:4px; min-width:0; }
   .field.wide { grid-column:1 / -1; }
   .field label { font-size:12px; font-weight:700; color:var(--ink-2); }
+  .field label i { font-style:normal; font-weight:500; color:var(--soft); }
   .field input, .field textarea { width:100%; padding:7px 10px; border:1px solid var(--line-2); border-radius:10px; background:#fff; min-width:0; }
   .field textarea { min-height:56px; resize:vertical; line-height:1.45; }
   .field input:disabled, .field textarea:disabled { background:var(--paper-2); color:var(--soft); }
   .field .hint { font-size:11.5px; color:var(--faint); }
   .changed { background:var(--hl) !important; border-color:#d9b400 !important; }
   .invalid { background:var(--bad-bg) !important; border-color:var(--bad) !important; }
-  table.lab { width:100%; border-collapse:collapse; font-size:13px; }
-  table.lab th, table.lab td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; }
-  table.lab th { font-size:12px; color:var(--soft); font-weight:700; background:var(--paper-2); }
-  table.lab td.zero { color:var(--warn); font-weight:700; }
   .checks { list-style:none; margin:0; padding:0; }
   .checks li { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:start; padding:7px 0; border-bottom:1px dashed var(--line); }
   .checks li:last-child { border-bottom:0; }
@@ -137,7 +134,8 @@
   .how { font-size:12.5px; color:var(--ink-2); }
   .tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   .try .res { margin-top:10px; font-size:18px; font-weight:800; }
-  .try .res.over { color:var(--bad); } .try .res.nd { color:var(--soft); }
+  .try .res.over { color:var(--bad); } .try .res.nd { color:var(--soft); } .try .res.need { color:var(--warn); }
+  .try .row + .row { margin-top:8px; }
   .try .why { margin:4px 0 0; padding-left:18px; color:var(--ink-2); font-size:12.5px; }
   .note { padding:10px 22px; border-top:1px solid var(--line); font-size:12.5px; color:var(--soft); background:var(--paper-2); }
   /* 원문 창 */
@@ -188,8 +186,8 @@ const RULES = "__RULES__";
 const EV = "__EV__";
 const STORE = 'labform-master-v1';
 const UNITS = ['ppm','ppb','mg/sm3','μg/sm3','ug/sm3','ng/sm3'];
-const FIELDS = ['method','calc','final','mdl','loq','unit'];
-const FIELD_NAME = { method: '공정시험기준', calc: '계산 자릿수', final: '최종 자릿수', mdl: '방법검출한계', loq: '정량한계', unit: '단위' };
+const FIELDS = ['method','calc','final','mdl','loq','unit','sig_mdl','sig_loq'];
+const FIELD_NAME = { method: '공정시험기준', calc: '계산 자릿수', final: '최종 자릿수', mdl: '방법검출한계', loq: '정량한계', unit: '단위', sig_mdl: '시험 기초자료 방법검출한계 유효숫자', sig_loq: '시험 기초자료 정량한계 유효숫자' };
 const LEVEL = { ok: '적합', warn: '검토', bad: '부적합', info: '참고' };
 const key = r => r.file + '|' + r.row;
 let edits = {};
@@ -248,28 +246,35 @@ function parsePermit(t) { // "8(12)": 괄호 앞 = 허가배출기준, 괄호 �
   let O2 = null; if (i >= 0) { const j = s.indexOf(')', i); O2 = num(s.slice(i + 1, j > 0 ? j : undefined)); }
   return { L, O2 };
 }
-function evaluate(c, raw, permit) { // 기록부 결과 수식과 같은 규칙
+function evaluate(c, raw, permit, std, meas) { // 기록부 결과 수식과 같은 규칙
   // 계산값 "0.1(12)"처럼 숫자 뒤 괄호(표준산소)가 붙으면: 괄호 앞 숫자로 판정·표시하고 꼬리는 뒤에 그대로 (엑셀 수식과 같음)
   const r = String(raw ?? '').trim(), k = r.indexOf('(');
-  const x = num(k >= 0 ? r.slice(0, k) : r), tail = k >= 0 ? r.slice(k) : '';
+  let x = num(k >= 0 ? r.slice(0, k) : r); const tail = k >= 0 ? r.slice(k) : '';
   if (x === null) return null;
+  const pre = []; let lab0 = '계산값';
+  if (c.o2) {   // 산소 보정 기록부: 표준산소가 있을 때만 보정 (표준산소 칸이 비면 허가배출기준 괄호 안 숫자)
+    const s0 = num(std), so = s0 !== null ? s0 : parsePermit(permit).O2, mo = num(meas);
+    if (so === null) pre.push(`표준산소농도 없음: 보정하지 않은 값 ${x}`);
+    else if (mo === null) return { text: '실측산소 입력', nd: false, need: true, why: [`표준산소농도 ${so}%${s0 === null ? ' (허가배출기준 괄호 안 숫자)' : ''}`, '실측산소농도가 비어 있음: 결과 칸에 「실측산소 입력」'] };
+    else if (mo >= 21) return { text: '실측산소 확인', nd: false, why: [`실측산소농도 ${mo}%: 21% 미만이어야 보정 가능`] };
+    else { const y = x * ((21 - so) / (21 - mo)); pre.push(`표준산소 ${so}%${s0 === null ? ' (허가배출기준 괄호 안 숫자)' : ''}, 실측산소 ${mo}%`, `보정 전 ${x} × (21 − ${so}) / (21 − ${mo})`); x = y; lab0 = '보정값'; }
+  }
   if (!digitOk(c.calc) || !digitOk(c.final)) return { text: '자릿수 확인', nd: false, why: ['계산·최종 자릿수는 0~8 정수'] };
   const calc = Number(c.calc), final = Number(c.final), jd = judgeDigits(c);
   const v1 = trunc(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);   // 계산 자릿수까지 버림 → 최종 자릿수로 한 번 4사5입
   const mdl = num(mdlValue(c)), lim = mdl === null ? 0 : mdl;       // 엑셀 N(): 방법검출한계가 "-"이면 0
-  const why = [`계산값 ${x}`, `계산 자릿수 ${calc}자리까지 계산: ${v1.toFixed(calc)}`, `최종 자릿수 ${final}자리로 4사5입: ${vf.toFixed(final)}`];
+  const why = [...pre, `${lab0} ${Number(x.toPrecision(12))}`, `계산 자릿수 ${calc}자리까지 계산: ${v1.toFixed(calc)}`, `최종 자릿수 ${final}자리로 4사5입: ${vf.toFixed(final)}`];
   if (vj < lim) { why.push(mdl === null ? `${vf.toFixed(final)} < 0: 불검출 (방법검출한계 없음)` : `${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
   if (mdl !== null) why.push(`${vf.toFixed(final)} ${vj === mdl ? '=' : '>'} 방법검출한계 ${mdl}: 검출`);
   else why.push('방법검출한계 없음: 불검출 판정 안 함 (0 미만만 불검출)');
   const p = parsePermit(permit); let text = vf.toFixed(final) + tail, over = false;
   if (p.L !== null) { over = vf > p.L; why.push(`허가배출기준 ${p.L}: ${over ? '초과' : (vf === p.L ? '같음 (초과 아님)' : '이내')}`); if (over) text += ' (초과)'; }
-  if (p.O2 !== null) why.push(`표준산소농도 ${p.O2}% (허가배출기준 괄호 안 값, 기록부에서 보정값으로 판정)`);
+  if (p.O2 !== null && !c.o2) why.push(`표준산소농도 ${p.O2}% (허가배출기준 괄호 안 값)`);
   return { text, over, why };
 }
+function sigOk(v) { const t = String(v ?? '').trim(); return t === '' || (/^\d$/.test(t) && Number(t) >= 1 && Number(t) <= 8); }   // 유효숫자 칸: 빈칸 또는 1~8
 function mdlValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).mdl : c.mdl; } return c.mdl; }
 function loqValue(c) { if (c.linked) { const src = DATA.find(x => x.file === c.file && !x.linked); return src ? cur(src).loq : c.loq; } return c.loq; }
-function labRows(c) { return (c.lab_rows && c.lab_rows.length) ? c.lab_rows : (c.lab_mdl !== undefined || c.lab_loq !== undefined ? [{ label: '', mdl: c.lab_mdl, loq: c.lab_loq }] : []); }
-function fmtLab(v) { const n = num(v); return n === null ? (v == null ? '' : String(v)) : String(Number(n.toPrecision(3))); }
 
 // 원문 대조: [수준, 내용(HTML), 근거, 원문 그림 종류]
 function checks(c) {
@@ -293,17 +298,6 @@ function checks(c) {
   if (loq !== null) {
     out.push(sig(loq) <= 2 ? ['ok', `정량한계 유효숫자 ${sig(loq)}개`, RULES.sig, 'sig'] : ['bad', `정량한계 유효숫자 ${sig(loq)}개 (2개 이하)`, RULES.sig, 'sig']);
     if (mdl) { const k = loq / mdl; out.push(k >= 2.5 && k <= 4 ? ['ok', `정량한계 / 방법검출한계 = ${k.toFixed(2)}`, RULES.ratio, 'ratio'] : ['warn', `정량한계 / 방법검출한계 = ${k.toFixed(2)} (이론 3.18)`, RULES.ratio, 'ratio']); }
-  }
-  // 시험 기초자료(실험실 측정값)는 원문 제시값 이하 (줄이 여럿이면 줄마다)
-  const labs = labRows(c);
-  for (const L of labs) {
-    const tag = L.label && labs.length > 1 ? `${esc(L.label)} ` : '';
-    for (const [v, refv, nm] of [[L.mdl, R.mdl, '방법검출한계'], [L.loq, R.range_low, '정량한계']]) {
-      if (refv == null || v === undefined) continue;
-      const n = num(v);
-      if (n === null || n === 0) out.push(['warn', `시험 기초자료 ${tag}${nm} ${v === null ? '빈칸' : esc(v)}: 실험실 측정값 입력 필요`, `${code} 6.1`, 'lab']);
-      else out.push(n <= refv + 1e-12 ? ['ok', `시험 기초자료 ${tag}${nm} ${Number(n.toPrecision(4))} (원문 ${refv} 이하)`, `${code} 6.1`, 'lab'] : ['bad', `시험 기초자료 ${tag}${nm} ${Number(n.toPrecision(4))}, 원문 ${refv} 초과`, `${code} 6.1`, 'lab']);
-    }
   }
   const u = String(c.unit || '').toLowerCase().replace(/³/g, '3').replace(/\s/g, '');
   if (!u) out.push(['warn', '단위 빈칸', RULES.unit, 'unit']);
@@ -392,7 +386,7 @@ function renderHome() {
       <li><b>불검출</b>: 최종 자릿수로 반올림한 값이 방법검출한계 <b>미만</b>이면 불검출, 같으면 검출. ${evBtn('nd', '총칙 2.14.3')} ${evBtn('lt', '총칙 2.13.6')}</li>
       <li><b>초과</b>: 허가배출기준(괄호 앞 숫자)보다 크면 결과 옆에 "(초과)", 빨간 글씨와 연한 빨강 바탕. 같으면 초과 아님.</li>
       <li><b>산소 보정</b>: 허가배출기준 괄호 안 숫자(예: 8(12)의 12)는 표준산소농도(%)로 기록부 표준산소 칸에 연결. 초과 판정은 보정값으로.</li>
-      <li><b>방법검출한계·정량한계</b>: 공정시험기준 칸은 원문 제시값과 같게, 시험 기초자료(실험실 측정값)는 원문 제시값 이하. 유효숫자 2개 이하. ${evBtn('sig', '정도보증 4.3.4.4')} ${evBtn('ratio', '정도보증 4.3.2')}</li>
+      <li><b>방법검출한계·정량한계</b>: 공정시험기준 칸은 원문 제시값과 같게, 유효숫자 2개 이하 (기록부의 시험 기초자료 칸은 입력값이 길어도 유효숫자 2개로 표시). ${evBtn('sig', '정도보증 4.3.4.4')} ${evBtn('ratio', '정도보증 4.3.2')}</li>
       <li><b>단위</b>: 가스상 ppm·ppb, 입자상 mg/Sm<sup>3</sup>·μg/Sm<sup>3</sup>·ng/Sm<sup>3</sup>. ${evBtn('unit', '총칙 2.14.1')}</li>
     </ol>
   </section>`;
@@ -425,9 +419,10 @@ function renderFile(f) {
 function itemCard(r) {
   const c = cur(r), cs = checks(c), k = key(r), ow = owner(r), follower = ow.row !== r.row, lv = level(cs);
   const ch = f => (edits[k] && f in edits[k] && String(edits[k][f]) !== String(r[f] ?? '')) ? 'changed' : '';
-  const bad = f => (f === 'calc' || f === 'final') && !(Number.isInteger(Number(c[f])) && Number(c[f]) >= 0 && Number(c[f]) <= 8 && String(c[f]).trim() !== '') ? 'invalid' : '';
-  const t = (window.__try || {})[k] || {}; const ev = evaluate(c, t.raw, t.permit);
-  const labs = labRows(c), evs = evidence(c);
+  const bad = f => ((f === 'calc' || f === 'final') && !(Number.isInteger(Number(c[f])) && Number(c[f]) >= 0 && Number(c[f]) <= 8 && String(c[f]).trim() !== ''))
+    || ((f === 'sig_mdl' || f === 'sig_loq') && !sigOk(c[f])) ? 'invalid' : '';
+  const t = (window.__try || {})[k] || {}; const ev = evaluate(c, t.raw, t.permit, t.std, t.meas);
+  const evs = evidence(c);
   return `<section class="panel item" data-k="${esc(k)}">
     <div class="item-h"><h2>${chem(c.item)}</h2><span class="where">${esc(c.sheet)} · ${esc(c.result)}</span><span class="grow"></span>
       ${changed(r) ? '<span class="pill edit">수정</span>' : ''}<span class="pill ${lv}">${LEVEL[lv]}</span>
@@ -443,14 +438,13 @@ function itemCard(r) {
           <div class="field"><label>방법검출한계</label>${c.linked ? `<input disabled value="${esc(mdlValue(c))}">` : `<input inputmode="decimal" data-f="mdl" class="${ch('mdl')}" value="${esc(c.mdl)}">`}</div>
           <div class="field"><label>정량한계</label>${c.linked ? `<input disabled value="${esc(loqValue(c))}">` : `<input inputmode="decimal" data-f="loq" class="${ch('loq')}" value="${esc(c.loq)}">`}</div>
           <div class="field"><label>판정값</label><input disabled value="최종 ${esc(judgeDigits(c))}자리 반올림값"></div>
+          <div class="field"><label>검출한계 유효숫자 <i>시험 기초자료</i></label><input inputmode="numeric" data-f="sig_mdl" class="${ch('sig_mdl')} ${bad('sig_mdl')}" value="${esc(c.sig_mdl ?? '')}" placeholder="빈칸: 입력값 그대로"></div>
+          <div class="field"><label>정량한계 유효숫자 <i>시험 기초자료</i></label><input inputmode="numeric" data-f="sig_loq" class="${ch('sig_loq')} ${bad('sig_loq')}" value="${esc(c.sig_loq ?? '')}" placeholder="빈칸: 입력값 그대로"></div>
         </div>
-        ${labs.length ? `<div class="sec">시험 기초자료 <span class="kicker">· 기록부의 실험실 측정값</span></div>
-        <table class="lab"><thead><tr><th>구분</th><th>방법검출한계</th><th>정량한계</th></tr></thead><tbody>
-        ${labs.map(L => `<tr><td>${chem(L.label || c.item)}</td><td class="${num(L.mdl) === 0 ? 'zero' : ''}">${L.mdl === undefined ? '-' : esc(fmtLab(L.mdl)) || '빈칸'}</td><td class="${num(L.loq) === 0 ? 'zero' : ''}">${L.loq === undefined ? '-' : esc(fmtLab(L.loq)) || '빈칸'}</td></tr>`).join('')}
-        </tbody></table>` : ''}
         <div class="sec">결과 계산</div>
-        <div class="try"><div class="row"><label class="tf"><span>계산값</span><input data-try="raw" inputmode="decimal" value="${esc(t.raw ?? '')}"></label><label class="tf"><span>허가배출기준 <i>예: 8(12)</i></span><input data-try="permit" value="${esc(t.permit ?? '')}"></label></div>
-          ${ev ? `<div class="res ${ev.over ? 'over' : ev.nd ? 'nd' : ''}">${esc(ev.text)}</div><ol class="why">${ev.why.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<ol class="why"><li>계산값을 넣으면 기록부와 같은 수식으로 결과 표시</li></ol>'}</div>
+        <div class="try"><div class="row"><label class="tf"><span>${c.o2 ? '계산값 <i>보정 전 농도</i>' : '계산값'}</span><input data-try="raw" inputmode="decimal" value="${esc(t.raw ?? '')}"></label><label class="tf"><span>허가배출기준 <i>예: 8(12)</i></span><input data-try="permit" value="${esc(t.permit ?? '')}"></label></div>
+          ${c.o2 ? `<div class="row"><label class="tf"><span>표준산소농도 (%) <i>비면 허가배출기준 괄호 값</i></span><input data-try="std" inputmode="decimal" placeholder="${esc(parsePermit(t.permit).O2 ?? '')}" value="${esc(t.std ?? '')}"></label><label class="tf"><span>실측산소농도 (%)</span><input data-try="meas" inputmode="decimal" value="${esc(t.meas ?? '')}"></label></div>` : ''}
+          ${ev ? `<div class="res ${ev.over ? 'over' : ev.nd ? 'nd' : ev.need ? 'need' : ''}">${esc(ev.text)}</div><ol class="why">${ev.why.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<ol class="why"><li>계산값을 넣으면 기록부와 같은 수식으로 결과 표시</li></ol>'}</div>
       </div>
       <div>
         <div class="sec">원문 대조 ${c.ref && c.ref.code ? `<span class="kicker">ES ${esc(c.ref.code)}${c.ref.via ? ' · ES ' + esc(c.ref.via) : ''}</span>` : ''}</div>
@@ -572,6 +566,7 @@ async function buildFile(name) {
         x = setCell(x, 'E' + i, Number(c.calc)); x = setCell(x, 'F' + i, Number(c.final));
         if (!r.linked) { x = setCell(x, 'G' + i, c.mdl); x = setCell(x, 'H' + i, c.loq); }
         x = setCell(x, 'I' + i, c.unit);
+        x = setCell(x, 'L' + i, sigOk(c.sig_mdl) ? c.sig_mdl : ''); x = setCell(x, 'M' + i, sigOk(c.sig_loq) ? c.sig_loq : '');   // 시험 기초자료 유효숫자 (엑셀 조건부 서식이 읽음)
       }
       zip.file(p, x);
     }
@@ -581,6 +576,8 @@ async function buildFile(name) {
 function digitsOk(list) {
   const bad = list.filter(r => { const c = cur(r); return !digitOk(c.calc) || !digitOk(c.final); });
   if (bad.length) { toast('자릿수는 0~8 정수: ' + bad.map(r => r.item).join(', ')); return false; }
+  const bs = list.filter(r => { const c = cur(r); return !sigOk(c.sig_mdl) || !sigOk(c.sig_loq); });
+  if (bs.length) { toast('유효숫자는 빈칸 또는 1~8: ' + bs.map(r => r.item).join(', ')); return false; }
   return true;
 }
 async function busy(btn, label, job) {
@@ -609,12 +606,12 @@ function downloadAll(btn) {
 }
 function plain(s) { return String(s ?? '').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'); }
 function csvText() {
-  const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '원문', '판정', '검토 내용', '비고'];
+  const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '기초자료 검출한계 유효숫자', '기초자료 정량한계 유효숫자', '원문', '판정', '검토 내용', '비고'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [head.map(q).join(',')];
   for (const r of DATA) {
     const c = cur(r), cs = checks(c), l = level(cs);
-    lines.push([r.file, c.item, c.sheet, c.result, cur(owner(r)).method, c.calc, c.final, mdlValue(c), loqValue(c), c.unit, c.ref && c.ref.code ? 'ES ' + c.ref.code : '', LEVEL[l], cs.filter(x => x[0] === 'warn' || x[0] === 'bad').map(x => plain(x[1])).join(' / '), c.note].map(q).join(','));
+    lines.push([r.file, c.item, c.sheet, c.result, cur(owner(r)).method, c.calc, c.final, mdlValue(c), loqValue(c), c.unit, c.sig_mdl ?? '', c.sig_loq ?? '', c.ref && c.ref.code ? 'ES ' + c.ref.code : '', LEVEL[l], cs.filter(x => x[0] === 'warn' || x[0] === 'bad').map(x => plain(x[1])).join(' / '), c.note].map(q).join(','));
   }
   return '﻿' + lines.join('\r\n');
 }

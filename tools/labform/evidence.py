@@ -225,16 +225,6 @@ def captures(code, r):
         if i is not None:
             a, b = span(path, i, '정량범위')
             out.append(dict(kind='range', title='정량범위', **shot(path, a, b)))
-    # 측정한 방법검출한계는 제시한 값 이하 (시험 기초자료): 그 문장만
-    L = lines_of(path)
-    i = find(path, lambda l, L, i: '측정한' in two(L, i) and '제시한' in two(L, i) and ('제시한' in l['text'] or '측정한' in l['text']))
-    if i is not None:
-        j = i
-        while j < len(L) - 1 and j < i + 2 and not re.search(r'이하이어야한다\.', ''.join(L[k]['text'] for k in range(i, j + 1))):
-            j += 1
-        if L[i]['text'].find('측정한') < 0 and i > 0:
-            pass
-        out.append(dict(kind='lab', title='시험 기초자료 기준', **shot(path, i, j)))
     return out
 
 

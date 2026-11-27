@@ -21,8 +21,9 @@ from tplkit import Book
 from openpyxl.utils import get_column_letter as CL, column_index_from_string as CI
 
 SHEET = '기준'
-HEAD = ['물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '비고', '판정 자릿수']
-COL = {k: CL(i + 1) for i, k in enumerate(['item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'judge'])}
+HEAD = ['물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '비고', '판정 자릿수',
+        '시험 기초자료 방법검출한계 유효숫자', '시험 기초자료 정량한계 유효숫자']
+COL = {k: CL(i + 1) for i, k in enumerate(['item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'judge', 'sig_mdl', 'sig_loq'])}
 
 
 def ref(row, key):
@@ -51,13 +52,41 @@ def judge_formula(i):
     return f'={COL["final"]}{i}'
 
 
+def sig_count(v):
+    """원문 제시값의 유효숫자 개수 (0.016 → 2, 0.008 → 1, 1.2 → 2, 10 → 2), 많아야 2. 숫자가 아니면 None"""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    if x == 0:
+        return None
+    t = repr(abs(x)).lower()
+    if 'e' in t:
+        t = t.split('e')[0]
+    if '.' in t and t.endswith('.0'):
+        t = t[:-2]
+    d = t.replace('.', '').lstrip('0')
+    return min(2, len(d))       # 정수 10 → 2개. 정도보증 4.3.4.4 「2개 이하」로 많아야 2
+
+
+def sig_defaults(rows):
+    """시험 기초자료 유효숫자 기본값 = 원문 제시값(공정시험기준 방법검출한계·정량한계)의 유효숫자. 제시값이 없으면 빈칸(입력값 그대로 표시).
+    다른 시트 값을 가져오는 줄(암모니아 BA·전체)은 같은 파일의 원래 줄 값"""
+    own = next((r for r in rows if not r.get('linked')), None)
+    for r in rows:
+        src = r if not r.get('linked') or own is None else own
+        r.setdefault('sig_mdl', sig_count(src.get('mdl')) or '')
+        r.setdefault('sig_loq', sig_count(src.get('loq')) or '')
+
+
 def add_sheet(b, rows):
+    sig_defaults(rows)
     body = ['<row r="1">' + ''.join(cell_xml(1, CL(i + 1), h) for i, h in enumerate(HEAD)) + '</row>']
     for i, r in enumerate(rows, start=2):
         r['judge'] = judge_formula(i)
-        vals = [r['item'], r['sheet'], r['result'], r['method'], r['calc'], r['final'], r['mdl'], r['loq'], r['unit'], r.get('note', ''), r['judge']]
+        vals = [r['item'], r['sheet'], r['result'], r['method'], r['calc'], r['final'], r['mdl'], r['loq'], r['unit'], r.get('note', ''), r['judge'], r['sig_mdl'], r['sig_loq']]
         body.append(f'<row r="{i}">' + ''.join(cell_xml(i, CL(j + 1), v) for j, v in enumerate(vals)) + '</row>')
-    widths = [14, 18, 12, 60, 10, 10, 12, 12, 10, 30, 10]
+    widths = [14, 18, 12, 60, 10, 10, 12, 12, 10, 30, 10, 14, 14]
     cols = ''.join(f'<col min="{i + 1}" max="{i + 1}" width="{w}" customWidth="1"/>' for i, w in enumerate(widths))
     xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -355,6 +384,7 @@ METHOD_CHOICE = {'트라이클로로에틸렌': ('01514.1d', '01511.1d')}
 NO_MDL = {'황산화물', '질소산화물', '일산화탄소', '총탄화수소'}
 TITLES = {}
 FIX_LOG = []
+SIG_LOG = []
 
 
 def own_lab_rows(it):
@@ -379,6 +409,7 @@ def apply(path, items, dst):
     # 원본 계산 수식 오류 고치기 (form_fixes.py, 근거는 거기에) + 결과가 읽는 계산값 칸의 앞선 반올림을 버림으로
     import form_fixes as FF
     FIX_LOG[:] = FF.apply(b, path)
+    SIG_LOG[:] = []
     cell_re = re.compile(r"(?:(?:'([^']+)'|([^\s!(),=<>&\"'+*/-]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?![\d(])")
     R_CELLS = []        # 결과가 읽는 계산값 칸 (계산 자릿수가 정해진 뒤 앞선 반올림을 버림으로 바꾼다)
     for it in items:
@@ -509,6 +540,7 @@ def apply(path, items, dst):
         if pa:
             log += align(b, sh, pa.split('!')[-1].replace('$', ''))
     FIX_LOG.extend(FF.post_apply(b, path))     # 표준산소 연결·산소 보정 규칙 등 마지막 손질 (link_o2 뒤)
+    SIG_LOG.extend(FF.sig_figs(b, path, rows, SHEET, COL))   # 시험 기초자료 유효숫자 표시 ('기준' L·M열)
     done = set()
     for sh, ref_, item, sheet in R_CELLS + [(sh, ref_, it_, s_) for (sh, ref_, it_, s_) in FF.o2_cells(b, path, R_CELLS)]:
         calc = next((r['calc'] for r in rows if r['item'] == item and r['sheet'] == sheet), None)
@@ -545,6 +577,8 @@ if __name__ == '__main__':
         print('ok', os.path.basename(p), f'기준 {len(rows)}줄')
         for l in FIX_LOG:
             print('     원본 수식 고침:', l)
+        for l in SIG_LOG:
+            print('     유효숫자:', l)
         for l in log:
             if '표준산소' in l or '허가배출기준' in l:
                 print('    ', l)

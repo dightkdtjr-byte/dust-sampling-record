@@ -13,4 +13,5 @@ python3 -I program_vs_excel.py $W/p7 > $W/p7compare.log 2>&1; log "방식7 프�
 python3 -I edge_test.py $W/golden $W/master.json $W/edge > $W/edge.log 2>&1; log "방식9 극단값: $(head -1 $W/edge.log)"
 python3 -I prop_test.py "$W/시험기록부.html" $W/prop > $W/prop.log 2>&1; log "방식10 프로그램 계산: $(head -1 $W/prop.log)"
 python3 -I fix_test.py $W/golden $W/fixt > $W/fixt.log 2>&1; log "방식11 원본 수식 고친 것: $(tail -1 $W/fixt.log)"
+python3 -I sig_test.py $W/golden $W/sigt > $W/sigt.log 2>&1; log "방식12 유효숫자 표시: $(tail -1 $W/sigt.log)"
 log "최종 회차 끝"

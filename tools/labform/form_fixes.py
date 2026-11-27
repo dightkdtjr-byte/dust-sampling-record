@@ -315,3 +315,116 @@ def strip_pre_rounding(b, sheet, ref, calc=None):
     b.setf(sheet, ref, nv[1:])
     b.wb[sheet][ref].value = nv
     return True
+
+
+# ── 시험 기초자료 방법검출한계·정량한계: 유효숫자 표시 (정도보증 ES 01001.b 4.3.4.4 「유효 숫자는 2 개 이하로 표기한다」) ──
+# 유효숫자 개수는 물질마다·방법검출한계와 정량한계마다 따로: 숨김 '기준' 시트 L열(방법검출한계)·M열(정량한계).
+# 기본값은 원문 제시값의 유효숫자 (구리 0.016 → 2, 0.05 → 1). 빈칸이면 입력한 값 그대로 표시.
+
+
+def _norm(v):
+    return re.sub(r'\s+', '', str(v or ''))
+
+
+def lab_cells(ws):
+    """시험 기초자료 표의 방법검출한계·정량한계 입력 칸 [(칸, 'mdl'|'loq', 줄 이름)] (수식 칸은 뺌)"""
+    out = []
+    for row in ws.iter_rows(max_row=min(ws.max_row, 60), max_col=4):
+        for c in row:
+            if not _norm(c.value).startswith('시험기초자료'):
+                continue
+            head = c.row; cols = {}
+            for rr in range(c.row, c.row + 2):
+                for cc in range(3, 15):
+                    h = _norm(ws.cell(rr, cc).value)
+                    if ('검출한계' in h or '정량한계' in h or '정량범위' in h) and '방법바탕' not in h:
+                        cols[cc] = 'mdl' if '검출' in h else 'loq'; head = rr
+            for rr in range(head + 1, head + 6):
+                if re.fullmatch(r'\d{1,2}', str(ws.cell(rr, 1).value or '').strip()):
+                    break                      # 다음 번호 칸(측정결과 등)
+                cells = [(ws.cell(rr, cc), k) for cc, k in cols.items()]
+                if all(x.value is None for x, _ in cells):
+                    break
+                lim = min(cols) if cols else 15
+                label = next((str(ws.cell(rr, cc).value).strip() for cc in range(2, lim) if isinstance(ws.cell(rr, cc).value, str)
+                              and not _norm(ws.cell(rr, cc).value).startswith('시험기초자료')), '')
+                out += [(x.coordinate, k, label) for x, k in cells if not (isinstance(x.value, str) and x.value.startswith('='))
+                        and (x.value is None or isinstance(x.value, (int, float)))]
+            return out
+    return out
+
+
+def _numfmt_dxfs(b, decs):
+    """소수 자릿수마다 표시 형식만 바꾸는 조건부 서식 스타일(dxf) 번호"""
+    st = b.text('xl/styles.xml')
+    ids = [int(x) for x in re.findall(r'numFmtId="(\d+)"', st)]
+    base = max(ids + [163]) + 1
+    code = lambda d: '0' if d == 0 else '0.' + '0' * d
+    m = re.search(r'<dxfs count="\d+"\s*/>', st)
+    if m:
+        st = st.replace(m.group(0), '<dxfs count="0"></dxfs>')
+    m = re.search(r'<dxfs count="(\d+)">(.*?)</dxfs>', st, re.S)
+    if not m:
+        st = re.sub(r'(</cellStyles>)', r'\1<dxfs count="0"></dxfs>', st, count=1)
+        m = re.search(r'<dxfs count="(\d+)">(.*?)</dxfs>', st, re.S)
+    items = re.findall(r'<dxf>.*?</dxf>|<dxf/>', m.group(2), re.S)
+    idx = {}
+    for d in decs:
+        old = next((i for i, it in enumerate(items) if it.startswith('<dxf><numFmt') and it.endswith(f'formatCode="{code(d)}"/></dxf>')), None)
+        if old is None:
+            items.append(f'<dxf><numFmt numFmtId="{base + d}" formatCode="{code(d)}"/></dxf>'); old = len(items) - 1
+        idx[d] = old
+    st = st.replace(m.group(0), f'<dxfs count="{len(items)}">{"".join(items)}</dxfs>')
+    b.put('xl/styles.xml', st)
+    return idx
+
+
+DECS = range(0, 10)
+
+
+def sig_rule(ref, S):
+    """칸 ref를 유효숫자 S개(S = '기준' 칸 참조)로 나타낼 때 소수 자릿수 = MAX(0, S-1-INT(LOG10(|S개로 맺은 값|)))
+    맺은 값으로 자릿수를 정해 0.00996 → 0.010처럼 자리가 올라가도 맞게. LOG10의 이진 오차는 1E-9로 막음"""
+    lg = lambda x: f'INT(LOG10(ABS({x}))+1E-9)'
+    r = f'ROUND({ref},{S}-1-{lg(ref)})'
+    return f'MAX(0,{S}-1-{lg(r)})'
+
+
+def sig_figs(b, path, rows, SHEET='기준', COL=None):
+    """시험 기초자료 칸: 값을 길게 적어도 '기준' 시트 L·M열의 유효숫자 개수로 보이게 (소수 자릿수마다 조건부 서식).
+    저장값은 그대로 (결과 수식은 이 칸을 읽지 않음). 유효숫자 칸이 비면 그 칸의 원래 표시 형식"""
+    log = []
+    D = None
+    col = {'mdl': (COL or {}).get('sig_mdl', 'L'), 'loq': (COL or {}).get('sig_loq', 'M')}
+    for ws in b.wb.worksheets:
+        if ws.sheet_state != 'visible' or '시험기록부' not in _norm(ws['A1'].value):
+            continue
+        mine = [r for r in rows if r['sheet'] == ws.title]
+        if not mine:
+            continue
+        cells = lab_cells(ws)
+        if not cells:
+            continue
+        D = D or _numfmt_dxfs(b, DECS)
+        s = b.sx(ws.title)
+        pri = max([int(x) for x in re.findall(r'priority="(\d+)"', s)] + [0])
+        cf = ''; done = []
+        for ref, kind, label in cells:
+            r = next((r for r in mine if label and _norm(r['item']) == _norm(label)), mine[0])   # SOx·NOx·CO: 줄 이름 = 물질
+            S = f"N('{SHEET}'!${col[kind]}${r['row']})"
+            if f'<conditionalFormatting sqref="{ref}"><cfRule type="expression" dxfId="{D[0]}"' in s:
+                continue
+            rules = ''
+            for d in DECS:
+                pri += 1
+                rules += (f'<cfRule type="expression" dxfId="{D[d]}" priority="{pri}"><formula>'
+                          f'AND(ISNUMBER({ref}),{ref}&lt;&gt;0,{S}&gt;=1,{sig_rule(ref, S)}={d})</formula></cfRule>')
+            cf += f'<conditionalFormatting sqref="{ref}">{rules}</conditionalFormatting>'
+            done.append(f'{ref}({"검출" if kind == "mdl" else "정량"} ' + (f'{r["sig_" + kind]}개' if r['sig_' + kind] else '빈칸: 입력값 그대로') + ')')
+        if not cf:
+            continue
+        m = re.search(r'<(dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|drawing|legacyDrawing|tableParts|extLst)\b', s)
+        s = s[:m.start()] + cf + s[m.start():] if m else s.replace('</worksheet>', cf + '</worksheet>')
+        b.setsx(ws.title, s)
+        log.append(f'{ws.title}: 시험 기초자료 ' + ', '.join(done))
+    return log
