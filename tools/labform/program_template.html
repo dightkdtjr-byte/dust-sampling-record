@@ -254,22 +254,20 @@ function evaluate(c, raw, permit, std, meas) { // 기록부 결과 수식과 같
   const pre = []; let lab0 = '계산값';
   if (c.o2) {   // 산소 보정 기록부: 표준산소가 있을 때만 보정 (표준산소 칸이 비면 허가배출기준 괄호 안 숫자)
     const s0 = num(std), so = s0 !== null ? s0 : parsePermit(permit).O2, mo = num(meas);
-    if (so === null) pre.push(`표준산소농도 없음: 보정하지 않은 값 ${x}`);
-    else if (mo === null) return { text: '실측산소 입력', nd: false, need: true, why: [`표준산소농도 ${so}%${s0 === null ? ' (허가배출기준 괄호 안 숫자)' : ''}`, '실측산소농도가 비어 있음: 결과 칸에 「실측산소 입력」'] };
-    else if (mo >= 21) return { text: '실측산소 확인', nd: false, why: [`실측산소농도 ${mo}%: 21% 미만이어야 보정 가능`] };
-    else { const y = x * ((21 - so) / (21 - mo)); pre.push(`표준산소 ${so}%${s0 === null ? ' (허가배출기준 괄호 안 숫자)' : ''}, 실측산소 ${mo}%`, `보정 전 ${x} × (21 − ${so}) / (21 − ${mo})`); x = y; lab0 = '보정값'; }
+    if (so === null) pre.push(`표준산소 없음: 보정 안 함`);
+    else if (mo === null) return { text: '실측산소 입력', nd: false, need: true, why: [`표준산소 ${so}%`, '실측산소 빈칸'] };
+    else if (mo >= 21) return { text: '실측산소 확인', nd: false, why: [`실측산소 ${mo}%: 21 미만`] };
+    else { const y = x * ((21 - so) / (21 - mo)); pre.push(`${x} × (21 − ${so}) / (21 − ${mo})`); x = y; lab0 = '보정값'; }
   }
-  if (!digitOk(c.calc) || !digitOk(c.final)) return { text: '자릿수 확인', nd: false, why: ['계산·최종 자릿수는 0~8 정수'] };
+  if (!digitOk(c.calc) || !digitOk(c.final)) return { text: '자릿수 확인', nd: false, why: ['자릿수 0~8'] };
   const calc = Number(c.calc), final = Number(c.final), jd = judgeDigits(c);
   const v1 = trunc(x, calc), vj = rhu(v1, jd), vf = rhu(v1, final);   // 계산 자릿수까지 버림 → 최종 자릿수로 한 번 4사5입
   const mdl = num(mdlValue(c)), lim = mdl === null ? 0 : mdl;       // 엑셀 N(): 방법검출한계가 "-"이면 0
-  const why = [...pre, `${lab0} ${Number(x.toPrecision(12))}`, `계산 자릿수 ${calc}자리까지 계산: ${v1.toFixed(calc)}`, `최종 자릿수 ${final}자리로 4사5입: ${vf.toFixed(final)}`];
-  if (vj < lim) { why.push(mdl === null ? `${vf.toFixed(final)} < 0: 불검출 (방법검출한계 없음)` : `${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
+  const why = [...pre, `${lab0} ${Number(x.toPrecision(12))}`, `계산 ${calc}자리: ${v1.toFixed(calc)}`, `최종 ${final}자리: ${vf.toFixed(final)}`];
+  if (vj < lim) { why.push(mdl === null ? `${vf.toFixed(final)} < 0: 불검출` : `${vf.toFixed(final)} < 방법검출한계 ${mdl}: 불검출`); return { text: '불검출', nd: true, why }; }
   if (mdl !== null) why.push(`${vf.toFixed(final)} ${vj === mdl ? '=' : '>'} 방법검출한계 ${mdl}: 검출`);
-  else why.push('방법검출한계 없음: 불검출 판정 안 함 (0 미만만 불검출)');
   const p = parsePermit(permit); let text = vf.toFixed(final) + tail, over = false;
-  if (p.L !== null) { over = vf > p.L; why.push(`허가배출기준 ${p.L}: ${over ? '초과' : (vf === p.L ? '같음 (초과 아님)' : '이내')}`); if (over) text += ' (초과)'; }
-  if (p.O2 !== null && !c.o2) why.push(`표준산소농도 ${p.O2}% (허가배출기준 괄호 안 값)`);
+  if (p.L !== null) { over = vf > p.L; why.push(`허가배출기준 ${p.L}: ${over ? '초과' : '이내'}`); if (over) text += ' (초과)'; }
   return { text, over, why };
 }
 function sigOk(v) { const t = String(v ?? '').trim(); return t === '' || (/^\d$/.test(t) && Number(t) >= 1 && Number(t) <= 8); }   // 유효숫자 칸: 빈칸 또는 1~8
@@ -286,10 +284,10 @@ function checks(c) {
     if (R.calc != null && R.final != null) out.push(calc === R.calc && final === R.final ? ['ok', `원문 결과 표시: 계산 ${R.calc}자리, 표기 ${R.final}자리`, `${code} 결과 표시`, 'digits'] : ['bad', `원문은 계산 ${R.calc}자리, 표기 ${R.final}자리`, `${code} 결과 표시`, 'digits']);
   }
   const mdl = num(mdlValue(c)), loq = num(loqValue(c));
-  if (mdl === null && !c.linked) out.push(R.mdl == null ? ['info', '방법검출한계 없음: 0 미만만 불검출 (원문 제시값 없음)', RULES.nd, 'nd'] : ['warn', `방법검출한계가 숫자가 아님 (${esc(c.mdl)})`, RULES.nd, 'nd']);
+  if (mdl === null && !c.linked) out.push(R.mdl == null ? ['info', '방법검출한계 원문 제시값 없음', RULES.nd, 'nd'] : ['warn', `방법검출한계가 숫자가 아님 (${esc(c.mdl)})`, RULES.nd, 'nd']);
   if (mdl !== null) {
     out.push(sig(mdl) <= 2 ? ['ok', `방법검출한계 유효숫자 ${sig(mdl)}개`, RULES.sig, 'sig'] : ['bad', `방법검출한계 유효숫자 ${sig(mdl)}개 (2개 이하)`, RULES.sig, 'sig']);
-    if (decimals(mdl) > final) { const up = Math.pow(10, -final) * Math.ceil(mdl / Math.pow(10, -final) - 1e-9); out.push(['warn', `방법검출한계 ${mdl}가 최종 ${final}자리보다 작음: 계산값 ${ndBelow(mdl, final)} 미만 불검출, 이상은 ${up.toFixed(final)} 이상으로 표시`, RULES.nd, 'nd']); }
+    if (decimals(mdl) > final) { const up = Math.pow(10, -final) * Math.ceil(mdl / Math.pow(10, -final) - 1e-9); out.push(['warn', `방법검출한계 ${mdl}: 최종 ${final}자리보다 작음`, RULES.nd, 'nd']); }
   }
   if (!c.linked) {
     if (R.mdl != null) out.push(mdl !== null && Math.abs(mdl - R.mdl) < 1e-12 ? ['ok', `방법검출한계 ${mdl} (원문 ${R.mdl})`, code, 'mdl'] : ['bad', `방법검출한계 ${esc(c.mdl)}, 원문은 ${R.mdl}`, code, 'mdl']);
@@ -302,7 +300,7 @@ function checks(c) {
   const u = String(c.unit || '').toLowerCase().replace(/³/g, '3').replace(/\s/g, '');
   if (!u) out.push(['warn', '단위 빈칸', RULES.unit, 'unit']);
   else {
-    out.push(UNITS.includes(u) ? ['ok', `단위 ${chem(c.unit)}`, RULES.unit, 'unit'] : ['bad', `단위 ${chem(c.unit)}: 총칙 표시단위 아님`, RULES.unit, 'unit']);
+    out.push(UNITS.includes(u) ? ['ok', `단위 ${chem(c.unit)}`, RULES.unit, 'unit'] : ['bad', `단위 ${chem(c.unit)}: 총칙 단위 아님`, RULES.unit, 'unit']);
     const ru = String(R.unit || '').toLowerCase().replace(/³/g, '3');
     if (ru && u !== ru) out.push(['bad', `원문 단위는 ${chem(R.unit)}`, code, 'digits']);
   }
@@ -355,9 +353,7 @@ function renderHome() {
   $('#app').innerHTML = `
   <section class="panel hero" id="home">
     <div>
-      <div class="kicker">대기오염공정시험기준</div>
       <h1>시험기록부</h1>
-      <p class="lead">기록부별 공정시험기준, 계산·최종 자릿수, 방법검출한계, 정량한계, 단위 관리</p>
       <div class="facts"><span>기록부 <b>${FILE_LIST.length}</b>종</span><span>시험항목 <b>${items}</b>종</span><span>기준 <b>${DATA.length}</b>항목</span></div>
       <button class="btn fill lg" id="btnAll">전체 기록부 내려받기 (zip)</button>
     </div>
@@ -380,14 +376,13 @@ function renderHome() {
   <div class="grid" id="cards">${shown.map((f, i) => (i === 0 || group(shown[i - 1]).name !== group(f).name ? `<div class="glabel">${esc(group(f).name)}</div>` : '') + card(f)).join('') || '<div class="empty">해당 기록부 없음</div>'}</div>
   <section class="panel rules">
     <h2>판정 기준</h2>
-    <div class="kicker">모든 기록부 결과 수식에 같은 기준 적용</div>
     <ol>
-      <li><b>계산</b>: 계산 자릿수까지 계산(그 아래는 버림)한 뒤 최종 자릿수로 한 번 4사5입. 계산 자릿수 = 최종 자릿수 + 1. 맺음은 한 번에 (총칙 1.6·2.14.2 → KS Q 5002 4.2.2.2). ${evBtn('calc', '총칙 2.14.2')}</li>
-      <li><b>불검출</b>: 최종 자릿수로 반올림한 값이 방법검출한계 <b>미만</b>이면 불검출, 같으면 검출. ${evBtn('nd', '총칙 2.14.3')} ${evBtn('lt', '총칙 2.13.6')}</li>
-      <li><b>초과</b>: 허가배출기준(괄호 앞 숫자)보다 크면 결과 옆에 "(초과)", 빨간 글씨와 연한 빨강 바탕. 같으면 초과 아님.</li>
-      <li><b>산소 보정</b>: 허가배출기준 괄호 안 숫자(예: 8(12)의 12)는 표준산소농도(%)로 기록부 표준산소 칸에 연결. 초과 판정은 보정값으로.</li>
-      <li><b>방법검출한계·정량한계</b>: 공정시험기준 칸은 원문 제시값과 같게, 유효숫자 2개 이하 (기록부의 시험 기초자료 칸은 입력값이 길어도 유효숫자 2개로 표시). ${evBtn('sig', '정도보증 4.3.4.4')} ${evBtn('ratio', '정도보증 4.3.2')}</li>
-      <li><b>단위</b>: 가스상 ppm·ppb, 입자상 mg/Sm<sup>3</sup>·μg/Sm<sup>3</sup>·ng/Sm<sup>3</sup>. ${evBtn('unit', '총칙 2.14.1')}</li>
+      <li><b>계산</b>: 계산 자릿수까지 버림 → 최종 자릿수로 4사5입 ${evBtn('calc', '총칙 2.14.2')}</li>
+      <li><b>불검출</b>: 방법검출한계 미만 ${evBtn('nd', '총칙 2.14.3')} ${evBtn('lt', '총칙 2.13.6')}</li>
+      <li><b>초과</b>: 허가배출기준 초과 시 (초과)</li>
+      <li><b>산소 보정</b>: 계산값 × (21 − 표준산소) / (21 − 실측산소)</li>
+      <li><b>방법검출한계·정량한계</b>: 유효숫자 2개 이하 ${evBtn('sig', '정도보증 4.3.4.4')} ${evBtn('ratio', '정도보증 4.3.2')}</li>
+      <li><b>단위</b>: ppm·ppb, mg/Sm<sup>3</sup>·μg/Sm<sup>3</sup>·ng/Sm<sup>3</sup> ${evBtn('unit', '총칙 2.14.1')}</li>
     </ol>
   </section>`;
   if (typing) { const el = $('#q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
@@ -431,27 +426,26 @@ function itemCard(r) {
       <div>
         <div class="sec">기준</div>
         <div class="fields">
-          <div class="field wide"><label>공정시험기준</label>${follower ? `<textarea disabled>${esc(cur(ow).method)}</textarea><span class="hint">「${chem(ow.item)}」 항목과 같은 칸</span>` : `<textarea data-f="method" class="${ch('method')}">${esc(c.method)}</textarea>`}</div>
+          <div class="field wide"><label>공정시험기준</label>${follower ? `<textarea disabled>${esc(cur(ow).method)}</textarea>` : `<textarea data-f="method" class="${ch('method')}">${esc(c.method)}</textarea>`}</div>
           <div class="field"><label>계산 자릿수</label><input inputmode="numeric" data-f="calc" class="${ch('calc')} ${bad('calc')}" value="${esc(c.calc)}"></div>
           <div class="field"><label>최종 자릿수</label><input inputmode="numeric" data-f="final" class="${ch('final')} ${bad('final')}" value="${esc(c.final)}"></div>
           <div class="field"><label>단위</label><input data-f="unit" class="${ch('unit')}" value="${esc(c.unit)}"></div>
           <div class="field"><label>방법검출한계</label>${c.linked ? `<input disabled value="${esc(mdlValue(c))}">` : `<input inputmode="decimal" data-f="mdl" class="${ch('mdl')}" value="${esc(c.mdl)}">`}</div>
           <div class="field"><label>정량한계</label>${c.linked ? `<input disabled value="${esc(loqValue(c))}">` : `<input inputmode="decimal" data-f="loq" class="${ch('loq')}" value="${esc(c.loq)}">`}</div>
           <div class="field"><label>판정값</label><input disabled value="최종 ${esc(judgeDigits(c))}자리 반올림값"></div>
-          <div class="field"><label>검출한계 유효숫자 <i>시험 기초자료</i></label><input inputmode="numeric" data-f="sig_mdl" class="${ch('sig_mdl')} ${bad('sig_mdl')}" value="${esc(c.sig_mdl ?? '')}" placeholder="빈칸: 입력값 그대로"></div>
-          <div class="field"><label>정량한계 유효숫자 <i>시험 기초자료</i></label><input inputmode="numeric" data-f="sig_loq" class="${ch('sig_loq')} ${bad('sig_loq')}" value="${esc(c.sig_loq ?? '')}" placeholder="빈칸: 입력값 그대로"></div>
+          <div class="field"><label>기초자료 검출한계 유효숫자</label><input inputmode="numeric" data-f="sig_mdl" class="${ch('sig_mdl')} ${bad('sig_mdl')}" value="${esc(c.sig_mdl ?? '')}"></div>
+          <div class="field"><label>기초자료 정량한계 유효숫자</label><input inputmode="numeric" data-f="sig_loq" class="${ch('sig_loq')} ${bad('sig_loq')}" value="${esc(c.sig_loq ?? '')}"></div>
         </div>
         <div class="sec">결과 계산</div>
-        <div class="try"><div class="row"><label class="tf"><span>${c.o2 ? '계산값 <i>보정 전 농도</i>' : '계산값'}</span><input data-try="raw" inputmode="decimal" value="${esc(t.raw ?? '')}"></label><label class="tf"><span>허가배출기준 <i>예: 8(12)</i></span><input data-try="permit" value="${esc(t.permit ?? '')}"></label></div>
-          ${c.o2 ? `<div class="row"><label class="tf"><span>표준산소농도 (%) <i>비면 허가배출기준 괄호 값</i></span><input data-try="std" inputmode="decimal" placeholder="${esc(parsePermit(t.permit).O2 ?? '')}" value="${esc(t.std ?? '')}"></label><label class="tf"><span>실측산소농도 (%)</span><input data-try="meas" inputmode="decimal" value="${esc(t.meas ?? '')}"></label></div>` : ''}
-          ${ev ? `<div class="res ${ev.over ? 'over' : ev.nd ? 'nd' : ev.need ? 'need' : ''}">${esc(ev.text)}</div><ol class="why">${ev.why.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<ol class="why"><li>계산값을 넣으면 기록부와 같은 수식으로 결과 표시</li></ol>'}</div>
+        <div class="try"><div class="row"><label class="tf"><span>계산값</span><input data-try="raw" inputmode="decimal" value="${esc(t.raw ?? '')}"></label><label class="tf"><span>허가배출기준</span><input data-try="permit" value="${esc(t.permit ?? '')}"></label></div>
+          ${c.o2 ? `<div class="row"><label class="tf"><span>표준산소농도 (%)</span><input data-try="std" inputmode="decimal" placeholder="${esc(parsePermit(t.permit).O2 ?? '')}" value="${esc(t.std ?? '')}"></label><label class="tf"><span>실측산소농도 (%)</span><input data-try="meas" inputmode="decimal" value="${esc(t.meas ?? '')}"></label></div>` : ''}
+          ${ev ? `<div class="res ${ev.over ? 'over' : ev.nd ? 'nd' : ev.need ? 'need' : ''}">${esc(ev.text)}</div><ol class="why">${ev.why.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}</div>
       </div>
       <div>
         <div class="sec">원문 대조 ${c.ref && c.ref.code ? `<span class="kicker">ES ${esc(c.ref.code)}${c.ref.via ? ' · ES ' + esc(c.ref.via) : ''}</span>` : ''}</div>
         <ul class="checks">${cs.map(x => `<li><span class="pill ${x[0]}">${LEVEL[x[0]]}</span><span class="msg">${x[1]}<span class="basis">${esc(x[2] || '')}</span></span>${x[3] && evidence(c, x[3]).length ? `<button class="linkbtn" data-ev="${esc(k)}" data-kind="${x[3]}">원문</button>` : '<span></span>'}</li>`).join('')}</ul>
       </div>
     </div>
-    ${c.note ? `<div class="note">${esc(c.note)}</div>` : ''}
   </section>`;
 }
 // 원문 그림

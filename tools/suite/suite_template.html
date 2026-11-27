@@ -41,7 +41,7 @@
   .card:not(.off):hover { transform:translateY(-2px); box-shadow:0 1px 0 rgba(42,57,68,.1), 0 14px 26px -16px rgba(20,28,34,.55); }
   .card.off { opacity:.6; cursor:default; }
   .kicker { font-size:12px; font-weight:600; color:var(--soft); }
-  .card h2 { margin:2px 0 0; font-size:21px; font-weight:800; }
+  .card h2 { margin:2px 0 6px; font-size:22px; font-weight:800; }
   .card p { flex:1 1 auto; margin:0; color:var(--ink-2); font-size:13.5px; }
   .card .foot { display:flex; align-items:center; gap:10px; }
   .card .meta { flex:1; font-size:12px; color:var(--soft); white-space:nowrap; }
@@ -66,9 +66,7 @@
 <div id="spSky" aria-hidden="true"></div>
 <div id="home"><main>
   <section class="hero">
-    <div class="kicker">__KICKER__</div>
     <h1>__TITLE__</h1>
-    <p>__LEAD__</p>
   </section>
   <div class="grid" id="cards"></div>
 </main></div>
@@ -82,8 +80,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('#tabs').innerHTML = APPS.map(a => `<button class="tab" data-go="${a.id}" ${a.ready ? '' : 'disabled title="파일 없음"'}>${esc(a.title)}</button>`).join('');
 $('#cards').innerHTML = APPS.map(a => `<article class="card ${a.ready ? '' : 'off'}" ${a.ready ? `data-go="${a.id}" tabindex="0" role="button"` : ''} style="--c:${a.color}">
-  <div><div class="kicker">${esc(a.kicker || '')}</div><h2>${esc(a.title)}</h2></div>
-  <p>${esc(a.desc || '')}</p>
+  <h2>${esc(a.title)}</h2>
   <div class="foot"><span class="meta">${a.ready ? esc(a.version ? 'v' + a.version : '') : '아직 합치지 않음'}</span><span class="go">${a.ready ? '열기' : '없음'}</span></div></article>`).join('');
 const frames = {};
 // 프로그램마다 따로 만든 HTML 한 파일을 그대로 띄운다 (srcdoc: 이 파일과 같은 출처라 브라우저 저장·내려받기가 그대로 된다)

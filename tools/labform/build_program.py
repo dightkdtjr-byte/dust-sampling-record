@@ -19,11 +19,11 @@ for p in sorted(glob.glob(os.path.join(golden, '*.xls*'))):
     files[os.path.basename(p)] = base64.b64encode(open(p, 'rb').read()).decode()
 # 원문 문장 등 RULES (총칙·정도보증)
 RULES = {
-    'calc': '총칙 ES 01000.b 1.6·2.14.2 (마지막 유효숫자의 다음 단위까지 계산, KS Q 5002 4.2.2.2 4사5입, 맺음은 한 번에)',
-    'nd': '총칙 ES 01000.b 2.14.3 (방법검출한계 미만은 불검출)',
-    'unit': '총칙 ES 01000.b 2.14.1 (가스상 ppm·ppb, 입자상 mg/Sm³·μg/Sm³·ng/Sm³)',
-    'sig': '정도보증 ES 01001.b 4.3.4.4 (유효숫자 2개 이하)',
-    'ratio': '정도보증 ES 01001.b 4.3.2·4.3.3 (방법검출한계 = 3.14s, 정량한계 = 10s)',
+    'calc': '총칙 1.6·2.14.2',
+    'nd': '총칙 2.14.3',
+    'unit': '총칙 2.14.1',
+    'sig': '정도보증 4.3.4.4',
+    'ratio': '정도보증 4.3.2·4.3.3',
 }
 js = lambda t: t.replace('</', '<\\/')      # <script> 안 JSON에 "</script>"가 있어도 끊기지 않게
 html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'program_template.html'), encoding='utf8').read()
