@@ -9,7 +9,7 @@
 #          · 좁고 세로로 긴 칸(병합)에 안 들어가는 글은 90° 돌려 세로로 쓴다 ("Sample", "Field Blank" 등)
 #          · 그 밖에 낱말 하나가 칸보다 길면 그 칸의 글자 크기를 줄인다 (MIN_PT까지)
 #          · 날짜·숫자·수식 칸은 "셀에 맞춤"을 켠다: 값이 칸보다 길어도 ###이 아니라 작게 찍힌다
-#  날짜   · 날짜 칸의 표시 형식을 yyyy-mm-dd로
+#  날짜   · 날짜 칸의 표시 형식을 yyyy.mm.dd로 (2000.00.00 꼴)
 #  예시   · 기본 정보 입력 칸에 모든 양식 같은 예시 값을 넣는다 (이미 수식·글이 있는 칸은 그대로)
 import re, datetime
 from openpyxl.utils import get_column_letter as CL, range_boundaries
@@ -19,18 +19,18 @@ FONT = '맑은 고딕'
 MIN_PT = 8
 FIT = 0.92                 # 글자 폭 추정이 틀려도 잘리지 않게 칸 안쪽 너비의 92%까지만 쓴다
 LINE = 1.35                # 줄 높이 = 글자 크기 × LINE
-DATE_FMT = 'yyyy-mm-dd'
-BOLD_ROWS = {'시험항목', '의뢰기관', '측정대상', '시료인수일', '분석일자', '시험방법', '분석기기'}
+DATE_FMT = 'yyyy.mm.dd'   # 날짜는 2000.00.00 꼴 (사용자 결정)
+BOLD_ROWS = {'시험항목', '의뢰기관', '측정대상', '시료인수일', '시료채취일', '분석일자', '시험방법', '분석기기'}
 # 예시 값: 사용자가 준 먼지 원본 기록(A16)의 값을 2027년 기준 날짜로 (인수·채취 3월 31일, 분석 다음 날 4월 1일)
 EXAMPLE = {
     '의뢰기관': '수도권대기환경청 대기총량과',
-    '측정대상': '대일개발(주) #A16',
+    '측정대상': '가람산업(주) #A16',      # 지어낸 사업장명 (anonymize.py)
     '시료채취일': datetime.date(2027, 3, 31),
     '분석일자': datetime.date(2027, 4, 1),
     '시각': 17,
     '시험검사기간': 2,
     '허가배출기준': '8(12)',
-    '시료명': '0331-DIG-#A16-P-1',
+    '시료명': '0331-GRS-#A16-P-1',
 }
 # OVERWRITE: 원본 기록을 양식으로 바꿀 때 True. 기본 정보 칸(의뢰기관·측정대상·날짜·시각·기간·서명)에 원본마다 다른 실제 값이
 # 들어 있으면 표준 예시로 바꿔 모든 양식을 같게 한다. 시료명·허가배출기준·측정값 같은 물질별 예시는 원본 값을 둔다.
@@ -206,7 +206,7 @@ def examples(b, sheet, area, fill=True):
             f = cell.number_format or ''
             if type(cell).__name__ == 'MergedCell' or f == DATE_FMT:
                 continue
-            if re.search(r'(^|[^"])(yy|mm-dd|m/d|d/m)', f) and 'h' not in f.lower():
+            if re.search(r'(^|[^"])(yy|mm-dd|m/d|d/m)', f) and 'h' not in f.lower() and f != DATE_FMT:
                 st = _cell_style(s_xml, f'{CL(c)}{r}', None, {}, c)
                 if st not in fmt_cache:
                     fmt_cache[st] = b.style_with_format(st, DATE_FMT)
@@ -455,7 +455,7 @@ def fit_cells(lay):
 
 # ───────── 계산·자료 시트 ─────────
 def tidy_other(b, sheet):
-    """기록부가 아닌 시트(계산과정·rawdata·기기 자료): 날짜 표시 형식 yyyy-mm-dd, 숫자·수식 칸 셀에 맞춤(### 방지)."""
+    """기록부가 아닌 시트(계산과정·rawdata·기기 자료): 날짜 표시 형식 yyyy.mm.dd, 숫자·수식 칸 셀에 맞춤(### 방지)."""
     from std import load
     from form_style import Styles, _set_styles, _cell_style
     ws = load(b)[sheet]

@@ -50,6 +50,9 @@
   /* 처음 화면 */
   .hero { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:24px; padding:28px 30px; align-items:center; }
   .hero h1 { font-size:34px; font-weight:800; letter-spacing:.18em; }
+  .brand { margin:6px auto 18px; display:flex; justify-content:center; font-size:30px; font-weight:800; }
+  .brand .sp-wordmark { height:80px; width:auto; max-width:100%; display:block; }
+  @media (max-width:560px) { .brand .sp-wordmark { height:50px; } }
   .hero .lead { color:var(--ink-2); margin:10px 0 16px; font-size:14.5px; }
   .facts { display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--soft); font-size:13px; margin-bottom:18px; }
   .facts b { color:var(--ink); }
@@ -179,6 +182,7 @@
 <div id="toast" role="status"></div>
 <script>/*__JSZIP__*/</script>
 <script>/*__SCENE__*/</script>
+<script>/*__WORDMARK__*/</script>
 <script>
 const DATA = "__DATA__";
 const FILES = "__FILES__";
@@ -351,9 +355,9 @@ function renderHome() {
   });
   const typing = document.activeElement && document.activeElement.id === 'q';
   $('#app').innerHTML = `
+  <h1 class="brand" id="brand" aria-label="시험기록부"></h1>
   <section class="panel hero" id="home">
     <div>
-      <h1>시험기록부</h1>
       <div class="facts"><span>기록부 <b>${FILE_LIST.length}</b>종</span><span>시험항목 <b>${items}</b>종</span><span>기준 <b>${DATA.length}</b>항목</span></div>
       <button class="btn fill lg" id="btnAll">전체 기록부 내려받기 (zip)</button>
     </div>
@@ -386,6 +390,7 @@ function renderHome() {
     </ol>
   </section>`;
   if (typing) { const el = $('#q'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  try { if (window.SPWordmark) { if (window.__wm) window.__wm.destroy(); window.__wm = SPWordmark.mount($('#brand'), '시험기록부', { scene: () => window.__scene }); } else $('#brand').textContent = '시험기록부'; } catch (e) { $('#brand').textContent = '시험기록부'; }
 }
 function evBtn(k, label) { return EV.rules && EV.rules[k] ? `<button class="linkbtn" data-rule="${k}">${esc(label)} 원문</button>` : `<span class="kicker">${esc(label)}</span>`; }
 function card(f) {
@@ -621,7 +626,7 @@ $('#btnImport').onclick = () => $('#fileImport').click();
 $('#fileImport').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const j = JSON.parse(await f.text()); const e2 = cleanEdits(j && j.edits ? j.edits : j); if (!Object.keys(e2).length && !(j && j.edits && !Object.keys(j.edits).length)) { toast('백업 파일에 기준 수정 내용이 없음'); } else { edits = e2; save(); render(); toast(`백업 불러옴 (${Object.keys(e2).length}항목)`); } } catch (x) { toast('백업 파일을 읽지 못함'); } e.target.value = ''; };
 $('#btnReset').onclick = () => { if (!confirm('모든 수정 내용을 지우고 처음 값으로 되돌릴까요?')) return; edits = {}; save(); render(); toast('처음 값으로 되돌림'); };
 render();
-try { if (window.StackpilotScene) StackpilotScene.mount(document.getElementById('spSky'), { theme: 'basic', mode: 'auto', season: 'auto', scope: 'menu' }); } catch (e) {}   // 시료채취 프로그램과 같은 풍경 (시간대·계절)
+try { if (window.StackpilotScene) window.__scene = StackpilotScene.mount(document.getElementById('spSky'), { theme: 'basic', mode: 'auto', season: 'auto', scope: 'menu' }); if (window.__wm) window.__wm.redraw(); } catch (e) {}   // 시료채취 프로그램과 같은 풍경 (시간대·계절)
 </script>
 </body>
 </html>

@@ -41,6 +41,8 @@ def _vocs_fixes():
                     (sh, f'O{lr}', f'=IFERROR(AVERAGE(L{lr}:L{lr + 2}),"")', '반복 주입 평균, 희석배수는 여기서 곱하지 않음 (원본 4종은 여기와 H열에서 두 번 곱함). 주입값이 모두 비면 빈칸(분석 안 한 시료), 0을 적으면 0'),
                     (sh, f'D{r}', f'=O{lr}', '시료 농도 = 반복 주입 평균 (원본 6종은 첫 주입값만)'),
                     (sh, f'H{r}', f'=IF(D{r}="","",ROUND(((D{r}*F{r})-G$32),3))', '분석 안 한 시료는 빈칸으로 평균에서 뺌(0을 적은 시료는 0으로 들어감), 음수도 숫자로 (Dichloromethane은 원본이 글자 "0.000"으로 바꿔 평균에서 빠짐)')]
+        out += [(sh, f'P{lr}', f'=IF(O{lr}="","",O{lr}-O$51)', '분석 안 한 시료는 빈칸 (빈칸 − 바탕은 엑셀에서 #VALUE!)') for lr in (53, 56, 59)]
+        out += [(sh, f'B{r}', f'=IFERROR(LEFT(K{lr},FIND(".",K{lr})-1),K{lr}&"")', '시료명: 파일 이름에 점이 없거나 비면 그대로 (원본은 #VALUE!)') for r, lr in [(32, 53), (33, 56), (34, 59)]]
         out.append((sh, 'I32', '=IFERROR(IF((AVERAGE(H32:H34)/1000)<0,0,TRUNC(ROUND(AVERAGE(H32:H34)/1000,8),3)),"")', '시료 평균은 분석한 시료만 (원본은 빈 시료가 0으로 평균에 들어가 결과가 작아짐), 시료가 모두 비면 결과 빈칸'))
     return out
 
@@ -137,6 +139,24 @@ def post_apply(b, path):
                 b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
                 log.append(f'{sh}!{ref}: {why}')
     log += blank_rows(b, path)
+    # 글자가 될 수 있는 칸(빈칸 "" 또는 "실측산소 입력")을 ROUND로 감싼 표시 칸: 숫자일 때만 맺고 아니면 그대로 (엑셀은 ROUND("")가 #VALUE!)
+    ref_re = re.compile(r"^=ROUND\(((?:'[^']+'|[^!(),'=]+)!)?\$?([A-Z]{1,3})\$?(\d+),(\d)\)$")
+    for ws in b.wb.worksheets:
+        if ws.title == '기준':
+            continue
+        for row in ws.iter_rows():
+            for c in row:
+                m = ref_re.match(str(c.value or ''))
+                if not m:
+                    continue
+                sh2 = (m.group(1) or '').rstrip('!').strip("'") or ws.title
+                if sh2 not in b.sheets:
+                    continue
+                tv = str(b.wb[sh2][f'{m.group(2)}{m.group(3)}'].value or '')
+                if tv.startswith('=') and ('""' in tv or '실측산소' in tv):
+                    x = (m.group(1) or '') + f'{m.group(2)}{m.group(3)}'
+                    if _set(b, ws.title, c.coordinate, f'=IF(ISNUMBER({x}),ROUND({x},{m.group(4)}),{x}&"")'):
+                        log.append(f'{ws.title}!{c.coordinate}: 보정값이 빈칸·「실측산소 입력」이면 그대로 표시')
     return log
 
 
@@ -156,12 +176,19 @@ def o2_cells(b, path, r_cells):
     return out
 
 
+def _unshare(b, sh):
+    """공유 수식(한 칸 수식을 여러 칸이 같이 씀)을 칸마다 풀어 둔다. 원본 칸을 바꾸면 나머지 칸 수식이 비는 것을 막음"""
+    if 't="shared"' in b.sx(sh):
+        b.unshare(sh)
+
+
 def _wrap_blank(b, sh, ref, cond):
     """칸 수식을 IF(cond="","",원래 수식)으로: cond(입력 칸)가 비면 빈칸 → 평균(AVERAGE)에서 빠진다"""
     v = b.wb[sh][ref].value
     if not (isinstance(v, str) and v.startswith('=')) or v.startswith(f'=IF({cond}="",""'):
         return False
     f = f'=IF({cond}="","",{v[1:]})'
+    _unshare(b, sh)
     b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
     return True
 
@@ -169,6 +196,7 @@ def _wrap_blank(b, sh, ref, cond):
 def _set(b, sh, ref, f):
     if b.wb[sh][ref].value == f:
         return False
+    _unshare(b, sh)
     b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
     return True
 
@@ -198,11 +226,13 @@ def blank_rows(b, path):
         note(_set(b, '계산과정', 'E3', '=IF(COUNT(C3:C5)=0,"",(IF(ISNUMBER(C3),C3*D3,0)+IF(ISNUMBER(C4),C4*D4,0)+IF(ISNUMBER(C5),C5*D5,0))/COUNT(C3:C5))'),
              '계산과정!E3', '시료 평균은 측정한 반복만')
         note(_set(b, '계산과정', 'F3', '=IF(COUNT(B8:B10)=0,0,C8)'), '계산과정!F3', '현장바탕을 측정하지 않았으면 0')
-        if '염화수소' in base:
-            first = next(ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', ''))
+        first = next((ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', '')), None)
+        if first:   # 브로민·플루오린도 염화수소처럼 (빈 반복 × 시료량은 엑셀에서 #VALUE!)
             note(_set(b, first, 'F21', '=IF(COUNT(D21:D23)=0,"",(IF(ISNUMBER(D21),D21*E21,0)+IF(ISNUMBER(D22),D22*E22,0)+IF(ISNUMBER(D23),D23*E23,0))/COUNT(D21:D23))'),
                  f'{first}!F21', '시료 평균은 측정한 반복만')
     if any(k in base for k in ('아세트알데하이드', '포름알데하이드', '폼알데하이드')) and W('계산과정'):
+        for r0 in (8, 11, 14, 17):     # 반복 평균: 모두 비면 빈칸 (AVERAGE가 #DIV/0!)
+            note(_set(b, '계산과정', f'C{r0}', f'=IF(COUNT(B{r0}:B{r0 + 2})=0,"",AVERAGE(B{r0}:B{r0 + 2}))'), '계산과정!C8·C11·C14·C17', '반복을 모두 분석하지 않았으면 빈칸')
         for r, b0 in ((3, 11), (4, 14), (5, 17)):
             note(_set(b, '계산과정', f'D{r}', '=IF(COUNT(B8:B10)=0,0,C8)'), f'계산과정!D{r}', '현장바탕 평균 (측정하지 않았으면 0)')
             v = b.wb['계산과정'][f'N{r}'].value
@@ -231,6 +261,15 @@ def blank_rows(b, path):
             m = re.search(r"('Raw data'!\$?[A-Z]+\$?\d+)", str(v))
             if m:
                 note(_wrap_blank(b, '계산과정', f'C{r}', m.group(1)), '계산과정!C2:C121', '측정이 없는 시각은 평균에서 뺌')
+            # 시각: 기기 파일의 " 2026/11/05 13:08:05"에서 시·분·초를 숫자로 꺼냄 (TIMEVALUE는 엑셀 지역 설정·앞 공백에 따라 #VALUE!),
+            # 엑셀이 날짜·시각으로 바꿔 넣은 값이면 시각 부분, 비면 빈칸
+            rb = f"'Raw data'!B{r + 12}"
+            t = f'RIGHT(TRIM({rb}),8)'
+            note(_set(b, '계산과정', f'B{r}', f'=IFERROR(IF(ISNUMBER({rb}),MOD({rb},1),IF(TRIM({rb})="","",TIME(VALUE(MID({t},1,2)),VALUE(MID({t},4,2)),VALUE(MID({t},7,2))))),"")'),
+                 '계산과정!B2:B121', '시각을 시·분·초 숫자로 (TIMEVALUE는 엑셀 설정에 따라 #VALUE!), 비면 빈칸')
+            ev = b.wb['계산과정'][f'E{r}'].value
+            if isinstance(ev, str) and ev.startswith('=') and not ev.startswith(f'=IF(C{r}="",""'):
+                note(_wrap_blank(b, '계산과정', f'E{r}', f'C{r}'), '계산과정!E2:E121', '측정이 없는 시각은 빈칸 (빈칸 × K는 엑셀에서 #VALUE!)')
     if 'PAHs' in base and W('시험기록부'):
         for r in range(21, 27):
             v = b.wb['시험기록부'][f'I{r}'].value

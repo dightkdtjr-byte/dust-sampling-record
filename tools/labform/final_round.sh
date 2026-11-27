@@ -14,4 +14,6 @@ python3 -I edge_test.py $W/golden $W/master.json $W/edge > $W/edge.log 2>&1; log
 python3 -I prop_test.py "$W/시험기록부.html" $W/prop > $W/prop.log 2>&1; log "방식10 프로그램 계산: $(head -1 $W/prop.log)"
 python3 -I fix_test.py $W/golden $W/fixt > $W/fixt.log 2>&1; log "방식11 원본 수식 고친 것: $(tail -1 $W/fixt.log)"
 python3 -I sig_test.py $W/golden $W/sigt > $W/sigt.log 2>&1; log "방식12 유효숫자 표시: $(tail -1 $W/sigt.log)"
+python3 -I blank_scan.py $W/golden $W/bscan > $W/bscan.log 2>&1; log "방식13 엑셀 오류 찾기: $(tail -1 $W/bscan.log)"
+for d in $(find $W/fixt -type d -name lo); do python3 -I errs.py $d; done | grep -v "오류 칸 0" > $W/fixt_errs.log; log "방식13 일부만 입력: 오류 칸 있는 파일 $(wc -l < $W/fixt_errs.log)개"
 log "최종 회차 끝"

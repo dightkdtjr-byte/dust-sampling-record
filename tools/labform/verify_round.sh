@@ -10,6 +10,7 @@ log "회차 $N 시작"
 python3 -I run_all.py work/all_zip $W/out > $W/run_all.log 2>&1; log "1 서식 정리: $(grep -c '^ok' $W/run_all.log)/19, 경고 $(grep -c '!!' $W/run_all.log)"
 cp work/ref_rules.json $W/ 2>/dev/null
 python3 -I apply_master.py $W/out $W/golden $W/master.json > $W/apply.log 2>&1; log "2 기준 시트: $(tail -1 $W/apply.log)"
+python3 -I wrap_blank_errors.py $W/golden > $W/wrapblank.log 2>&1; log "2-1 빈 양식 오류 막기: $(tail -1 $W/wrapblank.log)"
 python3 -I check_master.py $W/master.json > $W/check.log 2>&1; log "3 원문 대조: $(grep '판정 합계' $W/check.log)"
 python3 -I evidence.py work/ref_zip $W/master_checked.json $W/evidence.json > $W/evidence.log 2>&1
 python3 -I build_program.py $W/golden $W/master_checked.json $S/npm/package/dist/jszip.min.js "$W/시험기록부.html" $W/evidence.json > $W/build.log 2>&1; log "4 프로그램: $(tail -1 $W/build.log)"

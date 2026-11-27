@@ -394,8 +394,11 @@ for f in files:
                 if '###' in t:
                     bad(form, '④', f'PDF {i}쪽에 ###이 찍힘 (칸이 좁은 숫자·날짜)')
                 t_ = re.sub(r'\d{1,2}/\d{1,2}/(19|20)\d{2}\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', '', t)   # 기기 원자료 시각 표기(글자)는 원본 그대로
-                if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b', t_):
-                    bad(form, '⑤', f'PDF {i}쪽에 yyyy-mm-dd가 아닌 날짜가 찍힘')
+                if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b|\b(19|20)\d{2}-\d{2}-\d{2}\b', t_):
+                    bad(form, '⑤', f'PDF {i}쪽에 yyyy.mm.dd가 아닌 날짜가 찍힘')
+                import anonymize as AN
+                if AN.leftovers(t):
+                    bad(form, '⑨', f'PDF {i}쪽에 실제 사업장명: {AN.leftovers(t)[:3]}')
             if n_doc != n_form_pages:
                 bad(form, '⑥', f'PDF에서 문서번호가 찍힌 쪽 {n_doc}개, 기록부 쪽 {n_form_pages}개')
 

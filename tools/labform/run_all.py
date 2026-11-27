@@ -7,7 +7,7 @@
 #   · 시험기한 수식의 DAY() 버그를 고친다 (기간을 날짜로 적고 DAY()로 꺼내면 31일을 넘을 때 틀린다)
 #   · 기본 정보 칸(의뢰기관·측정대상·날짜·시각·기간·서명)은 표준 예시로 바꾼다 (content_rules.OVERWRITE)
 #   · 원본을 LibreOffice로 다시 계산해 오류(#REF!·#DIV/0! 등)가 나는 수식은 IFERROR(…,"")로 감싼다 (빈 줄의 INDIRECT, 빈 자료의 AVERAGE 등)
-#   · 계산·자료 시트도 날짜 yyyy-mm-dd, 숫자·수식 칸 셀에 맞춤
+#   · 계산·자료 시트도 날짜 yyyy.mm.dd, 숫자·수식 칸 셀에 맞춤
 import sys, os, re, glob, warnings
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 warnings.filterwarnings('ignore')
@@ -162,6 +162,10 @@ def run(path):
     k = SR.unify_scripts(b, [sh for sh, _ in forms] + others)
     if k:
         log.append(f'위첨자·아래첨자 통일 {k}칸 (Sm3·m3의 3 위첨자, 화학식 숫자·RRFavg 아래첨자)')
+    import anonymize as AN
+    k = AN.anonymize(b)
+    if k:
+        log.append(f'예시 사업장명·시료명 약어를 지어낸 이름으로 {k}곳')
     ext = os.path.splitext(path)[1]
     dst = os.path.join(DST, f'시험기록부_{item_name(path)}{ext}')
     b.finish(dst)
