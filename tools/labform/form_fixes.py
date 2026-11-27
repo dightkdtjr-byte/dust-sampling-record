@@ -38,9 +38,10 @@ def _vocs_fixes():
     for sh in VOCS:
         for k, (r, lr) in enumerate([(32, 53), (33, 56), (34, 59)]):
             out += [(sh, f'N{lr}', f'=200/M{lr}', '희석배수 = 200 / 주입량 (Benzene은 원본이 거꾸로 주입량/200)'),
-                    (sh, f'O{lr}', f'=IFERROR(AVERAGE(L{lr}:L{lr + 2}),0)', '반복 주입 평균, 희석배수는 여기서 곱하지 않음 (원본 4종은 여기와 H열에서 두 번 곱함)'),
+                    (sh, f'O{lr}', f'=IFERROR(AVERAGE(L{lr}:L{lr + 2}),"")', '반복 주입 평균, 희석배수는 여기서 곱하지 않음 (원본 4종은 여기와 H열에서 두 번 곱함). 주입값이 모두 비면 빈칸(분석 안 한 시료), 0을 적으면 0'),
                     (sh, f'D{r}', f'=O{lr}', '시료 농도 = 반복 주입 평균 (원본 6종은 첫 주입값만)'),
-                    (sh, f'H{r}', f'=ROUND(((D{r}*F{r})-G$32),3)', '음수도 숫자로 평균에 넣음 (Dichloromethane은 원본이 글자 "0.000"으로 바꿔 평균에서 빠짐)')]
+                    (sh, f'H{r}', f'=IF(D{r}="","",ROUND(((D{r}*F{r})-G$32),3))', '분석 안 한 시료는 빈칸으로 평균에서 뺌(0을 적은 시료는 0으로 들어감), 음수도 숫자로 (Dichloromethane은 원본이 글자 "0.000"으로 바꿔 평균에서 빠짐)')]
+        out.append((sh, 'I32', '=IFERROR(IF((AVERAGE(H32:H34)/1000)<0,0,TRUNC(ROUND(AVERAGE(H32:H34)/1000,8),3)),"")', '시료 평균은 분석한 시료만 (원본은 빈 시료가 0으로 평균에 들어가 결과가 작아짐), 시료가 모두 비면 결과 빈칸'))
     return out
 
 
@@ -93,7 +94,7 @@ O2_FIX = {
     '먼지': [('계산과정', 'N3', '=IF(L$3="","",IF(M3="","{N}",K3*((21-L3)/(21-M3))))'),
              ('시험기록부', 'J18', '=IF(계산과정!L3="",ROUND(계산과정!K3,2),계산과정!N3)')],
     '염화수소': [('계산과정', 'P3', '=IF(L3="","",IF(M3="","{N}",ROUND((((E3-F3)*100)/N3)*(22.4/35.453)*((21-L3)/(21-M3)),2)&"("&L3&")"))')],
-    'SOx': [('계산과정', 'I5', '=IF(F5="",D5,IF(G5="","{N}",D5*((21-F5)/(21-G5))))')],
+    'SOx': [('계산과정', f'I{r}', f'=IF(D{r}="","",IF(F{r}="",D{r},IF(G{r}="","{{N}}",D{r}*((21-F{r})/(21-G{r})))))') for r in range(5, 14)],
     '중금속': [('계산과정', f'{c}27', f'=IF({c}$22="",{c}25,IF($C$23="","{{N}}",{c}$25*((21-{c}$22)/(21-$C$23))))') for c in 'CDEFGHI'],
 }
 OTHER_FIX = {
@@ -135,6 +136,7 @@ def post_apply(b, path):
             if sh in b.sheets and b.wb[sh][ref].value != f:
                 b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
                 log.append(f'{sh}!{ref}: {why}')
+    log += blank_rows(b, path)
     return log
 
 
@@ -151,6 +153,94 @@ def o2_cells(b, path, r_cells):
             s2 = m.group(1) or m.group(2) or sh
             if s2 in b.sheets:
                 out.append((s2, f'{m.group(3)}{m.group(4)}', item, sheet))
+    return out
+
+
+def _wrap_blank(b, sh, ref, cond):
+    """칸 수식을 IF(cond="","",원래 수식)으로: cond(입력 칸)가 비면 빈칸 → 평균(AVERAGE)에서 빠진다"""
+    v = b.wb[sh][ref].value
+    if not (isinstance(v, str) and v.startswith('=')) or v.startswith(f'=IF({cond}="",""'):
+        return False
+    f = f'=IF({cond}="","",{v[1:]})'
+    b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
+    return True
+
+
+def _set(b, sh, ref, f):
+    if b.wb[sh][ref].value == f:
+        return False
+    b.setf(sh, ref, f[1:]); b.wb[sh][ref].value = f
+    return True
+
+
+def blank_rows(b, path):
+    """분석하지 않은 값(입력 칸이 빔)은 평균에서 뺀다. 0이나 n.a.(검출 안 됨)는 0으로 평균에 넣는다 (사용자 결정).
+    엑셀은 빈 칸을 가리키는 수식(=B11)과 빈 칸의 곱(B×C)을 0으로 계산하므로, 입력 칸이 비었는지를 직접 보고 빈칸("")을 돌려준다"""
+    import os
+    base = os.path.basename(path); log = []
+    def note(ok, where, why):
+        if ok:
+            log.append(f'{where}: {why}')
+    W = lambda sh: sh in b.sheets
+    if '암모니아' in base and W('계산과정'):
+        for r in range(4, 16):
+            note(_wrap_blank(b, '계산과정', f'E{r}', f'B{r}'), f'계산과정!E{r}', '측정값 빈칸이면 평균에서 뺌')
+    if '황화수소' in base and W('계산과정'):
+        for r in range(3, 9):
+            note(_wrap_blank(b, '계산과정', f'D{r}', f'B{r}'), f'계산과정!D{r}', '측정값 빈칸이면 평균에서 뺌')
+    if ('사이안화수소' in base or '시안화수소' in base) and W('계산과정'):
+        for r in range(3, 9):
+            note(_wrap_blank(b, '계산과정', f'E{r}', f'B{r}'), f'계산과정!E{r}', '측정값 빈칸이면 평균에서 뺌')
+    if any(k in base for k in ('브롬', '브로민', '불소', '플루오린', '염화수소')) and W('계산과정'):
+        for r in range(8, 14):
+            raw = f'rawdata!H{r + 6}'
+            note(_set(b, '계산과정', f'B{r}', f'=IF({raw}="","",IF({raw}="n.a.",0,{raw}))'), f'계산과정!B{r}', '기기값 빈칸이면 빈칸(평균에서 뺌), n.a.는 0')
+        note(_set(b, '계산과정', 'E3', '=IF(COUNT(C3:C5)=0,"",(IF(ISNUMBER(C3),C3*D3,0)+IF(ISNUMBER(C4),C4*D4,0)+IF(ISNUMBER(C5),C5*D5,0))/COUNT(C3:C5))'),
+             '계산과정!E3', '시료 평균은 측정한 반복만')
+        note(_set(b, '계산과정', 'F3', '=IF(COUNT(B8:B10)=0,0,C8)'), '계산과정!F3', '현장바탕을 측정하지 않았으면 0')
+        if '염화수소' in base:
+            first = next(ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', ''))
+            note(_set(b, first, 'F21', '=IF(COUNT(D21:D23)=0,"",(IF(ISNUMBER(D21),D21*E21,0)+IF(ISNUMBER(D22),D22*E22,0)+IF(ISNUMBER(D23),D23*E23,0))/COUNT(D21:D23))'),
+                 f'{first}!F21', '시료 평균은 측정한 반복만')
+    if any(k in base for k in ('아세트알데하이드', '포름알데하이드', '폼알데하이드')) and W('계산과정'):
+        for r, b0 in ((3, 11), (4, 14), (5, 17)):
+            note(_set(b, '계산과정', f'D{r}', '=IF(COUNT(B8:B10)=0,0,C8)'), f'계산과정!D{r}', '현장바탕 평균 (측정하지 않았으면 0)')
+            v = b.wb['계산과정'][f'N{r}'].value
+            if isinstance(v, str) and v.startswith('=') and 'COUNT(' not in v:
+                note(_set(b, '계산과정', f'N{r}', f'=IF(COUNT(B{b0}:B{b0 + 2})=0,"",{v[1:]})'), f'계산과정!N{r}', '시료를 분석하지 않았으면 빈칸(평균에서 뺌)')
+    if '비소' in base and W('계산과정(As)'):
+        sh = '계산과정(As)'
+        for r in (5, 6, 7, 9, 10, 11):
+            for c in ('E', 'K'):
+                v = b.wb[sh][f'{c}{r}'].value
+                m = re.search(r"('rawdata\(As\)'!\$?[A-Z]+\$?\d+)", str(v))
+                if m:
+                    note(_wrap_blank(b, sh, f'{c}{r}', m.group(1)), f'{sh}!{c}{r}', '기기값 빈칸이면 평균에서 뺌')
+            note(_wrap_blank(b, sh, f'H{r}', f'E{r}'), f'{sh}!H{r}', '빈칸이면 평균에서 뺌')
+            note(_wrap_blank(b, sh, f'N{r}', f'K{r}'), f'{sh}!N{r}', '빈칸이면 평균에서 뺌')
+    if '중금속' in base and W('계산과정'):
+        for col in 'CDEFGHI':
+            for r in (6, 7, 8, 11, 12, 13):
+                v = b.wb['계산과정'][f'{col}{r}'].value
+                m = re.search(r"('Raw data'!\$?[A-Z]+\$?\d+)", str(v))
+                if m:
+                    note(_wrap_blank(b, '계산과정', f'{col}{r}', m.group(1)), f'계산과정!{col}{r}', '기기값 빈칸이면 평균에서 뺌')
+    if '총탄화수소' in base and W('계산과정'):
+        for r in range(2, 122):
+            v = b.wb['계산과정'][f'C{r}'].value
+            m = re.search(r"('Raw data'!\$?[A-Z]+\$?\d+)", str(v))
+            if m:
+                note(_wrap_blank(b, '계산과정', f'C{r}', m.group(1)), '계산과정!C2:C121', '측정이 없는 시각은 평균에서 뺌')
+    if 'PAHs' in base and W('시험기록부'):
+        for r in range(21, 27):
+            v = b.wb['시험기록부'][f'I{r}'].value
+            if isinstance(v, str) and v.startswith('=') and 'ISTEXT' not in v:
+                note(_set(b, '시험기록부', f'I{r}', f'=IF(ISTEXT(B{r}),{v[1:]},"")'), f'시험기록부!I{r}', '시료명이 없는 줄은 평균에서 뺌 (면적 n.a.는 0)')
+    # 같은 메시지는 한 번만
+    out = []
+    for l in log:
+        if l not in out:
+            out.append(l)
     return out
 
 
