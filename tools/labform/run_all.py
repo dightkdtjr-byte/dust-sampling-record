@@ -176,6 +176,9 @@ def run(path):
     import raw_layout as RL
     for sheet, _ in forms:
         log += RL.trim_form_merges(b, sheet)
+    import equations as EQ                   # 계산식을 한 모양의 식 그림으로
+    from openpyxl.utils import range_boundaries as _rb
+    log += EQ.apply(b, path, [sh for sh, _ in forms], {sh: _rb(ar)[2] for sh, ar in forms}, load(b))
     for sheet in others:
         land = (load(b)[sheet].page_setup.orientation == 'landscape')
         page_setup(b, sheet, None, landscape=land)   # 문서번호 바닥글은 기록부 시트에만 (로우데이터·계산과정 시트는 뺌)

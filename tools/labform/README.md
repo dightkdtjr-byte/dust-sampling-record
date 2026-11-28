@@ -153,6 +153,9 @@ python3 -I tools/labform/compare.py $W/orig $W/fill/lo     # 고친 오류 칸 �
 - `wrap_blank_errors.py` — 빈 양식 오류 막기: 입력 숫자를 지운 사본을 엑셀처럼 다시 계산해 오류 나는 수식을 IFERROR(…,"")로 (apply_master 다음)
 - `blank_scan.py` — 검증 방식 13: 엑셀 오류 찾기 (그대로·빈 양식)
 - `raw_layout.py` — 계산과정 시트 인쇄: 표·차트 묶음이 쪽 사이에서 갈라지지 않게 나누고(긴 표는 차트·병합 칸을 피해 나누고 머리 줄 반복), 열·줄을 늘려 쪽을 채움(그림·차트는 크기 고정). 기기 자료 붙이는 시트(수식 없는 시트)는 손대지 않음 (`is_raw_paste`)
+- `equations.py` + `eq_render.cjs` + `eq/` — 계산식: 기록부마다 제각각이던 식(엑셀 수식 개체·칸과 테두리로 만든 분수·글자)을 KaTeX로 조판한 한 모양의 그림으로, 기호 설명도 식과 같은 기호·콜론 맞춘 표 그림으로 (내용은 원본 그대로, 단위 표기만 통일). 그림은 `eq/`에 들어 있고, 식·설명을 바꿨을 때만 다시 만든다:
+  `SCRATCH=<katex 설치 폴더의 부모> python3 -I equations.py render` (식), `LEGEND_COLLECT=x.jsonl python3 -I run_all.py …` 뒤 `python3 -I equations.py legends x.jsonl` (설명)
+- `eq_audit.py` — 검증 방식 20: 계산식 그림이 칸 안에 있는지·겹치지 않는지·원래 수식 개체가 남지 않았는지·줄지 않았는지
 - `raw_untouched.py` — 검증 방식 17: 기기 자료 붙이는 시트가 원본 그대로인지 (칸·값·서식·글꼴·열 너비·줄 높이·병합·그림·인쇄 설정)
 - `text_raw_test.py` — 검증 방식 18: 기기 값에 "-"·"<0.001"·음수가 들어와도 중금속·비소 결과가 나오는지
 - `page_audit.py` + `sheet_pages.py` — 검증 방식 19: 모든 시트(기기 자료 시트 빼고) 표 묶음 갈라짐·인쇄 영역 경계에 걸린 병합 칸·쪽 채움, 시트마다 실제 PDF 쪽수와 계산 비교
