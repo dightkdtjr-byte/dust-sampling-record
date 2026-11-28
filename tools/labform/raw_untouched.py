@@ -7,6 +7,7 @@ warnings.filterwarnings('ignore')
 here = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, here)
 from anonymize import fix_text
 from raw_layout import is_raw_paste
+from names import FILE_MAP, rename_text, pairs_for
 import openpyxl
 
 ITEM = lambda p: re.search(r'시험기록부_([^_]+?)(?:_|\.xls)', os.path.basename(p)).group(1)
@@ -50,7 +51,8 @@ def shape(x, dx):
 
 
 def main(src, out):
-    origs = {ITEM(p): p for p in glob.glob(os.path.join(src, '**', '*.xls*'), recursive=True) if not os.path.basename(p).startswith('~$')}
+    # 최종 파일 이름은 공정시험기준 표기(불소화합물 → 플루오린화합물 등, names.FILE_MAP)
+    origs = {FILE_MAP.get(ITEM(p), ITEM(p)): p for p in glob.glob(os.path.join(src, '**', '*.xls*'), recursive=True) if not os.path.basename(p).startswith('~$')}
     bad = 0; n = 0
     for q in sorted(glob.glob(os.path.join(out, '*.xls[xm]'))):
         p = origs.get(ITEM(q))
@@ -62,9 +64,10 @@ def main(src, out):
             if ws.sheet_state != 'visible' or not is_raw_paste(ws) or '시험기록부' in re.sub(r'\s', '', str(ws['A1'].value or '')):
                 continue
             n += 1
-            if ws.title not in wq.sheetnames:
+            qt = rename_text(ws.title, pairs_for(p))
+            if qt not in wq.sheetnames:
                 print(f'✖ {os.path.basename(q)} {ws.title}: 시트가 없어짐'); bad += 1; continue
-            wsq = wq[ws.title]; diff = []
+            wsq = wq[qt]; diff = []
             co = {c.coordinate: (fix_text(c.value) if isinstance(c.value, str) else c.value, fmt(c)) for row in ws.iter_rows() for c in row if c.value is not None or c.has_style}
             cq = {c.coordinate: (c.value, fmt(c)) for row in wsq.iter_rows() for c in row if c.value is not None or c.has_style}
             dv = [k for k in set(co) | set(cq) if (co.get(k) or (None,))[0] != (cq.get(k) or (None,))[0]]
@@ -73,7 +76,7 @@ def main(src, out):
             ds = [k for k in set(co) & set(cq) if co[k][1] != cq[k][1]]
             if ds:
                 diff.append(f'서식 다른 칸 {len(ds)}개 {sorted(ds)[:5]}')
-            so, sq = shape(*sheet_xml(zo, ws.title)), shape(*sheet_xml(zq, ws.title))
+            so, sq = shape(*sheet_xml(zo, ws.title)), shape(*sheet_xml(zq, qt))
             for k in so:
                 if so[k] != sq[k]:
                     diff.append(f'{k} 다름')
@@ -82,6 +85,10 @@ def main(src, out):
                 print(f'✖ {os.path.basename(q)} {ws.title}: ' + '; '.join(diff))
             else:
                 print(f'  {os.path.basename(q)} {ws.title}: 원본 그대로')
+    exp = sum(1 for p in origs.values() for ws in openpyxl.load_workbook(p).worksheets
+              if ws.sheet_state == 'visible' and is_raw_paste(ws) and '시험기록부' not in re.sub(r'\s', '', str(ws['A1'].value or '')))
+    if n != exp:
+        print(f'✖ 검사한 시트 {n}개 ≠ 원본의 기기 자료 시트 {exp}개 (짝 못 지은 파일)'); bad += exp - n; n = exp
     print(f'기기 자료 시트 원본 유지: {n - bad}/{n}')
 
 
