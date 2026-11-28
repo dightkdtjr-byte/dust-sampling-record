@@ -39,6 +39,7 @@ for k in sorted(orig):
             for c in row:
                 v = c.value
                 if not (isinstance(v, str) and v.startswith('=')): continue
+                if v.strip() == '=': continue      # "=" 한 글자: 칸으로 만든 분수의 등호 글자 (수식 아님, 계산식 그림으로 바뀜)
                 tot['원본 수식'] += 1
                 w = wg[b][c.coordinate].value
                 if not (isinstance(w, str) and w.startswith('=')):
