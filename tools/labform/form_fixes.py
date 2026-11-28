@@ -155,6 +155,7 @@ def post_apply(b, path):
                 log.append(f'{sh}: 표준산소가 없으면 보정 전 값의 큰 값 (원본은 MAX(…)="" 비교가 늘 거짓이라 0 → 불검출)')
     log += blank_rows(b, path)
     log += qa_fixes(b, path)
+    log += zero_and_text(b)
     # 글자가 될 수 있는 칸(빈칸 "" 또는 "실측산소 입력")을 ROUND로 감싼 표시 칸: 숫자일 때만 맺고 아니면 그대로 (엑셀은 ROUND("")가 #VALUE!)
     ref_re = re.compile(r"^=ROUND\(((?:'[^']+'|[^!(),'=]+)!)?\$?([A-Z]{1,3})\$?(\d+),(\d)\)$")
     for ws in b.wb.worksheets:
@@ -534,4 +535,34 @@ def qa_fixes(b, path):
             log.append(f'{form}!J52: 회수율 50 %∼150 % 경계 포함 (원본은 50·150을 부적합)')
         if 'G53>-30' in v('J53') and _set(b, form, 'J53', f53):
             log.append(f'{form}!J53: RRF 상대표준편차 30 % 이내 경계 포함')
+    return log
+
+
+RAWREAD = re.compile(r"IF\((?P<r>(?:'[^']+'|[A-Za-z_][\w ]*)!\$?[A-Z]+\$?\d+)=\"\",\"\",IF\((?P=r)<0,0,(?P=r)\)\)")
+
+
+def zero_and_text(b):
+    """계산과정 시트 손질 (기록부 시트는 그대로)
+    ① 음수를 0으로 바꿀 때 글자 "0"이 아니라 숫자 0: 글자 "0"은 엑셀에서 어떤 숫자보다 크게 비교돼 불검출 판정·반올림이 틀어지고, 같은 줄에 0.0000과 0이 섞여 보인다
+    ② 기기 값을 읽는 칸: 숫자가 아닌 값("-", "<0.001", "N/A" 등 기기가 검출 못 했다는 표시)은 0으로 본다. 원래는 그대로 넘어가 평균이 안 나오고 최종 농도가 빈칸이 됐다. 빈 칸은 그대로 빈칸"""
+    log = []
+    for ws in b.wb.worksheets:
+        if '시험기록부' in str(ws['A1'].value or '').replace(' ', '') or ws.title == '기준':
+            continue
+        n1 = n2 = 0
+        for row in ws.iter_rows():
+            for c in row:
+                v = c.value
+                if not (isinstance(v, str) and v.startswith('=')):
+                    continue
+                w = v.replace('<0,"0",', '<0,0,')
+                n1 += w != v
+                w2 = RAWREAD.sub(lambda m: f'IF({m["r"]}="","",IF(ISNUMBER({m["r"]}),MAX({m["r"]},0),IFERROR(MAX(VALUE({m["r"]}),0),0)))', w)
+                n2 += w2 != w
+                if w2 != v:
+                    _set(b, ws.title, c.coordinate, w2)
+        if n1:
+            log.append(f'{ws.title}: 음수일 때 글자 "0" → 숫자 0 ({n1}칸)')
+        if n2:
+            log.append(f'{ws.title}: 기기 값이 "-" 같은 글자면 0(불검출)으로 계산 ({n2}칸, 원래는 최종 농도가 빈칸)')
     return log

@@ -115,11 +115,14 @@ def error_cells(path):
     return out
 
 
+from raw_layout import is_raw_paste
+
+
 def run(path):
     errs = error_cells(path)
     b = Book(path)
     wb = b.wb
-    forms, others = [], []
+    forms, others, raws = [], [], []
     first_c2 = None
     for ws in wb.worksheets:
         if is_form(ws):
@@ -127,10 +130,14 @@ def run(path):
             first_c2 = first_c2 or c2
             forms.append((ws.title, area))
         elif ws.sheet_state == 'visible':
-            others.append(ws.title)
+            if is_raw_paste(ws):
+                raws.append(ws.title)       # 기기 자료를 그대로 붙여 넣는 시트: 칸·서식·너비·높이·그림·인쇄 설정 모두 원본 그대로 (익명화만)
+            else:
+                others.append(ws.title)
     if not forms:
         return None, ['기록부 시트 없음']
-    log = []
+    log = [f'기기 자료 붙이는 시트 (손대지 않음): {raws}'] if raws else []
+    b.raw_sheets = raws
     for sheet, refs in errs.items():
         if sheet in b.sheets:
             b.unshare(sheet)
@@ -144,6 +151,18 @@ def run(path):
             log.append(f'{sheet}: 시험기한 수식 DAY() 버그 고침 {k}곳')
     # 시험방법 제목을 원문 제목으로 먼저 고친다 (글자 맞춤·줄바꿈이 고친 글자로 되게)
     k = fix_titles(b, [sh for sh, _ in forms])
+    for sh_, _ in forms:     # 항목 번호가 끊기면 이어지게 (원본 3개 기록부: 13번 다음 항목이 다시 12번)
+        ws_ = load(b)[sh_]; prev = None
+        for r in range(1, ws_.max_row + 1):
+            v = str(ws_.cell(r, 1).value or '').strip()
+            if re.fullmatch(r'\d{1,2}', v):
+                n = int(v)
+                if prev is not None and n != prev + 1 and n <= prev:
+                    b.setv(sh_, f'A{r}', prev + 1, style_from=f'A{r}') if 'style_from' in b.setv.__code__.co_varnames else b.setv(sh_, f'A{r}', prev + 1)
+                    ws_.cell(r, 1).value = prev + 1
+                    log.append(f'{sh_}!A{r}: 항목 번호 {n} → {prev + 1} (앞 번호에 이어지게)')
+                    n = prev + 1
+                prev = n
     if k:
         log.append(f'시험방법 제목을 원문 제목으로 {k}칸')
     doc = find_docno(b, forms[0][0]) or DEFAULT_DOCNO
@@ -154,6 +173,9 @@ def run(path):
         first = first or lay
         warn = [n for n in lay.notes if n.startswith('!!')]
         log.append(f'{sheet} {area} → {len(pages)}쪽' + (f' 경고 {warn}' if warn else ''))
+    import raw_layout as RL
+    for sheet, _ in forms:
+        log += RL.trim_form_merges(b, sheet)
     for sheet in others:
         land = (load(b)[sheet].page_setup.orientation == 'landscape')
         page_setup(b, sheet, None, landscape=land)   # 문서번호 바닥글은 기록부 시트에만 (로우데이터·계산과정 시트는 뺌)

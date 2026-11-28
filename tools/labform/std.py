@@ -14,10 +14,9 @@ ROW1, ROW2 = 30.75, 59.25     # 서명란 이름 줄·서명 줄 높이(pt)
 # 인쇄 배율은 숫자로 박지 않고 "한 쪽 너비에 맞춤"으로 둔다: 배율을 박으면 프린터·글꼴에 따라 마지막 열이 다음 쪽으로 넘어갈 수 있다.
 # 모든 양식의 열 너비 합(TOTAL_PX)과 여백이 같으므로 엑셀이 정하는 배율도 모두 같다 (이 너비·여백에서는 65~66%).
 MARGINS = dict(left=0.45, right=0.45, top=0.45, bottom=0.45, header=0.2, footer=0.2)
-WORST_SCALE = 67              # 쪽 높이를 따질 때 가정하는 가장 큰 배율(%): 이보다 작게 찍히면 여유가 더 생긴다
-# 여유 6%: 엑셀의 '너비에 맞춤' 배율은 화면 DPI·글꼴 렌더링에 따라 1~3%p 달라진다. 98%까지 채우면 엑셀에서 쪽 끝 표가
-# 다음 쪽으로 밀려 나뉜다(PAHs 시료 표). 배율이 70%까지 커져도 한 쪽에 들어가게 한다
-PAGE_PT = (11.69 - MARGINS['top'] - MARGINS['bottom']) * 72 / (WORST_SCALE / 100) * 0.94   # 한 쪽에 들어가는 줄 높이 합(pt)
+WORST_SCALE = 66              # 기록부 인쇄 배율(%) 고정. 너비 맞춤 배율은 엑셀(맑은 고딕 11, 한 글자 8점)에서 71 %, 글꼴이 6 % 넓은 LibreOffice(나눔바른고딕)에서 66.5 %로 프로그램마다 달라
+# 쪽 높이가 흔들린다 (엑셀에서 쪽 끝 표가 다음 쪽으로 밀림). 66 %로 고정하면 어느 프로그램에서도 너비가 한 쪽에 들어가고 쪽 높이가 같다
+PAGE_PT = (11.69 - MARGINS['top'] - MARGINS['bottom']) * 72 / (WORST_SCALE / 100) * 0.975  # 한 쪽에 들어가는 줄 높이 합(pt)
 DOCNO = re.compile(r'[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}')
 # 문서번호 칸: 칸 전체가 "■ MAMO-QP-14-01" 꼴 (시료명 "0629-TCW-#A1-DMDS-FB-1-1" 같은 것을 문서번호로 잘못 읽지 않게)
 DOCNO_CELL = re.compile(r'\s*■?\s*[A-Z]{2,6}-[A-Z]{1,4}-\d{1,3}-\d{1,3}\s*')
@@ -243,13 +242,79 @@ class Layout:
             return len(gray) >= 3 and len(gray) >= 0.6 * len(filled)
         strong = [r for r in range(self.r1, self.r2) if (r + 1) in starts and self.can_break_after(r) and not is_head(r)]
         # 원본의 쪽 나눔 자리는 다음 줄이 항목 시작일 때만 쓴다 (아니면 항목 경계에서 다시 정한다)
-        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h) and (h + 1) in starts and not is_head(h)) | {self.r2})
+        # 원본 쪽 나눔 자리도 번호 매긴 항목 경계일 때만 (항목 안 표 머리 앞의 원본 나눔은 버림: 한 항목이 두 쪽으로 갈림)
+        numrow = lambda r: re.fullmatch(r'\d{1,2}', str(self.ws.cell(r, self.c1).value or '').strip()) is not None
+        ends = sorted(set(h for h in hints if self.r1 <= h < self.r2 and self.can_break_after(h) and (h + 1) in starts and not is_head(h) and (numrow(h + 1) or is_head(h + 1))) | {self.r2})
+        # 쪽 나누기를 한꺼번에 고른다: 나눌 수 있는 자리 = 번호 항목 경계와 회색 머리 줄로 시작하는 새 표 앞.
+        # 쪽마다 한 쪽에 들어가야 하고(빈 줄을 줄여 들어가면 그것도 됨), 그 가운데 쪽 수가 가장 적고 쪽마다 고르게 찬 것을 고른다.
+        # 한 묶음이 한 쪽보다 길어 이렇게 나눌 수 없으면 아래의 앞에서부터 채우는 방법으로
+        numrow1 = lambda r: re.fullmatch(r'\d{1,2}', str(self.ws.cell(r, self.c1).value or '').strip()) is not None
+        bpos = [self.r1 - 1] + [r for r in range(self.r1, self.r2) if self.can_break_after(r) and (numrow1(r + 1) or is_head(r + 1)) and not is_head(r)] + [self.r2]
+        fits = {}
+        def tail_room(a_, e_):
+            # 맨 끝 빈 줄(쓰는 칸)을 4pt까지 낮춰 얻는 자리
+            room = 0.0
+            for r in range(e_, a_, -1):
+                if not self.row_empty(r):
+                    break
+                room += H[r] - 4
+            return room
+        def fit_page(a_, e_, dry):
+            over = total(a_, e_) - PAGE_PT
+            if over <= 0:
+                return True
+            if self.squeeze(a_, e_, dry=True):
+                return True if dry else self.squeeze(a_, e_)
+            if over <= tail_room(a_, e_):
+                if not dry:
+                    for r in range(e_, a_, -1):
+                        if over <= 0 or not self.row_empty(r):
+                            break
+                        cut = min(over, H[r] - 4); H[r] = round(H[r] - cut, 2); over -= cut
+                    self.notes.append(f'{a_}~{e_}행: 맨 끝 빈 줄 높이를 줄여 한 쪽에 넣음')
+                return True
+            return False
+        def ok(i, j):
+            k = (i, j)
+            if k not in fits:
+                fits[k] = fit_page(bpos[i] + 1, bpos[j], True)
+            return fits[k]
+        INF = (10 ** 9, 0.0)
+        best = [INF] * len(bpos); prev = [None] * len(bpos); best[0] = (0, 0.0)
+        for j in range(1, len(bpos)):
+            for i in range(j - 1, -1, -1):
+                if total(bpos[i] + 1, bpos[j]) > PAGE_PT * 1.25:
+                    break
+                if best[i] == INF or not ok(i, j):
+                    continue
+                fill = min(1.0, total(bpos[i] + 1, bpos[j]) / PAGE_PT)
+                cand_ = (best[i][0] + 1, best[i][1] + (1 - fill) ** 2)     # 마지막 쪽도 같은 무게: 거의 빈 마지막 쪽보다 고르게 찬 쪽들
+                if cand_ < best[j]:
+                    best[j] = cand_; prev[j] = i
+        if best[-1] != INF:
+            chain = []; j = len(bpos) - 1
+            while j:
+                chain.append((bpos[prev[j]] + 1, bpos[j])); j = prev[j]
+            pages = chain[::-1]
+            for a_, e_ in pages:
+                fit_page(a_, e_, False)
+            self.pages = pages
+            return pages
         pages = []
         a = self.r1
         for e in ends:
             # 원래 한 쪽이던 구간이 한 쪽에 안 들어가면 항목 경계에서 더 나눈다
             while total(a, e) > PAGE_PT:
-                cand = [r for r in strong if a <= r < e and total(a, r) <= PAGE_PT]
+                # 쪽 나눔 자리: 번호 매긴 항목 경계, 또는 항목 안이라도 회색 머리 줄로 시작하는 새 표 바로 앞 (표 가운데·표와 그 아래 차트
+                # 사이에서는 나누지 않는다). 항목 경계를 지키느라 앞 쪽이 75 %도 안 차면 새 표 앞에서 나눈다
+                num = lambda r: re.fullmatch(r'\d{1,2}', str(self.ws.cell(r + 1, self.c1).value or '').strip()) is not None
+                c_num = [r for r in strong if a <= r < e and total(a, r) <= PAGE_PT and num(r)]
+                c_head = [r for r in range(a, e) if is_head(r + 1) and self.can_break_after(r) and total(a, r) <= PAGE_PT]
+                cand = c_num
+                if c_head and (not c_num or (c_head[-1] > c_num[-1] and total(a, c_num[-1]) < PAGE_PT * 0.75)):
+                    cand = sorted(set(c_num) | {c_head[-1]})
+                if not cand:
+                    cand = [r for r in strong if a <= r < e and total(a, r) <= PAGE_PT]
                 if not cand:
                     # 항목 경계에서 나눌 수 없으면: 먼저 빈 줄·넉넉한 줄을 줄여 한 쪽에 넣어 보고, 그래도 안 되면 항목 안에서 나눈다
                     if self.squeeze(a, e, dry=True):
@@ -389,7 +454,7 @@ class Layout:
                 cell = self.ws.cell(r, c)
                 if type(cell).__name__ != 'MergedCell' and is_docno(cell.value):
                     b.setv(sheet, f'{CL(c)}{r}', None)
-        page_setup(b, sheet, docno, breaks=[e for _, e in self.pages[:-1]], last_col=self.c2)
+        page_setup(b, sheet, docno, breaks=[e for _, e in self.pages[:-1]], last_col=self.c2, fixed_scale=WORST_SCALE)
 
 
 def style_with_wrap(b, base):

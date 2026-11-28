@@ -1,5 +1,6 @@
 #!/bin/bash
 # 최종 회차: 최종 코드로 처음부터 + 방식 3(무작위)·5(정적 감사·다른 엔진)·6(인쇄)·7(프로그램↔엑셀)·9(극단값)·10(프로그램 계산)
+#  … 17(기기 자료 시트 원본 유지)·18(기기 값 "-"·글자·음수)·19(인쇄 쪽: 표 갈라짐·잘린 병합·실제 PDF 쪽수)
 cd "$(dirname "$0")"
 W=work/rounds/final
 ./verify_round.sh final > /dev/null 2>&1
@@ -19,4 +20,7 @@ for d in $(find $W/fixt -type d -name lo); do python3 -I errs.py $d; done | grep
 python3 -I link_audit.py work/all_zip $W/golden $W/link > $W/link.log 2>&1; log "방식14 $(tail -1 $W/link.log)"
 python3 -I chain_audit.py $W/golden $W/master.json > $W/chain.log 2>&1; log "방식15 $(tail -1 $W/chain.log)"
 python3 -I e2e_model_test.py $W/golden $W/master.json $W/e2e16 12 > $W/e2e16.log 2>&1; log "방식16 $(tail -1 $W/e2e16.log)"
+python3 -I raw_untouched.py work/all_zip $W/golden > $W/raw.log 2>&1; log "방식17 $(tail -1 $W/raw.log)"
+python3 -I text_raw_test.py $W/golden $W/textraw > $W/textraw.log 2>&1; log "방식18 $(tail -1 $W/textraw.log)"
+python3 -I sheet_pages.py $W/golden $W/sheetpages > /dev/null 2>&1; python3 -I page_audit.py $W/golden $W/sheetpages/pages.json > $W/pages.log 2>&1; log "방식19 $(tail -1 $W/pages.log)"
 log "최종 회차 끝"

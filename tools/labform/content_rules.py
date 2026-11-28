@@ -42,6 +42,41 @@ _norm = lambda s: re.sub(r'\s', '', str(s or ''))
 
 
 # ───────── 글꼴 ─────────
+def _keep_raw_fonts(b, st):
+    """기기 자료 붙이는 시트(b.raw_sheets)의 칸은 원본 글꼴 그대로: 그 칸이 쓰는 서식을 복사해 원본 글꼴 사본을 가리키게 하고 칸을 사본으로 돌린다.
+    글꼴 사본은 <keepfont>로 표시해 두어 글꼴 통일에서 빠지게 한다 (통일 뒤 <font>로 되돌림)"""
+    raws = [sh for sh in getattr(b, 'raw_sheets', []) if sh in b.sheets]
+    if not raws:
+        return st
+    fm = re.search(r'<fonts count="(\d+)"([^>]*)>(.*?)</fonts>', st, re.S)
+    fonts = re.findall(r'<font\b[^>]*/>|<font\b[^>]*>.*?</font>', fm.group(3), re.S)
+    cm = re.search(r'<cellXfs count="(\d+)">(.*?)</cellXfs>', st, re.S)
+    xfs = re.findall(r'<xf\b[^>]*/>|<xf\b[^>]*>.*?</xf>', cm.group(2), re.S)
+    font_map, xf_map, new_fonts, new_xfs = {}, {}, [], []
+    def clone_xf(i):
+        if i in xf_map:
+            return xf_map[i]
+        x = xfs[i]; fid = int((re.search(r'fontId="(\d+)"', x) or [0, 0])[1])
+        if fid not in font_map:
+            font_map[fid] = len(fonts) + len(new_fonts)
+            new_fonts.append(fonts[fid].replace('<font', '<keepfont', 1).replace('</font>', '</keepfont>'))
+        y = re.sub(r'fontId="\d+"', f'fontId="{font_map[fid]}"', x) if 'fontId=' in x else x.replace('<xf ', f'<xf fontId="{font_map[fid]}" ', 1)
+        xf_map[i] = len(xfs) + len(new_xfs); new_xfs.append(y)
+        return xf_map[i]
+    for sh in raws:
+        x = b.sx(sh)
+        x2 = re.sub(r'(<c r="[A-Z]+\d+"[^>]*?\ss=")(\d+)(")', lambda m: m.group(1) + str(clone_xf(int(m.group(2)))) + m.group(3), x)
+        x2 = re.sub(r'<c r="([A-Z]+\d+)"(?![^>]*\ss=")', lambda m: f'<c r="{m.group(1)}" s="{clone_xf(0)}"', x2)   # 서식 번호가 없는 칸 = 0번 서식
+        x2 = re.sub(r'(<(?:row|col)\b[^>]*?\ss=")(\d+)(")', lambda m: m.group(1) + str(clone_xf(int(m.group(2)))) + m.group(3), x2)
+        if x2 != x:
+            b.setsx(sh, x2)
+    if new_xfs:
+        st = st.replace(fm.group(0), f'<fonts count="{len(fonts) + len(new_fonts)}"{fm.group(2)}>{fm.group(3)}{"".join(new_fonts)}</fonts>')
+        cm = re.search(r'<cellXfs count="(\d+)">(.*?)</cellXfs>', st, re.S)
+        st = st.replace(cm.group(0), f'<cellXfs count="{len(xfs) + len(new_xfs)}">{cm.group(2)}{"".join(new_xfs)}</cellXfs>')
+    return st
+
+
 def unify_fonts(b):
     if getattr(b, '_fonts_done', False):
         return []
@@ -59,7 +94,9 @@ def unify_fonts(b):
         else:
             f = f.replace(f'<name val="{FONT}"/>', f'<name val="{FONT}"/><charset val="129"/>')
         return f
+    st = _keep_raw_fonts(b, st)
     st = re.sub(r'<font\b[^>]*>.*?</font>', fix_font, st, flags=re.S)
+    st = st.replace('<keepfont ', '<font ').replace('<keepfont>', '<font>').replace('</keepfont>', '</font>')
     b.put('xl/styles.xml', st)
     if names - {FONT}:
         notes.append('칸 글꼴 ' + ', '.join(sorted(names - {FONT})) + f' → {FONT}')
