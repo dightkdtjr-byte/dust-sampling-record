@@ -152,6 +152,7 @@ python3 -I tools/labform/compare.py $W/orig $W/fill/lo     # 고친 오류 칸 �
 - `build_program.py` + `program_template.html` — 시험기록부 프로그램(HTML 한 파일: 기록부·원문 그림·JSZip 내장)
 - `wrap_blank_errors.py` — 빈 양식 오류 막기: 입력 숫자를 지운 사본을 엑셀처럼 다시 계산해 오류 나는 수식을 IFERROR(…,"")로 (apply_master 다음)
 - `blank_scan.py` — 검증 방식 13: 엑셀 오류 찾기 (그대로·빈 양식)
+- `raw_layout.py` — raw data·계산과정 시트 인쇄 (그림 시트 한 줄 세로 배치, 넓은 시트 가로)
 - `anonymize.py` — 예시 사업장명·시료명 약어를 지어낸 이름으로 (run_all 끝)
 - `../suite/vendor/sp_wordmark.js` — 제목 글자 로고 (시료채취 프로그램 로고 꾸밈, 풍경 시간대 색)
 - `sig_test.py` — 검증 방식 12: 시험 기초자료 유효숫자 표시 (수식 ↔ 규칙, LibreOffice 인쇄 글자)
