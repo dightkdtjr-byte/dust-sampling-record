@@ -4,7 +4,7 @@
 # 기준을 고친 뒤 내려받으면 각 기록부의 숨김 '기준' 시트 칸(D·E·F·G·H·I)을 고쳐 준다 (기록부 하나 또는 전체 zip).
 import sys, os, json, base64, glob, datetime
 
-VERSION = '2.2.9'
+VERSION = '2.3.0'
 golden, master, jszip, out = sys.argv[1:5]
 evidence = sys.argv[5] if len(sys.argv) > 5 else None
 rows = json.load(open(master, encoding='utf8'))

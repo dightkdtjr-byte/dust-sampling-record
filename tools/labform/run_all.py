@@ -158,6 +158,8 @@ def run(path):
         land = (load(b)[sheet].page_setup.orientation == 'landscape')
         page_setup(b, sheet, None, landscape=land)   # 문서번호 바닥글은 기록부 시트에만 (로우데이터·계산과정 시트는 뺌)
         CR.tidy_other(b, sheet)
+    import raw_layout as RL
+    log += RL.tidy(b, others, load(b))       # raw data·계산과정 시트 인쇄 모양 (그림 시트는 한 줄 세로 배치)
     import scripts_rule as SR
     k = SR.unify_scripts(b, [sh for sh, _ in forms] + others)
     if k:

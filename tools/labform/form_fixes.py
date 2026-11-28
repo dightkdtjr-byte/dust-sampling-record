@@ -154,6 +154,7 @@ def post_apply(b, path):
                 b.setsx(sh, x.replace(old, new))
                 log.append(f'{sh}: 표준산소가 없으면 보정 전 값의 큰 값 (원본은 MAX(…)="" 비교가 늘 거짓이라 0 → 불검출)')
     log += blank_rows(b, path)
+    log += qa_fixes(b, path)
     # 글자가 될 수 있는 칸(빈칸 "" 또는 "실측산소 입력")을 ROUND로 감싼 표시 칸: 숫자일 때만 맺고 아니면 그대로 (엑셀은 ROUND("")가 #VALUE!)
     ref_re = re.compile(r"^=ROUND\(((?:'[^']+'|[^!(),'=]+)!)?\$?([A-Z]{1,3})\$?(\d+),(\d)\)$")
     for ws in b.wb.worksheets:
@@ -508,3 +509,29 @@ def sig_figs(b, path, rows, SHEET='기준', COL=None):
         log.append(f'{ws.title}: 시험 기초자료 ' + ', '.join(done))
     return log
 
+
+
+def qa_fixes(b, path):
+    """결과 경로 밖 수식 손질 (시험기한·정도관리 판정)"""
+    import os
+    base = os.path.basename(path); log = []
+    form = next((ws.title for ws in b.wb.worksheets if '시험기록부' in str(ws['A1'].value or '').replace(' ', '')), None)
+    if not form:
+        return log
+    v = lambda ref: str(b.wb[form][ref].value or '')
+    # 시험기한 = 시료인수일부터 시험검사 기간(일) 근무일, 인수 시각이 13시 전이면 그날을 하루로 (다른 17개 기록부와 같게)
+    if '황화수소' in base and 'DAY((LEFT(' in v('J7'):
+        if _set(b, form, 'J7', '=IF(D6="","",WORKDAY(D6,IF(F6<13,(I7-1),I7),N7))'):
+            log.append(f'{form}!J7: 시험기한 — 13시 전 인수 규칙 넣고 기간을 숫자로 (원본은 DAY(LEFT(기간,1))이라 10일 이상이면 틀리고 시각 규칙 없음)')
+    if 'CS2' in base and v('I7').endswith(',0)+1'):
+        if _set(b, form, 'I7', v('I7')[:-2]):
+            log.append(f'{form}!I7: 시험기한 끝의 +1 뺌 (다른 기록부와 같게, 원본은 하루 늦게 나옴)')
+    # 벤조(a)피렌 정도관리 판정: 회수율 50 %∼150 %, RRF 상대표준편차 30 % 이내는 경계 포함 (ES 01525.1a 6.1.3·6.1.4)
+    if 'PAHs' in base:
+        f52 = '=IF(AND(D53>=50,D53<=150,E53>=50,E53<=150,F53>=50,F53<=150),"적합","부적합")'
+        f53 = '=IF(AND(G53>=-30,G53<=30),"적합","부적합")'
+        if 'D53>50' in v('J52') and _set(b, form, 'J52', f52):
+            log.append(f'{form}!J52: 회수율 50 %∼150 % 경계 포함 (원본은 50·150을 부적합)')
+        if 'G53>-30' in v('J53') and _set(b, form, 'J53', f53):
+            log.append(f'{form}!J53: RRF 상대표준편차 30 % 이내 경계 포함')
+    return log
