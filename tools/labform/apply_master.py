@@ -22,8 +22,9 @@ from openpyxl.utils import get_column_letter as CL, column_index_from_string as 
 
 SHEET = '기준'
 HEAD = ['물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '비고', '판정 자릿수',
-        '시험 기초자료 방법검출한계 유효숫자', '시험 기초자료 정량한계 유효숫자']
-COL = {k: CL(i + 1) for i, k in enumerate(['item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'judge', 'sig_mdl', 'sig_loq'])}
+        '시험 기초자료 방법검출한계 유효숫자', '시험 기초자료 정량한계 유효숫자', '측정값 유효숫자']
+COL = {k: CL(i + 1) for i, k in enumerate(['item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'judge', 'sig_mdl', 'sig_loq', 'sig_val'])}
+SIG_VAL_DEFAULT = 3       # 측정값 유효숫자 기본값 (사용자 결정: 항목별로 바꿀 수 있게, 기본 3)
 
 
 def ref(row, key):
@@ -77,6 +78,7 @@ def sig_defaults(rows):
         src = r if not r.get('linked') or own is None else own
         r.setdefault('sig_mdl', sig_count(src.get('mdl')) or '')
         r.setdefault('sig_loq', sig_count(src.get('loq')) or '')
+        r.setdefault('sig_val', SIG_VAL_DEFAULT)
 
 
 def add_sheet(b, rows):
@@ -84,9 +86,9 @@ def add_sheet(b, rows):
     body = ['<row r="1">' + ''.join(cell_xml(1, CL(i + 1), h) for i, h in enumerate(HEAD)) + '</row>']
     for i, r in enumerate(rows, start=2):
         r['judge'] = judge_formula(i)
-        vals = [r['item'], r['sheet'], r['result'], r['method'], r['calc'], r['final'], r['mdl'], r['loq'], r['unit'], r.get('note', ''), r['judge'], r['sig_mdl'], r['sig_loq']]
+        vals = [r['item'], r['sheet'], r['result'], r['method'], r['calc'], r['final'], r['mdl'], r['loq'], r['unit'], r.get('note', ''), r['judge'], r['sig_mdl'], r['sig_loq'], r['sig_val']]
         body.append(f'<row r="{i}">' + ''.join(cell_xml(i, CL(j + 1), v) for j, v in enumerate(vals)) + '</row>')
-    widths = [14, 18, 12, 60, 10, 10, 12, 12, 10, 30, 10, 14, 14]
+    widths = [14, 18, 12, 60, 10, 10, 12, 12, 10, 30, 10, 14, 14, 12]
     cols = ''.join(f'<col min="{i + 1}" max="{i + 1}" width="{w}" customWidth="1"/>' for i, w in enumerate(widths))
     xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -543,6 +545,7 @@ def apply(path, items, dst):
             log += align(b, sh, pa.split('!')[-1].replace('$', ''))
     FIX_LOG.extend(FF.post_apply(b, path))     # 표준산소 연결·산소 보정 규칙 등 마지막 손질 (link_o2 뒤)
     SIG_LOG.extend(FF.sig_figs(b, path, rows, SHEET, COL))   # 시험 기초자료 유효숫자 표시 ('기준' L·M열)
+    SIG_LOG.extend(FF.value_sig_figs(b, path, rows, SHEET, COL, PERMITS))   # 측정값 유효숫자 표시 ('기준' N열)
     done = set()
     for sh, ref_, item, sheet in R_CELLS + [(sh, ref_, it_, s_) for (sh, ref_, it_, s_) in FF.o2_cells(b, path, R_CELLS)]:
         calc = next((r['calc'] for r in rows if r['item'] == item and r['sheet'] == sheet), None)

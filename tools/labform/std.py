@@ -206,7 +206,11 @@ class Layout:
 
     # ── ④ 쪽 나누기 ──
     def row_empty(self, r):
-        return all(self.ws.cell(r, c).value is None for c in range(self.c1, self.c2 + 1))
+        # 여러 줄에 걸친 병합 칸에 글자가 있으면 그 줄들은 빈 줄이 아니다 (줄이면 병합 칸 글자가 잘림: VOCs 기기 조건 D16:J19)
+        if not hasattr(self, '_text_rows'):
+            self._text_rows = {q for (c0, top, c1_, bot) in self.merges if bot > top and self.ws.cell(top, c0).value not in (None, '')
+                               for q in range(top, bot + 1)}
+        return r not in self._text_rows and all(self.ws.cell(r, c).value is None for c in range(self.c1, self.c2 + 1))
 
     def can_break_after(self, r):
         return not any(top <= r < bot for (_, top, _, bot) in self.merges)

@@ -1,6 +1,6 @@
 # 원본 기록부의 계산 수식 오류 고치기 (결과 수식 앞 단계). 독립 수식 감사(LibreOffice에 값을 넣어 재현)로 찾고,
 # 원본 파일·공정시험기준 원문으로 하나씩 확인한 것만 고친다. 각 항목에 근거를 적는다.
-import re
+import re, os
 
 VOCS = ['Benzene', '1,3-Butadiene', 'Dichloromethane', 'Trichloroethylene', 'Tetrachloroethylene', '1,2-Dichloroethane',
         'Chloroform', 'Acrylonitrile', 'Styrene', 'Ethylbenzene', 'Carbon tetrachloride', 'VInyl chloride']
@@ -510,6 +510,117 @@ def sig_figs(b, path, rows, SHEET='기준', COL=None):
         log.append(f'{ws.title}: 시험 기초자료 ' + ', '.join(done))
     return log
 
+
+
+METAL_SHEETS = ['구리화합물', '납화합물', '아연화합물', '크로뮴화합물', '니켈화합물', '카드뮴화합물', '베릴륨화합물']   # 중금속 계산과정 C~I열 순서
+
+
+def _rects(cells):
+    """칸 주소 집합 → 직사각형 묶음 [(r1, c1, r2, c2)]: 줄마다 이어진 칸을 묶고, 같은 열 범위가 아래로 이어지면 합친다"""
+    rows = {}
+    for r, c in cells:
+        rows.setdefault(r, []).append(c)
+    runs = []
+    for r in sorted(rows):
+        cs = sorted(rows[r]); a = cs[0]
+        for i in range(1, len(cs) + 1):
+            if i == len(cs) or cs[i] != cs[i - 1] + 1:
+                runs.append((r, a, cs[i - 1])); a = cs[i] if i < len(cs) else None
+    out = []
+    open_ = {}
+    for r, a, z in runs:
+        k = (a, z)
+        if k in open_ and open_[k][2] == r - 1:
+            open_[k][2] = r
+        else:
+            if k in open_:
+                out.append(tuple(open_[k]))
+            open_[k] = [open_[k][0] if False else r, a, r, z]
+    out += [tuple(v) for v in open_.values()]
+    return [(r1, a, r2, z) for r1, a, r2, z in out]
+
+
+def value_sig_figs(b, path, rows, SHEET='기준', COL=None, permits=None):
+    """측정값 칸 (기록부·계산과정 시트의 숫자 칸): 기기 값처럼 자릿수가 길게 들어와도 '기준' 시트 N열(측정값 유효숫자, 기본 3)의 개수로 보이게.
+    저장값·계산은 그대로 (표시 형식만, 조건부 서식). 정수는 그대로(희석배수 1이 1.00이 되지 않게), 큰 수는 정수부 그대로(1000.7 → 1001).
+    빼는 칸: 기기 자료 시트, 날짜·시각·% 칸, 결과 칸, '기준' 시트를 읽는 칸(방법검출한계 등), 허가배출기준, 시험 기초자료 유효숫자 칸"""
+    from openpyxl.utils import range_boundaries, get_column_letter as CL_
+    from raw_layout import is_raw_paste
+    col = (COL or {}).get('sig_val', 'N')
+    log = []; D = None
+    by_sheet = {}
+    for r in rows:
+        by_sheet.setdefault(r['sheet'], []).append(r)
+    first = rows[0] if rows else None
+    if first is None:
+        return log
+    skip = {(r['sheet'], r.get('mdl_cell')) for r in rows} | {(r['sheet'], r.get('loq_cell')) for r in rows} | {(r['sheet'], r.get('method_cell')) for r in rows}
+    for r in rows:
+        for it in r.get('results', []):
+            skip.add((r['sheet'], it['result']))
+    for sh, d in (permits or {}).items():
+        for res, P in d.items():
+            m = re.fullmatch(r"\$?([A-Z]+)\$?(\d+)", str(P).split('!')[-1]) if P else None
+            if m:
+                skip.add((sh, f'{m.group(1)}{m.group(2)}'))
+    datefmt = re.compile(r'(?<!\\)[ymdhs]|%|@|AM/PM', re.I)
+    for ws in b.wb.worksheets:
+        if ws.sheet_state != 'visible' or ws.title == SHEET:
+            continue
+        form = '시험기록부' in _norm(ws['A1'].value)
+        if not form and is_raw_paste(ws):
+            continue
+        mine = by_sheet.get(ws.title)
+        if form and not mine:
+            continue                     # 요약 시트(금속화합물·VOCs 요약)는 각 물질 시트 값을 그대로 보여 줌 → 물질 시트 기준
+        lab = {ref for ref, _, _ in lab_cells(ws)} if form else set()
+        pa = ws.print_area; pa = pa[0] if isinstance(pa, (list, tuple)) else pa
+        c1, r1, c2, r2 = range_boundaries(pa.split('!')[-1].replace('$', '')) if pa else (1, 1, ws.max_column, ws.max_row)
+        groups = {}
+        for row in ws.iter_rows(min_row=r1, max_row=r2, min_col=c1, max_col=c2):
+            for c in row:
+                v = c.value
+                if v is None or isinstance(v, bool) or type(c).__name__ == 'MergedCell':
+                    continue
+                if isinstance(v, str) and not v.startswith('='):
+                    continue
+                if isinstance(v, str) and ("'" + SHEET + "'!" in v or SHEET + '!' in v):
+                    continue
+                if form and c.column == 1:
+                    continue
+                if (ws.title, c.coordinate) in skip or c.coordinate in lab or datefmt.search(c.number_format or ''):
+                    continue
+                # 이 칸의 유효숫자를 정하는 기준 줄
+                if mine:
+                    rr = mine[0]
+                elif '중금속' in os.path.basename(path) and 3 <= c.column <= 9:
+                    rr = next((r for r in rows if r['sheet'] == METAL_SHEETS[c.column - 3]), first)
+                else:
+                    rr = first
+                groups.setdefault(rr['row'], set()).add((c.row, c.column))
+        if not groups:
+            continue
+        D = D or _numfmt_dxfs(b, DECS)
+        s = b.sx(ws.title)
+        pri = max([int(x) for x in re.findall(r'priority="(\d+)"', s)] + [0])
+        cf = ''; n = 0
+        for row_, cells in sorted(groups.items()):
+            S = f"N('{SHEET}'!${col}${row_})"
+            for ra, ca, rb, cb in _rects(cells):
+                tl = f'{CL_(ca)}{ra}'
+                sq = tl if (ra, ca) == (rb, cb) else f'{tl}:{CL_(cb)}{rb}'
+                rules = ''
+                for d in DECS:
+                    pri += 1
+                    rules += (f'<cfRule type="expression" dxfId="{D[d]}" priority="{pri}"><formula>'
+                              f'AND(ISNUMBER({tl}),{tl}&lt;&gt;0,{tl}&lt;&gt;INT({tl}),{S}&gt;=1,{sig_rule(tl, S)}={d})</formula></cfRule>')
+                cf += f'<conditionalFormatting sqref="{sq}">{rules}</conditionalFormatting>'
+            n += len(cells)
+        m = re.search(r'<(dataValidations|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|drawing|legacyDrawing|tableParts|extLst)\b', s)
+        s = s[:m.start()] + cf + s[m.start():] if m else s.replace('</worksheet>', cf + '</worksheet>')
+        b.setsx(ws.title, s)
+        log.append(f'{ws.title}: 측정값 유효숫자 표시 {n}칸 (기준 {", ".join(str(k) for k in sorted(groups))}행 N열)')
+    return log
 
 
 def qa_fixes(b, path):

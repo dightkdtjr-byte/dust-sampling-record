@@ -440,4 +440,21 @@ def trim_form_merges(b, sheet):
         n = len(re.findall(r'<mergeCell ref=', x2))
         x2 = re.sub(r'<mergeCells count="\d+"', f'<mergeCells count="{n}"', x2)
         b.setsx(sheet, x2)
+        # 병합 끝 칸의 오른쪽 테두리(표 바깥 굵은 선)를 새 끝 칸(인쇄 영역 끝 열)으로 옮긴다
+        from form_style import Styles, _set_styles, _cell_style
+        S = Styles(b); new = {}
+        for o in out:
+            old = re.search(r'!([A-Z]+)(\d+):([A-Z]+)(\d+) →', o)
+            r_top, r_bot, old_last = int(old.group(2)), int(old.group(4)), old.group(3)
+            for r in range(r_top, r_bot + 1):
+                xs = b.sx(sheet)
+                bx_old = S.border_xml((re.search(r'borderId="(\d+)"', S.xf(_cell_style(xs, f'{old_last}{r}', None, {}, 0))) or [0, '0'])[1])
+                right = re.search(r'<right style="([^"]+)"', bx_old)
+                st = _cell_style(xs, f'{CL(c2)}{r}', None, {}, c2)
+                bx = S.border_xml((re.search(r'borderId="(\d+)"', S.xf(st)) or [0, '0'])[1])
+                cur = [(re.search(rf'<{n_} style="([^"]+)"', bx) or [0, None])[1] for n_ in ('left', 'right', 'top', 'bottom')]
+                if right and cur[1] != right.group(1):
+                    new[(r, c2)] = S.with_border(st, (cur[0], right.group(1), cur[2], cur[3]))
+        if new:
+            _set_styles(b, sheet, new)
     return [f'병합 칸을 인쇄 영역 안으로: {o}' for o in out]

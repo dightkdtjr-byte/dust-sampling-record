@@ -190,8 +190,8 @@ const RULES = "__RULES__";
 const EV = "__EV__";
 const STORE = 'labform-master-v1';
 const UNITS = ['ppm','ppb','mg/sm3','μg/sm3','ug/sm3','ng/sm3'];
-const FIELDS = ['method','calc','final','mdl','loq','unit','sig_mdl','sig_loq'];
-const FIELD_NAME = { method: '공정시험기준', calc: '계산 자릿수', final: '최종 자릿수', mdl: '방법검출한계', loq: '정량한계', unit: '단위', sig_mdl: '시험 기초자료 방법검출한계 유효숫자', sig_loq: '시험 기초자료 정량한계 유효숫자' };
+const FIELDS = ['method','calc','final','mdl','loq','unit','sig_mdl','sig_loq','sig_val'];
+const FIELD_NAME = { method: '공정시험기준', calc: '계산 자릿수', final: '최종 자릿수', mdl: '방법검출한계', loq: '정량한계', unit: '단위', sig_mdl: '시험 기초자료 방법검출한계 유효숫자', sig_loq: '시험 기초자료 정량한계 유효숫자', sig_val: '측정값 유효숫자' };
 const LEVEL = { ok: '적합', warn: '검토', bad: '부적합', info: '참고' };
 const key = r => r.file + '|' + r.row;
 let edits = {};
@@ -420,7 +420,7 @@ function itemCard(r) {
   const c = cur(r), cs = checks(c), k = key(r), ow = owner(r), follower = ow.row !== r.row, lv = level(cs);
   const ch = f => (edits[k] && f in edits[k] && String(edits[k][f]) !== String(r[f] ?? '')) ? 'changed' : '';
   const bad = f => ((f === 'calc' || f === 'final') && !(Number.isInteger(Number(c[f])) && Number(c[f]) >= 0 && Number(c[f]) <= 8 && String(c[f]).trim() !== ''))
-    || ((f === 'sig_mdl' || f === 'sig_loq') && !sigOk(c[f])) ? 'invalid' : '';
+    || ((f === 'sig_mdl' || f === 'sig_loq' || f === 'sig_val') && !sigOk(c[f])) ? 'invalid' : '';
   const t = (window.__try || {})[k] || {}; const ev = evaluate(c, t.raw, t.permit, t.std, t.meas);
   const evs = evidence(c);
   return `<section class="panel item" data-k="${esc(k)}">
@@ -440,6 +440,7 @@ function itemCard(r) {
           <div class="field"><label>판정값</label><input disabled value="최종 ${esc(judgeDigits(c))}자리 반올림값"></div>
           <div class="field"><label>기초자료 검출한계 유효숫자</label><input inputmode="numeric" data-f="sig_mdl" class="${ch('sig_mdl')} ${bad('sig_mdl')}" value="${esc(c.sig_mdl ?? '')}"></div>
           <div class="field"><label>기초자료 정량한계 유효숫자</label><input inputmode="numeric" data-f="sig_loq" class="${ch('sig_loq')} ${bad('sig_loq')}" value="${esc(c.sig_loq ?? '')}"></div>
+          <div class="field"><label>측정값 유효숫자</label><input inputmode="numeric" data-f="sig_val" class="${ch('sig_val')} ${bad('sig_val')}" value="${esc(c.sig_val ?? '')}"></div>
         </div>
         <div class="sec">결과 계산</div>
         <div class="try"><div class="row"><label class="tf"><span>계산값</span><input data-try="raw" inputmode="decimal" value="${esc(t.raw ?? '')}"></label><label class="tf"><span>허가배출기준</span><input data-try="permit" value="${esc(t.permit ?? '')}"></label></div>
@@ -565,7 +566,7 @@ async function buildFile(name) {
         x = setCell(x, 'E' + i, Number(c.calc)); x = setCell(x, 'F' + i, Number(c.final));
         if (!r.linked) { x = setCell(x, 'G' + i, c.mdl); x = setCell(x, 'H' + i, c.loq); }
         x = setCell(x, 'I' + i, c.unit);
-        x = setCell(x, 'L' + i, sigOk(c.sig_mdl) ? c.sig_mdl : ''); x = setCell(x, 'M' + i, sigOk(c.sig_loq) ? c.sig_loq : '');   // 시험 기초자료 유효숫자 (엑셀 조건부 서식이 읽음)
+        x = setCell(x, 'L' + i, sigOk(c.sig_mdl) ? c.sig_mdl : ''); x = setCell(x, 'M' + i, sigOk(c.sig_loq) ? c.sig_loq : ''); x = setCell(x, 'N' + i, sigOk(c.sig_val) ? c.sig_val : '');   // 유효숫자 (엑셀 조건부 서식이 읽음)
       }
       zip.file(p, x);
     }
@@ -575,7 +576,7 @@ async function buildFile(name) {
 function digitsOk(list) {
   const bad = list.filter(r => { const c = cur(r); return !digitOk(c.calc) || !digitOk(c.final); });
   if (bad.length) { toast('자릿수는 0~8 정수: ' + bad.map(r => r.item).join(', ')); return false; }
-  const bs = list.filter(r => { const c = cur(r); return !sigOk(c.sig_mdl) || !sigOk(c.sig_loq); });
+  const bs = list.filter(r => { const c = cur(r); return !sigOk(c.sig_mdl) || !sigOk(c.sig_loq) || !sigOk(c.sig_val); });
   if (bs.length) { toast('유효숫자는 빈칸 또는 1~8: ' + bs.map(r => r.item).join(', ')); return false; }
   return true;
 }
@@ -605,12 +606,12 @@ function downloadAll(btn) {
 }
 function plain(s) { return String(s ?? '').replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'); }
 function csvText() {
-  const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '기초자료 검출한계 유효숫자', '기초자료 정량한계 유효숫자', '원문', '판정', '검토 내용', '비고'];
+  const head = ['파일', '물질', '시트', '결과 칸', '공정시험기준', '계산 자릿수', '최종 자릿수', '방법검출한계', '정량한계', '단위', '기초자료 검출한계 유효숫자', '기초자료 정량한계 유효숫자', '측정값 유효숫자', '원문', '판정', '검토 내용', '비고'];
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [head.map(q).join(',')];
   for (const r of DATA) {
     const c = cur(r), cs = checks(c), l = level(cs);
-    lines.push([r.file, c.item, c.sheet, c.result, cur(owner(r)).method, c.calc, c.final, mdlValue(c), loqValue(c), c.unit, c.sig_mdl ?? '', c.sig_loq ?? '', c.ref && c.ref.code ? 'ES ' + c.ref.code : '', LEVEL[l], cs.filter(x => x[0] === 'warn' || x[0] === 'bad').map(x => plain(x[1])).join(' / '), c.note].map(q).join(','));
+    lines.push([r.file, c.item, c.sheet, c.result, cur(owner(r)).method, c.calc, c.final, mdlValue(c), loqValue(c), c.unit, c.sig_mdl ?? '', c.sig_loq ?? '', c.sig_val ?? '', c.ref && c.ref.code ? 'ES ' + c.ref.code : '', LEVEL[l], cs.filter(x => x[0] === 'warn' || x[0] === 'bad').map(x => plain(x[1])).join(' / '), c.note].map(q).join(','));
   }
   return '﻿' + lines.join('\r\n');
 }

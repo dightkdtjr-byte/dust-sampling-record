@@ -106,8 +106,12 @@ for f in files:
     zz = zipfile.ZipFile(f)
     wbx = zz.read('xl/workbook.xml').decode('utf8'); rels = zz.read('xl/_rels/workbook.xml.rels').decode('utf8')
     vis_parts = []
+    from raw_layout import is_raw_paste
+    raw_names = {w_.title for w_ in wb.worksheets if is_raw_paste(w_) and '시험기록부' not in re.sub(r'\s', '', str(w_['A1'].value or ''))}   # 기기 자료 붙이는 시트는 원본 그대로 (방식 17)
     for m_ in re.finditer(r'<sheet\b[^>]*>', wbx):
         if 'state="hidden"' in m_.group(0) or 'state="veryHidden"' in m_.group(0):
+            continue
+        if re.search(r'name="([^"]+)"', m_.group(0)).group(1).replace('&amp;', '&') in raw_names:
             continue
         rid = re.search(r'r:id="([^"]+)"', m_.group(0)).group(1)
         tgt = re.search(rf'<Relationship[^>]*Id="{rid}"[^>]*Target="([^"]+)"', rels) or re.search(rf'<Relationship[^>]*Target="([^"]+)"[^>]*Id="{rid}"', rels)
@@ -153,8 +157,9 @@ for f in files:
         bad(form, '①', f'서명란 줄 높이 {row["h1"]}/{row["h2"]}pt (기준 {ROW1}/{ROW2})')
     if tot != TOTAL_PX:
         bad(form, '①', f'인쇄 열 너비 합 {tot}px (기준 {TOTAL_PX}px) → 배율이 달라짐')
-    if not fit or ps.fitToWidth != 1 or (ps.fitToHeight or 0) != 0:
-        bad(form, '①', f'배율 설정 {row["fit"]} (기준: 한 쪽 너비에 맞춤 1x0)')
+    from std import WORST_SCALE
+    if fit or ps.scale != WORST_SCALE:
+        bad(form, '①', f'배율 설정 {row["fit"]} (기준: {WORST_SCALE} % 고정)')
     if (pm.left, pm.right, pm.top, pm.bottom) != (MARGINS['left'], MARGINS['right'], MARGINS['top'], MARGINS['bottom']):
         bad(form, '①', f'여백 {row["margin"]}')
 
@@ -310,7 +315,9 @@ for f in files:
     if nb:
         bad(form, '⑤', nb[0].replace('맞춤', '가 기준과 다름'))
     zf = zipfile.ZipFile(f)
-    fonts = set(re.findall(r'<name val="([^"]+)"/>', zf.read('xl/styles.xml').decode('utf8'))) - {CR.FONT}
+    from raw_layout import is_raw_paste
+    fonts = {c_.font.name for w_ in wb.worksheets if w_.sheet_state == 'visible' and not (is_raw_paste(w_) and '시험기록부' not in re.sub(r'\s', '', str(w_['A1'].value or '')))
+             for row_ in w_.iter_rows() for c_ in row_ if c_.value is not None and c_.font is not None and c_.font.name} - {CR.FONT}   # 기기 자료 시트 칸은 원본 글꼴 그대로 (방식 17)
     for n_ in zf.namelist():
         if re.match(r'xl/(drawings/drawing|charts/chart)\d+\.xml$', n_):
             fonts |= set(re.findall(r'<a:(?:latin|ea|cs) typeface="([^"]+)"', zf.read(n_).decode('utf8'))) - {CR.FONT, 'Cambria Math'}
@@ -382,6 +389,11 @@ for f in files:
         elif footer_docno(s):
             bad(form, '⑥', f'"{s.title}"(로우데이터·계산 시트) 바닥글에 문서번호가 있음')
     if pdf_dir:
+        from raw_layout import is_raw_paste
+        raw_txt = [{str(c_.value).strip() for row_ in w_.iter_rows() for c_ in row_ if isinstance(c_.value, str) and len(str(c_.value).strip()) >= 4}
+                   for w_ in wb.worksheets if is_raw_paste(w_) and '시험기록부' not in re.sub(r'\s', '', str(w_['A1'].value or ''))]
+        # 기기 자료 시트 쪽: 그 시트의 글자 칸이 3개 넘게 찍힌 쪽 (원본 그대로 두므로 ### 검사에서 뺌)
+        is_raw_page = lambda t: any(sum(1 for v_ in st_ if v_ in t) >= min(3, len(st_)) for st_ in raw_txt if st_)
         cand = [p for p in glob.glob(os.path.join(pdf_dir, '*.pdf')) if key(p) == form]
         if not cand:
             bad(form, '⑥', 'PDF 없음')
@@ -391,7 +403,7 @@ for f in files:
             for i in range(1, n + 1):
                 t = subprocess.run(['pdftotext', '-f', str(i), '-l', str(i), cand[0], '-'], capture_output=True, text=True).stdout
                 n_doc += bool(doc_txt) and doc_txt in re.sub(r'\s', '', t)
-                if '###' in t:
+                if '###' in t and not is_raw_page(t):
                     bad(form, '④', f'PDF {i}쪽에 ###이 찍힘 (칸이 좁은 숫자·날짜)')
                 t_ = re.sub(r'\d{1,2}/\d{1,2}/(19|20)\d{2}\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', '', t)   # 기기 원자료 시각 표기(글자)는 원본 그대로
                 if re.search(r'\b\d{1,2}/\d{1,2}/(19|20)\d{2}\b|\b\d{2}-\d{2}-\d{2}\b|\b(19|20)\d{2}-\d{2}-\d{2}\b', t_):

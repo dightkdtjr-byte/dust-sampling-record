@@ -8,7 +8,7 @@ VERSION = '2.3.1'
 golden, master, jszip, out = sys.argv[1:5]
 evidence = sys.argv[5] if len(sys.argv) > 5 else None
 rows = json.load(open(master, encoding='utf8'))
-keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'sig_mdl', 'sig_loq']
+keep = ['file', 'row', 'item', 'sheet', 'result', 'method', 'calc', 'final', 'mdl', 'loq', 'unit', 'note', 'linked', 'method_row', 'ref', 'sig_mdl', 'sig_loq', 'sig_val']
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from form_fixes import O2_FIX
 # 산소 보정을 하는 기록부 (결과 계산에 표준산소·실측산소 칸)

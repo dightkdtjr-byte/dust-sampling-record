@@ -24,4 +24,5 @@ python3 -I raw_untouched.py work/all_zip $W/golden > $W/raw.log 2>&1; log "방�
 python3 -I text_raw_test.py $W/golden $W/textraw > $W/textraw.log 2>&1; log "방식18 $(tail -1 $W/textraw.log)"
 python3 -I sheet_pages.py $W/golden $W/sheetpages > /dev/null 2>&1; python3 -I page_audit.py $W/golden $W/sheetpages/pages.json > $W/pages.log 2>&1; log "방식19 $(tail -1 $W/pages.log)"
 python3 -I eq_audit.py $W/golden > $W/eq.log 2>&1; log "방식20 $(tail -1 $W/eq.log)"
+python3 -I raw_paste_test.py work/all_zip $W/golden $W/paste > $W/paste.log 2>&1; log "방식21 $(tail -1 $W/paste.log)"
 log "최종 회차 끝"
